@@ -1,0 +1,6 @@
+{
+  "name": "Meridian Intelligence",
+  "description": "Institutional financial research platform and dynamic 3-statement DCF valuation terminal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
