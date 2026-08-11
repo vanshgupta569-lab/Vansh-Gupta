@@ -63,7 +63,7 @@ export default function App() {
     // Responses are cached at the edge, so a repeat lookup can return in a few
     // hundred milliseconds. Hold the build stages on screen briefly so the work
     // is legible rather than flashing past; a slow fetch simply takes longer.
-    const MIN_VISIBLE_MS = 2200;
+    const MIN_VISIBLE_MS = 4800;
     const startedAt = Date.now();
     const settle = async () => {
       const elapsed = Date.now() - startedAt;
