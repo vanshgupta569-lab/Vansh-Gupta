@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCF, calculateDCFFor, COMPANIES_DATA } from '../data/companies';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE } from '../data/companies';
 import {
   TrendingUp,
   BarChart2,
@@ -40,6 +40,37 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Starts empty; if the fetch fails or returns nothing, the ticker falls back
   // to whatever placeholder text lives in the company data file.
   const [liveNews, setLiveNews] = useState<NewsItem[]>([]);
+
+  // Live quote for the company on screen. Curated data files carry the price as
+  // at the date the model was built, which goes stale; the header should always
+  // show what the shares actually trade at now.
+  const [liveQuote, setLiveQuote] = useState<{ price: number; changePct: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLiveQuote(null);
+
+    fetch(`/api/company?ticker=${encodeURIComponent(company.ticker)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.quote?.price) {
+          setLiveQuote({
+            price: data.quote.price,
+            changePct: data.quote.changePct ?? 0,
+          });
+        }
+      })
+      .catch(() => {
+        // Silent — the stored price stays on screen.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [company.ticker]);
+
+  const displayPrice = liveQuote?.price ?? company.price;
+  const displayChangePct = liveQuote?.changePct ?? company.priceChangePct;
 
   useEffect(() => {
     let cancelled = false;
@@ -82,9 +113,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // curated one. Same engine either way — only the inputs differ.
   const runDCF = React.useCallback(
     (d: ValuationDrivers) =>
-      company.modelData ? calculateDCFFor(company.modelData, d) : calculateDCF(d),
-    [company.modelData]
+      company.modelData
+        ? calculateDCFFor(company.modelData, d, displayPrice)
+        : calculateDCFFor(AAPL_SOURCE, d, displayPrice),
+    [company.modelData, displayPrice]
   );
+
+  // A placeholder record has neither its own model nor a curated one, so any
+  // valuation shown for it would be Apple's cash flows wearing another
+  // company's name. Say so instead of showing a number.
+  const hasRealModel = Boolean(company.modelData) || company.engineBacked;
 
   const dcfResult = useMemo(() => runDCF(drivers), [drivers, runDCF]);
 
@@ -203,36 +241,48 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <div className="flex flex-wrap items-center gap-6">
             <div className="text-left md:text-right border-l md:border-l-0 md:border-r-0 hairline-border-l pl-4 md:pl-0">
               <div className="font-mono text-[11px] text-[#8A8A8F] tracking-widest mb-1 uppercase">
-                LIVE PRICING ({company.currency})
+                {liveQuote ? 'LIVE PRICING' : 'LAST STORED PRICE'} ({company.currency})
               </div>
               <div className="flex items-baseline gap-3 md:justify-end">
                 <span className="font-display text-3xl sm:text-4xl text-[#F2F0EA] font-semibold">
-                  {company.currencySymbol}{company.price.toFixed(2)}
+                  {company.currencySymbol}{displayPrice.toFixed(2)}
                 </span>
                 <span
                   className={`font-mono text-[11px] tracking-wider font-semibold flex items-center gap-0.5 px-2 py-0.5 ${
-                    company.priceChangePct >= 0 ? 'text-emerald-400 bg-emerald-950/40' : 'text-rose-400 bg-rose-950/40'
+                    displayChangePct >= 0 ? 'text-emerald-400 bg-emerald-950/40' : 'text-rose-400 bg-rose-950/40'
                   }`}
                 >
-                  {company.priceChangePct >= 0 ? '+' : ''}{company.priceChangePct}%
+                  {displayChangePct >= 0 ? '+' : ''}{displayChangePct}%
                 </span>
               </div>
             </div>
 
             {/* Model Implied Value & Premium/Discount */}
-            <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner">
-              <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                MODEL IMPLIED VALUE
+            {hasRealModel ? (
+              <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  MODEL IMPLIED VALUE
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-display text-2xl text-[#8B1E1E] font-bold">
+                    {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
+                  </span>
+                  <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
+                    {premiumDiscountLabel}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-display text-2xl text-[#8B1E1E] font-bold">
-                  {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
-                </span>
-                <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
-                  {premiumDiscountLabel}
-                </span>
+            ) : (
+              <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner max-w-xs">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  NO MODEL BUILT
+                </div>
+                <div className="font-mono text-[11px] text-[#A1A1AA] leading-relaxed">
+                  Placeholder record. Search this ticker in the directory to build
+                  a model from its filings.
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

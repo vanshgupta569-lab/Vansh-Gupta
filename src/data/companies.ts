@@ -58,8 +58,20 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
 // ---------------------------------------------------------------------------
 // `source` is any engine-shaped data file: the curated AAPL.js, or one derived
 // on the fly from filings by deriveModel(). The engine treats both identically.
-export function calculateDCFFor(source: any, drivers: ValuationDrivers): DCFResult {
+export function calculateDCFFor(
+  source: any,
+  drivers: ValuationDrivers,
+  marketPriceOverride?: number | null
+): DCFResult {
   const d = buildOverridden(source, drivers);
+
+  // The premium/discount comparison must use the price the shares trade at
+  // now, not the price frozen into the data file when the model was built.
+  // The model's own valuation is unaffected — this only changes what it is
+  // being compared against.
+  if (typeof marketPriceOverride === 'number' && marketPriceOverride > 0) {
+    d.dcf.sharePrice = marketPriceOverride;
+  }
   const M: any = buildModel(d);
   const D: any = buildDCF(M, d);
 
@@ -125,6 +137,10 @@ export function calculateDCFFor(source: any, drivers: ValuationDrivers): DCFResu
     forecastRows,
   };
 }
+
+// Apple's curated, Excel-verified data file, exported so the dashboard can run
+// it directly.
+export const AAPL_SOURCE = AAPL_DATA;
 
 // Back-compatible wrapper: Apple's curated model.
 export function calculateDCF(drivers: ValuationDrivers): DCFResult {

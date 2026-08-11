@@ -31,8 +31,12 @@ export default function App() {
   const handleLookupTicker = async (rawTicker: string) => {
     const ticker = rawTicker.toUpperCase();
 
-    // Already have it — open it rather than fetching again.
-    if (allCompanies[ticker]) {
+    // Reuse what we have ONLY if it is real: either a curated model (Apple) or
+    // one already fetched this session. The four placeholder records shipped in
+    // companies.ts carry invented figures and no model of their own, so they
+    // must be replaced by a live fetch rather than opened.
+    const existing = allCompanies[ticker];
+    if (existing && (existing.engineBacked || existing.modelData)) {
       handleSelectCompanyFromDirectory(ticker);
       return;
     }
