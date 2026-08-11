@@ -62,8 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="hidden xl:flex items-center gap-2 font-mono text-[11px] text-[#8A8A8F] border-l hairline-border-l pl-6">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="text-[#F2F0EA] font-medium">{timeStr}</span>
-          <span className="text-[#8A8A8F] ml-2">NY: OPEN</span>
-          <span className="text-[#8A8A8F]">| LSE: CLOSED</span>
+          <span className="text-[#8A8A8F] ml-2">UTC CLOCK</span>
         </div>
       </div>
 
