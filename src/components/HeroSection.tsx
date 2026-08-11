@@ -27,26 +27,22 @@ const HERO_SLIDES = [
   },
 ];
 
-// Custom easing for that sharp, expensive fintech feel
 const customEase = [0.16, 1, 0.3, 1];
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => {
   const [activeSlide, setActiveSlide] = useState(0);
   const containerRef = useRef<HTMLElement>(null);
 
-  // Scroll Hooks for Parallax Depth
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end start"]
   });
 
-  // Different elements move at different speeds for 3D depth
   const textY = useTransform(scrollYProgress, [0, 1], [0, -150]);
   const radarY = useTransform(scrollYProgress, [0, 1], [0, -50]);
   const gridY = useTransform(scrollYProgress, [0, 1], [0, 200]);
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
-  // Keep the automatic slide rotation
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % HERO_SLIDES.length);
@@ -62,7 +58,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
       ref={containerRef}
       className="relative pt-32 lg:pt-40 pb-24 max-w-[1440px] mx-auto px-6 lg:px-12 hairline-border-b min-h-[720px] flex flex-col justify-between overflow-hidden"
     >
-      {/* Animated Architectural Background Grid */}
       <motion.div 
         style={{ y: gridY }}
         className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none bg-[radial-gradient(#F2F0EA_1px,transparent_1px)] [background-size:32px_32px]"
@@ -73,7 +68,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
         className="grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-12 items-center relative z-10"
       >
         
-        {/* Left Column (Text & Controls with Parallax Scroll) */}
         <motion.div 
           style={{ y: textY }}
           className="lg:col-span-6 flex flex-col gap-8"
@@ -84,7 +78,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                 key={activeSlide}
                 className="flex flex-col gap-6"
               >
-                {/* 1. Tagline Reveal */}
                 <motion.div 
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -98,7 +91,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                   </span>
                 </motion.div>
 
-                {/* 2. Title Mask Reveal */}
                 <div className="overflow-hidden py-1">
                   <motion.h1 
                     initial={{ y: "100%", opacity: 0 }}
@@ -111,24 +103,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                   </motion.h1>
                 </div>
 
-                {/* 3. Subtitle Reveal */}
                 <motion.p 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.8, ease: customEase, delay: 0.2 }}
-                  className="font-sans text-lg lg:text-xl text-[#F2F0EA]/80 max-w-xl border-l-2 border-[#8B1E1E] pl-6 py-2 leading-relaxed"
+                  className="font-sans text-lg lg:text-xl font-light text-[#A1A1AA] max-w-xl border-l-2 border-[#8B1E1E] pl-6 py-2 leading-relaxed tracking-wide"
                 >
                   {slide.subtitle}
                 </motion.p>
 
-                {/* 4. Detail Reveal */}
                 <motion.p 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 1, ease: customEase, delay: 0.4 }}
-                  className="font-mono text-sm text-[#8A8A8F] max-w-lg leading-relaxed mt-2"
+                  className="font-mono text-[11px] text-[#8A8A8F] max-w-lg leading-loose uppercase tracking-wider mt-2"
                 >
                   {slide.detail}
                 </motion.p>
@@ -136,7 +126,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
             </AnimatePresence>
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-8 mt-2 pt-6 hairline-border-t">
             <div className="flex gap-3">
               {HERO_SLIDES.map((_, idx) => (
@@ -164,7 +153,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
           </div>
         </motion.div>
 
-        {/* Centre Graphic (Restored to Automatic Rotation, Added Scroll Parallax) */}
         <motion.div 
           style={{ y: radarY }}
           className="lg:col-span-6 relative h-[380px] w-full flex items-center justify-center"
@@ -178,7 +166,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                   transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
                   className="w-52 h-52 border border-[#8B1E1E]/30 rounded-full flex items-center justify-center relative"
                 >
-                  {/* Restored Automatic Sweeping Line */}
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
@@ -196,16 +183,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                   </div>
                 </motion.div>
                 
-                {/* Static Crosshairs */}
                 <div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-[#222228]/50" />
                 <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-[#222228]/50" />
               </div>
 
-              {/* Radar Corner Tags */}
-              <span className="absolute top-3 left-3 font-mono text-[9px] text-[#8A8A8F]">HISTORICAL</span>
-              <span className="absolute top-3 right-3 font-mono text-[9px] text-[#8A8A8F]">FORECAST</span>
-              <span className="absolute bottom-3 left-3 font-mono text-[9px] text-[#8A8A8F]">3-STATEMENT</span>
-              <span className="absolute bottom-3 right-3 font-mono text-[9px] text-[#8B1E1E] flex items-center gap-1">
+              <span className="absolute top-3 left-3 font-mono text-[9px] tracking-widest text-[#8A8A8F]">HISTORICAL</span>
+              <span className="absolute top-3 right-3 font-mono text-[9px] tracking-widest text-[#8A8A8F]">FORECAST</span>
+              <span className="absolute bottom-3 left-3 font-mono text-[9px] tracking-widest text-[#8A8A8F]">3-STATEMENT</span>
+              <span className="absolute bottom-3 right-3 font-mono text-[9px] tracking-widest text-[#8B1E1E] flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#8B1E1E] animate-pulse"></span> DCF
               </span>
             </div>
@@ -213,7 +198,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
         </motion.div>
       </motion.div>
 
-      {/* Scroll Indicator */}
       <motion.div 
         style={{ opacity: heroOpacity }}
         className="flex justify-between items-center mt-12 pt-8 hairline-border-t text-xs font-mono text-[#8A8A8F] relative z-10"
@@ -225,9 +209,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
           >
             <ArrowDown className="w-4 h-4 text-[#8B1E1E]" />
           </motion.div>
-          <span className="tracking-widest">SCROLL TO EXPLORE THE METHODOLOGY AND COVERAGE</span>
+          <span className="tracking-widest uppercase">SCROLL TO EXPLORE THE METHODOLOGY AND COVERAGE</span>
         </div>
-        <div className="hidden sm:block text-[11px] tracking-widest text-[#8A8A8F]/70">
+        <div className="hidden sm:block text-[10px] tracking-widest uppercase text-[#8A8A8F]/70">
           INDEPENDENT RESEARCH — ASSUMPTIONS VISIBLE
         </div>
       </motion.div>

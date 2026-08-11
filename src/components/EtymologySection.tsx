@@ -19,12 +19,12 @@ export const EtymologySection: React.FC = () => {
             className="flex items-center gap-2 mb-3"
           >
             <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
+            <span className="font-mono text-[11px] text-[#A1A1AA] tracking-[0.2em] uppercase">
               01 — PHILOSOPHY & ETYMOLOGY
             </span>
           </motion.div>
 
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8">
             <div>
               <div className="overflow-hidden py-1">
                 <motion.h2 
@@ -40,10 +40,10 @@ export const EtymologySection: React.FC = () => {
                 initial={{ opacity: 0 }}
                 animate={isInView ? { opacity: 1 } : {}}
                 transition={{ duration: 0.8, delay: 0.3 }}
-                className="font-mono text-sm text-[#8B1E1E] font-semibold tracking-wider uppercase mt-2 flex items-center gap-2"
+                className="font-mono text-sm text-[#8B1E1E] font-semibold tracking-wider uppercase mt-3 flex items-center gap-3"
               >
                 <span>OUR PURPOSE:</span>
-                <span className="bg-[#8B1E1E]/10 border border-[#8B1E1E]/40 text-[#F2F0EA] px-3 py-1 font-serif italic text-base capitalize">
+                <span className="bg-[#8B1E1E]/10 border border-[#8B1E1E]/40 text-[#F2F0EA] px-4 py-1.5 font-serif italic text-base capitalize">
                   "A ledger that never lies."
                 </span>
               </motion.div>
@@ -53,15 +53,15 @@ export const EtymologySection: React.FC = () => {
               initial={{ opacity: 0, x: 20 }}
               animate={isInView ? { opacity: 1, x: 0 } : {}}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="font-mono text-xs text-[#8A8A8F] border-l-2 border-[#8B1E1E] pl-4 max-w-sm"
+              className="font-mono text-xs text-[#8A8A8F] border-l-2 border-[#8B1E1E] pl-5 max-w-sm leading-relaxed"
             >
-              <strong className="text-[#F2F0EA] block">mar·gi·na·li·a</strong>
+              <strong className="text-[#F2F0EA] block tracking-widest mb-1 uppercase">mar·gi·na·li·a</strong>
               <span className="italic">noun</span> /ˌmɑːrdʒɪˈneɪliə/ — Notes, commentary, and critical disclosures written in the margins of a text.
             </motion.div>
           </div>
 
           <motion.p 
-            className="font-sans text-base sm:text-lg text-[#dfbfbc] max-w-4xl leading-relaxed bg-[#0B0B0D] p-6 border hairline-border"
+            className="font-sans text-base sm:text-lg font-light text-[#A1A1AA] max-w-4xl leading-loose tracking-wide bg-[#0B0B0D] p-8 sm:p-10 border hairline-border shadow-xl"
           >
             {sentence.split(" ").map((word, index) => (
               <motion.span
@@ -75,7 +75,7 @@ export const EtymologySection: React.FC = () => {
               </motion.span>
             ))}
             <motion.strong 
-              initial={{ color: "#dfbfbc", opacity: 0 }}
+              initial={{ color: "#A1A1AA", opacity: 0 }}
               animate={isInView ? { color: "#8B1E1E", opacity: 1 } : {}}
               transition={{ duration: 1, delay: 1.5 }}
               className="inline-block"
@@ -96,15 +96,15 @@ export const EtymologySection: React.FC = () => {
               initial={{ opacity: 0, y: 30 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6, delay: 0.6 + (index * 0.2), ease: "easeOut" }}
-              className="p-8 border hairline-border bg-[#0B0B0D] hover:bg-[#111114] transition-colors group"
+              className="p-8 sm:p-10 border hairline-border bg-[#0B0B0D] hover:bg-[#111114] transition-colors group"
             >
               <div className="w-12 h-12 bg-[#8B1E1E]/10 border border-[#8B1E1E]/30 flex items-center justify-center mb-6 group-hover:border-[#8B1E1E] transition-colors">
-                <item.icon className="w-6 h-6 text-[#8B1E1E]" />
+                <item.icon className="w-5 h-5 text-[#8B1E1E]" />
               </div>
-              <h3 className="font-display text-xl sm:text-2xl mb-3 text-[#F2F0EA]">
+              <h3 className="font-display text-xl sm:text-2xl mb-4 text-[#F2F0EA]">
                 {item.title}
               </h3>
-              <p className="font-sans text-sm text-[#8A8A8F] leading-relaxed">
+              <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide">
                 {item.desc}
               </p>
             </motion.div>

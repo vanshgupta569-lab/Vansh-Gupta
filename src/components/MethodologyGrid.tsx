@@ -17,7 +17,6 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
   const [activeStepHover, setActiveStepHover] = useState<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Hook for the central vertical timeline
   const { scrollYProgress } = useScroll({
     target: gridRef,
     offset: ["start center", "end center"]
@@ -31,7 +30,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
+            <span className="font-mono text-[11px] text-[#A1A1AA] tracking-[0.2em] uppercase">
               02 - HOW IT WORKS
             </span>
           </div>
@@ -39,14 +38,13 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
             From Filing to Fair Value
           </h2>
         </div>
-        <p className="font-mono text-xs text-[#8A8A8F] max-w-md">
+        <p className="font-mono text-xs text-[#8A8A8F] max-w-md uppercase tracking-wider">
           Four steps from raw reported data to a live, adjustable discounted cash flow model.
         </p>
       </div>
 
       <div ref={gridRef} className="relative grid grid-cols-1 md:grid-cols-2 border hairline-border bg-[#0B0B0D]">
         
-        {/* Animated Central Timeline (Desktop Only) */}
         <div className="hidden md:block absolute top-0 bottom-0 left-1/2 w-[1px] bg-[#222228] -translate-x-1/2 z-0">
           <motion.div 
             style={{ height: lineHeight }} 
@@ -75,7 +73,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
             >
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className={`font-mono text-[11px] tracking-widest font-semibold transition-colors duration-500 ${activeStepHover === index ? 'text-[#F2F0EA]' : 'text-[#8B1E1E]'}`}>
+                  <span className={`font-mono text-[11px] tracking-[0.2em] font-semibold transition-colors duration-500 ${activeStepHover === index ? 'text-[#F2F0EA]' : 'text-[#8B1E1E]'}`}>
                     {item.step}
                   </span>
                   <div className="w-8 h-8 bg-[#222228]/50 border hairline-border flex items-center justify-center group-hover:border-[#8B1E1E] transition-colors duration-300">
@@ -83,18 +81,18 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
                   </div>
                 </div>
 
-                <h3 className="font-display text-2xl text-[#F2F0EA] mb-3 group-hover:text-[#ffb3ad] transition-colors flex items-center justify-between">
+                <h3 className="font-display text-2xl text-[#F2F0EA] mb-4 group-hover:text-[#ffb3ad] transition-colors flex items-center justify-between">
                   <span>{item.title}</span>
                   <ArrowRight className="w-4 h-4 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
                 </h3>
 
-                <p className="font-sans text-sm text-[#dfbfbc] leading-relaxed mb-4">
+                <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide mb-6">
                   {item.description}
                 </p>
               </div>
 
-              <div className="font-mono text-[11px] text-[#8A8A8F] pt-4 hairline-border-t border-dashed flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-[#8B1E1E]" />
+              <div className="font-mono text-[10px] text-[#8A8A8F] pt-4 hairline-border-t border-dashed flex items-start gap-3 uppercase tracking-wider leading-relaxed">
+                <span className="w-1.5 h-1.5 bg-[#8B1E1E] shrink-0 mt-1.5" />
                 <span>{item.detail}</span>
               </div>
             </motion.div>

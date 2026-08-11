@@ -113,22 +113,22 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       {/* Terminal Title & Ticker Selector Bar */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 border-b hairline-border-b pb-6">
         <div>
-          <h2 className="font-display text-2xl sm:text-3xl text-[#F2F0EA]">
+          <h2 className="font-display text-2xl sm:text-3xl text-[#F2F0EA] tracking-tight">
             Company Specific Analysis
           </h2>
         </div>
 
         {/* Company Quick Ticker Selector */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[11px] text-[#8A8A8F] mr-2 hidden sm:inline">SELECT TICKER:</span>
+          <span className="font-mono text-[11px] text-[#8A8A8F] mr-2 hidden sm:inline uppercase tracking-widest">SELECT TICKER:</span>
           {Object.keys(companies).map((t) => (
             <button
               key={t}
               onClick={() => onSelectTicker(t)}
-              className={`font-mono text-xs px-3.5 py-1.5 transition-all cursor-pointer ${
+              className={`font-mono text-[11px] uppercase tracking-wider px-4 py-1.5 transition-all cursor-pointer ${
                 selectedTicker === t
-                  ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold border border-[#8B1E1E]'
-                  : 'bg-[#111114] text-[#dfbfbc] border hairline-border hover:bg-[#222228]'
+                  ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold border border-[#8B1E1E] shadow-[0_0_10px_rgba(139,30,30,0.3)]'
+                  : 'bg-[#111114] text-[#A1A1AA] border hairline-border hover:bg-[#222228] hover:text-[#F2F0EA]'
               }`}
             >
               {t}
@@ -136,7 +136,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           ))}
           <button
             onClick={onOpenDirectory}
-            className="font-mono text-xs px-3 py-1.5 bg-transparent border hairline-border text-[#8B1E1E] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors cursor-pointer ml-2"
+            className="font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 bg-transparent border hairline-border text-[#8B1E1E] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors cursor-pointer ml-2"
           >
             + All Companies
           </button>
@@ -144,24 +144,24 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       </div>
 
       {/* Primary Header Info Bar */}
-      <div className="bg-[#111114] border hairline-border p-6 lg:p-8 mb-6">
+      <div className="bg-[#111114] border hairline-border p-6 lg:p-8 mb-6 shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-6">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="font-mono text-xs text-[#8A8A8F] border border-[#222228] px-2 py-0.5 uppercase">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
                 {company.exchange}: {company.ticker}
               </span>
-              <span className="font-mono text-xs text-[#8A8A8F]">{company.sector}</span>
-              <span className="font-mono text-[11px] text-[#8A8A8F]">ISIN: {company.isin}</span>
+              <span className="font-mono text-[10px] tracking-widest uppercase text-[#8A8A8F]">{company.sector}</span>
+              <span className="font-mono text-[10px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {company.isin}</span>
             </div>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA]">
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA] tracking-tight">
               {company.name}
             </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-6">
             <div className="text-left md:text-right border-l md:border-l-0 md:border-r-0 hairline-border-l pl-4 md:pl-0">
-              <div className="font-mono text-[11px] text-[#8A8A8F] tracking-wider mb-1">
+              <div className="font-mono text-[11px] text-[#8A8A8F] tracking-widest mb-1 uppercase">
                 LIVE PRICING ({company.currency})
               </div>
               <div className="flex items-baseline gap-3 md:justify-end">
@@ -169,7 +169,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   {company.currencySymbol}{company.price.toFixed(2)}
                 </span>
                 <span
-                  className={`font-mono text-xs font-semibold flex items-center gap-0.5 px-2 py-0.5 ${
+                  className={`font-mono text-[11px] tracking-wider font-semibold flex items-center gap-0.5 px-2 py-0.5 ${
                     company.priceChangePct >= 0 ? 'text-emerald-400 bg-emerald-950/40' : 'text-rose-400 bg-rose-950/40'
                   }`}
                 >
@@ -179,15 +179,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
 
             {/* Model Implied Value & Premium/Discount */}
-            <div className="bg-[#0B0B0D] border hairline-border p-3 px-4 text-left md:text-right">
-              <div className="font-mono text-[10px] text-[#8A8A8F] tracking-wider uppercase mb-1">
+            <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner">
+              <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
                 MODEL IMPLIED VALUE
               </div>
-              <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-display text-2xl text-[#8B1E1E] font-bold">
                   {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
                 </span>
-                <span className={`font-mono text-xs px-2.5 py-0.5 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
+                <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
                   {premiumDiscountLabel}
                 </span>
               </div>
@@ -197,46 +197,46 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
         {/* 5 Key Metric Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-6 hairline-border-t">
-          <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase block mb-1">Market Cap</span>
+          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Market Cap</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.marketCapStr}</span>
           </div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase block mb-1">ROE (LTM)</span>
+          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROE (LTM)</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.roePct}%</span>
           </div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase block mb-1">ROA (LTM)</span>
+          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROA (LTM)</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.roaPct}%</span>
           </div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase block mb-1">Op Margin</span>
+          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Op Margin</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.opMarginPct}%</span>
           </div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase block mb-1">Net Debt / EBITDA</span>
+          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Net Debt / EBITDA</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.netDebtEbitda}</span>
           </div>
         </div>
       </div>
 
       {/* Live News Ticker Marquee */}
-      <div className="hairline-border border bg-[#0B0B0D] py-2.5 px-4 overflow-hidden mb-8 relative flex items-center">
-        <div className="font-mono text-[11px] text-[#8B1E1E] uppercase font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-1.5">
+      <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
+        <div className="font-mono text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
           <Activity className="w-3.5 h-3.5 animate-pulse" />
           <span>NEWS DISPATCH:</span>
         </div>
         <div className="overflow-hidden relative w-full">
-          <div className="animate-marquee flex gap-12 font-mono text-xs text-[#dfbfbc]">
+          <div className="animate-marquee flex gap-12 font-mono text-xs text-[#A1A1AA]">
             {company.recentNews.map((news) => (
               <span key={news.id} className="inline-flex items-center gap-2">
-                <span className="text-[#8B1E1E] font-semibold">[{news.time}]</span>
-                <span className="text-[#F2F0EA] font-medium">{news.headline}</span>
-                <span className="text-[#8A8A8F] text-[10px]">({news.source})</span>
+                <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
+                <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
+                <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
               </span>
             ))}
           </div>
@@ -247,13 +247,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         
         {/* Card 1: Revenue & Margin Trend Bar Chart */}
-        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px]">
+        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
           <div>
             <div className="flex justify-between items-center mb-4">
-              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-wider font-medium">
+              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
                 REV & MARGIN TREND
               </span>
-              <span className="font-mono text-[10px] text-[#8B1E1E] border border-[#8B1E1E]/40 px-1.5 py-0.5">
+              <span className="font-mono text-[9px] tracking-widest text-[#8B1E1E] border border-[#8B1E1E]/40 px-2 py-0.5 uppercase bg-[#8B1E1E]/5">
                 5-YEAR GAAP
               </span>
             </div>
@@ -274,10 +274,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   >
                     {/* Hover Inspect Tooltip */}
                     {hoveredBarIndex === idx && (
-                      <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-2 z-20 font-mono text-[10px] text-[#F2F0EA] whitespace-nowrap shadow-xl">
-                        <div className="text-[#8B1E1E] font-bold">{yr} Metrics</div>
-                        <div>Rev: {company.currencySymbol}{(company.financials.revenue[idx] / 1000).toFixed(1)}B</div>
-                        <div>EBITDA Margin: {margin}%</div>
+                      <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-3 z-20 font-mono text-[10px] text-[#A1A1AA] whitespace-nowrap shadow-xl">
+                        <div className="text-[#8B1E1E] font-bold tracking-widest uppercase mb-1">{yr} Metrics</div>
+                        <div className="tracking-wider">Rev: <span className="text-[#F2F0EA]">{company.currencySymbol}{(company.financials.revenue[idx] / 1000).toFixed(1)}B</span></div>
+                        <div className="tracking-wider">EBITDA Margin: <span className="text-[#F2F0EA]">{margin}%</span></div>
                       </div>
                     )}
 
@@ -295,7 +295,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#8B1E1E]" />
                     </div>
 
-                    <span className="font-mono text-[10px] text-[#8A8A8F] mt-2 group-hover:text-[#F2F0EA]">
+                    <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] mt-3 group-hover:text-[#F2F0EA] transition-colors">
                       {yr}
                     </span>
                   </div>
@@ -304,24 +304,24 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-between items-center font-mono text-[10px] text-[#8A8A8F] pt-3">
-            <span className="flex items-center gap-1">
+          <div className="flex justify-between items-center font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4">
+            <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 bg-[#222228] border border-[#8B1E1E]" /> Revenue
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-2">
               <span className="w-3 h-0.5 bg-[#8B1E1E]" /> EBITDA Margin %
             </span>
           </div>
         </div>
 
         {/* Card 2: DCF Sensitivity Heatmap Matrix */}
-        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px]">
+        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
           <div>
             <div className="flex justify-between items-center mb-3">
-              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-wider font-medium">
+              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
                 DCF SENSITIVITY MATRIX
               </span>
-              <span className="font-mono text-[10px] text-[#8A8A8F]">WACC vs. G%</span>
+              <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">WACC vs. G%</span>
             </div>
 
             {/* 5x5 Cell Matrix */}
@@ -345,11 +345,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       key={`${rIdx}-${cIdx}`}
                       onMouseEnter={() => setHoveredMatrixCell({ wacc: currWacc, g: currG, val })}
                       onMouseLeave={() => setHoveredMatrixCell(null)}
-                      className={`h-9 border border-[#222228] flex items-center justify-center cursor-pointer transition-all ${cellBg} ${
+                      className={`h-9 border border-[#222228] flex items-center justify-center cursor-pointer transition-all hover:scale-105 hover:z-10 ${cellBg} ${
                         isCurrentDriver ? 'ring-1 ring-[#F2F0EA]' : ''
                       }`}
                     >
-                      <span className="font-mono text-[10px] text-[#F2F0EA] font-semibold">
+                      <span className="font-mono text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
                         {company.currencySymbol}{Math.round(val)}
                       </span>
                     </div>
@@ -359,37 +359,37 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
 
             {/* Matrix Cell Inspector */}
-            <div className="bg-[#0B0B0D] border hairline-border p-2.5 font-mono text-[10px] text-[#dfbfbc] flex justify-between items-center min-h-[38px]">
+            <div className="bg-[#0B0B0D] border hairline-border p-3 font-mono text-[10px] text-[#A1A1AA] tracking-wider flex justify-between items-center min-h-[42px] shadow-inner mt-4">
               {hoveredMatrixCell ? (
                 <>
-                  <span>
+                  <span className="uppercase tracking-widest">
                     WACC: <strong className="text-[#F2F0EA]">{hoveredMatrixCell.wacc.toFixed(1)}%</strong> | Term G:{' '}
                     <strong className="text-[#F2F0EA]">{hoveredMatrixCell.g.toFixed(1)}%</strong>
                   </span>
-                  <span className="text-[#8B1E1E] font-bold">
+                  <span className="text-[#8B1E1E] font-bold tracking-widest uppercase">
                     Target: {company.currencySymbol}{hoveredMatrixCell.val.toFixed(2)}
                   </span>
                 </>
               ) : (
-                <span className="text-[#8A8A8F]">Hover matrix cell to inspect valuation sensitivity.</span>
+                <span className="text-[#8A8A8F] uppercase tracking-widest">Hover matrix cell to inspect valuation sensitivity.</span>
               )}
             </div>
           </div>
 
-          <div className="font-mono text-[10px] text-[#8A8A8F] flex justify-between items-center pt-2">
+          <div className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F] flex justify-between items-center pt-3">
             <span>Y-Axis: WACC (+/-1%)</span>
             <span>X-Axis: Term Growth (+/-1%)</span>
           </div>
         </div>
 
         {/* Card 3: Health Score Radar Chart */}
-        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px]">
+        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
           <div>
             <div className="flex justify-between items-center mb-2">
-              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-wider font-medium">
+              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
                 FINANCIAL HEALTH SCORE
               </span>
-              <span className="font-mono text-[12px] text-[#8B1E1E] font-bold border border-[#8B1E1E] px-2 py-0.5">
+              <span className="font-mono text-[12px] text-[#8B1E1E] font-bold border border-[#8B1E1E] px-2 py-0.5 bg-[#8B1E1E]/5">
                 {company.healthMetrics.overallScore}/100
               </span>
             </div>
@@ -433,18 +433,18 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px] text-[#8A8A8F] pt-2 border-t hairline-border-t">
-            <div>Bal Sheet: <span className="text-[#F2F0EA]">{company.healthMetrics.balanceSheetStrength}%</span></div>
-            <div>Earnings Quality: <span className="text-[#F2F0EA]">{company.healthMetrics.earningsQuality}%</span></div>
-            <div>Cash Flow: <span className="text-[#F2F0EA]">{company.healthMetrics.cashFlowCoverage}%</span></div>
-            <div>Moat Rating: <span className="text-[#F2F0EA]">{company.healthMetrics.valuationMoat}%</span></div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
+            <div>Bal Sheet: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.balanceSheetStrength}%</span></div>
+            <div>Earnings Quality: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.earningsQuality}%</span></div>
+            <div>Cash Flow: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.cashFlowCoverage}%</span></div>
+            <div>Moat Rating: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.valuationMoat}%</span></div>
           </div>
         </div>
 
       </div>
 
       {/* Interactive Terminal Workspace Tabs */}
-      <div className="bg-[#111114] border hairline-border p-6 lg:p-8">
+      <div className="bg-[#111114] border hairline-border p-6 lg:p-8 shadow-xl">
         
         {/* Navigation Tabs Header */}
         <div className="flex flex-wrap gap-4 sm:gap-8 border-b hairline-border-b pb-4 mb-8">
@@ -461,10 +461,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
-                className={`font-mono text-xs uppercase tracking-wider pb-2 flex items-center gap-2 transition-all cursor-pointer ${
+                className={`font-mono text-xs uppercase tracking-widest pb-2 flex items-center gap-2 transition-all cursor-pointer ${
                   isActive
                     ? 'text-[#F2F0EA] font-semibold border-b-2 border-[#8B1E1E]'
-                    : 'text-[#8A8A8F] hover:text-[#dfbfbc]'
+                    : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
                 }`}
               >
                 <Icon className={`w-4 h-4 ${isActive ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'}`} />
@@ -477,16 +477,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         {/* TAB 1: HISTORICAL FINANCIALS */}
         {activeTab === 'HISTORICAL' && (
           <div className="overflow-x-auto">
-            <div className="flex justify-between items-center mb-4">
-              <span className="font-mono text-xs text-[#8A8A8F] uppercase">
+            <div className="flex justify-between items-center mb-5">
+              <span className="font-mono text-[11px] tracking-widest text-[#8A8A8F] uppercase">
                 3-Statement GAAP Financial Summary ({company.currency} Millions)
               </span>
-              <span className="font-mono text-[10px] text-[#8B1E1E]">AUDITED SEC DATA</span>
+              <span className="font-mono text-[10px] tracking-widest text-[#8B1E1E] bg-[#8B1E1E]/5 px-2 py-0.5 border border-[#8B1E1E]/30">AUDITED SEC DATA</span>
             </div>
 
             <table className="w-full text-left font-mono text-xs border-collapse">
               <thead>
-                <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase">
+                <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase tracking-widest">
                   <th className="py-3 pr-6 font-medium">Line Item</th>
                   {company.financials.years.map((y) => (
                     <th key={y} className="py-3 px-4 text-right font-medium">
@@ -495,8 +495,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#222228] text-[#F2F0EA]">
-                <tr>
+              <tbody className="divide-y divide-[#222228] text-[#F2F0EA] tracking-wider">
+                <tr className="hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Total Revenue</td>
                   {company.financials.revenue.map((v, i) => (
                     <td key={i} className="py-3 px-4 text-right">
@@ -505,16 +505,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
 
-                <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
-                  <td className="py-2.5 pr-6 pl-3 text-[11px]">Revenue Growth %</td>
+                <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
+                  <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Revenue Growth %</td>
                   {company.financials.revenueGrowth.map((v, i) => (
-                    <td key={i} className={`py-2.5 px-4 text-right text-[11px] ${v >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${v >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {v > 0 ? '+' : ''}{v}%
                     </td>
                   ))}
                 </tr>
 
-                <tr>
+                <tr className="text-[#A1A1AA] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium">Gross Margin %</td>
                   {company.financials.grossMargin.map((v, i) => (
                     <td key={i} className="py-3 px-4 text-right">
@@ -523,7 +523,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
 
-                <tr>
+                <tr className="text-[#A1A1AA] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium">EBITDA Margin %</td>
                   {company.financials.ebitdaMargin.map((v, i) => (
                     <td key={i} className="py-3 px-4 text-right">
@@ -532,7 +532,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
 
-                <tr>
+                <tr className="hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Net Income</td>
                   {company.financials.netIncome.map((v, i) => (
                     <td key={i} className="py-3 px-4 text-right">
@@ -541,16 +541,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
 
-                <tr className="bg-[#0B0B0D]/50">
-                  <td className="py-3 pr-6 pl-3 text-[#dfbfbc]">Operating Cash Flow</td>
+                <tr className="bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
+                  <td className="py-3 pr-6 pl-3 text-[#A1A1AA]">Operating Cash Flow</td>
                   {company.financials.operatingCashFlow.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right text-[#dfbfbc]">
+                    <td key={i} className="py-3 px-4 text-right text-[#A1A1AA]">
                       {company.currencySymbol}{v.toLocaleString()}
                     </td>
                   ))}
                 </tr>
 
-                <tr>
+                <tr className="hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-semibold text-[#8B1E1E]">Free Cash Flow (FCF)</td>
                   {company.financials.freeCashFlow.map((v, i) => (
                     <td key={i} className="py-3 px-4 text-right font-semibold text-[#8B1E1E]">
@@ -559,7 +559,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
 
-                <tr className="text-[#8A8A8F] text-[11px]">
+                <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-2.5 pr-6">Total Debt</td>
                   {company.financials.totalDebt.map((v, i) => (
                     <td key={i} className="py-2.5 px-4 text-right">
@@ -568,7 +568,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   ))}
                 </tr>
 
-                <tr className="text-[#8A8A8F] text-[11px]">
+                <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-2.5 pr-6">Cash & Equivalents</td>
                   {company.financials.cashAndEquivalents.map((v, i) => (
                     <td key={i} className="py-2.5 px-4 text-right">
@@ -586,17 +586,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <div className="overflow-x-auto space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0B0B0D] p-4 border hairline-border">
               <div>
-                <span className="font-mono text-xs text-[#dfbfbc] uppercase font-semibold block">
+                <span className="font-mono text-[11px] text-[#A1A1AA] uppercase tracking-widest font-semibold block mb-1">
                   5-YEAR INTEGRATED MODEL ({company.currency} MILLIONS)
                 </span>
-                <span className="font-mono text-[10px] text-[#8A8A8F]">
+                <span className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
                   Revenue growth {drivers.revenueGrowthPct}% · Op margin {drivers.operatingMarginPct}% · Tax {drivers.taxRatePct}% · CapEx {drivers.capexPctOfRev}% of rev · WACC {drivers.waccPct}%
-                  {!company.engineBacked && ' · Figures illustrative — engine data file not yet built for this company'}
+                  {!company.engineBacked && ' · Figures illustrative — engine data file not yet built'}
                 </span>
               </div>
               <button
                 onClick={() => setActiveTab('DRIVERS')}
-                className="font-mono text-xs px-3.5 py-1.5 bg-[#8B1E1E] text-[#F2F0EA] hover:bg-[#6a1515] transition-colors cursor-pointer flex items-center gap-1.5 font-semibold whitespace-nowrap"
+                className="font-mono text-[11px] uppercase tracking-widest px-4 py-2 bg-[#8B1E1E] text-[#F2F0EA] hover:bg-[#6a1515] transition-colors cursor-pointer flex items-center gap-2 font-semibold whitespace-nowrap shadow-[0_0_10px_rgba(139,30,30,0.3)]"
               >
                 <Sliders className="w-3.5 h-3.5" />
                 <span>Adjust Drivers</span>
@@ -604,14 +604,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
 
             {!dcfResult.applicable ? (
-              <div className="p-6 border hairline-border bg-[#0B0B0D] font-mono text-xs text-[#8A8A8F]">
-                <strong className="text-[#F2F0EA] block mb-2">MODEL NOT APPLICABLE</strong>
+              <div className="p-8 border hairline-border bg-[#0B0B0D] font-mono text-xs text-[#8A8A8F] shadow-inner text-center tracking-wide">
+                <strong className="text-[#F2F0EA] block mb-2 uppercase tracking-widest">MODEL NOT APPLICABLE</strong>
                 {dcfResult.message}
               </div>
             ) : (
               <table className="w-full text-left font-mono text-xs border-collapse">
                 <thead>
-                  <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase">
+                  <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase tracking-widest">
                     <th className="py-3 pr-6 font-medium">Line Item</th>
                     {dcfResult.forecastRows.map((row: ForecastRow) => (
                       <th key={row.year} className="py-3 px-4 text-right font-medium text-[#8B1E1E]">
@@ -620,8 +620,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#222228] text-[#F2F0EA]">
-                  <tr>
+                <tbody className="divide-y divide-[#222228] text-[#F2F0EA] tracking-wider">
+                  <tr className="hover:bg-[#1a1a1f] transition-colors">
                     <td className="py-3 pr-6 font-medium">Revenue</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-3 px-4 text-right font-bold">
@@ -629,15 +629,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
-                    <td className="py-2.5 pr-6 pl-3 text-[11px]">Revenue Growth %</td>
+                  <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
+                    <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Revenue Growth %</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${row.revenueGrowthPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {row.revenueGrowthPct >= 0 ? '+' : ''}{row.revenueGrowthPct}%
                       </td>
                     ))}
                   </tr>
-                  <tr>
+                  <tr className="hover:bg-[#1a1a1f] transition-colors text-[#A1A1AA]">
                     <td className="py-3 pr-6 font-medium">EBIT</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-3 px-4 text-right">
@@ -645,13 +645,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
-                    <td className="py-2.5 pr-6 pl-3 text-[11px]">Operating Margin %</td>
+                  <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
+                    <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Operating Margin %</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-2.5 px-4 text-right text-[11px]">{row.operatingMarginPct}%</td>
                     ))}
                   </tr>
-                  <tr className="text-[#8A8A8F] text-[11px]">
+                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                     <td className="py-2.5 pr-6">Taxes ({drivers.taxRatePct}%)</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-2.5 px-4 text-right">
@@ -659,7 +659,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="font-semibold bg-[#0B0B0D]/30">
+                  <tr className="font-semibold bg-[#0B0B0D]/30 hover:bg-[#1a1a1f] transition-colors">
                     <td className="py-3 pr-6">EBIAT (NOPAT)</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-3 px-4 text-right">
@@ -667,7 +667,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-[#8A8A8F] text-[11px]">
+                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                     <td className="py-2.5 pr-6 pl-3">Add: D&A</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-2.5 px-4 text-right">
@@ -675,7 +675,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-[#8A8A8F] text-[11px]">
+                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                     <td className="py-2.5 pr-6 pl-3">Less: CapEx</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-2.5 px-4 text-right">
@@ -683,7 +683,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-[#8A8A8F] text-[11px]">
+                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                     <td className="py-2.5 pr-6 pl-3">Less: Δ Working Capital</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
                       <td key={i} className="py-2.5 px-4 text-right">
@@ -699,16 +699,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-[#8A8A8F] text-[10px]">
-                    <td className="py-2 pr-6">Discount Factor (WACC {drivers.waccPct}%)</td>
+                  <tr className="text-[#8A8A8F] text-[10px] uppercase tracking-widest hover:bg-[#1a1a1f] transition-colors">
+                    <td className="py-3 pr-6">Discount Factor (WACC {drivers.waccPct}%)</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-2 px-4 text-right">{row.discountFactor}</td>
+                      <td key={i} className="py-3 px-4 text-right">{row.discountFactor}</td>
                     ))}
                   </tr>
-                  <tr className="font-semibold bg-[#111114]">
-                    <td className="py-3 pr-6">PV of Unlevered FCF</td>
+                  <tr className="font-semibold bg-[#111114] border-t hairline-border-t">
+                    <td className="py-4 pr-6">PV of Unlevered FCF</td>
                     {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-3 px-4 text-right">
+                      <td key={i} className="py-4 px-4 text-right">
                         {company.currencySymbol}{row.pvUfcf.toLocaleString()}
                       </td>
                     ))}
@@ -719,35 +719,35 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 2: DRIVER ASSUMPTIONS */}
+        {/* TAB 3: DRIVER ASSUMPTIONS */}
         {activeTab === 'DRIVERS' && (
           <div className="space-y-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0B0B0D] p-4 border hairline-border">
-              <span className="font-mono text-xs text-[#dfbfbc] uppercase font-medium">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0B0B0D] p-5 border hairline-border shadow-inner">
+              <span className="font-mono text-[11px] text-[#A1A1AA] uppercase tracking-widest font-semibold">
                 SCENARIO PRESETS:
               </span>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => applyPreset('BASE')}
-                  className="font-mono text-xs px-3 py-1 bg-[#222228] text-[#F2F0EA] hover:bg-[#8B1E1E] transition-colors cursor-pointer"
+                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-[#222228] text-[#F2F0EA] hover:bg-[#8B1E1E] transition-colors cursor-pointer uppercase font-semibold"
                 >
                   Reset Base Case
                 </button>
                 <button
                   onClick={() => applyPreset('BULL')}
-                  className="font-mono text-xs px-3 py-1 bg-emerald-950/60 border border-emerald-700 text-emerald-300 hover:bg-emerald-900 transition-colors cursor-pointer"
+                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-emerald-950/60 border border-emerald-700 text-emerald-300 hover:bg-emerald-900 transition-colors cursor-pointer uppercase font-semibold"
                 >
                   Bull Case (+30% Growth)
                 </button>
                 <button
                   onClick={() => applyPreset('BEAR')}
-                  className="font-mono text-xs px-3 py-1 bg-rose-950/60 border border-rose-700 text-rose-300 hover:bg-rose-900 transition-colors cursor-pointer"
+                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-rose-950/60 border border-rose-700 text-rose-300 hover:bg-rose-900 transition-colors cursor-pointer uppercase font-semibold"
                 >
                   Bear Case (-40% Growth)
                 </button>
                 <button
                   onClick={() => applyPreset('FORENSIC')}
-                  className="font-mono text-xs px-3 py-1 bg-[#8B1E1E]/40 border border-[#8B1E1E] text-[#F2F0EA] hover:bg-[#8B1E1E] transition-colors cursor-pointer"
+                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-[#8B1E1E]/40 border border-[#8B1E1E] text-[#F2F0EA] hover:bg-[#8B1E1E] transition-colors cursor-pointer uppercase font-semibold shadow-[0_0_10px_rgba(139,30,30,0.2)]"
                 >
                   Forensic Stress Test
                 </button>
@@ -756,10 +756,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Slider 1: Revenue Growth % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-5 space-y-3">
-                <div className="flex justify-between items-center font-mono text-xs">
-                  <label className="text-[#8A8A8F] uppercase">Revenue Growth %</label>
-                  <span className="text-[#8B1E1E] font-bold text-base">{drivers.revenueGrowthPct}%</span>
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
+                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
+                  <label className="text-[#8A8A8F] uppercase font-semibold">Revenue Growth %</label>
+                  <span className="text-[#8B1E1E] font-bold text-lg">{drivers.revenueGrowthPct}%</span>
                 </div>
                 <input
                   type="range"
@@ -770,16 +770,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   onChange={(e) => setDrivers({ ...drivers, revenueGrowthPct: parseFloat(e.target.value) })}
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
-                <p className="font-mono text-[10px] text-[#8A8A8F]">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
                   5-Year CAGR assumption driving explicit cash flow growth.
                 </p>
               </div>
 
               {/* Slider 2: Operating Margin % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-5 space-y-3">
-                <div className="flex justify-between items-center font-mono text-xs">
-                  <label className="text-[#8A8A8F] uppercase">Operating Margin %</label>
-                  <span className="text-[#8B1E1E] font-bold text-base">{drivers.operatingMarginPct}%</span>
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
+                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
+                  <label className="text-[#8A8A8F] uppercase font-semibold">Operating Margin %</label>
+                  <span className="text-[#8B1E1E] font-bold text-lg">{drivers.operatingMarginPct}%</span>
                 </div>
                 <input
                   type="range"
@@ -790,16 +790,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   onChange={(e) => setDrivers({ ...drivers, operatingMarginPct: parseFloat(e.target.value) })}
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
-                <p className="font-mono text-[10px] text-[#8A8A8F]">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
                   Target EBIT margin after non-GAAP footnote reconciliation.
                 </p>
               </div>
 
               {/* Slider 3: Tax Rate % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-5 space-y-3">
-                <div className="flex justify-between items-center font-mono text-xs">
-                  <label className="text-[#8A8A8F] uppercase">Effective Tax Rate %</label>
-                  <span className="text-[#F2F0EA] font-bold text-base">{drivers.taxRatePct}%</span>
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
+                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
+                  <label className="text-[#8A8A8F] uppercase font-semibold">Effective Tax Rate %</label>
+                  <span className="text-[#F2F0EA] font-bold text-lg">{drivers.taxRatePct}%</span>
                 </div>
                 <input
                   type="range"
@@ -810,16 +810,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   onChange={(e) => setDrivers({ ...drivers, taxRatePct: parseFloat(e.target.value) })}
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
-                <p className="font-mono text-[10px] text-[#8A8A8F]">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
                   Effective cash tax rate adjusted for R&D credits.
                 </p>
               </div>
 
               {/* Slider 4: CapEx % of Revenue */}
-              <div className="bg-[#0B0B0D] border hairline-border p-5 space-y-3">
-                <div className="flex justify-between items-center font-mono text-xs">
-                  <label className="text-[#8A8A8F] uppercase">CapEx % of Revenue</label>
-                  <span className="text-[#F2F0EA] font-bold text-base">{drivers.capexPctOfRev}%</span>
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
+                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
+                  <label className="text-[#8A8A8F] uppercase font-semibold">CapEx % of Revenue</label>
+                  <span className="text-[#F2F0EA] font-bold text-lg">{drivers.capexPctOfRev}%</span>
                 </div>
                 <input
                   type="range"
@@ -830,16 +830,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   onChange={(e) => setDrivers({ ...drivers, capexPctOfRev: parseFloat(e.target.value) })}
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
-                <p className="font-mono text-[10px] text-[#8A8A8F]">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
                   Capital expenditures required to sustain projected growth.
                 </p>
               </div>
 
               {/* Slider 5: WACC % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-5 space-y-3">
-                <div className="flex justify-between items-center font-mono text-xs">
-                  <label className="text-[#8A8A8F] uppercase">WACC % (Discount Rate)</label>
-                  <span className="text-[#8B1E1E] font-bold text-base">{drivers.waccPct}%</span>
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
+                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
+                  <label className="text-[#8A8A8F] uppercase font-semibold">WACC % (Discount Rate)</label>
+                  <span className="text-[#8B1E1E] font-bold text-lg">{drivers.waccPct}%</span>
                 </div>
                 <input
                   type="range"
@@ -850,16 +850,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   onChange={(e) => setDrivers({ ...drivers, waccPct: parseFloat(e.target.value) })}
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
-                <p className="font-mono text-[10px] text-[#8A8A8F]">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
                   Weighted Average Cost of Capital risk hurdle.
                 </p>
               </div>
 
               {/* Slider 6: Terminal Growth Rate % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-5 space-y-3">
-                <div className="flex justify-between items-center font-mono text-xs">
-                  <label className="text-[#8A8A8F] uppercase">Terminal Growth Rate %</label>
-                  <span className="text-[#F2F0EA] font-bold text-base">{drivers.terminalGrowthPct}%</span>
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
+                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
+                  <label className="text-[#8A8A8F] uppercase font-semibold">Terminal Growth Rate %</label>
+                  <span className="text-[#F2F0EA] font-bold text-lg">{drivers.terminalGrowthPct}%</span>
                 </div>
                 <input
                   type="range"
@@ -870,7 +870,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   onChange={(e) => setDrivers({ ...drivers, terminalGrowthPct: parseFloat(e.target.value) })}
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
-                <p className="font-mono text-[10px] text-[#8A8A8F]">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
                   Perpetual long-term GDP growth rate benchmark.
                 </p>
               </div>
@@ -878,75 +878,75 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 3: DCF MODEL OUTPUT */}
+        {/* TAB 4: DCF MODEL OUTPUT */}
         {activeTab === 'DCF_OUTPUT' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
             
             {/* Left Inputs Summary */}
             <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4">
-                <div className="font-mono text-xs text-[#8A8A8F] uppercase border-b hairline-border-b pb-2 flex justify-between">
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-5 shadow-md">
+                <div className="font-mono text-[11px] tracking-widest text-[#8A8A8F] uppercase border-b hairline-border-b pb-3 flex justify-between font-semibold">
                   <span>ACTIVE MODEL PARAMETERS</span>
                   <span className="text-[#8B1E1E]">LIVE STATE</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 font-mono text-xs">
+                <div className="grid grid-cols-2 gap-5 font-mono text-xs">
                   <div>
-                    <span className="text-[#8A8A8F] block text-[10px]">REVENUE GROWTH %</span>
-                    <span className="text-[#F2F0EA] font-bold text-base">{drivers.revenueGrowthPct}%</span>
+                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">REVENUE GROWTH %</span>
+                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.revenueGrowthPct}%</span>
                   </div>
 
                   <div>
-                    <span className="text-[#8A8A8F] block text-[10px]">TAX RATE %</span>
-                    <span className="text-[#F2F0EA] font-bold text-base">{drivers.taxRatePct}%</span>
+                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">TAX RATE %</span>
+                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.taxRatePct}%</span>
                   </div>
 
                   <div>
-                    <span className="text-[#8A8A8F] block text-[10px]">CAPEX %</span>
-                    <span className="text-[#F2F0EA] font-bold text-base">{drivers.capexPctOfRev}%</span>
+                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">CAPEX %</span>
+                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.capexPctOfRev}%</span>
                   </div>
 
                   <div>
-                    <span className="text-[#8A8A8F] block text-[10px]">WACC %</span>
-                    <span className="text-[#8B1E1E] font-bold text-base">{drivers.waccPct}%</span>
+                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">WACC %</span>
+                    <span className="text-[#8B1E1E] font-bold text-lg tracking-wider">{drivers.waccPct}%</span>
                   </div>
 
                   <div>
-                    <span className="text-[#8A8A8F] block text-[10px]">OP MARGIN %</span>
-                    <span className="text-[#F2F0EA] font-bold text-base">{drivers.operatingMarginPct}%</span>
+                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">OP MARGIN %</span>
+                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.operatingMarginPct}%</span>
                   </div>
 
                   <div>
-                    <span className="text-[#8A8A8F] block text-[10px]">TERMINAL G %</span>
-                    <span className="text-[#F2F0EA] font-bold text-base">{drivers.terminalGrowthPct}%</span>
+                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">TERMINAL G %</span>
+                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.terminalGrowthPct}%</span>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setActiveTab('DRIVERS')}
-                  className="w-full mt-2 font-mono text-xs bg-[#222228] text-[#F2F0EA] py-2 uppercase hover:bg-[#8B1E1E] transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full mt-4 font-mono text-[11px] tracking-widest bg-[#222228] text-[#F2F0EA] py-3 uppercase hover:bg-[#8B1E1E] transition-colors flex items-center justify-center gap-2 cursor-pointer font-semibold"
                 >
-                  <Sliders className="w-3.5 h-3.5" />
+                  <Sliders className="w-4 h-4" />
                   <span>Adjust Assumptions</span>
                 </button>
               </div>
 
               {/* Cash Flow Bridge Breakdown */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-3 font-mono text-xs">
-                <div className="text-[#8A8A8F] uppercase text-[10px] border-b hairline-border-b pb-2">
+              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 font-mono text-xs shadow-inner">
+                <div className="text-[#8A8A8F] uppercase tracking-widest text-[10px] border-b hairline-border-b pb-3 font-semibold">
                   VALUATION BRIDGE COMPONENTS
                 </div>
-                <div className="flex justify-between text-[#dfbfbc]">
+                <div className="flex justify-between text-[#A1A1AA] tracking-wider pt-1">
                   <span>PV of Explicit 5-Yr Cash Flows:</span>
-                  <span className="text-[#F2F0EA]">{company.currencySymbol}{dcfResult.pvExplicitFCF.toLocaleString()}B</span>
+                  <span className="text-[#F2F0EA] font-medium">{company.currencySymbol}{dcfResult.pvExplicitFCF.toLocaleString()}B</span>
                 </div>
-                <div className="flex justify-between text-[#dfbfbc]">
+                <div className="flex justify-between text-[#A1A1AA] tracking-wider">
                   <span>PV of Terminal Value:</span>
-                  <span className="text-[#F2F0EA]">{company.currencySymbol}{dcfResult.pvTerminalValue.toLocaleString()}B</span>
+                  <span className="text-[#F2F0EA] font-medium">{company.currencySymbol}{dcfResult.pvTerminalValue.toLocaleString()}B</span>
                 </div>
-                <div className="flex justify-between text-[#8A8A8F] text-[11px] pt-2 border-t hairline-border-t">
+                <div className="flex justify-between text-[#8A8A8F] text-[10px] uppercase tracking-widest pt-4 border-t hairline-border-t">
                   <span>Terminal Share of Enterprise Value:</span>
-                  <span>
+                  <span className="text-[#F2F0EA]">
                     {Math.round(
                       (dcfResult.pvTerminalValue / (dcfResult.pvExplicitFCF + dcfResult.pvTerminalValue)) * 100
                     )}
@@ -957,104 +957,104 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
 
             {/* Right Output Valuation Panel */}
-            <div className="lg:col-span-7 bg-[#0B0B0D] border hairline-border p-8 flex flex-col justify-between space-y-8">
+            <div className="lg:col-span-7 bg-[#0B0B0D] border hairline-border p-8 flex flex-col justify-between space-y-8 shadow-xl">
               <div>
-                <div className="font-mono text-xs text-[#8A8A8F] uppercase tracking-wider mb-3 flex items-center justify-between">
+                <div className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest mb-4 flex items-center justify-between font-semibold border-b hairline-border-b pb-3">
                   <span>MODEL IMPLIED VALUE</span>
-                  <span className="text-[#8B1E1E] font-semibold">MARKET vs. MODEL</span>
+                  <span className="text-[#8B1E1E]">MARKET vs. MODEL</span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3.5 mb-6">
+                <div className="flex flex-wrap items-center gap-4 mb-8 mt-6">
                   <div className="font-display text-5xl sm:text-6xl text-[#F2F0EA] font-semibold tracking-tight">
                     {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
                   </div>
 
                   <div
-                    className={`font-mono text-xs px-3 py-1.5 font-bold uppercase tracking-wider flex items-center gap-1 ${
-                      potentialUpsidePct >= 0 ? 'bg-[#8B1E1E] text-[#F2F0EA]' : 'bg-rose-950 text-rose-300 border border-rose-700'
+                    className={`font-mono text-[11px] px-3.5 py-1.5 font-bold uppercase tracking-widest flex items-center gap-1.5 ${
+                      potentialUpsidePct >= 0 ? 'bg-[#8B1E1E] text-[#F2F0EA] shadow-[0_0_15px_rgba(139,30,30,0.4)]' : 'bg-rose-950 text-rose-300 border border-rose-700'
                     }`}
                   >
                     {potentialUpsidePct >= 0 ? (
                       <>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
+                        <ArrowUpRight className="w-4 h-4" />
                         <span>+{potentialUpsidePct}% UPSIDE</span>
                       </>
                     ) : (
                       <>
-                        <ArrowDownRight className="w-3.5 h-3.5" />
+                        <ArrowDownRight className="w-4 h-4" />
                         <span>{potentialUpsidePct}% DOWNSIDE</span>
                       </>
                     )}
                   </div>
 
                   {/* Premium / Discount badge */}
-                  <div className={`font-mono text-xs px-3.5 py-1.5 font-semibold uppercase tracking-widest border flex items-center gap-1.5 ${premiumDiscountStyle}`}>
+                  <div className={`font-mono text-[10px] px-3.5 py-1.5 font-semibold uppercase tracking-widest border flex items-center gap-2 ${premiumDiscountStyle}`}>
                     <span className="w-2 h-2 rounded-full bg-current" />
                     <span>{premiumDiscountLabel}</span>
                   </div>
                 </div>
 
                 {/* Market price vs model implied value */}
-                <div className="p-4 border hairline-border bg-[#111114] font-mono text-xs leading-relaxed mb-6 text-[#dfbfbc]">
-                  <strong className="block mb-1.5 text-[#F2F0EA] uppercase tracking-wider">
+                <div className="p-6 border hairline-border bg-[#111114] mb-8 shadow-inner border-l-4 border-l-[#8B1E1E]">
+                  <strong className="block mb-2 font-mono text-[11px] text-[#F2F0EA] uppercase tracking-widest">
                     MARKET PRICE vs. MODEL IMPLIED VALUE
                   </strong>
-                  <p className="leading-relaxed">
-                    {company.currencySymbol}{company.price.toFixed(2)} market price ·{' '}
-                    {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)} model implied value ·{' '}
+                  <p className="font-sans text-[13px] font-light text-[#A1A1AA] leading-loose tracking-wide">
+                    <strong className="font-semibold text-[#F2F0EA]">{company.currencySymbol}{company.price.toFixed(2)}</strong> market price ·{' '}
+                    <strong className="font-semibold text-[#F2F0EA]">{company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}</strong> model implied value ·{' '}
                     {potentialUpsidePct < 0
                       ? `market trades ${Math.abs(potentialUpsidePct)}% above this model`
                       : `market trades ${potentialUpsidePct}% below this model`}.
                     {' '}Use the sliders to adjust assumptions and see how the gap changes.
-                    This is a gap — not a recommendation.
+                    This is a calculated gap — not a recommendation.
                   </p>
                 </div>
 
-                <p className="font-sans text-xs text-[#8A8A8F] leading-relaxed max-w-lg">
+                <p className="font-sans text-xs font-light text-[#A1A1AA] leading-loose tracking-wide max-w-lg">
                   Fair value based on 5-year explicit free cash flow projections discounted at {drivers.waccPct}% WACC and {drivers.terminalGrowthPct}% perpetual growth rate.
                 </p>
               </div>
 
               {/* Enterprise Value to Equity Value Ledger Table */}
               <table className="w-full font-mono text-xs border-collapse">
-                <tbody>
-                  <tr className="border-b hairline-border-b hover:bg-[#111114]">
-                    <td className="py-3 text-[#8A8A8F]">Implied Enterprise Value (EV)</td>
-                    <td className="py-3 text-right text-[#F2F0EA] font-semibold">
+                <tbody className="tracking-wider">
+                  <tr className="border-b hairline-border-b hover:bg-[#1a1a1f] transition-colors">
+                    <td className="py-4 text-[#8A8A8F] uppercase tracking-widest text-[10px]">Implied Enterprise Value (EV)</td>
+                    <td className="py-4 text-right text-[#F2F0EA] font-semibold text-sm">
                       {company.currencySymbol}{dcfResult.enterpriseValueBillion.toLocaleString()}B
                     </td>
                   </tr>
 
-                  <tr className="border-b hairline-border-b hover:bg-[#111114]">
-                    <td className="py-3 text-[#8A8A8F]">
+                  <tr className="border-b hairline-border-b hover:bg-[#1a1a1f] transition-colors">
+                    <td className="py-4 text-[#A1A1AA]">
                       {drivers.netDebtBillion < 0 ? 'Plus: Net Cash' : 'Less: Net Debt'}
                     </td>
-                    <td className="py-3 text-right text-[#dfbfbc]">
+                    <td className="py-4 text-right text-[#A1A1AA]">
                       {drivers.netDebtBillion < 0
                         ? `+${company.currencySymbol}${Math.abs(drivers.netDebtBillion).toFixed(1)}B`
                         : `(${company.currencySymbol}${drivers.netDebtBillion.toFixed(1)}B)`}
                     </td>
                   </tr>
 
-                  <tr className="border-b hairline-border-b hover:bg-[#111114] bg-[#111114]/50">
-                    <td className="py-3 text-[#F2F0EA] font-medium">Implied Equity Value</td>
-                    <td className="py-3 text-right text-[#8B1E1E] font-bold text-sm">
+                  <tr className="border-b hairline-border-b hover:bg-[#1a1a1f] bg-[#111114]/80 transition-colors">
+                    <td className="py-4 text-[#F2F0EA] font-semibold uppercase tracking-widest text-[11px]">Implied Equity Value</td>
+                    <td className="py-4 text-right text-[#8B1E1E] font-bold text-base">
                       {company.currencySymbol}{dcfResult.impliedEquityValueBillion.toLocaleString()}B
                     </td>
                   </tr>
 
-                  <tr className="hover:bg-[#111114]">
-                    <td className="py-3 text-[#8A8A8F]">Diluted Shares Outstanding</td>
-                    <td className="py-3 text-right text-[#dfbfbc]">
+                  <tr className="hover:bg-[#1a1a1f] transition-colors">
+                    <td className="py-4 text-[#A1A1AA]">Diluted Shares Outstanding</td>
+                    <td className="py-4 text-right text-[#A1A1AA]">
                       {drivers.sharesOutstandingBillion} Billion
                     </td>
                   </tr>
                 </tbody>
               </table>
 
-              <div className="font-mono text-[10px] text-[#8A8A8F] pt-3 border-t hairline-border-t flex justify-between items-center">
+              <div className="font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4 border-t hairline-border-t flex justify-between items-center mt-2">
                 <span>MARGINALIA ENGINE · VERIFIED AGAINST EXCEL MODEL</span>
-                <span className="text-[#8B1E1E]">100% RECALCULATED REAL-TIME</span>
+                <span className="text-[#8B1E1E] font-bold">100% RECALCULATED REAL-TIME</span>
               </div>
             </div>
 
