@@ -21,13 +21,9 @@ export const FeedbackFormSection: React.FC = () => {
             </span>
           </div>
 
-          <h3 className="font-display text-3xl sm:text-4xl text-[#F2F0EA] mb-2 font-semibold">
+          <h3 className="font-display text-3xl sm:text-4xl text-[#F2F0EA] mb-8 font-semibold">
             Vansh Deepak Gupta
           </h3>
-
-          <p className="font-mono text-sm text-[#8B1E1E] mb-8 uppercase tracking-wider font-semibold">
-            CA INTERMEDIATE (AIR 34)
-          </p>
 
           <div className="border-t hairline-border-t pt-8">
             <p className="font-display text-2xl sm:text-3xl text-[#F2F0EA] font-bold italic leading-relaxed text-left border-l-4 border-[#8B1E1E] pl-6 py-2">
