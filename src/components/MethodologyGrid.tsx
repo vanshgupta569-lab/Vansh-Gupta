@@ -1,103 +1,137 @@
-import React, { useState, useRef } from 'react';
-import { ArrowRight, Calculator, FileSpreadsheet, Search, BarChart2 } from 'lucide-react';
+import React, { useRef } from 'react';
+import { Database, Sliders, Cpu, Calculator, ArrowRight } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
 
 interface MethodologyGridProps {
   onSelectStep: (stepNumber: number) => void;
 }
 
-const METHODOLOGY_STEPS = [
-  { step: 'STEP 1', title: 'Open a Ticker', description: 'Type any listed ticker and a model is built on the spot. Each company shows a live price, key metrics, and three years of reported financials pulled from its own filings.', icon: Search, detail: 'US companies come from SEC EDGAR. Companies listed elsewhere need their exchange suffix — .NS for India, .L for London, .TO for Toronto.' },
-  { step: 'STEP 2', title: 'Read the Reported History', description: 'Three years of income statement, balance sheet and cash flow side by side. Figures are as reported — no adjustments, no estimates, no rounding. Revenue growth, margins, free cash flow and net debt are computed directly from those numbers.', icon: BarChart2, detail: 'Historical data is sourced from SEC filings for US companies and from exchange disclosures elsewhere. Units and currency are labelled per company.' },
-  { step: 'STEP 3', title: 'Inspect the Integrated Model', description: 'A full 3-statement model built on the reported history: income statement, balance sheet, cash flow, working capital schedule, PP&E schedule, debt schedule, and capital stock. Every forecast line is driven by a named assumption, not a black box.', icon: FileSpreadsheet, detail: 'The balance sheet is checked for balance in every year. Reported years and forecast years are shown in separate tabs, so filed figures are never mixed with modelled ones.' },
-  { step: 'STEP 4', title: 'Run the DCF', description: 'Adjust WACC, terminal growth, revenue growth, operating margin, capex and tax rate with live sliders. Implied enterprise value, equity value and per-share intrinsic value recalculate instantly. A 5×5 sensitivity grid shows how the output moves across the full range of assumptions.', icon: Calculator, detail: 'Two terminal value methods: Gordon Growth perpetuity and EV/EBITDA exit multiple. The market price vs. model implied value gap is shown — no buy/sell verdict is made.' },
+const PIPELINE_STEPS = [
+  {
+    phase: 'PHASE 01',
+    title: 'Ticker Lookup & Data Ingestion',
+    subtitle: 'User Selection & SEC/Exchange Record Retrieval',
+    description: 'When a user selects an equity ticker from the directory, the platform instantly queries structured financial databases to pull the exact trailing 3-year audited financial statements. US companies come from SEC EDGAR, while international listings use exchange suffixes (.NS for India, .L for London, .TO for Toronto). No estimates or approximations are introduced at this ingestion stage.',
+    icon: Database,
+    detail: 'Pulls raw Balance Sheets, Income Statements, and Cash Flow schedules directly from primary regulatory filings as reported.',
+  },
+  {
+    phase: 'PHASE 02',
+    title: 'Uniform Assumption Architecture',
+    subtitle: 'Normalized Modeling Framework',
+    description: 'The fetched history feeds into a standardized 3-statement projection engine. Every forecast line item is driven by transparent, named assumptions—including revenue growth, operating margins, effective tax rates, and CapEx intensity.',
+    icon: Sliders,
+    detail: 'Users retain full interactive control to override default parameters via live terminal sliders in real time.',
+  },
+  {
+    phase: 'PHASE 03',
+    title: 'Free Cash Flow & Working Capital Mechanics',
+    subtitle: 'Unlevered Free Cash Flow (UFCF) Derivation',
+    description: 'The engine computes Net Operating Profit After Tax (NOPAT/EBIAT), adds back Depreciation & Amortization, and subtracts capital expenditures and net working capital changes to arrive at pristine Unlevered Free Cash Flows across a 5-year explicit horizon.',
+    icon: Cpu,
+    detail: 'Balance sheet schedules balance programmatically in every single projected forecast year without exceptions.',
+  },
+  {
+    phase: 'PHASE 04',
+    title: 'Dual-Method Intrinsic Valuation',
+    subtitle: 'Perpetuity Growth & EV/EBITDA Exit Multiples',
+    description: 'To calculate terminal value and final intrinsic equity value, the engine employs two institutional standards: (1) The Gordon Growth Perpetuity Method based on long-term macroeconomic benchmarks, and (2) The EV/EBITDA Exit Multiple Method. Both discount future cash flows back using the Weighted Average Cost of Capital (WACC).',
+    icon: Calculator,
+    detail: 'Outputs a dynamic 5×5 sensitivity matrix demonstrating valuation variations across WACC and growth bands with zero buy/sell verdicts attached.',
+  },
 ];
 
 export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }) => {
-  const [activeStepHover, setActiveStepHover] = useState<number | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const { scrollYProgress } = useScroll({
-    target: gridRef,
+    target: containerRef,
     offset: ["start center", "end center"]
   });
   
   const lineHeight = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
 
   return (
-    <section id="methodology" className="max-w-[1440px] mx-auto px-6 lg:px-12 py-20 hairline-border-b">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4">
+    <section id="methodology" className="max-w-[1440px] mx-auto px-6 lg:px-12 py-24 hairline-border-b">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-6">
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <span className="w-2 h-2 bg-[#8B1E1E]" />
             <span className="font-mono text-[11px] text-[#A1A1AA] tracking-[0.2em] uppercase">
-              02 - HOW IT WORKS
+              02 — ENGINE MECHANICS & METHODOLOGY
             </span>
           </div>
-          <h2 className="font-display text-3xl sm:text-4xl text-[#F2F0EA] font-medium">
-            From Filing to Fair Value
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium tracking-tight">
+            From Raw Filing to Intrinsic Value
           </h2>
         </div>
-        <p className="font-mono text-xs text-[#8A8A8F] max-w-md uppercase tracking-wider">
-          Four steps from raw reported data to a live, adjustable discounted cash flow model.
+        <p className="font-mono text-xs text-[#8A8A8F] max-w-md uppercase tracking-wider leading-relaxed">
+          An end-to-end breakdown of how Marginalia transforms public disclosures into a live, institutional-grade discounted cash flow model.
         </p>
       </div>
 
-      <div ref={gridRef} className="relative grid grid-cols-1 md:grid-cols-2 border hairline-border bg-[#0B0B0D]">
+      <div ref={containerRef} className="relative space-y-8">
         
-        <div className="hidden md:block absolute top-0 bottom-0 left-1/2 w-[1px] bg-[#222228] -translate-x-1/2 z-0">
+        {/* Animated Connecting Vertical Line */}
+        <div className="hidden lg:block absolute top-8 bottom-8 left-[39px] w-[1px] bg-[#222228] z-0">
           <motion.div 
             style={{ height: lineHeight }} 
             className="w-full bg-[#8B1E1E] shadow-[0_0_15px_rgba(139,30,30,0.8)]" 
           />
         </div>
 
-        {METHODOLOGY_STEPS.map((item, index) => {
-          const IconComponent = item.icon;
-          const isRightCol = index % 2 === 1;
-          const isBottomRow = index >= 2;
+        {PIPELINE_STEPS.map((step, index) => {
+          const IconComponent = step.icon;
 
           return (
             <motion.div
-              key={item.step}
-              initial={{ opacity: 0, y: 40 }}
+              key={step.phase}
+              initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              onMouseEnter={() => setActiveStepHover(index)}
-              onMouseLeave={() => setActiveStepHover(null)}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.6, ease: "easeOut", delay: index * 0.1 }}
               onClick={() => onSelectStep(index + 1)}
-              className={`p-8 sm:p-12 hover:bg-[#111114] transition-all min-h-[260px] flex flex-col justify-between group cursor-pointer relative z-10 ${
-                !isRightCol ? 'md:border-r border-[#222228]' : ''
-              } ${!isBottomRow ? 'border-b border-[#222228]' : ''}`}
+              className="relative z-15 bg-[#111114] border hairline-border p-8 sm:p-12 hover:bg-[#16161a] transition-all group shadow-lg cursor-pointer"
             >
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <span className={`font-mono text-[11px] tracking-[0.2em] font-semibold transition-colors duration-500 ${activeStepHover === index ? 'text-[#F2F0EA]' : 'text-[#8B1E1E]'}`}>
-                    {item.step}
-                  </span>
-                  <div className="w-8 h-8 bg-[#222228]/50 border hairline-border flex items-center justify-center group-hover:border-[#8B1E1E] transition-colors duration-300">
-                    <IconComponent className="w-4 h-4 text-[#8A8A8F] group-hover:text-[#F2F0EA]" />
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                {/* Phase Number & Icon Column */}
+                <div className="lg:col-span-3 flex items-center lg:items-start gap-4">
+                  <div className="w-14 h-14 bg-[#0B0B0D] border hairline-border flex items-center justify-center shrink-0 group-hover:border-[#8B1E1E] transition-colors shadow-inner">
+                    <IconComponent className="w-6 h-6 text-[#8B1E1E]" />
+                  </div>
+                  <div>
+                    <span className="font-mono text-[11px] text-[#8B1E1E] tracking-[0.2em] font-semibold uppercase block mb-1">
+                      {step.phase}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider block">
+                      {step.subtitle}
+                    </span>
                   </div>
                 </div>
 
-                <h3 className="font-display text-2xl text-[#F2F0EA] mb-4 group-hover:text-[#ffb3ad] transition-colors flex items-center justify-between">
-                  <span>{item.title}</span>
-                  <ArrowRight className="w-4 h-4 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
-                </h3>
+                {/* Content Column */}
+                <div className="lg:col-span-9 flex flex-col justify-between space-y-4">
+                  <h3 className="font-display text-2xl sm:text-3xl text-[#F2F0EA] tracking-tight group-hover:text-[#ffb3ad] transition-colors flex items-center justify-between">
+                    <span>{step.title}</span>
+                    <ArrowRight className="w-4 h-4 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
+                  </h3>
 
-                <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide mb-6">
-                  {item.description}
-                </p>
-              </div>
+                  <p className="font-sans text-sm sm:text-base font-light text-[#A1A1AA] leading-loose tracking-wide">
+                    {step.description}
+                  </p>
 
-              <div className="font-mono text-[10px] text-[#8A8A8F] pt-4 hairline-border-t border-dashed flex items-start gap-3 uppercase tracking-wider leading-relaxed">
-                <span className="w-1.5 h-1.5 bg-[#8B1E1E] shrink-0 mt-1.5" />
-                <span>{item.detail}</span>
+                  <div className="font-mono text-[10px] text-[#8A8A8F] pt-4 hairline-border-t border-dashed flex items-start gap-3 uppercase tracking-wider leading-relaxed">
+                    <span className="w-1.5 h-1.5 bg-[#8B1E1E] shrink-0 mt-1.5" />
+                    <span>{step.detail}</span>
+                  </div>
+                </div>
+
               </div>
             </motion.div>
           );
         })}
+
       </div>
     </section>
   );

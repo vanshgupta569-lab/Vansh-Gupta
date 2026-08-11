@@ -153,25 +153,26 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
           </div>
         </motion.div>
 
+        {/* Fixed Square Radar Graphic Container */}
         <motion.div 
           style={{ y: radarY }}
-          className="lg:col-span-6 relative h-[380px] w-full flex items-center justify-center"
+          className="lg:col-span-6 w-full flex items-center justify-center py-6"
         >
-          <div className="relative w-80 h-80 flex items-center justify-center">
+          <div className="relative w-80 h-80 sm:w-96 sm:h-96 flex items-center justify-center shrink-0">
             <div className="absolute inset-0 hairline-border p-6 bg-[#111114]/40 backdrop-blur-sm flex items-center justify-center">
               
-              <div className="w-72 h-72 border hairline-border rounded-full flex items-center justify-center relative">
+              <div className="w-72 h-72 sm:w-80 sm:h-80 border hairline-border rounded-full flex items-center justify-center relative aspect-square">
                 <motion.div
                   animate={{ scale: [1, 1.05, 1] }}
                   transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-                  className="w-52 h-52 border border-[#8B1E1E]/30 rounded-full flex items-center justify-center relative"
+                  className="w-52 h-52 sm:w-60 sm:h-60 border border-[#8B1E1E]/30 rounded-full flex items-center justify-center relative aspect-square"
                 >
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
                     className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-gradient-to-b from-[#8B1E1E] via-transparent to-transparent origin-center"
                   />
-                  <div className="w-32 h-32 border border-[#8B1E1E]/60 rounded-full flex items-center justify-center relative z-10 bg-[#0B0B0D]/50">
+                  <div className="w-32 h-32 border border-[#8B1E1E]/60 rounded-full flex items-center justify-center relative z-10 bg-[#0B0B0D]/50 aspect-square">
                     <motion.div
                       animate={{ opacity: [0.7, 1, 0.7] }}
                       transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
@@ -193,6 +194,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
               <span className="absolute bottom-3 right-3 font-mono text-[9px] tracking-widest text-[#8B1E1E] flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#8B1E1E] animate-pulse"></span> DCF
               </span>
+
             </div>
           </div>
         </motion.div>
