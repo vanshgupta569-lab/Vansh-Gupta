@@ -9,12 +9,46 @@ import { DirectoryScreen } from './components/DirectoryScreen';
 import { TerminalDashboard } from './components/TerminalDashboard';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
+import { loadCompany } from './data/autoCompany';
+import { CompanyData } from './types';
 import { ScreenType } from './types';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('HOME');
   const [selectedTicker, setSelectedTicker] = useState<string>('AAPL');
   const [activeSection, setActiveSection] = useState<string>('hero');
+
+  // Companies fetched and modelled on demand this session. They sit alongside
+  // the curated ones and are discarded on refresh — nothing is stored.
+  const [loadedCompanies, setLoadedCompanies] = useState<Record<string, CompanyData>>({});
+  const [lookupState, setLookupState] = useState<{ loading: boolean; error: string | null }>({
+    loading: false,
+    error: null,
+  });
+
+  const allCompanies = { ...COMPANIES_DATA, ...loadedCompanies };
+
+  const handleLookupTicker = async (rawTicker: string) => {
+    const ticker = rawTicker.toUpperCase();
+
+    // Already have it — open it rather than fetching again.
+    if (allCompanies[ticker]) {
+      handleSelectCompanyFromDirectory(ticker);
+      return;
+    }
+
+    setLookupState({ loading: true, error: null });
+    try {
+      const company = await loadCompany(ticker);
+      setLoadedCompanies((prev) => ({ ...prev, [ticker]: company }));
+      setLookupState({ loading: false, error: null });
+      setSelectedTicker(ticker);
+      setCurrentScreen('ANALYSIS');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error: any) {
+      setLookupState({ loading: false, error: error.message || 'Could not build a model for that ticker.' });
+    }
+  };
 
   const handleNavigateToScreen = (screen: ScreenType) => {
     setCurrentScreen(screen);
@@ -71,17 +105,19 @@ export default function App() {
         {/* SCREEN 2: COMPANY SEARCH DIRECTORY */}
         {currentScreen === 'DIRECTORY' && (
           <DirectoryScreen
-            companies={COMPANIES_DATA}
+            companies={allCompanies}
             selectedTicker={selectedTicker}
             onSelectCompany={handleSelectCompanyFromDirectory}
             onBackToHome={() => handleNavigateToScreen('HOME')}
+            onLookupTicker={handleLookupTicker}
+            lookupState={lookupState}
           />
         )}
 
         {/* SCREEN 3: FINANCIAL ANALYSIS & DYNAMIC DCF TERMINAL */}
         {currentScreen === 'ANALYSIS' && (
           <TerminalDashboard
-            companies={COMPANIES_DATA}
+            companies={allCompanies}
             selectedTicker={selectedTicker}
             onSelectTicker={(ticker) => setSelectedTicker(ticker)}
             onOpenDirectory={() => handleNavigateToScreen('DIRECTORY')}

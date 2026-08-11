@@ -7,6 +7,8 @@ interface DirectoryScreenProps {
   selectedTicker: string;
   onSelectCompany: (ticker: string) => void;
   onBackToHome: () => void;
+  onLookupTicker: (ticker: string) => void;
+  lookupState: { loading: boolean; error: string | null };
 }
 
 export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
@@ -14,8 +16,11 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
   selectedTicker,
   onSelectCompany,
   onBackToHome,
+  onLookupTicker,
+  lookupState,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [lookupQuery, setLookupQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState<string>('ALL');
 
   const companyList = Object.values(companies) as CompanyData[];
@@ -56,8 +61,46 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
 
           <div className="font-mono text-[11px] text-[#8A8A8F] border border-[#222228] bg-[#111114] px-4 py-3 flex items-center gap-3 uppercase tracking-widest shadow-md">
             <Building2 className="w-4 h-4 text-[#8B1E1E]" />
-            <span>COVERAGE: <strong className="text-[#F2F0EA]">5 INSTITUTIONAL EQUITIES</strong></span>
+            <span>COVERAGE: <strong className="text-[#F2F0EA]">ANY LISTED COMPANY</strong></span>
           </div>
+        </div>
+
+        {/* Any-company lookup — the directory below is only what has been
+            opened before; anything listed anywhere can be modelled on demand. */}
+        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-6 shadow-lg">
+          <div className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-[0.2em] mb-3">
+            Model any listed company
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={lookupQuery}
+              onChange={(e) => setLookupQuery(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && lookupQuery.trim()) onLookupTicker(lookupQuery.trim());
+              }}
+              placeholder="Enter a ticker — AAPL, NVDA, RELIANCE.NS, BP.L"
+              className="flex-grow bg-transparent border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm px-4 py-3 outline-none placeholder:text-[#8A8A8F] transition-colors"
+            />
+            <button
+              onClick={() => lookupQuery.trim() && onLookupTicker(lookupQuery.trim())}
+              disabled={lookupState.loading}
+              className="bg-[#8B1E1E] text-[#F2F0EA] font-mono text-xs px-6 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-50 whitespace-nowrap"
+            >
+              {lookupState.loading ? 'Building model…' : 'Build model'}
+            </button>
+          </div>
+
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed uppercase tracking-wider">
+            US filings come from SEC EDGAR. Companies listed elsewhere need their
+            exchange suffix — .NS for India, .L for London, .TO for Toronto.
+          </div>
+
+          {lookupState.error && (
+            <div className="mt-4 border border-[#8B1E1E]/50 bg-[#8B1E1E]/10 px-4 py-3 font-mono text-[11px] text-[#F2F0EA] leading-relaxed">
+              {lookupState.error}
+            </div>
+          )}
         </div>
 
         {/* Search Bar & Sector Filter Controls */}

@@ -99,6 +99,11 @@ export interface CompanyData {
   recentNews: NewsItem[];
   // Engine-sourced flag — true for companies with a real data file
   engineBacked: boolean;
+  // Present only on auto-generated companies: the engine-shaped data file the
+  // model was derived from, so sliders can re-run the engine for this company.
+  modelData?: any;
+  // Plain-English note on where each derived assumption came from.
+  provenance?: Record<string, string>;
 }
 
 export interface AccessRequestForm {

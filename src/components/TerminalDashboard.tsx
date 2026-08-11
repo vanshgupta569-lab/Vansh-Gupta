@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCF, COMPANIES_DATA } from '../data/companies';
+import { calculateDCF, calculateDCFFor, COMPANIES_DATA } from '../data/companies';
 import {
   TrendingUp,
   BarChart2,
@@ -66,13 +66,27 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Drivers State (initialized per company)
   const [drivers, setDrivers] = useState<ValuationDrivers>(company.defaultDrivers);
 
+  // Switching company must load that company's own starting assumptions,
+  // otherwise the previous company's sliders silently carry over.
+  useEffect(() => {
+    setDrivers(company.defaultDrivers);
+  }, [company.ticker]);
+
   // Update local drivers if ticker changes
   React.useEffect(() => {
     setDrivers(company.defaultDrivers);
   }, [selectedTicker]);
 
   // Recalculate DCF live
-  const dcfResult = useMemo(() => calculateDCF(drivers), [drivers]);
+  // Auto-generated companies carry their own derived data file; Apple uses the
+  // curated one. Same engine either way — only the inputs differ.
+  const runDCF = React.useCallback(
+    (d: ValuationDrivers) =>
+      company.modelData ? calculateDCFFor(company.modelData, d) : calculateDCF(d),
+    [company.modelData]
+  );
+
+  const dcfResult = useMemo(() => runDCF(drivers), [drivers, runDCF]);
 
   // Calculate Upside %
   const potentialUpsidePct = useMemo(() => {
@@ -126,11 +140,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const sensitivityMatrix = useMemo(() => {
     return waccRange.map((w) =>
       gRange.map((g) => {
-        const res = calculateDCF({ ...drivers, waccPct: Math.max(4, w), terminalGrowthPct: Math.max(0.5, g) });
+        const res = runDCF({ ...drivers, waccPct: Math.max(4, w), terminalGrowthPct: Math.max(0.5, g) });
         return res.targetPrice;
       })
     );
-  }, [drivers]);
+  }, [drivers, runDCF]);
 
   const [hoveredMatrixCell, setHoveredMatrixCell] = useState<{ wacc: number; g: number; val: number } | null>(null);
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);

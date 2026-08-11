@@ -17,9 +17,9 @@ const r = (n: number | null, dp = 0): number => {
 // ---------------------------------------------------------------------------
 // BUILD A MODEL RUN WITH SLIDER OVERRIDES
 // ---------------------------------------------------------------------------
-function buildOverridden(drivers: ValuationDrivers): any {
+function buildOverridden(source: any, drivers: ValuationDrivers): any {
   // Deep-clone so we never mutate the original data file
-  const d = JSON.parse(JSON.stringify(AAPL_DATA));
+  const d = JSON.parse(JSON.stringify(source));
 
   // 1. Revenue growth — apply as a uniform blended rate across all segments
   const rg = drivers.revenueGrowthPct / 100;
@@ -56,10 +56,12 @@ function buildOverridden(drivers: ValuationDrivers): any {
 // ---------------------------------------------------------------------------
 // CALCULATE DCF — called by TerminalDashboard on every slider change
 // ---------------------------------------------------------------------------
-export function calculateDCF(drivers: ValuationDrivers): DCFResult {
-  const d = buildOverridden(drivers);
-  const M = buildModel(d);
-  const D = buildDCF(M, d);
+// `source` is any engine-shaped data file: the curated AAPL.js, or one derived
+// on the fly from filings by deriveModel(). The engine treats both identically.
+export function calculateDCFFor(source: any, drivers: ValuationDrivers): DCFResult {
+  const d = buildOverridden(source, drivers);
+  const M: any = buildModel(d);
+  const D: any = buildDCF(M, d);
 
   // Guard: engine said DCF is not applicable
   if (!D.applicable) {
@@ -110,7 +112,6 @@ export function calculateDCF(drivers: ValuationDrivers): DCFResult {
   const equityBridge = D.perpetuity;
   const evM = equityBridge.enterpriseValue;          // in $M
   const eqM = equityBridge.equityValue;              // in $M
-  const shareCount = AAPL_DATA.dcf.dilutedSharesCount; // millions
 
   return {
     applicable: true,
@@ -125,11 +126,16 @@ export function calculateDCF(drivers: ValuationDrivers): DCFResult {
   };
 }
 
+// Back-compatible wrapper: Apple's curated model.
+export function calculateDCF(drivers: ValuationDrivers): DCFResult {
+  return calculateDCFFor(AAPL_DATA, drivers);
+}
+
 // ---------------------------------------------------------------------------
 // PRE-RUN THE BASE APPLE MODEL (module load time)
 // ---------------------------------------------------------------------------
-const _M = buildModel(AAPL_DATA);
-const _D = buildDCF(_M, AAPL_DATA);
+const _M: any = buildModel(AAPL_DATA);
+const _D: any = buildDCF(_M, AAPL_DATA);
 const _nH: number = _M.nH;
 
 // Historical operating cash flow per year (from reported data in the data file)
