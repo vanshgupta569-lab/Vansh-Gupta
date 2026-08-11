@@ -15,15 +15,28 @@ export const Header: React.FC<HeaderProps> = ({
   onScrollToSection,
   activeSection,
 }) => {
-  const [timeStr, setTimeStr] = useState<string>('');
+  const [utcTimeStr, setUtcTimeStr] = useState<string>('');
+  const [istTimeStr, setIstTimeStr] = useState<string>('');
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      const hours = String(now.getUTCHours()).padStart(2, '0');
-      const mins = String(now.getUTCMinutes()).padStart(2, '0');
-      const secs = String(now.getUTCSeconds()).padStart(2, '0');
-      setTimeStr(`${hours}:${mins}:${secs} UTC`);
+      
+      // Format UTC Time
+      const utcHours = String(now.getUTCHours()).padStart(2, '0');
+      const utcsMins = String(now.getUTCMinutes()).padStart(2, '0');
+      const utcSecs = String(now.getUTCSeconds()).padStart(2, '0');
+      setUtcTimeStr(`${utcHours}:${utcsMins}:${utcSecs} UTC`);
+
+      // Format IST Time (Asia/Kolkata)
+      const istFormatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      setIstTimeStr(`${istFormatter.format(now)} IST`);
     };
 
     updateTime();
@@ -58,11 +71,18 @@ export const Header: React.FC<HeaderProps> = ({
           <span>MARGINALIA</span>
         </button>
 
-        {/* Live Market Clock */}
-        <div className="hidden xl:flex items-center gap-2 font-mono text-[11px] text-[#8A8A8F] border-l hairline-border-l pl-6">
+        {/* Live Market Clocks (UTC & IST) */}
+        <div className="hidden xl:flex items-center gap-3 font-mono text-[11px] text-[#8A8A8F] border-l hairline-border-l pl-6">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[#F2F0EA] font-medium">{timeStr}</span>
-          <span className="text-[#8A8A8F] ml-2">UTC CLOCK</span>
+          <div className="flex items-center gap-3">
+            <div>
+              <span className="text-[#F2F0EA] font-medium mr-1">{istTimeStr}</span>
+            </div>
+            <span className="text-[#52525B]">|</span>
+            <div>
+              <span className="text-[#8A8A8F] font-medium mr-1">{utcTimeStr}</span>
+            </div>
+          </div>
         </div>
       </div>
 
