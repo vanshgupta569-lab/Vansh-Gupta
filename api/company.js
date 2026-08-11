@@ -143,14 +143,29 @@ function extractUSFact(facts, tagList) {
     if (!unitKey) continue;
 
     for (const point of entry.units[unitKey]) {
-      // fp === 'FY' and form 10-K keeps us to full-year audited figures only,
-      // filtering out quarterly and amended noise.
-      if (point.fp !== 'FY' || !point.form?.startsWith('10-K')) continue;
-      if (!point.fy) continue;
+      if (!point.form?.startsWith('10-K') || !point.end) continue;
 
-      // Earlier tags in the list are the preferred ones, so don't let a later
-      // tag overwrite a year an earlier tag already filled.
-      if (byYear[point.fy] === undefined) byYear[point.fy] = point.val;
+      // IMPORTANT: do not trust point.fy. That field is the fiscal year of the
+      // FILING, not of the figure. Every 10-K restates the two prior years as
+      // comparatives, and all of them carry the filing's own fy stamp — so
+      // relying on it silently files old figures under recent years.
+      // The figure's real period is in its start/end dates instead.
+      if (point.start) {
+        // A flow item (revenue, profit, cash flow) covers a span of time.
+        // Keep only full-year spans, discarding quarters and half-years.
+        const days =
+          (new Date(point.end) - new Date(point.start)) / 86400000;
+        if (days < 300 || days > 400) continue;
+      }
+      // A stock item (cash, assets, equity) is a snapshot with no start date,
+      // and is dated by its end date alone.
+
+      const year = Number(point.end.slice(0, 4));
+      if (!year) continue;
+
+      // Later entries are from more recent filings, so let them win: a figure
+      // restated in a subsequent year supersedes the original.
+      byYear[year] = point.val;
     }
   }
 
@@ -235,6 +250,49 @@ async function fetchFromSEC(ticker) {
 // ===========================================================================
 // SECTION 2 — YAHOO FINANCE (everything that isn't a US filer)
 // ===========================================================================
+
+// Yahoo now rejects anonymous requests to its financial data with a 401.
+// Access requires two things obtained in sequence: a session cookie, then a
+// short "crumb" token tied to that cookie. Both are free and need no account.
+let yahooAuth = null;
+
+async function getYahooAuth() {
+  if (yahooAuth) return yahooAuth;
+
+  const browserHeaders = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  };
+
+  // Step one: ask for any Yahoo page and keep the cookie it hands back.
+  const cookieRes = await fetch('https://fc.yahoo.com', {
+    headers: browserHeaders,
+    redirect: 'follow',
+  });
+
+  const rawCookie = cookieRes.headers.get('set-cookie');
+  if (!rawCookie) throw new Error('Yahoo did not issue a session cookie');
+
+  const cookie = rawCookie
+    .split(',')
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+
+  // Step two: exchange the cookie for a crumb token.
+  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+    headers: { ...browserHeaders, Cookie: cookie },
+  });
+
+  const crumb = (await crumbRes.text()).trim();
+  if (!crumb || crumb.length > 20 || crumb.includes('<')) {
+    throw new Error('Yahoo did not issue a crumb token');
+  }
+
+  yahooAuth = { cookie, crumb, browserHeaders };
+  return yahooAuth;
+}
 
 // Yahoo's old quoteSummary statement modules still answer, but they now come
 // back mostly empty — balance sheet and cash flow return nothing. The endpoint
