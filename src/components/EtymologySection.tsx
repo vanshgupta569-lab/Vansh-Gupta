@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, BarChart3, Scale, BookOpen, BookmarkCheck, Shield } from 'lucide-react';
+import { BookOpen, BookmarkCheck, Shield } from 'lucide-react';
 
 export const EtymologySection: React.FC = () => {
   return (
@@ -46,7 +46,7 @@ export const EtymologySection: React.FC = () => {
               Notes in the Margins
             </h3>
             <p className="font-sans text-sm text-[#8A8A8F] leading-relaxed">
-              Extracting buried commitments, off-balance sheet lease obligations, capital capitalization velocity, and deferred tax shifts from SEC filing footnotes.
+              Every model starts from what companies actually reported: filed income statements, balance sheets and cash flow statements. No numbers are invented; if a figure isn't in the filing, it isn't in the model.
             </p>
           </div>
 
@@ -55,10 +55,10 @@ export const EtymologySection: React.FC = () => {
               <BookmarkCheck className="w-6 h-6 text-[#8B1E1E]" />
             </div>
             <h3 className="font-display text-xl sm:text-2xl mb-3 text-[#F2F0EA]">
-              Unvarnished Ledger Truth
+              Assumptions in Plain Sight
             </h3>
             <p className="font-sans text-sm text-[#8A8A8F] leading-relaxed">
-              A commitment to mathematical integrity. Reconciling GAAP to non-GAAP distortions to build a pristine, unmanipulated representation of true earnings power.
+              Every forecast number is driven by a named, visible assumption — revenue growth, gross margin, WACC, terminal growth rate. Nothing is hidden inside a black box. Change an assumption and watch every downstream figure recalculate instantly.
             </p>
           </div>
 
@@ -67,10 +67,10 @@ export const EtymologySection: React.FC = () => {
               <Shield className="w-6 h-6 text-[#8B1E1E]" />
             </div>
             <h3 className="font-display text-xl sm:text-2xl mb-3 text-[#F2F0EA]">
-              Auditability & Proof
+              Reported vs. Modelled
             </h3>
             <p className="font-sans text-sm text-[#8A8A8F] leading-relaxed">
-              Every data point, driver assumption, and DCF fair value line item links directly back to verified primary SEC disclosures with zero guesswork.
+              Historical figures are clearly separated from forecast figures. The model tells you what a set of assumptions implies — not what will happen. The distance between the model's implied value and the market price is shown without a verdict attached.
             </p>
           </div>
         </div>
