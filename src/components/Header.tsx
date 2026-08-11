@@ -92,6 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
           {[
             { id: 'etymology', label: 'Etymology' },
             { id: 'methodology', label: 'Methodology' },
+            { id: 'mechanism', label: 'How It Works' },
             { id: 'coverage', label: 'Coverage Stats' },
             { id: 'about', label: 'About' },
             { id: 'search-company', label: 'Search Company' },

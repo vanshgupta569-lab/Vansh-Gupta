@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { EtymologySection } from './components/EtymologySection';
 import { MethodologyGrid } from './components/MethodologyGrid';
+import { MechanismSection } from './components/MechanismSection';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
 import { DirectoryScreen } from './components/DirectoryScreen';
@@ -116,6 +117,9 @@ export default function App() {
 
             {/* Process Flowchart / Methodology */}
             <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
+
+            {/* How a valuation is built — mechanics only, no company data */}
+            <MechanismSection />
 
             {/* Coverage Stats */}
             <CoverageStatsSection />

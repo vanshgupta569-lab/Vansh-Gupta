@@ -57,6 +57,35 @@ export const EtymologySection: React.FC = () => {
             >
               <strong className="text-[#F2F0EA] block tracking-widest mb-1 uppercase">mar·gi·na·li·a</strong>
               <span className="italic">noun</span> /ˌmɑːrdʒɪˈneɪliə/ · Notes, commentary, and critical disclosures written in the margins of a text.
+
+              {/* An annotation drawing itself in the margin: the site's own
+                  name, performed. The stroke is revealed by animating
+                  stroke-dashoffset from full length down to zero. */}
+              <svg
+                viewBox="0 0 220 60"
+                className="w-full max-w-[220px] mt-5 overflow-visible"
+                fill="none"
+                aria-hidden="true"
+              >
+                <motion.path
+                  d="M6 40 C 34 12, 62 12, 88 32 S 140 52, 168 22"
+                  stroke="#8B1E1E"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={isInView ? { pathLength: 1, opacity: 0.85 } : {}}
+                  transition={{ duration: 1.6, delay: 1.0, ease: 'easeInOut' }}
+                />
+                <motion.path
+                  d="M168 22 l -9 3 M168 22 l 2 9"
+                  stroke="#8B1E1E"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={isInView ? { pathLength: 1, opacity: 0.85 } : {}}
+                  transition={{ duration: 0.4, delay: 2.5, ease: 'easeOut' }}
+                />
+              </svg>
             </motion.div>
           </div>
 

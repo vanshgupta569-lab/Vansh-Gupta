@@ -52,6 +52,34 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
 
   const slide = HERO_SLIDES[activeSlide];
 
+  // Crosshair that tracks the pointer across the hero, the way a reading
+  // cursor moves across a terminal chart. Pointer-only: it is never shown on
+  // touch devices, where there is no cursor to follow, and it is skipped for
+  // anyone who has asked their system to reduce motion.
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const fine = window.matchMedia('(pointer: fine)').matches;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!fine || still) return;
+
+    const node = containerRef.current;
+    if (!node) return;
+
+    const move = (event: MouseEvent) => {
+      const box = node.getBoundingClientRect();
+      setPointer({ x: event.clientX - box.left, y: event.clientY - box.top });
+    };
+    const leave = () => setPointer(null);
+
+    node.addEventListener('mousemove', move);
+    node.addEventListener('mouseleave', leave);
+    return () => {
+      node.removeEventListener('mousemove', move);
+      node.removeEventListener('mouseleave', leave);
+    };
+  }, []);
+
   return (
     <section 
       id="hero" 
@@ -62,6 +90,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
         style={{ y: gridY }}
         className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none bg-[radial-gradient(#F2F0EA_1px,transparent_1px)] [background-size:32px_32px]"
       />
+
+      {/* Reading crosshair */}
+      {pointer && (
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <motion.div
+            className="absolute left-0 right-0 h-[1px] bg-[#8B1E1E]/20"
+            animate={{ top: pointer.y }}
+            transition={{ type: 'tween', duration: 0.35, ease: 'easeOut' }}
+          />
+          <motion.div
+            className="absolute top-0 bottom-0 w-[1px] bg-[#8B1E1E]/20"
+            animate={{ left: pointer.x }}
+            transition={{ type: 'tween', duration: 0.35, ease: 'easeOut' }}
+          />
+        </div>
+      )}
 
       <motion.div 
         style={{ opacity: heroOpacity }}
