@@ -2,16 +2,16 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion, useInView, animate } from 'motion/react';
 import { Send, MessageSquare, Mail } from 'lucide-react';
 
-// Custom Animated Counter Component
-const AnimatedNumber = ({ value }: { value: number }) => {
+// Custom Animated Counter Component for 10000+
+const AnimatedCounter = ({ target }: { target: number }) => {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true, margin: "-50px" });
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
     if (inView) {
-      const controls = animate(0, value, {
-        duration: 1.5,
+      const controls = animate(0, target, {
+        duration: 2,
         ease: "easeOut",
         onUpdate(val) {
           setDisplayValue(Math.round(val));
@@ -19,9 +19,9 @@ const AnimatedNumber = ({ value }: { value: number }) => {
       });
       return controls.stop;
     }
-  }, [value, inView]);
+  }, [target, inView]);
 
-  return <span ref={ref}>{displayValue}</span>;
+  return <span ref={ref}>{displayValue.toLocaleString()}</span>;
 };
 
 export const CoverageStatsSection: React.FC = () => {
@@ -67,7 +67,7 @@ export const CoverageStatsSection: React.FC = () => {
         >
           <span className="w-2 h-2 bg-[#8B1E1E]" />
           <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
-            03 - CURRENT COVERAGE
+            03 - GLOBAL COVERAGE & SCALE
           </span>
         </motion.div>
 
@@ -80,13 +80,13 @@ export const CoverageStatsSection: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-center p-8 sm:p-12 border-b md:border-b-0 border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
           >
-            <div className="font-display text-5xl sm:text-6xl lg:text-7xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              <AnimatedNumber value={5} />
+            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
+              <AnimatedCounter target={10000} />+
             </div>
             <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
-              Companies Covered
+              Equities Covered
             </div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">Any listed company, modelled on demand</div>
+            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">NYSE · NASDAQ · NSE · BSE · LSE · TSX</div>
           </motion.div>
 
           <motion.div 
@@ -96,13 +96,13 @@ export const CoverageStatsSection: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-center p-8 sm:p-12 border-b md:border-b-0 md:border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
           >
-            <div className="font-display text-5xl sm:text-6xl lg:text-7xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              <AnimatedNumber value={3} /> <span className="text-3xl sm:text-4xl">YRS</span>
+            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
+              3 <span className="text-3xl sm:text-4xl">YRS</span>
             </div>
             <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
               Historical Data
             </div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">3 years of reported figures per company</div>
+            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">Audited filed income & cash flows</div>
           </motion.div>
 
           <motion.div 
@@ -112,8 +112,8 @@ export const CoverageStatsSection: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="text-center p-8 sm:p-12 border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
           >
-            <div className="font-display text-5xl sm:text-6xl lg:text-7xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              <AnimatedNumber value={8} />
+            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
+              8
             </div>
             <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
               Integrated Schedules
@@ -128,7 +128,7 @@ export const CoverageStatsSection: React.FC = () => {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="text-center p-8 sm:p-12 hover:bg-[#1a1a1f] transition-colors group cursor-default"
           >
-            <div className="font-display text-5xl sm:text-6xl lg:text-7xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
+            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
               ₹0 / $0
             </div>
             <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">

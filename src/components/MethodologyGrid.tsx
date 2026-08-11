@@ -70,7 +70,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
         </p>
       </div>
 
-      <div ref={containerRef} className="relative space-y-8">
+      <div ref={containerRef} className="relative space-y-8 mb-16">
         
         {/* Animated Connecting Vertical Line */}
         <div className="hidden lg:block absolute top-8 bottom-8 left-[39px] w-[1px] bg-[#222228] z-0">
@@ -133,6 +133,43 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
         })}
 
       </div>
+
+      {/* Famous Quote & Portrait Feature Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="bg-[#111114] border hairline-border p-8 sm:p-12 relative overflow-hidden shadow-xl flex flex-col md:flex-row items-center gap-8"
+      >
+        <div className="absolute top-0 right-0 w-48 h-48 bg-[#8B1E1E]/5 rounded-bl-full pointer-events-none" />
+
+        {/* Economist Portrait Frame */}
+        <div className="shrink-0 relative">
+          <div className="w-24 h-24 sm:w-32 sm:h-32 border-2 border-[#8B1E1E] p-1 bg-[#0B0B0D] shadow-xl overflow-hidden">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/John_Maynard_Keynes_%281902%29.jpg/800px-John_Maynard_Keynes_%281902%29.jpg" 
+              alt="John Maynard Keynes" 
+              className="w-full h-full object-cover grayscale contrast-125 hover:grayscale-0 transition-all duration-500"
+            />
+          </div>
+          <span className="absolute -bottom-2 -right-2 bg-[#8B1E1E] text-[#F2F0EA] font-mono text-[9px] px-2 py-0.5 uppercase tracking-widest font-semibold">
+            Keynes
+          </span>
+        </div>
+
+        {/* Quote Content */}
+        <div className="space-y-3 flex-grow text-center md:text-left">
+          <div className="font-mono text-[10px] text-[#8B1E1E] tracking-[0.25em] uppercase font-semibold">
+            PHILOSOPHICAL BENCHMARK
+          </div>
+          <blockquote className="font-display text-xl sm:text-2xl lg:text-3xl italic text-[#F2F0EA] leading-snug">
+            “I would rather be vaguely right than precisely wrong.”
+          </blockquote>
+          <p className="font-mono text-xs text-[#8A8A8F] uppercase tracking-wider">
+            — John Maynard Keynes <span className="text-[#6E6E73]">(Foundational Economist)</span>
+          </p>
+        </div>
+      </motion.div>
     </section>
   );
 };
