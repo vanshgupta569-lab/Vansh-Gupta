@@ -1,251 +1,321 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, animate, useInView } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { CompanyData } from '../types';
+import { BuildPipeline } from './motionPrimitives';
+import { Search, ArrowRight, Building2, TrendingUp, Sparkles, Mail, FileSpreadsheet } from 'lucide-react';
 
-/**
- * Shared motion helpers for the dashboard.
- *
- * The rule applied throughout: motion marks a CHANGE. A figure moves because
- * it just became a different figure, not for decoration. Anything that would
- * move while a reader is trying to read a number is left still.
- */
-
-export const useReducedMotion = () => {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduced(query.matches);
-    const listen = (e: MediaQueryListEvent) => setReduced(e.matches);
-    query.addEventListener('change', listen);
-    return () => query.removeEventListener('change', listen);
-  }, []);
-  return reduced;
-};
-
-/* ------------------------------------------------------------------ */
-/* Tweened figure                                                       */
-/* A number that eases to its new value instead of jumping. Used for    */
-/* anything a slider can change.                                        */
-/* ------------------------------------------------------------------ */
-
-interface TweenNumberProps {
-  value: number;
-  decimals?: number;
-  prefix?: string;
-  suffix?: string;
-  /** Briefly tint on change: green when rising, oxblood when falling. */
-  flash?: boolean;
-  className?: string;
+interface DirectoryScreenProps {
+  companies: Record<string, CompanyData>;
+  selectedTicker: string;
+  onSelectCompany: (ticker: string) => void;
+  onBackToHome: () => void;
+  onLookupTicker: (ticker: string) => void;
+  lookupState: { loading: boolean; error: string | null };
 }
 
-export const TweenNumber: React.FC<TweenNumberProps> = ({
-  value,
-  decimals = 2,
-  prefix = '',
-  suffix = '',
-  flash = false,
-  className = '',
+export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
+  companies,
+  selectedTicker,
+  onSelectCompany,
+  onBackToHome,
+  onLookupTicker,
+  lookupState,
 }) => {
-  const reduced = useReducedMotion();
-  const [shown, setShown] = useState(value);
-  const previous = useRef(value);
-  const [direction, setDirection] = useState<'up' | 'down' | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<
+    { ticker: string; name: string; exchange: string }[]
+  >([]);
 
+  // Look up matching companies as the user types. Debounced so a fast typist
+  // doesn't fire a request per keystroke.
   useEffect(() => {
-    if (previous.current === value) return;
-
-    const from = previous.current;
-    previous.current = value;
-
-    if (reduced || !isFinite(from) || !isFinite(value)) {
-      setShown(value);
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
       return;
     }
 
-    if (flash) {
-      setDirection(value > from ? 'up' : 'down');
-      const clear = setTimeout(() => setDirection(null), 700);
-      const controls = animate(from, value, {
-        duration: 0.45,
-        ease: [0.16, 1, 0.3, 1],
-        onUpdate: setShown,
-      });
-      return () => {
-        clearTimeout(clear);
-        controls.stop();
-      };
-    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setSuggestions(data.results || []);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
+    }, 220);
 
-    const controls = animate(from, value, {
-      duration: 0.45,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: setShown,
-    });
-    return controls.stop;
-  }, [value, reduced, flash]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
-  const tint =
-    direction === 'up'
-      ? 'text-emerald-400'
-      : direction === 'down'
-      ? 'text-[#8B1E1E]'
-      : '';
+  const companyList = Object.values(companies) as CompanyData[];
+
+
+  // The grid below is the analyst-model shelf: only companies with a real,
+  // hand-built data file. Everything else is reached through the search box.
+  const filteredCompanies = companyList.filter((c) => c.engineBacked);
 
   return (
-    <span className={`tabular-nums transition-colors duration-500 ${tint} ${className}`}>
-      {prefix}
-      {shown.toLocaleString(undefined, {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-      })}
-      {suffix}
-    </span>
-  );
-};
+    <div className="pt-28 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12 min-h-screen flex flex-col justify-between">
+      <div>
+        {/* Title Banner */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10 border-b hairline-border-b pb-8">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 bg-[#8B1E1E]" />
+              <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] font-semibold uppercase">
+                SCREEN 02 — INSTITUTIONAL COVERAGE DIRECTORY
+              </span>
+            </div>
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA]">
+              Search Covered Companies
+            </h1>
+            <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide mt-4 max-w-2xl border-l-2 border-[#8B1E1E] pl-4">
+              Enter any listed ticker to build a 3-statement model and DCF from its own filings, then move the assumptions and watch the implied value recalculate.
+            </p>
+          </div>
 
-/* ------------------------------------------------------------------ */
-/* Change flash                                                         */
-/* Wraps any element and pulses its background when `watch` changes —   */
-/* the way a live quote ticks. Used to show what switching between the  */
-/* analyst and derived models actually moves.                           */
-/* ------------------------------------------------------------------ */
+          <div className="font-mono text-[11px] text-[#8A8A8F] border border-[#222228] bg-[#111114] px-4 py-3 flex items-center gap-3 uppercase tracking-widest shadow-md">
+            <Building2 className="w-4 h-4 text-[#8B1E1E]" />
+            <span>COVERAGE: <strong className="text-[#F2F0EA]">ANY LISTED COMPANY</strong></span>
+          </div>
+        </div>
 
-export const FlashOnChange: React.FC<{
-  watch: unknown;
-  children: React.ReactNode;
-  className?: string;
-}> = ({ watch, children, className = '' }) => {
-  const reduced = useReducedMotion();
-  const [pulse, setPulse] = useState(false);
-  const first = useRef(true);
-
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (reduced) return;
-    setPulse(true);
-    const timer = setTimeout(() => setPulse(false), 900);
-    return () => clearTimeout(timer);
-  }, [watch, reduced]);
-
-  return (
-    <span
-      className={`transition-colors duration-700 ${
-        pulse ? 'bg-[#8B1E1E]/20' : 'bg-transparent'
-      } ${className}`}
-    >
-      {children}
-    </span>
-  );
-};
-
-/* ------------------------------------------------------------------ */
-/* Build pipeline                                                       */
-/* Shown while a model is being built. It names the stages actually     */
-/* being worked through rather than spinning — on a site whose argument */
-/* is that the workings are visible, the loading state should say so    */
-/* too.                                                                 */
-/* ------------------------------------------------------------------ */
-
-const STAGES = [
-  'Locating the filings',
-  'Reading three years of statements',
-  'Deriving assumptions from history',
-  'Building the forecast and schedules',
-  'Discounting cash flows',
-];
-
-export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
-  const reduced = useReducedMotion();
-  const [stage, setStage] = useState(0);
-
-  useEffect(() => {
-    if (!active) {
-      setStage(0);
-      return;
-    }
-    if (reduced) {
-      setStage(STAGES.length - 1);
-      return;
-    }
-    // Advance through the stages while the fetch is in flight, holding on the
-    // last one until the real work finishes. Never claims to be complete.
-    const timer = setInterval(() => {
-      setStage((s) => (s < STAGES.length - 1 ? s + 1 : s));
-    }, 900);
-    return () => clearInterval(timer);
-  }, [active, reduced]);
-
-  if (!active) return null;
-
-  return (
-    <div className="mt-4 border hairline-border bg-[#0B0B0D] p-5">
-      {STAGES.map((label, index) => {
-        const done = index < stage;
-        const current = index === stage;
-
-        return (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: done || current ? 1 : 0.35, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05 }}
-            className="flex items-center gap-3 py-1.5 font-mono text-[11px]"
-          >
-            <span
-              className={`w-3.5 h-3.5 border flex items-center justify-center text-[8px] shrink-0 ${
-                done
-                  ? 'border-[#8B1E1E] bg-[#8B1E1E] text-[#F2F0EA]'
-                  : current
-                  ? 'border-[#8B1E1E] text-[#8B1E1E]'
-                  : 'border-[#222228] text-transparent'
-              }`}
+        {/* One search box. Type a name or ticker, pick a match, and a model is
+            built from that company's own filings. */}
+        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-10 shadow-lg">
+          <div className="relative flex items-center w-full">
+            <Search className="w-5 h-5 absolute left-5 text-[#8A8A8F]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const first = suggestions[0];
+                  if (first) onLookupTicker(first.ticker);
+                  else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
+                }
+                if (e.key === 'Escape') setSearchQuery('');
+              }}
+              placeholder="Search any listed company: Apple, Reliance, Nvidia, Tata Motors..."
+              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm pl-14 pr-32 py-5 outline-none placeholder:text-[#52525B] transition-colors rounded-none shadow-inner"
+              autoFocus
+            />
+            <button
+              onClick={() => {
+                const first = suggestions[0];
+                if (first) onLookupTicker(first.ticker);
+                else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
+              }}
+              disabled={lookupState.loading || !searchQuery.trim()}
+              className="absolute right-2 bg-[#8B1E1E] text-[#F2F0EA] font-mono text-[11px] px-5 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
             >
-              {done ? '✓' : current ? '·' : ''}
+              {lookupState.loading ? 'Building…' : 'Build model'}
+            </button>
+          </div>
+
+          {/* Live suggestions as the user types */}
+          {suggestions.length > 0 && (
+            <div className="mt-3 border hairline-border bg-[#0B0B0D] divide-y divide-[#222228]">
+              {suggestions.map((sug) => (
+                <button
+                  key={sug.ticker}
+                  onClick={() => onLookupTicker(sug.ticker)}
+                  className="w-full text-left px-5 py-3 hover:bg-[#18181c] transition-colors cursor-pointer flex items-center justify-between gap-4 group"
+                >
+                  <span className="flex items-center gap-4 min-w-0">
+                    <span className="font-mono text-sm text-[#F2F0EA] font-semibold shrink-0">
+                      {sug.ticker}
+                    </span>
+                    <span className="font-sans text-sm font-light text-[#A1A1AA] truncate">
+                      {sug.name}
+                    </span>
+                  </span>
+                  <span className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest shrink-0 flex items-center gap-3">
+                    {sug.exchange}
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed uppercase tracking-wider">
+            US filings come from SEC EDGAR; everywhere else from exchange
+            disclosures. Banks, insurers and lenders are shown without a DCF, because
+            discounted cash flow does not apply to them.
+          </div>
+
+          {/* While a model is being built, name the stages instead of spinning */}
+          <BuildPipeline active={lookupState.loading} />
+
+          {lookupState.error && (
+            <div className="mt-4 border border-[#8B1E1E]/50 bg-[#8B1E1E]/10 px-4 py-3 font-mono text-[11px] text-[#F2F0EA] leading-relaxed">
+              {lookupState.error}
+            </div>
+          )}
+        </div>
+
+        {/* A clear break: everything above is the automated engine, everything
+            below is hand-built work. The divider and the scale of the heading
+            are what make that switch legible. */}
+        <div className="mt-20 pt-12 border-t hairline-border-t">
+          <div className="flex items-center gap-3 mb-5">
+            <span className="w-2 h-2 bg-[#8B1E1E]" />
+            <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+              Built by hand
             </span>
-            <span className={done || current ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}>
-              {label}
-            </span>
-            {current && (
-              <motion.span
-                className="h-[1px] bg-[#8B1E1E] ml-1"
-                initial={{ width: 0 }}
-                animate={{ width: 28 }}
-                transition={{ duration: 0.55, repeat: Infinity, repeatType: 'reverse' }}
-              />
-            )}
-          </motion.div>
-        );
-      })}
+          </div>
+
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium leading-tight max-w-3xl">
+            The analyst's own models.
+          </h2>
+
+          <p className="font-sans text-base font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-5">
+            The workbooks below were prepared by the analyst himself, after a
+            detailed study of each company and its filings, with every assumption
+            chosen and defended individually. They are not the output of the
+            automated engine.
+          </p>
+
+          {/* The address is shown as text rather than a mailto button: a mailto
+              link opens whatever desktop mail client the machine happens to
+              have, which is useless to anyone on webmail. Selectable text works
+              for everyone. */}
+          <div className="mt-7 pb-2">
+            <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed max-w-2xl mb-3">
+              For a model of this depth on a company not listed here, rather than
+              the engine-generated version, write to:
+            </p>
+            <div className="inline-flex items-center gap-3 border hairline-border bg-[#0B0B0D] px-5 py-3">
+              <Mail className="w-4 h-4 text-[#8B1E1E] shrink-0" />
+              <span className="font-mono text-sm text-[#F2F0EA] tracking-wide select-all">
+                vanshgupta569@gmail.com
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Company Grid Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12 mt-8">
+          {filteredCompanies.map((comp) => {
+            const isSelected = comp.ticker === selectedTicker;
+
+            return (
+              <div
+                key={comp.ticker}
+                onClick={() => onSelectCompany(comp.ticker)}
+                className={`p-8 border hairline-border bg-[#111114] hover:bg-[#18181c] group cursor-pointer transition-all duration-300 relative flex flex-col justify-between min-h-[280px] shadow-lg ${
+                  isSelected ? 'ring-1 ring-[#8B1E1E] border-l-4 border-l-[#8B1E1E]' : 'border-l-4 border-l-transparent hover:border-l-[#222228]'
+                }`}
+              >
+                {/* Crosshair accents */}
+                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                <div>
+                  <div className="flex justify-between items-start mb-5">
+                    <div>
+                      <div className="font-mono text-3xl font-bold text-[#F2F0EA] flex items-center gap-3 tracking-tight">
+                        <span>{comp.ticker}</span>
+                        <span className="font-mono text-[9px] text-[#A1A1AA] tracking-widest font-normal border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
+                          {comp.exchange}
+                        </span>
+                      </div>
+                      <div className="font-sans text-sm font-light text-[#A1A1AA] tracking-wide mt-1">{comp.name}</div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-mono text-xl font-bold text-[#F2F0EA] tracking-tight">
+                        {comp.currencySymbol}{comp.price.toFixed(2)}
+                      </div>
+                      <div
+                        className={`font-mono text-[11px] tracking-wider font-semibold mt-1 ${
+                          comp.priceChangePct >= 0 ? 'text-emerald-500' : 'text-[#8B1E1E]'
+                        }`}
+                      >
+                        {comp.priceChangePct >= 0 ? '+' : ''}{comp.priceChangePct}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="font-sans text-xs font-light text-[#A1A1AA] leading-loose tracking-wide line-clamp-2 mb-6">
+                    {comp.description}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] bg-[#0B0B0D] p-4 border hairline-border">
+                    <div>Cap: <strong className="text-[#F2F0EA] font-semibold">{comp.marketCapStr}</strong></div>
+                    <div>Sector: <strong className="text-[#F2F0EA] font-semibold">{comp.sector}</strong></div>
+                    <div>ROE: <strong className="text-[#F2F0EA] font-semibold">{comp.roePct}%</strong></div>
+                    <div>Op Margin: <strong className="text-[#F2F0EA] font-semibold">{comp.opMarginPct}%</strong></div>
+                  </div>
+                </div>
+
+                {/* Excel workbooks behind this model, where they exist. The
+                    click is stopped so the card underneath doesn't also open. */}
+                {comp.excelModels && comp.excelModels.length > 0 && (
+                  <div className="border-t hairline-border-t pt-4 mt-5">
+                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mb-2.5">
+                      Download the Excel workbooks
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {comp.excelModels.map((model) => (
+                        <a
+                          key={model.label}
+                          href={model.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-2 font-mono text-[10px] text-[#A1A1AA] hover:text-[#F2F0EA] border hairline-border hover:border-[#8B1E1E] px-3 py-2 transition-colors bg-[#0B0B0D]"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#8B1E1E]" />
+                          {model.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center border-t hairline-border-t pt-5 mt-6">
+                  <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {comp.isin}</span>
+                  <button className="font-mono text-[10px] text-[#8B1E1E] group-hover:text-[#F2F0EA] tracking-widest font-semibold uppercase flex items-center gap-2 transition-colors duration-300">
+                    <span>Open Financial Model</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredCompanies.length === 0 && (
+          <div className="text-center py-24 bg-[#111114] border hairline-border p-8 shadow-inner">
+            <div className="font-mono text-sm text-[#A1A1AA] tracking-wide mb-2">
+              No hand-built analyst models yet.
+            </div>
+            <div className="font-sans text-xs font-light text-[#8A8A8F] tracking-wide">
+              Use the search above to model any listed company automatically.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="pt-8 border-t hairline-border-t flex justify-between items-center font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-12">
+        <button
+          onClick={onBackToHome}
+          className="text-[#8A8A8F] hover:text-[#F2F0EA] flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          <span>←</span> Return to Intro & Philosophy
+        </button>
+        <span>MARGINALIA SEARCH ENGINE V4.2</span>
+      </div>
     </div>
-  );
-};
-
-/* ------------------------------------------------------------------ */
-/* Bars that grow from the baseline when scrolled into view            */
-/* ------------------------------------------------------------------ */
-
-export const GrowBar: React.FC<{
-  height: string;
-  delay?: number;
-  className?: string;
-}> = ({ height, delay = 0, className = '' }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-40px' });
-  const reduced = useReducedMotion();
-
-  return (
-    <motion.div
-      ref={ref}
-      className={className}
-      initial={{ height: reduced ? height : 0 }}
-      animate={inView ? { height } : {}}
-      transition={{
-        duration: reduced ? 0 : 0.8,
-        delay: reduced ? 0 : delay,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-    />
   );
 };
