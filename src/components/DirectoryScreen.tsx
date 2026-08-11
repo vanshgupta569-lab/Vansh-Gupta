@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
+import { BuildPipeline } from './motionPrimitives';
 import { Search, ArrowRight, Building2, TrendingUp, Sparkles, Mail, FileSpreadsheet } from 'lucide-react';
 
 interface DirectoryScreenProps {
@@ -149,6 +150,9 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             disclosures. Banks, insurers and lenders are shown without a DCF, because
             discounted cash flow does not apply to them.
           </div>
+
+          {/* While a model is being built, name the stages instead of spinning */}
+          <BuildPipeline active={lookupState.loading} />
 
           {lookupState.error && (
             <div className="mt-4 border border-[#8B1E1E]/50 bg-[#8B1E1E]/10 px-4 py-3 font-mono text-[11px] text-[#F2F0EA] leading-relaxed">

@@ -1,7 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE } from '../data/companies';
 import { loadDerivedModelData } from '../data/autoCompany';
+import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
 import {
   TrendingUp,
   BarChart2,
@@ -71,6 +73,24 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   }, [company.ticker]);
 
   const displayPrice = liveQuote?.price ?? company.price;
+
+  // A slim bar that appears once the full ticker header has scrolled away,
+  // keeping the ticker, live price and implied value in view while reading the
+  // statements below. Institutional terminals all do this; it is useful rather
+  // than decorative.
+  const [headerCondensed, setHeaderCondensed] = useState(false);
+  const headerSentinel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = headerSentinel.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeaderCondensed(!entry.isIntersecting),
+      { rootMargin: '-80px 0px 0px 0px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   const displayChangePct = liveQuote?.changePct ?? company.priceChangePct;
 
   useEffect(() => {
@@ -223,6 +243,55 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   return (
     <section id="terminal" className="pt-16 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12">
+      {/* Condensed header, shown once the full one has scrolled out of view */}
+      <AnimatePresence>
+        {headerCondensed && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            className="fixed top-0 left-0 right-0 z-40 bg-[#0B0B0D]/95 backdrop-blur-sm border-b hairline-border-b"
+          >
+            <div className="max-w-[1440px] mx-auto px-6 lg:px-12 py-3 flex items-center justify-between gap-6">
+              <div className="flex items-baseline gap-3 min-w-0">
+                <span className="font-mono text-[11px] text-[#8B1E1E] font-bold tracking-widest shrink-0">
+                  {company.ticker}
+                </span>
+                <span className="font-sans text-sm text-[#A1A1AA] font-light truncate hidden sm:block">
+                  {company.name}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-6 shrink-0">
+                <div className="text-right">
+                  <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+                    Price
+                  </div>
+                  <div className="font-mono text-sm text-[#F2F0EA]">
+                    <TweenNumber value={displayPrice} prefix={company.currencySymbol} />
+                  </div>
+                </div>
+
+                {hasRealModel && (
+                  <div className="text-right">
+                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+                      Implied
+                    </div>
+                    <div className="font-mono text-sm text-[#8B1E1E] font-semibold">
+                      <TweenNumber
+                        value={dcfResult.targetPrice}
+                        prefix={company.currencySymbol}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Terminal Title & Ticker Selector Bar */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 border-b hairline-border-b pb-6">
         <div>
@@ -329,9 +398,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   MODEL IMPLIED VALUE
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-display text-2xl text-[#8B1E1E] font-bold">
-                    {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
-                  </span>
+                  <FlashOnChange watch={viewMode} className="px-1 -mx-1">
+                    <span className="font-display text-2xl text-[#8B1E1E] font-bold">
+                      <TweenNumber
+                        value={dcfResult.targetPrice}
+                        prefix={company.currencySymbol}
+                      />
+                    </span>
+                  </FlashOnChange>
                   <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
                     {premiumDiscountLabel}
                   </span>
@@ -357,33 +431,41 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
 
         {/* 5 Key Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-6 hairline-border-t">
-          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+        <motion.div
+          initial="hidden"
+          animate="shown"
+          variants={{ shown: { transition: { staggerChildren: 0.06 } } }}
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-6 hairline-border-t"
+        >
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
             <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Market Cap</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.marketCapStr}</span>
-          </div>
+          </motion.div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
             <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROE (LTM)</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.roePct}%</span>
-          </div>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roePct} decimals={1} suffix="%" /></span>
+          </motion.div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
             <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROA (LTM)</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.roaPct}%</span>
-          </div>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roaPct} decimals={1} suffix="%" /></span>
+          </motion.div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
             <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Op Margin</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.opMarginPct}%</span>
-          </div>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /></span>
+          </motion.div>
 
-          <div className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
             <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Net Debt / EBITDA</span>
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.netDebtEbitda}</span>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
+
+      {/* Marks where the full header ends, for the condensed bar above */}
+      <div ref={headerSentinel} />
 
       {/* Live News Ticker Marquee */}
       <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
@@ -462,13 +544,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       className="absolute w-full h-[2px] bg-[#8B1E1E] z-10 group-hover:scale-y-150 transition-transform"
                     />
 
-                    {/* Revenue Bar */}
-                    <div
-                      style={{ height: `${revHeightPct}%` }}
+                    {/* Revenue Bar — grows from the baseline on first view,
+                        and eases to its new height when the company changes. */}
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${revHeightPct}%` }}
+                      transition={{
+                        duration: 0.75,
+                        delay: idx * 0.09,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
                       className="w-full bg-[#222228] group-hover:bg-[#8B1E1E]/40 transition-colors relative"
                     >
                       <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#8B1E1E]" />
-                    </div>
+                    </motion.div>
 
                     <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] mt-3 group-hover:text-[#F2F0EA] transition-colors">
                       {yr}
@@ -516,18 +605,23 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   else cellBg = 'bg-[#111114]';
 
                   return (
-                    <div
+                    <motion.div
                       key={`${rIdx}-${cIdx}`}
                       onMouseEnter={() => setHoveredMatrixCell({ wacc: currWacc, g: currG, val })}
                       onMouseLeave={() => setHoveredMatrixCell(null)}
-                      className={`h-9 border border-[#222228] flex items-center justify-center cursor-pointer transition-all hover:scale-105 hover:z-10 ${cellBg} ${
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      /* Fill diagonally, so the grid resolves from the top-left
+                         corner outward rather than appearing all at once. */
+                      transition={{ duration: 0.28, delay: (rIdx + cIdx) * 0.035, ease: 'easeOut' }}
+                      className={`h-9 border border-[#222228] flex items-center justify-center cursor-pointer transition-colors duration-500 hover:scale-105 hover:z-10 ${cellBg} ${
                         isCurrentDriver ? 'ring-1 ring-[#F2F0EA]' : ''
                       }`}
                     >
                       <span className="font-mono text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
                         {company.currencySymbol}{Math.round(val)}
                       </span>
-                    </div>
+                    </motion.div>
                   );
                 })
               )}
@@ -595,9 +689,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
                   const pts = `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]} ${p5[0]},${p5[1]}`;
 
+                  // The polygon morphs between shapes when the company or the
+                  // model view changes, rather than snapping to the new one.
                   return (
-                    <polygon
-                      points={pts}
+                    <motion.polygon
+                      animate={{ points: pts }}
+                      initial={{ points: '100,100 100,100 100,100 100,100 100,100' }}
+                      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
                       fill="rgba(139, 30, 30, 0.4)"
                       stroke="#8B1E1E"
                       strokeWidth="2"
@@ -668,14 +766,23 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
-                className={`font-mono text-xs uppercase tracking-widest pb-2 flex items-center gap-2 transition-all cursor-pointer ${
+                className={`relative font-mono text-xs uppercase tracking-widest pb-2 flex items-center gap-2 transition-colors cursor-pointer ${
                   isActive
-                    ? 'text-[#F2F0EA] font-semibold border-b-2 border-[#8B1E1E]'
+                    ? 'text-[#F2F0EA] font-semibold'
                     : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'}`} />
+                <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'}`} />
                 <span>{tab.label}</span>
+                {/* One underline shared across the tabs: motion moves it to
+                    whichever tab is active rather than redrawing it. */}
+                {isActive && (
+                  <motion.span
+                    layoutId="tab-underline"
+                    className="absolute left-0 right-0 -bottom-[1px] h-[2px] bg-[#8B1E1E]"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                  />
+                )}
               </button>
             );
           })}
@@ -1185,9 +1292,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 mb-8 mt-6">
-                  <div className="font-display text-5xl sm:text-6xl text-[#F2F0EA] font-semibold tracking-tight">
-                    {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
-                  </div>
+                  <FlashOnChange watch={viewMode} className="px-1 -mx-1">
+                    <div className="font-display text-5xl sm:text-6xl text-[#F2F0EA] font-semibold tracking-tight">
+                      <TweenNumber
+                        value={dcfResult.targetPrice}
+                        prefix={company.currencySymbol}
+                        flash
+                      />
+                    </div>
+                  </FlashOnChange>
 
                   <div
                     className={`font-mono text-[11px] px-3.5 py-1.5 font-bold uppercase tracking-widest flex items-center gap-1.5 ${
