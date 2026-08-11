@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCF, COMPANIES_DATA } from '../data/companies';
 import {
   TrendingUp,
@@ -35,6 +35,33 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   // Tab State
   const [activeTab, setActiveTab] = useState<TabType>('DCF_OUTPUT');
+
+  // Live news headlines, fetched from our own /api/news proxy.
+  // Starts empty; if the fetch fails or returns nothing, the ticker falls back
+  // to whatever placeholder text lives in the company data file.
+  const [liveNews, setLiveNews] = useState<NewsItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLiveNews([]);
+
+    fetch(`/api/news?ticker=${encodeURIComponent(company.ticker)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.items) && data.items.length > 0) {
+          setLiveNews(data.items);
+        }
+      })
+      .catch(() => {
+        // Silent — the placeholder headline stays on screen.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [company.ticker]);
+
+  const newsToShow = liveNews.length > 0 ? liveNews : company.recentNews;
 
   // Drivers State (initialized per company)
   const [drivers, setDrivers] = useState<ValuationDrivers>(company.defaultDrivers);
@@ -232,13 +259,27 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
         <div className="overflow-hidden relative w-full">
           <div className="animate-marquee flex gap-12 font-mono text-xs text-[#A1A1AA]">
-            {company.recentNews.map((news) => (
-              <span key={news.id} className="inline-flex items-center gap-2">
-                <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
-                <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
-                <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
-              </span>
-            ))}
+            {newsToShow.map((news) =>
+              news.url ? (
+                <a
+                  key={news.id}
+                  href={news.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
+                  <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
+                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                </a>
+              ) : (
+                <span key={news.id} className="inline-flex items-center gap-2">
+                  <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
+                  <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
+                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                </span>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -879,8 +920,21 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         )}
 
         {/* TAB 4: DCF MODEL OUTPUT */}
-        {activeTab === 'DCF_OUTPUT' && (
+        {activeTab === 'DCF_OUTPUT' && !dcfResult.applicable && (
+          <div className="p-8 border hairline-border bg-[#0B0B0D] font-mono text-xs text-[#8A8A8F] shadow-inner text-center tracking-wide">
+            <strong className="text-[#F2F0EA] block mb-2 uppercase tracking-widest">VALUATION NOT APPLICABLE</strong>
+            {dcfResult.message}
+          </div>
+        )}
+
+        {activeTab === 'DCF_OUTPUT' && dcfResult.applicable && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+
+            {!company.engineBacked && (
+              <div className="lg:col-span-12 p-4 border hairline-border bg-[#0B0B0D] font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest text-center">
+                Figures illustrative — engine data file not yet built for this company
+              </div>
+            )}
             
             {/* Left Inputs Summary */}
             <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
@@ -1053,8 +1107,12 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               </table>
 
               <div className="font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4 border-t hairline-border-t flex justify-between items-center mt-2">
-                <span>MARGINALIA ENGINE · VERIFIED AGAINST EXCEL MODEL</span>
-                <span className="text-[#8B1E1E] font-bold">100% RECALCULATED REAL-TIME</span>
+                <span>
+                  {company.engineBacked
+                    ? 'MARGINALIA ENGINE · VERIFIED AGAINST EXCEL MODEL'
+                    : 'MARGINALIA ENGINE · ILLUSTRATIVE INPUTS'}
+                </span>
+                <span className="text-[#8B1E1E] font-bold">RECALCULATED REAL-TIME</span>
               </div>
             </div>
 

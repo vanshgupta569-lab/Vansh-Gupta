@@ -73,7 +73,8 @@ export interface NewsItem {
   time: string;
   headline: string;
   source: string;
-  type: 'FILING' | 'UPGRADE' | 'CONTRACT' | 'EARNINGS' | 'PLACEHOLDER';
+  type: 'FILING' | 'UPGRADE' | 'CONTRACT' | 'EARNINGS' | 'PLACEHOLDER' | 'NEWS';
+  url?: string;
 }
 
 export interface CompanyData {
