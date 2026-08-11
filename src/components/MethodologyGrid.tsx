@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Calculator, FileSpreadsheet, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, Calculator, FileSpreadsheet, Search, BarChart2 } from 'lucide-react';
 
 interface MethodologyGridProps {
   onSelectStep: (stepNumber: number) => void;
@@ -9,30 +9,30 @@ const METHODOLOGY_STEPS = [
   {
     step: 'STEP 1',
     title: 'Open a Ticker',
-    description: 'Initiate deep-dive analysis on specific equities with instantaneous data retrieval, ISIN resolution, and live market pricing.',
+    description: 'Search covered companies and open their dashboard. Each company shows a live price, key metrics, and three years of audited reported financials pulled from official filings.',
     icon: Search,
-    detail: 'Retrieves multi-year GAAP 10-K & 10-Q filings, consensus estimates, and share count changes in <200ms.',
+    detail: 'Coverage currently spans five companies: AAPL, META, NVDA, RELIANCE, SPCX. More added as models are built and verified.',
   },
   {
     step: 'STEP 2',
-    title: 'Read the Market First',
-    description: 'Synthesize prevailing sentiment, analyst consensus estimates, and live pricing context before diving into fundamentals.',
-    icon: Sparkles,
-    detail: 'Parses institutional buy/hold/sell spreads, macro rate implications, and pricing momentum badges.',
+    title: 'Read the Reported History',
+    description: 'Three years of income statement, balance sheet and cash flow side by side. Figures are as reported — no adjustments, no estimates, no rounding. Revenue growth, margins, free cash flow and net debt are computed directly from those numbers.',
+    icon: BarChart2,
+    detail: 'Historical data is sourced from SEC filings (US companies) and exchange disclosures (Indian companies). Units are clearly labelled per company.',
   },
   {
     step: 'STEP 3',
-    title: 'Filings Become Numbers',
-    description: 'Transform dense SEC 10-Ks and 10-Qs into structured, comparable 3-statement financial models and cash flow statement bridges.',
+    title: 'Inspect the Integrated Model',
+    description: 'A full 3-statement model built on the reported history: income statement, balance sheet, cash flow, working capital schedule, PP&E schedule, debt schedule, and capital stock. Every forecast line is driven by a named assumption, not a black box.',
     icon: FileSpreadsheet,
-    detail: 'Automated normalization of non-recurring items, stock-based compensation capitalization, and lease amortization.',
+    detail: 'The balance sheet is checked for balance in every year. Forecasts are clearly labelled — reported figures carry an "R" tag, modelled figures carry an "M" tag.',
   },
   {
     step: 'STEP 4',
-    title: 'Run Forensics & DCF',
-    description: 'Apply proprietary screens to uncover anomalies, red flags, and calculate dynamic Enterprise Value and Target Prices.',
+    title: 'Run the DCF',
+    description: 'Adjust WACC, terminal growth, revenue growth, operating margin, capex and tax rate with live sliders. Implied enterprise value, equity value and per-share intrinsic value recalculate instantly. A 5×5 sensitivity grid shows how the output moves across the full range of assumptions.',
     icon: Calculator,
-    detail: 'Real-time WACC, CapEx, Tax Rate, and Terminal Growth parameter adjustments with instant DCF sensitivity output.',
+    detail: 'Two terminal value methods: Gordon Growth perpetuity and EV/EBITDA exit multiple. The market price vs. model implied value gap is shown — no buy/sell verdict is made.',
   },
 ];
 
@@ -46,15 +46,15 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
           <div className="flex items-center gap-2 mb-2">
             <span className="w-2 h-2 bg-[#8B1E1E]" />
             <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
-              02 - PROCESS FLOWCHART
+              02 - HOW IT WORKS
             </span>
           </div>
           <h2 className="font-display text-3xl sm:text-4xl text-[#F2F0EA] font-medium">
-            3-Statement Valuation Process
+            From Filing to Fair Value
           </h2>
         </div>
         <p className="font-mono text-xs text-[#8A8A8F] max-w-md">
-          A systematic, four-stage quantitative funnel designed for institutional analysts and forensic investors.
+          Four steps from raw reported data to a live, adjustable discounted cash flow model.
         </p>
       </div>
 
