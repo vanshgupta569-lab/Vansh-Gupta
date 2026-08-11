@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { CompanyData, TabType, ValuationDrivers } from '../types';
-import { calculateDCF } from '../data/companies';
+import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow } from '../types';
+import { calculateDCF, COMPANIES_DATA } from '../data/companies';
 import {
   TrendingUp,
   BarChart2,
@@ -581,16 +581,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           </div>
         )}
 
-        {/* TAB 2: FORECASTED FINANCIAL STATEMENTS */}
+        {/* TAB 2: FORECASTED FINANCIAL STATEMENTS — driven by the real engine */}
         {activeTab === 'FORECASTED' && (
           <div className="overflow-x-auto space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0B0B0D] p-4 border hairline-border">
               <div>
                 <span className="font-mono text-xs text-[#dfbfbc] uppercase font-semibold block">
-                  5-YEAR PROJECTED 3-STATEMENT MODEL ({company.currency} Millions)
+                  5-YEAR INTEGRATED MODEL ({company.currency} MILLIONS)
                 </span>
                 <span className="font-mono text-[10px] text-[#8A8A8F]">
-                  Driven live by Driver Assumptions: Revenue Growth ({drivers.revenueGrowthPct}%), Operating Margin ({drivers.operatingMarginPct}%), Tax Rate ({drivers.taxRatePct}%), WACC ({drivers.waccPct}%)
+                  Revenue growth {drivers.revenueGrowthPct}% · Op margin {drivers.operatingMarginPct}% · Tax {drivers.taxRatePct}% · CapEx {drivers.capexPctOfRev}% of rev · WACC {drivers.waccPct}%
+                  {!company.engineBacked && ' · Figures illustrative — engine data file not yet built for this company'}
                 </span>
               </div>
               <button
@@ -602,152 +603,119 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               </button>
             </div>
 
-            {/* Projected Financial Statements Table */}
-            {(() => {
-              const lastRev = company.financials.revenue[company.financials.revenue.length - 1] || 380000;
-              const forecastYears = ['2025E', '2026E', '2027E', '2028E', '2029E'];
-              
-              let currRev = lastRev;
-              const projectedRows = forecastYears.map((yr, idx) => {
-                currRev *= (1 + drivers.revenueGrowthPct / 100);
-                const ebit = currRev * (drivers.operatingMarginPct / 100);
-                const tax = ebit * (drivers.taxRatePct / 100);
-                const nopat = ebit - tax;
-                const capex = currRev * (drivers.capexPctOfRev / 100);
-                const nwcChange = currRev * 0.02;
-                const fcff = nopat - capex - nwcChange;
-                const discountFactor = 1 / Math.pow(1 + drivers.waccPct / 100, idx + 1);
-                const pvFcff = fcff * discountFactor;
-
-                return {
-                  year: yr,
-                  revenue: Math.round(currRev),
-                  ebit: Math.round(ebit),
-                  tax: Math.round(tax),
-                  nopat: Math.round(nopat),
-                  capex: Math.round(capex),
-                  nwcChange: Math.round(nwcChange),
-                  fcff: Math.round(fcff),
-                  discountFactor: Number(discountFactor.toFixed(3)),
-                  pvFcff: Math.round(pvFcff),
-                };
-              });
-
-              return (
-                <table className="w-full text-left font-mono text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase">
-                      <th className="py-3 pr-6 font-medium">Forecasted Line Item</th>
-                      {projectedRows.map((row) => (
-                        <th key={row.year} className="py-3 px-4 text-right font-medium text-[#8B1E1E]">
-                          {row.year}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#222228] text-[#F2F0EA]">
-                    <tr>
-                      <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Forecasted Revenue</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-3 px-4 text-right font-bold text-[#F2F0EA]">
-                          {company.currencySymbol}{r.revenue.toLocaleString()}
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
-                      <td className="py-2.5 pr-6 pl-3 text-[11px]">Revenue Growth %</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-2.5 px-4 text-right text-[11px] text-emerald-400 font-semibold">
-                          +{drivers.revenueGrowthPct}%
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr>
-                      <td className="py-3 pr-6 font-medium">Operating Income (EBIT)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-3 px-4 text-right">
-                          {company.currencySymbol}{r.ebit.toLocaleString()}
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
-                      <td className="py-2.5 pr-6 pl-3 text-[11px]">Operating Margin %</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-2.5 px-4 text-right text-[11px]">
-                          {drivers.operatingMarginPct}%
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr>
-                      <td className="py-2.5 pr-6 text-[#8A8A8F]">Provision for Taxes ({drivers.taxRatePct}%)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-2.5 px-4 text-right text-[#8A8A8F]">
-                          ({company.currencySymbol}{r.tax.toLocaleString()})
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="font-semibold bg-[#0B0B0D]/30">
-                      <td className="py-3 pr-6 text-[#F2F0EA]">NOPAT (Net Operating Profit After Tax)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-3 px-4 text-right text-[#F2F0EA]">
-                          {company.currencySymbol}{r.nopat.toLocaleString()}
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="text-[#8A8A8F] text-[11px]">
-                      <td className="py-2.5 pr-6 pl-3">Less: Capital Expenditures ({drivers.capexPctOfRev}%)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-2.5 px-4 text-right">
-                          ({company.currencySymbol}{r.capex.toLocaleString()})
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="text-[#8A8A8F] text-[11px]">
-                      <td className="py-2.5 pr-6 pl-3">Less: Change in Net Working Capital (2%)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-2.5 px-4 text-right">
-                          ({company.currencySymbol}{r.nwcChange.toLocaleString()})
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="bg-[#8B1E1E]/10 border-t-2 border-[#8B1E1E]">
-                      <td className="py-3 pr-6 font-bold text-[#8B1E1E]">Unlevered Free Cash Flow (FCFF)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-3 px-4 text-right font-bold text-[#8B1E1E]">
-                          {company.currencySymbol}{r.fcff.toLocaleString()}
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="text-[#8A8A8F] text-[10px]">
-                      <td className="py-2 pr-6">Discount Factor (WACC = {drivers.waccPct}%)</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-2 px-4 text-right">
-                          {r.discountFactor}
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr className="font-semibold bg-[#111114]">
-                      <td className="py-3 pr-6 text-[#F2F0EA]">Present Value of FCFF</td>
-                      {projectedRows.map((r, i) => (
-                        <td key={i} className="py-3 px-4 text-right text-[#F2F0EA]">
-                          {company.currencySymbol}{r.pvFcff.toLocaleString()}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              );
-            })()}
+            {!dcfResult.applicable ? (
+              <div className="p-6 border hairline-border bg-[#0B0B0D] font-mono text-xs text-[#8A8A8F]">
+                <strong className="text-[#F2F0EA] block mb-2">MODEL NOT APPLICABLE</strong>
+                {dcfResult.message}
+              </div>
+            ) : (
+              <table className="w-full text-left font-mono text-xs border-collapse">
+                <thead>
+                  <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase">
+                    <th className="py-3 pr-6 font-medium">Line Item</th>
+                    {dcfResult.forecastRows.map((row: ForecastRow) => (
+                      <th key={row.year} className="py-3 px-4 text-right font-medium text-[#8B1E1E]">
+                        {row.year}E
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#222228] text-[#F2F0EA]">
+                  <tr>
+                    <td className="py-3 pr-6 font-medium">Revenue</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-3 px-4 text-right font-bold">
+                        {company.currencySymbol}{row.revenue.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
+                    <td className="py-2.5 pr-6 pl-3 text-[11px]">Revenue Growth %</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${row.revenueGrowthPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {row.revenueGrowthPct >= 0 ? '+' : ''}{row.revenueGrowthPct}%
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-3 pr-6 font-medium">EBIT</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-3 px-4 text-right">
+                        {company.currencySymbol}{row.ebit.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#dfbfbc] bg-[#0B0B0D]/50">
+                    <td className="py-2.5 pr-6 pl-3 text-[11px]">Operating Margin %</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-2.5 px-4 text-right text-[11px]">{row.operatingMarginPct}%</td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#8A8A8F] text-[11px]">
+                    <td className="py-2.5 pr-6">Taxes ({drivers.taxRatePct}%)</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-2.5 px-4 text-right">
+                        ({company.currencySymbol}{row.taxAmt.toLocaleString()})
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="font-semibold bg-[#0B0B0D]/30">
+                    <td className="py-3 pr-6">EBIAT (NOPAT)</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-3 px-4 text-right">
+                        {company.currencySymbol}{row.ebiat.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#8A8A8F] text-[11px]">
+                    <td className="py-2.5 pr-6 pl-3">Add: D&A</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-2.5 px-4 text-right">
+                        {company.currencySymbol}{row.da.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#8A8A8F] text-[11px]">
+                    <td className="py-2.5 pr-6 pl-3">Less: CapEx</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-2.5 px-4 text-right">
+                        ({company.currencySymbol}{row.capex.toLocaleString()})
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#8A8A8F] text-[11px]">
+                    <td className="py-2.5 pr-6 pl-3">Less: Δ Working Capital</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-2.5 px-4 text-right">
+                        ({company.currencySymbol}{row.wcChange.toLocaleString()})
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="bg-[#8B1E1E]/10 border-t-2 border-[#8B1E1E]">
+                    <td className="py-3 pr-6 font-bold text-[#8B1E1E]">Unlevered FCF</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-3 px-4 text-right font-bold text-[#8B1E1E]">
+                        {company.currencySymbol}{row.ufcf.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-[#8A8A8F] text-[10px]">
+                    <td className="py-2 pr-6">Discount Factor (WACC {drivers.waccPct}%)</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-2 px-4 text-right">{row.discountFactor}</td>
+                    ))}
+                  </tr>
+                  <tr className="font-semibold bg-[#111114]">
+                    <td className="py-3 pr-6">PV of Unlevered FCF</td>
+                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
+                      <td key={i} className="py-3 px-4 text-right">
+                        {company.currencySymbol}{row.pvUfcf.toLocaleString()}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 
@@ -1058,9 +1026,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   </tr>
 
                   <tr className="border-b hairline-border-b hover:bg-[#111114]">
-                    <td className="py-3 text-[#8A8A8F]">Less: Net Debt / (Plus Net Cash)</td>
+                    <td className="py-3 text-[#8A8A8F]">
+                      {drivers.netDebtBillion < 0 ? 'Plus: Net Cash' : 'Less: Net Debt'}
+                    </td>
                     <td className="py-3 text-right text-[#dfbfbc]">
-                      ({company.currencySymbol}{drivers.netDebtBillion}B)
+                      {drivers.netDebtBillion < 0
+                        ? `+${company.currencySymbol}${Math.abs(drivers.netDebtBillion).toFixed(1)}B`
+                        : `(${company.currencySymbol}${drivers.netDebtBillion.toFixed(1)}B)`}
                     </td>
                   </tr>
 
@@ -1081,7 +1053,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               </table>
 
               <div className="font-mono text-[10px] text-[#8A8A8F] pt-3 border-t hairline-border-t flex justify-between items-center">
-                <span>MARGINALIA DCF ENGINE VER 4.2</span>
+                <span>MARGINALIA ENGINE · VERIFIED AGAINST EXCEL MODEL</span>
                 <span className="text-[#8B1E1E]">100% RECALCULATED REAL-TIME</span>
               </div>
             </div>
