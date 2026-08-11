@@ -15,7 +15,6 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
-  Zap,
   LineChart,
 } from 'lucide-react';
 
@@ -54,31 +53,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return Number(((diff / company.price) * 100).toFixed(1));
   }, [dcfResult.targetPrice, company.price]);
 
-  // Calculate Verdict based on DCF Target Fair Value vs Current Market Price
-  const verdict = useMemo(() => {
-    if (potentialUpsidePct >= 10) {
-      return {
-        label: 'BUY',
-        badgeStyle: 'bg-emerald-950/90 text-emerald-300 border-emerald-600',
-        boxStyle: 'bg-emerald-950/30 border-emerald-800/60 text-emerald-200',
-        description: `Current market price of ${company.currencySymbol}${company.price.toFixed(2)} trades at a ${potentialUpsidePct}% discount to our calculated DCF Target Fair Value of ${company.currencySymbol}${dcfResult.targetPrice.toFixed(2)}. Represents an attractive margin of safety for capital allocation.`,
-      };
-    } else if (potentialUpsidePct <= -10) {
-      return {
-        label: 'SELL',
-        badgeStyle: 'bg-rose-950/90 text-rose-300 border-rose-600',
-        boxStyle: 'bg-rose-950/30 border-rose-800/60 text-rose-200',
-        description: `Current market price of ${company.currencySymbol}${company.price.toFixed(2)} trades at a ${Math.abs(potentialUpsidePct)}% premium above our calculated DCF Target Fair Value of ${company.currencySymbol}${dcfResult.targetPrice.toFixed(2)}. Valuation appears stretched relative to explicit cash flow projections.`,
-      };
-    } else {
-      return {
-        label: 'HOLD',
-        badgeStyle: 'bg-amber-950/90 text-amber-300 border-amber-600',
-        boxStyle: 'bg-amber-950/30 border-amber-800/60 text-amber-200',
-        description: `Current market price of ${company.currencySymbol}${company.price.toFixed(2)} is within fair value range relative to our DCF Target Price of ${company.currencySymbol}${dcfResult.targetPrice.toFixed(2)} (${potentialUpsidePct >= 0 ? '+' : ''}${potentialUpsidePct}% variance). Recommend maintaining position pending further catalyst disclosures.`,
-      };
-    }
-  }, [potentialUpsidePct, company.currencySymbol, company.price, dcfResult.targetPrice]);
+  // potentialUpsidePct > 0 → market is below model → DISCOUNT to model
+  // potentialUpsidePct < 0 → market is above model → PREMIUM to model
+  const premiumDiscountLabel = potentialUpsidePct < 0
+    ? `${Math.abs(potentialUpsidePct)}% PREMIUM TO MODEL`
+    : `${potentialUpsidePct}% DISCOUNT TO MODEL`;
+  const premiumDiscountStyle = potentialUpsidePct < 0
+    ? 'bg-rose-950/60 text-rose-300 border-rose-700'
+    : 'bg-emerald-950/60 text-emerald-300 border-emerald-700';
 
   // Preset Scenario Handlers
   const applyPreset = (preset: 'BASE' | 'BULL' | 'BEAR' | 'FORENSIC') => {
@@ -196,17 +178,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               </div>
             </div>
 
-            {/* Target Fair Value & Verdict Highlight */}
+            {/* Model Implied Value & Premium/Discount */}
             <div className="bg-[#0B0B0D] border hairline-border p-3 px-4 text-left md:text-right">
               <div className="font-mono text-[10px] text-[#8A8A8F] tracking-wider uppercase mb-1">
-                TARGET FAIR VALUE
+                MODEL IMPLIED VALUE
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="font-display text-2xl text-[#8B1E1E] font-bold">
                   {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}
                 </span>
-                <span className={`font-mono text-xs px-2.5 py-0.5 font-bold uppercase tracking-widest border ${verdict.badgeStyle}`}>
-                  {verdict.label}
+                <span className={`font-mono text-xs px-2.5 py-0.5 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
+                  {premiumDiscountLabel}
                 </span>
               </div>
             </div>
@@ -1010,8 +992,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             <div className="lg:col-span-7 bg-[#0B0B0D] border hairline-border p-8 flex flex-col justify-between space-y-8">
               <div>
                 <div className="font-mono text-xs text-[#8A8A8F] uppercase tracking-wider mb-3 flex items-center justify-between">
-                  <span>TARGET FAIR VALUE PRICE & VERDICT</span>
-                  <span className="text-[#8B1E1E] font-semibold">VALUATION DECISION</span>
+                  <span>MODEL IMPLIED VALUE</span>
+                  <span className="text-[#8B1E1E] font-semibold">MARKET vs. MODEL</span>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3.5 mb-6">
@@ -1037,23 +1019,26 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     )}
                   </div>
 
-                  {/* Highlighted Verdict Badge */}
-                  <div
-                    className={`font-mono text-xs px-3.5 py-1.5 font-bold uppercase tracking-widest border flex items-center gap-1.5 shadow-lg ${verdict.badgeStyle}`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-                    <span>VERDICT: {verdict.label}</span>
+                  {/* Premium / Discount badge */}
+                  <div className={`font-mono text-xs px-3.5 py-1.5 font-semibold uppercase tracking-widest border flex items-center gap-1.5 ${premiumDiscountStyle}`}>
+                    <span className="w-2 h-2 rounded-full bg-current" />
+                    <span>{premiumDiscountLabel}</span>
                   </div>
                 </div>
 
-                {/* Verdict Analyst Commentary Box */}
-                <div className={`p-4 border font-mono text-xs leading-relaxed mb-6 ${verdict.boxStyle}`}>
-                  <strong className="block mb-1.5 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                    <Zap className="w-4 h-4" />
-                    VALUATION DECISION: {verdict.label}
+                {/* Market price vs model implied value */}
+                <div className="p-4 border hairline-border bg-[#111114] font-mono text-xs leading-relaxed mb-6 text-[#dfbfbc]">
+                  <strong className="block mb-1.5 text-[#F2F0EA] uppercase tracking-wider">
+                    MARKET PRICE vs. MODEL IMPLIED VALUE
                   </strong>
-                  <p className="text-xs leading-relaxed">
-                    {verdict.description}
+                  <p className="leading-relaxed">
+                    {company.currencySymbol}{company.price.toFixed(2)} market price ·{' '}
+                    {company.currencySymbol}{dcfResult.targetPrice.toFixed(2)} model implied value ·{' '}
+                    {potentialUpsidePct < 0
+                      ? `market trades ${Math.abs(potentialUpsidePct)}% above this model`
+                      : `market trades ${potentialUpsidePct}% below this model`}.
+                    {' '}Use the sliders to adjust assumptions and see how the gap changes.
+                    This is a gap — not a recommendation.
                   </p>
                 </div>
 
