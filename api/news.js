@@ -9,22 +9,41 @@
 //
 // Free. No API key. No account needed.
 
-// What to actually search for, per ticker. Ticker symbols alone return junk,
-// so each company gets a hand-written query.
-const SEARCH_QUERIES = {
-  AAPL: 'Apple Inc stock',
-  META: 'Meta Platforms stock',
-  NVDA: 'Nvidia stock',
-  RELIANCE: 'Reliance Industries share',
-  SPCX: 'SpaceX stock',
-};
+// A ticker alone makes a poor news query — "META" returns metaverse blogs and
+// "F" returns nothing useful. The dashboard therefore passes the company's real
+// name, and we search on that. The ticker is only a fallback.
 
-// Indian company news reads better from the India edition.
-const REGIONS = {
-  RELIANCE: { hl: 'en-IN', gl: 'IN', ceid: 'IN:en' },
+// Exchange suffix -> which Google News edition to search. An Indian company is
+// covered by the Indian press, so asking the US edition returns very little.
+const REGION_BY_SUFFIX = {
+  NS: { hl: 'en-IN', gl: 'IN', ceid: 'IN:en' },   // NSE India
+  BO: { hl: 'en-IN', gl: 'IN', ceid: 'IN:en' },   // BSE India
+  L:  { hl: 'en-GB', gl: 'GB', ceid: 'GB:en' },   // London
+  TO: { hl: 'en-CA', gl: 'CA', ceid: 'CA:en' },   // Toronto
+  AX: { hl: 'en-AU', gl: 'AU', ceid: 'AU:en' },   // Australia
+  HK: { hl: 'en-HK', gl: 'HK', ceid: 'HK:en' },   // Hong Kong
 };
 
 const DEFAULT_REGION = { hl: 'en-US', gl: 'US', ceid: 'US:en' };
+
+// Company names carry legal suffixes that add nothing to a news search and
+// often narrow it too far. Strip them.
+const NAME_NOISE = /\b(inc|inc\.|corp|corp\.|corporation|co|co\.|ltd|ltd\.|limited|plc|sa|nv|ag|holdings|holding|group|company|the)\b/gi;
+
+function cleanName(name) {
+  return name
+    .replace(NAME_NOISE, ' ')
+    .replace(/[.,&]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildQuery(ticker, name) {
+  const base = name && name.length > 1 ? cleanName(name) : ticker.split('.')[0];
+  // "share price" reads better for Indian coverage, "stock" for US — but both
+  // work either way, so keep one consistent term.
+  return `${base} stock`;
+}
 
 const MAX_ITEMS = 8;
 
@@ -65,15 +84,19 @@ function formatTime(pubDate) {
 }
 
 export default async function handler(req, res) {
-  const ticker = String(req.query.ticker || '').toUpperCase();
-  const query = SEARCH_QUERIES[ticker];
+  const ticker = String(req.query.ticker || '').trim().toUpperCase();
+  const name = String(req.query.name || '').trim();
 
-  if (!query) {
-    res.status(400).json({ items: [], error: 'Unknown ticker' });
+  if (!ticker) {
+    res.status(400).json({ items: [], error: 'No ticker given' });
     return;
   }
 
-  const region = REGIONS[ticker] || DEFAULT_REGION;
+  const query = buildQuery(ticker, name);
+
+  // The bit after the dot tells us which country's press to search.
+  const suffix = ticker.includes('.') ? ticker.split('.').pop() : null;
+  const region = (suffix && REGION_BY_SUFFIX[suffix]) || DEFAULT_REGION;
   const url =
     'https://news.google.com/rss/search' +
     `?q=${encodeURIComponent(query)}` +

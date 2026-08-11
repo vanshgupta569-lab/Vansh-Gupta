@@ -75,7 +75,7 @@
 .animate-marquee {
   display: inline-block;
   white-space: nowrap;
-  animation: marquee 90s linear infinite;
+  animation: marquee 60s linear infinite;
 }
 
 .animate-marquee:hover {

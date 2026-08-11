@@ -77,7 +77,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     let cancelled = false;
     setLiveNews([]);
 
-    fetch(`/api/news?ticker=${encodeURIComponent(company.ticker)}`)
+    fetch(
+      `/api/news?ticker=${encodeURIComponent(company.ticker)}` +
+        `&name=${encodeURIComponent(company.name || '')}`
+    )
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && Array.isArray(data.items) && data.items.length > 0) {
