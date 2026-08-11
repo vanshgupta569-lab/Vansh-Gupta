@@ -173,7 +173,7 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
     // last one until the real work finishes. Never claims to be complete.
     const timer = setInterval(() => {
       setStage((s) => (s < STAGES.length - 1 ? s + 1 : s));
-    }, 620);
+    }, 380);
     return () => clearInterval(timer);
   }, [active, reduced]);
 

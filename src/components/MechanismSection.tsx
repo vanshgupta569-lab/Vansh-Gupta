@@ -1,269 +1,319 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, useInView, animate } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { CompanyData } from '../types';
+import { BuildPipeline } from './motionPrimitives';
+import { Search, ArrowRight, Building2, TrendingUp, Sparkles, Mail, FileSpreadsheet } from 'lucide-react';
 
-/**
- * MechanismSection
- *
- * Two animations that demonstrate how the engine works, using no company's
- * figures at all. The bars are proportions, not amounts: no ticker, no
- * currency, no axis. What is being shown is the mechanism, which is identical
- * for every company on the site — so nothing here privileges one over another,
- * and nothing here is a number that could be wrong.
- *
- * Motion is disabled entirely for anyone who has asked their system to reduce
- * it; they see the finished state immediately.
- */
+interface DirectoryScreenProps {
+  companies: Record<string, CompanyData>;
+  selectedTicker: string;
+  onSelectCompany: (ticker: string) => void;
+  onBackToHome: () => void;
+  onLookupTicker: (ticker: string) => void;
+  lookupState: { loading: boolean; error: string | null };
+}
 
-const useReducedMotion = () => {
-  const [reduced, setReduced] = useState(false);
+export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
+  companies,
+  selectedTicker,
+  onSelectCompany,
+  onBackToHome,
+  onLookupTicker,
+  lookupState,
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<
+    { ticker: string; name: string; exchange: string }[]
+  >([]);
+
+  // Look up matching companies as the user types. Debounced so a fast typist
+  // doesn't fire a request per keystroke.
   useEffect(() => {
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReduced(query.matches);
-    const listen = (e: MediaQueryListEvent) => setReduced(e.matches);
-    query.addEventListener('change', listen);
-    return () => query.removeEventListener('change', listen);
-  }, []);
-  return reduced;
-};
-
-/* ------------------------------------------------------------------ */
-/* 1. DISCOUNTING                                                       */
-/* Five equal bars, one per forecast year, each shrinking to what it is */
-/* worth today. The discount factor is a pure ratio — true of every     */
-/* company, belonging to none.                                          */
-/* ------------------------------------------------------------------ */
-
-const DISCOUNT_RATE = 0.09;
-const YEARS = [1, 2, 3, 4, 5];
-
-const DiscountingFigure: React.FC = () => {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
-  const reduced = useReducedMotion();
-  const [progress, setProgress] = useState(0); // 0 = undiscounted, 1 = present value
-
-  useEffect(() => {
-    if (!inView) return;
-    if (reduced) {
-      setProgress(1);
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
       return;
     }
-    const controls = animate(0, 1, {
-      duration: 2.6,
-      delay: 0.35,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: setProgress,
-    });
-    return controls.stop;
-  }, [inView, reduced]);
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setSuggestions(data.results || []);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const companyList = Object.values(companies) as CompanyData[];
+
+
+  // The grid below is the analyst-model shelf: only companies with a real,
+  // hand-built data file. Everything else is reached through the search box.
+  const filteredCompanies = companyList.filter((c) => c.engineBacked);
 
   return (
-    <div ref={ref}>
-      <div className="flex items-end justify-between gap-3 sm:gap-5 h-64">
-        {YEARS.map((year, index) => {
-          const factor = 1 / Math.pow(1 + DISCOUNT_RATE, year);
-          // Interpolate from full height to the discounted height.
-          const height = 100 - (100 - factor * 100) * progress;
-          const shown = 1 - (1 - factor) * progress;
-
-          return (
-            <div key={year} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
-              {/* One dashed frame per year, always full height, standing for the
-                  undiscounted cash flow. The solid bar fills it from the bottom.
-                  Drawing it this way means every frame is identical by
-                  construction — stacking a separate box on top of each bar left
-                  their top edges a fraction of a pixel apart. */}
-              <div className="w-full flex-1 min-h-0 border border-dashed border-[#8B1E1E]/30 flex flex-col justify-end">
-                <div
-                  className="w-full bg-[#8B1E1E]"
-                  style={{ height: `${height}%`, transition: 'none' }}
-                />
-              </div>
-
-              <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 tracking-widest">
-                Y{year}
-              </div>
-              <div className="font-mono text-[10px] text-[#F2F0EA] mt-1 tabular-nums">
-                {shown.toFixed(2)}
-              </div>
+    <div className="pt-28 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12 min-h-screen flex flex-col justify-between">
+      <div>
+        {/* Title Banner */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10 border-b hairline-border-b pb-8">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 bg-[#8B1E1E]" />
+              <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] font-semibold uppercase">
+                SCREEN 02 — INSTITUTIONAL COVERAGE DIRECTORY
+              </span>
             </div>
-          );
-        })}
-      </div>
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA]">
+              Search Covered Companies
+            </h1>
+            <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide mt-4 max-w-2xl border-l-2 border-[#8B1E1E] pl-4">
+              Enter any listed ticker to build a 3-statement model and DCF from its own filings, then move the assumptions and watch the implied value recalculate.
+            </p>
+          </div>
 
-      <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
-        Discount factor at {(DISCOUNT_RATE * 100).toFixed(0)}% · illustrative rate
-      </div>
-    </div>
-  );
-};
+          <div className="font-mono text-[11px] text-[#8A8A8F] border border-[#222228] bg-[#111114] px-4 py-3 flex items-center gap-3 uppercase tracking-widest shadow-md">
+            <Building2 className="w-4 h-4 text-[#8B1E1E]" />
+            <span>COVERAGE: <strong className="text-[#F2F0EA]">ANY LISTED COMPANY</strong></span>
+          </div>
+        </div>
 
-/* ------------------------------------------------------------------ */
-/* 2. THE BALANCE IDENTITY                                              */
-/* Two columns rising to exactly the same height. The engine checks     */
-/* this in every forecast year of every company it builds.              */
-/* ------------------------------------------------------------------ */
-
-const BalanceFigure: React.FC = () => {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
-  const reduced = useReducedMotion();
-
-  const rise = {
-    hidden: { height: '0%' },
-    shown: { height: '100%' },
-  };
-
-  const transition = reduced
-    ? { duration: 0 }
-    : { duration: 1.5, ease: [0.16, 1, 0.3, 1] as const, delay: 0.3 };
-
-  const columns = [
-    { label: 'Assets', segments: [58, 42] },
-    { label: 'Liabilities + Equity', segments: [37, 63] },
-  ];
-
-  return (
-    <div ref={ref}>
-      {/* The bars and the labels are kept in separate rows on purpose. With the
-          label inside the column, a label that wraps to two lines lifts its own
-          bar off the floor — which is exactly the wrong thing to happen in a
-          panel about two sides being equal. */}
-      <div className="flex items-end justify-center gap-8 sm:gap-14 h-56 relative">
-        {/* The line both sides must reach */}
-        <motion.div
-          className="absolute left-0 right-0 top-0 border-t border-dashed border-[#8B1E1E]/40"
-          initial={{ opacity: 0 }}
-          animate={inView ? { opacity: 1 } : {}}
-          transition={{ delay: reduced ? 0 : 1.7, duration: 0.5 }}
-        />
-
-        {columns.map((column, columnIndex) => (
-          <div key={column.label} className="flex-1 max-w-[130px] h-full flex flex-col justify-end">
-            <motion.div
-              className="w-full flex flex-col-reverse"
-              variants={rise}
-              initial="hidden"
-              animate={inView ? 'shown' : 'hidden'}
-              transition={{ ...transition, delay: (transition.delay ?? 0) + columnIndex * 0.15 }}
+        {/* One search box. Type a name or ticker, pick a match, and a model is
+            built from that company's own filings. */}
+        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-10 shadow-lg">
+          <div className="relative flex items-center w-full">
+            <Search className="w-5 h-5 absolute left-5 text-[#8A8A8F]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const first = suggestions[0];
+                  if (first) onLookupTicker(first.ticker);
+                  else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
+                }
+                if (e.key === 'Escape') setSearchQuery('');
+              }}
+              placeholder="Search any listed company: Apple, Reliance, Nvidia, Tata Motors..."
+              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm pl-14 pr-32 py-5 outline-none placeholder:text-[#52525B] transition-colors rounded-none shadow-inner"
+              autoFocus
+            />
+            <button
+              onClick={() => {
+                const first = suggestions[0];
+                if (first) onLookupTicker(first.ticker);
+                else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
+              }}
+              disabled={lookupState.loading || !searchQuery.trim()}
+              className="absolute right-2 bg-[#8B1E1E] text-[#F2F0EA] font-mono text-[11px] px-5 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
             >
-              {column.segments.map((share, segmentIndex) => (
-                <div
-                  key={segmentIndex}
-                  style={{ height: `${share}%` }}
-                  className={
-                    segmentIndex === 0
-                      ? 'bg-[#8B1E1E] w-full'
-                      : 'bg-[#8B1E1E]/25 w-full border-t border-[#8B1E1E]/40'
-                  }
-                />
+              {lookupState.loading ? 'Building…' : 'Build model'}
+            </button>
+          </div>
+
+          {/* Live suggestions as the user types */}
+          {suggestions.length > 0 && (
+            <div className="mt-3 border hairline-border bg-[#0B0B0D] divide-y divide-[#222228]">
+              {suggestions.map((sug) => (
+                <button
+                  key={sug.ticker}
+                  onClick={() => onLookupTicker(sug.ticker)}
+                  className="w-full text-left px-5 py-3 hover:bg-[#18181c] transition-colors cursor-pointer flex items-center justify-between gap-4 group"
+                >
+                  <span className="flex items-center gap-4 min-w-0">
+                    <span className="font-mono text-sm text-[#F2F0EA] font-semibold shrink-0">
+                      {sug.ticker}
+                    </span>
+                    <span className="font-sans text-sm font-light text-[#A1A1AA] truncate">
+                      {sug.name}
+                    </span>
+                  </span>
+                  <span className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest shrink-0 flex items-center gap-3">
+                    {sug.exchange}
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </span>
+                </button>
               ))}
-            </motion.div>
-          </div>
-        ))}
+            </div>
+          )}
 
-        {/* The equals sign, once both sides have settled */}
-        <motion.div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={inView ? { opacity: 1, scale: 1 } : {}}
-          transition={{ delay: reduced ? 0 : 1.9, duration: 0.5, ease: 'easeOut' }}
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed uppercase tracking-wider">
+            US filings come from SEC EDGAR; everywhere else from exchange
+            disclosures. Banks, insurers and lenders are shown without a DCF, because
+            discounted cash flow does not apply to them.
+          </div>
+
+          {/* While a model is being built, name the stages instead of spinning */}
+          <BuildPipeline active={lookupState.loading} />
+
+          {lookupState.error && (
+            <div className="mt-4 border border-[#8B1E1E]/50 bg-[#8B1E1E]/10 px-4 py-3 font-mono text-[11px] text-[#F2F0EA] leading-relaxed">
+              {lookupState.error}
+            </div>
+          )}
+        </div>
+
+        {/* A clear break: everything above is the automated engine, everything
+            below is hand-built work. The divider and the scale of the heading
+            are what make that switch legible. */}
+        <div className="mt-20 pt-12 border-t hairline-border-t">
+          <div className="flex items-center gap-3 mb-5">
+            <span className="w-2 h-2 bg-[#8B1E1E]" />
+            <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+              Built by hand
+            </span>
+          </div>
+
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium leading-tight max-w-3xl">
+            The analyst's own models.
+          </h2>
+
+          <p className="font-sans text-base font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-5">
+            The workbooks below were prepared by the analyst himself, after a
+            detailed study of each company and its filings, with every assumption
+            chosen and defended individually. They are not the output of the
+            automated engine.
+          </p>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 mt-7 pb-2">
+            <a
+              href="mailto:vanshgupta569@gmail.com?subject=Request%20for%20a%20custom%20financial%20model"
+              className="inline-flex items-center gap-2 font-mono text-[11px] text-[#F2F0EA] bg-[#8B1E1E] hover:bg-[#6a1515] transition-colors tracking-wider uppercase px-5 py-3 font-semibold"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Request a model for a company
+            </a>
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest leading-relaxed">
+              For a model of this depth on a company
+              <br className="hidden sm:block" />
+              not listed here, rather than the engine version.
+            </span>
+          </div>
+        </div>
+
+        {/* Company Grid Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12 mt-8">
+          {filteredCompanies.map((comp) => {
+            const isSelected = comp.ticker === selectedTicker;
+
+            return (
+              <div
+                key={comp.ticker}
+                onClick={() => onSelectCompany(comp.ticker)}
+                className={`p-8 border hairline-border bg-[#111114] hover:bg-[#18181c] group cursor-pointer transition-all duration-300 relative flex flex-col justify-between min-h-[280px] shadow-lg ${
+                  isSelected ? 'ring-1 ring-[#8B1E1E] border-l-4 border-l-[#8B1E1E]' : 'border-l-4 border-l-transparent hover:border-l-[#222228]'
+                }`}
+              >
+                {/* Crosshair accents */}
+                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                <div>
+                  <div className="flex justify-between items-start mb-5">
+                    <div>
+                      <div className="font-mono text-3xl font-bold text-[#F2F0EA] flex items-center gap-3 tracking-tight">
+                        <span>{comp.ticker}</span>
+                        <span className="font-mono text-[9px] text-[#A1A1AA] tracking-widest font-normal border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
+                          {comp.exchange}
+                        </span>
+                      </div>
+                      <div className="font-sans text-sm font-light text-[#A1A1AA] tracking-wide mt-1">{comp.name}</div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-mono text-xl font-bold text-[#F2F0EA] tracking-tight">
+                        {comp.currencySymbol}{comp.price.toFixed(2)}
+                      </div>
+                      <div
+                        className={`font-mono text-[11px] tracking-wider font-semibold mt-1 ${
+                          comp.priceChangePct >= 0 ? 'text-emerald-500' : 'text-[#8B1E1E]'
+                        }`}
+                      >
+                        {comp.priceChangePct >= 0 ? '+' : ''}{comp.priceChangePct}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="font-sans text-xs font-light text-[#A1A1AA] leading-loose tracking-wide line-clamp-2 mb-6">
+                    {comp.description}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-3 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] bg-[#0B0B0D] p-4 border hairline-border">
+                    <div>Cap: <strong className="text-[#F2F0EA] font-semibold">{comp.marketCapStr}</strong></div>
+                    <div>Sector: <strong className="text-[#F2F0EA] font-semibold">{comp.sector}</strong></div>
+                    <div>ROE: <strong className="text-[#F2F0EA] font-semibold">{comp.roePct}%</strong></div>
+                    <div>Op Margin: <strong className="text-[#F2F0EA] font-semibold">{comp.opMarginPct}%</strong></div>
+                  </div>
+                </div>
+
+                {/* Excel workbooks behind this model, where they exist. The
+                    click is stopped so the card underneath doesn't also open. */}
+                {comp.excelModels && comp.excelModels.length > 0 && (
+                  <div className="border-t hairline-border-t pt-4 mt-5">
+                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mb-2.5">
+                      Download the Excel workbooks
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {comp.excelModels.map((model) => (
+                        <a
+                          key={model.label}
+                          href={model.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-2 font-mono text-[10px] text-[#A1A1AA] hover:text-[#F2F0EA] border hairline-border hover:border-[#8B1E1E] px-3 py-2 transition-colors bg-[#0B0B0D]"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#8B1E1E]" />
+                          {model.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center border-t hairline-border-t pt-5 mt-6">
+                  <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {comp.isin}</span>
+                  <button className="font-mono text-[10px] text-[#8B1E1E] group-hover:text-[#F2F0EA] tracking-widest font-semibold uppercase flex items-center gap-2 transition-colors duration-300">
+                    <span>Open Financial Model</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredCompanies.length === 0 && (
+          <div className="text-center py-24 bg-[#111114] border hairline-border p-8 shadow-inner">
+            <div className="font-mono text-sm text-[#A1A1AA] tracking-wide mb-2">
+              No hand-built analyst models yet.
+            </div>
+            <div className="font-sans text-xs font-light text-[#8A8A8F] tracking-wide">
+              Use the search above to model any listed company automatically.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="pt-8 border-t hairline-border-t flex justify-between items-center font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-12">
+        <button
+          onClick={onBackToHome}
+          className="text-[#8A8A8F] hover:text-[#F2F0EA] flex items-center gap-2 transition-colors cursor-pointer"
         >
-          <span className="font-display text-3xl text-[#F2F0EA] bg-[#111114] px-3 leading-none">
-            =
-          </span>
-        </motion.div>
-      </div>
-
-      {/* Labels in their own row, so wrapping cannot move the bars */}
-      <div className="flex items-start justify-center gap-8 sm:gap-14 mt-3">
-        {columns.map((column) => (
-          <div
-            key={column.label}
-            className="flex-1 max-w-[130px] font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase text-center leading-snug"
-          >
-            {column.label}
-          </div>
-        ))}
-      </div>
-
-      <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
-        Checked in every forecast year, for every company
+          <span>←</span> Return to Intro & Philosophy
+        </button>
+        <span>MARGINALIA SEARCH ENGINE V4.2</span>
       </div>
     </div>
   );
 };
-
-/* ------------------------------------------------------------------ */
-
-export const MechanismSection: React.FC = () => {
-  const headingRef = useRef<HTMLDivElement>(null);
-  const headingInView = useInView(headingRef, { once: true, margin: '-100px' });
-
-  return (
-    <section
-      id="mechanism"
-      className="max-w-[1440px] mx-auto px-6 lg:px-12 py-20 hairline-border-b overflow-hidden"
-    >
-      <div ref={headingRef}>
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={headingInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          className="flex items-center gap-3 mb-3"
-        >
-          <span className="w-2 h-2 bg-[#8B1E1E]" />
-          <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
-            03 — HOW A VALUATION IS BUILT
-          </span>
-        </motion.div>
-
-        <motion.h2
-          initial={{ opacity: 0, y: 20 }}
-          animate={headingInView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.7, delay: 0.1, ease: 'easeOut' }}
-          className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium leading-tight max-w-3xl"
-        >
-          Two rules the engine never breaks.
-        </motion.h2>
-
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={headingInView ? { opacity: 1 } : {}}
-          transition={{ duration: 0.7, delay: 0.25 }}
-          className="font-sans text-base font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-5"
-        >
-          Every model on this site is built the same way, whichever company you
-          search for. No figures are shown here: these are the mechanics, and
-          they hold for all of them.
-        </motion.p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mt-14">
-        <div className="border hairline-border bg-[#111114] p-7 sm:p-9 shadow-lg">
-          <div className="font-mono text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
-            A rupee later is worth less now
-          </div>
-          <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed mb-8 max-w-md">
-            Forecast cash flows are pulled back to what they are worth today.
-            The further out a year sits, the less of it survives the journey.
-          </p>
-          <DiscountingFigure />
-        </div>
-
-        <div className="border hairline-border bg-[#111114] p-7 sm:p-9 shadow-lg">
-          <div className="font-mono text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
-            The two sides must agree
-          </div>
-          <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed mb-8 max-w-md">
-            What a business owns has to equal what it owes plus what its owners
-            hold. If a forecast year fails this test, the model is wrong.
-          </p>
-          <BalanceFigure />
-        </div>
-      </div>
-    </section>
-  );
-};
-
-export default MechanismSection;

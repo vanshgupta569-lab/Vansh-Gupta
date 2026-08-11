@@ -161,45 +161,46 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           )}
         </div>
 
-        {/* Analyst models — companies with a hand-built, verified data file */}
-        <div className="mb-4 flex items-baseline justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 bg-[#8B1E1E]" />
-              <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
-                Analyst models
-              </span>
-            </div>
-            <p className="font-sans text-sm font-light text-[#A1A1AA] max-w-3xl leading-relaxed">
-              These companies have a model built by hand and reconciled to the
-              filings line by line. Every other company is modelled automatically
-              from its reported history. Search for it above.
-            </p>
+        {/* A clear break: everything above is the automated engine, everything
+            below is hand-built work. The divider and the scale of the heading
+            are what make that switch legible. */}
+        <div className="mt-20 pt-12 border-t hairline-border-t">
+          <div className="flex items-center gap-3 mb-5">
+            <span className="w-2 h-2 bg-[#8B1E1E]" />
+            <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+              Built by hand
+            </span>
+          </div>
+
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium leading-tight max-w-3xl">
+            The analyst's own models.
+          </h2>
+
+          <p className="font-sans text-base font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-5">
+            The workbooks below were prepared by the analyst himself, after a
+            detailed study of each company and its filings, with every assumption
+            chosen and defended individually. They are not the output of the
+            automated engine.
+          </p>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 mt-7 pb-2">
+            <a
+              href="mailto:vanshgupta569@gmail.com?subject=Request%20for%20a%20custom%20financial%20model"
+              className="inline-flex items-center gap-2 font-mono text-[11px] text-[#F2F0EA] bg-[#8B1E1E] hover:bg-[#6a1515] transition-colors tracking-wider uppercase px-5 py-3 font-semibold"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Request a model for a company
+            </a>
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest leading-relaxed">
+              For a model of this depth on a company
+              <br className="hidden sm:block" />
+              not listed here, rather than the engine version.
+            </span>
           </div>
         </div>
 
-        {/* What an analyst model is, and how to request one */}
-        <div className="border hairline-border bg-[#111114] p-6 sm:p-7 mb-6 shadow-lg">
-          <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed max-w-3xl">
-            The workbooks below were prepared by the analyst himself, after a
-            detailed study of the company and its filings, with each assumption
-            chosen and defended individually. They are not the output of the
-            automated engine. If you would like a model of this depth for a
-            particular company, rather than the engine-generated version, please
-            get in touch.
-          </p>
-
-          <a
-            href="mailto:vanshgupta569@gmail.com?subject=Request%20for%20a%20custom%20financial%20model"
-            className="inline-flex items-center gap-2 mt-4 font-mono text-[11px] text-[#8B1E1E] hover:text-[#F2F0EA] transition-colors tracking-wider uppercase border-b border-[#8B1E1E]/40 hover:border-[#F2F0EA] pb-0.5"
-          >
-            <Mail className="w-3.5 h-3.5" />
-            vanshgupta569@gmail.com
-          </a>
-        </div>
-
         {/* Company Grid Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12 mt-8">
           {filteredCompanies.map((comp) => {
             const isSelected = comp.ticker === selectedTicker;
 

@@ -59,14 +59,29 @@ export default function App() {
     }
 
     setLookupState({ loading: true, error: null });
+
+    // Responses are cached at the edge, so a repeat lookup can return in a few
+    // hundred milliseconds. Hold the build stages on screen briefly so the work
+    // is legible rather than flashing past; a slow fetch simply takes longer.
+    const MIN_VISIBLE_MS = 2200;
+    const startedAt = Date.now();
+    const settle = async () => {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_VISIBLE_MS) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_VISIBLE_MS - elapsed));
+      }
+    };
+
     try {
       const company = await loadCompany(ticker);
+      await settle();
       setLoadedCompanies((prev) => ({ ...prev, [ticker]: company }));
       setLookupState({ loading: false, error: null });
       setSelectedTicker(ticker);
       setCurrentScreen('ANALYSIS');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
+      await settle();
       setLookupState({ loading: false, error: error.message || 'Could not build a model for that ticker.' });
     }
   };

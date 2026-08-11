@@ -82,14 +82,23 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const headerSentinel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const node = headerSentinel.current;
-    if (!node || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setHeaderCondensed(!entry.isIntersecting),
-      { rootMargin: '-80px 0px 0px 0px' }
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
+    // Measured against scroll position rather than IntersectionObserver: the
+    // marker is a zero-height element, and a zero-height box combined with a
+    // negative rootMargin does not reliably report as intersecting.
+    const check = () => {
+      const node = headerSentinel.current;
+      if (!node) return;
+      // Condense once the marker has passed above the top of the viewport.
+      setHeaderCondensed(node.getBoundingClientRect().top < 8);
+    };
+
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
   }, []);
   const displayChangePct = liveQuote?.changePct ?? company.priceChangePct;
 
@@ -465,7 +474,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       </div>
 
       {/* Marks where the full header ends, for the condensed bar above */}
-      <div ref={headerSentinel} />
+      <div ref={headerSentinel} className="h-px w-full" aria-hidden="true" />
 
       {/* Live News Ticker Marquee */}
       <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
