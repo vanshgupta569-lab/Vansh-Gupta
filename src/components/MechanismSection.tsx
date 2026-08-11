@@ -59,7 +59,7 @@ const DiscountingFigure: React.FC = () => {
 
   return (
     <div ref={ref}>
-      <div className="flex items-end justify-between gap-3 sm:gap-5 h-56">
+      <div className="flex items-end justify-between gap-3 sm:gap-5 h-64">
         {YEARS.map((year, index) => {
           const factor = 1 / Math.pow(1 + DISCOUNT_RATE, year);
           // Interpolate from full height to the discounted height.
@@ -67,16 +67,16 @@ const DiscountingFigure: React.FC = () => {
           const shown = 1 - (1 - factor) * progress;
 
           return (
-            <div key={year} className="flex-1 flex flex-col items-center justify-end h-full">
-              {/* The value that survives discounting */}
-              <div
-                className="w-full bg-[#8B1E1E] relative"
-                style={{ height: `${height}%`, transition: 'none' }}
-              >
-                {/* The portion lost to time, drawn as an outline above */}
+            <div key={year} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+              {/* One dashed frame per year, always full height, standing for the
+                  undiscounted cash flow. The solid bar fills it from the bottom.
+                  Drawing it this way means every frame is identical by
+                  construction — stacking a separate box on top of each bar left
+                  their top edges a fraction of a pixel apart. */}
+              <div className="w-full flex-1 min-h-0 border border-dashed border-[#8B1E1E]/30 flex flex-col justify-end">
                 <div
-                  className="absolute left-0 right-0 border border-dashed border-[#8B1E1E]/30 border-b-0"
-                  style={{ bottom: '100%', height: `${100 - height}%` }}
+                  className="w-full bg-[#8B1E1E]"
+                  style={{ height: `${height}%`, transition: 'none' }}
                 />
               </div>
 
@@ -118,10 +118,19 @@ const BalanceFigure: React.FC = () => {
     ? { duration: 0 }
     : { duration: 1.5, ease: [0.16, 1, 0.3, 1] as const, delay: 0.3 };
 
+  const columns = [
+    { label: 'Assets', segments: [58, 42] },
+    { label: 'Liabilities + Equity', segments: [37, 63] },
+  ];
+
   return (
     <div ref={ref}>
+      {/* The bars and the labels are kept in separate rows on purpose. With the
+          label inside the column, a label that wraps to two lines lifts its own
+          bar off the floor — which is exactly the wrong thing to happen in a
+          panel about two sides being equal. */}
       <div className="flex items-end justify-center gap-8 sm:gap-14 h-56 relative">
-        {/* The line they must both reach */}
+        {/* The line both sides must reach */}
         <motion.div
           className="absolute left-0 right-0 top-0 border-t border-dashed border-[#8B1E1E]/40"
           initial={{ opacity: 0 }}
@@ -129,10 +138,7 @@ const BalanceFigure: React.FC = () => {
           transition={{ delay: reduced ? 0 : 1.7, duration: 0.5 }}
         />
 
-        {[
-          { label: 'Assets', segments: [58, 42] },
-          { label: 'Liabilities + Equity', segments: [37, 63] },
-        ].map((column, columnIndex) => (
+        {columns.map((column, columnIndex) => (
           <div key={column.label} className="flex-1 max-w-[130px] h-full flex flex-col justify-end">
             <motion.div
               className="w-full flex flex-col-reverse"
@@ -153,24 +159,32 @@ const BalanceFigure: React.FC = () => {
                 />
               ))}
             </motion.div>
-
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 tracking-widest uppercase text-center">
-              {column.label}
-            </div>
           </div>
         ))}
 
-        {/* The equals sign, appearing once both sides have settled */}
+        {/* The equals sign, once both sides have settled */}
         <motion.div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={inView ? { opacity: 1, scale: 1 } : {}}
           transition={{ delay: reduced ? 0 : 1.9, duration: 0.5, ease: 'easeOut' }}
         >
-          <span className="font-display text-3xl text-[#F2F0EA] bg-[#0B0B0D] px-3 leading-none">
+          <span className="font-display text-3xl text-[#F2F0EA] bg-[#111114] px-3 leading-none">
             =
           </span>
         </motion.div>
+      </div>
+
+      {/* Labels in their own row, so wrapping cannot move the bars */}
+      <div className="flex items-start justify-center gap-8 sm:gap-14 mt-3">
+        {columns.map((column) => (
+          <div
+            key={column.label}
+            className="flex-1 max-w-[130px] font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase text-center leading-snug"
+          >
+            {column.label}
+          </div>
+        ))}
       </div>
 
       <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
