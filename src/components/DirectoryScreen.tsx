@@ -164,19 +164,22 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
         {/* A clear break: everything above is the automated engine, everything
             below is hand-built work. The divider and the scale of the heading
             are what make that switch legible. */}
-        <div className="mt-20 pt-12 border-t hairline-border-t">
-          <div className="flex items-center gap-3 mb-5">
-            <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+        <div className="mt-24 pt-16 border-t hairline-border-t">
+          {/* Deliberately larger than the screen's own title: this is the
+              point where the site stops being an automated tool and starts
+              showing hand-built work, and the type should say so. */}
+          <div className="flex items-center gap-3 mb-6">
+            <span className="w-8 h-[2px] bg-[#8B1E1E]" />
+            <span className="font-mono text-[12px] text-[#8B1E1E] tracking-[0.25em] uppercase font-semibold">
               Built by hand
             </span>
           </div>
 
-          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium leading-tight max-w-3xl">
-            The analyst's own models.
+          <h2 className="font-display text-4xl sm:text-6xl lg:text-7xl text-[#F2F0EA] font-semibold leading-[1.05] tracking-tight max-w-4xl">
+            The analyst's<br />own models.
           </h2>
 
-          <p className="font-sans text-base font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-5">
+          <p className="font-sans text-lg font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-7">
             The workbooks below were prepared by the analyst himself, after a
             detailed study of each company and its filings, with every assumption
             chosen and defended individually. They are not the output of the
