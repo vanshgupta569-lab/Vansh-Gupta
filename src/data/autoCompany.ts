@@ -37,6 +37,17 @@ export async function loadCompany(ticker: string): Promise<CompanyData> {
   return buildCompanyRecord(fetched, modelData);
 }
 
+// Fetch a company and derive ONLY its model data — used when a curated company
+// (Apple) also needs its derived counterpart, so the two can be compared.
+export async function loadDerivedModelData(ticker: string): Promise<any> {
+  const response = await fetch(`/api/company?ticker=${encodeURIComponent(ticker)}`);
+  const fetched = await response.json();
+  if (!response.ok || fetched.error || !fetched.statements) {
+    throw new Error(fetched.error || `Could not load ${ticker}`);
+  }
+  return deriveModel(fetched);
+}
+
 export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
   const M: any = buildModel(modelData);
   const D: any = buildDCF(M, modelData);

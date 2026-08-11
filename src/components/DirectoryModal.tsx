@@ -41,7 +41,7 @@ export const DirectoryModal: React.FC<DirectoryModalProps> = ({
           <span className="text-[#8B1E1E] font-semibold border-b border-[#8B1E1E] pb-0.5">
             Coverage Directory
           </span>
-          <span>5 Institutional Equities</span>
+          <span>Any Listed Company</span>
         </nav>
 
         <button

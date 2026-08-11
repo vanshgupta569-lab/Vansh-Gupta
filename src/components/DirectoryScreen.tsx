@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
-import { Search, ArrowRight, Building2, TrendingUp, Sparkles, X, Filter } from 'lucide-react';
+import { Search, ArrowRight, Building2, TrendingUp, Sparkles } from 'lucide-react';
 
 interface DirectoryScreenProps {
   companies: Record<string, CompanyData>;
@@ -20,24 +20,43 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
   lookupState,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [lookupQuery, setLookupQuery] = useState('');
-  const [selectedSector, setSelectedSector] = useState<string>('ALL');
+  const [suggestions, setSuggestions] = useState<
+    { ticker: string; name: string; exchange: string }[]
+  >([]);
+
+  // Look up matching companies as the user types. Debounced so a fast typist
+  // doesn't fire a request per keystroke.
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setSuggestions(data.results || []);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
 
   const companyList = Object.values(companies) as CompanyData[];
 
-  const sectors = ['ALL', ...Array.from(new Set(companyList.map((c) => c.sector)))];
 
-  const filteredCompanies = companyList.filter((c) => {
-    const matchesQuery =
-      c.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.isin.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.sector.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesSector = selectedSector === 'ALL' || c.sector === selectedSector;
-
-    return matchesQuery && matchesSector;
-  });
+  // The grid below is the analyst-model shelf: only companies with a real,
+  // hand-built data file. Everything else is reached through the search box.
+  const filteredCompanies = companyList.filter((c) => c.engineBacked);
 
   return (
     <div className="pt-28 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12 min-h-screen flex flex-col justify-between">
@@ -55,7 +74,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               Search Covered Companies
             </h1>
             <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide mt-4 max-w-2xl border-l-2 border-[#8B1E1E] pl-4">
-              Select any benchmark equity below to launch its 3-statement financial model, dynamic DCF valuation, footnote forensic breakdown, and live target price recalculations.
+              Enter any listed ticker to build a 3-statement model and DCF from its own filings, then move the assumptions and watch the implied value recalculate.
             </p>
           </div>
 
@@ -65,35 +84,70 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           </div>
         </div>
 
-        {/* Any-company lookup — the directory below is only what has been
-            opened before; anything listed anywhere can be modelled on demand. */}
-        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-6 shadow-lg">
-          <div className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-[0.2em] mb-3">
-            Model any listed company
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+        {/* One search box. Type a name or ticker, pick a match, and a model is
+            built from that company's own filings. */}
+        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-10 shadow-lg">
+          <div className="relative flex items-center w-full">
+            <Search className="w-5 h-5 absolute left-5 text-[#8A8A8F]" />
             <input
               type="text"
-              value={lookupQuery}
-              onChange={(e) => setLookupQuery(e.target.value.toUpperCase())}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && lookupQuery.trim()) onLookupTicker(lookupQuery.trim());
+                if (e.key === 'Enter') {
+                  const first = suggestions[0];
+                  if (first) onLookupTicker(first.ticker);
+                  else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
+                }
+                if (e.key === 'Escape') setSearchQuery('');
               }}
-              placeholder="Enter a ticker — AAPL, NVDA, RELIANCE.NS, BP.L"
-              className="flex-grow bg-transparent border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm px-4 py-3 outline-none placeholder:text-[#8A8A8F] transition-colors"
+              placeholder="Search any listed company — Apple, Reliance, Nvidia, Tata Motors..."
+              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm pl-14 pr-32 py-5 outline-none placeholder:text-[#52525B] transition-colors rounded-none shadow-inner"
+              autoFocus
             />
             <button
-              onClick={() => lookupQuery.trim() && onLookupTicker(lookupQuery.trim())}
-              disabled={lookupState.loading}
-              className="bg-[#8B1E1E] text-[#F2F0EA] font-mono text-xs px-6 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-50 whitespace-nowrap"
+              onClick={() => {
+                const first = suggestions[0];
+                if (first) onLookupTicker(first.ticker);
+                else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
+              }}
+              disabled={lookupState.loading || !searchQuery.trim()}
+              className="absolute right-2 bg-[#8B1E1E] text-[#F2F0EA] font-mono text-[11px] px-5 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
             >
-              {lookupState.loading ? 'Building model…' : 'Build model'}
+              {lookupState.loading ? 'Building…' : 'Build model'}
             </button>
           </div>
 
+          {/* Live suggestions as the user types */}
+          {suggestions.length > 0 && (
+            <div className="mt-3 border hairline-border bg-[#0B0B0D] divide-y divide-[#222228]">
+              {suggestions.map((sug) => (
+                <button
+                  key={sug.ticker}
+                  onClick={() => onLookupTicker(sug.ticker)}
+                  className="w-full text-left px-5 py-3 hover:bg-[#18181c] transition-colors cursor-pointer flex items-center justify-between gap-4 group"
+                >
+                  <span className="flex items-center gap-4 min-w-0">
+                    <span className="font-mono text-sm text-[#F2F0EA] font-semibold shrink-0">
+                      {sug.ticker}
+                    </span>
+                    <span className="font-sans text-sm font-light text-[#A1A1AA] truncate">
+                      {sug.name}
+                    </span>
+                  </span>
+                  <span className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest shrink-0 flex items-center gap-3">
+                    {sug.exchange}
+                    <ArrowRight className="w-3.5 h-3.5 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed uppercase tracking-wider">
-            US filings come from SEC EDGAR. Companies listed elsewhere need their
-            exchange suffix — .NS for India, .L for London, .TO for Toronto.
+            US filings come from SEC EDGAR; everywhere else from exchange
+            disclosures. Banks, insurers and lenders are shown without a DCF —
+            discounted cash flow does not apply to them.
           </div>
 
           {lookupState.error && (
@@ -103,46 +157,20 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           )}
         </div>
 
-        {/* Search Bar & Sector Filter Controls */}
-        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-10 space-y-6 shadow-lg">
-          <div className="relative flex items-center w-full">
-            <Search className="w-5 h-5 absolute left-5 text-[#8A8A8F]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search ticker (e.g. AAPL, NVDA, META), company name, or ISIN..."
-              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm pl-14 pr-10 py-5 outline-none placeholder:text-[#52525B] transition-colors rounded-none shadow-inner"
-              autoFocus
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-5 text-[#8A8A8F] hover:text-[#F2F0EA] cursor-pointer transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-
-          {/* Sector Filter Chips */}
-          <div className="flex flex-wrap items-center gap-3 pt-2 border-t hairline-border-t">
-            <span className="font-mono text-[10px] text-[#8A8A8F] mr-2 flex items-center gap-2 uppercase tracking-widest">
-              <Filter className="w-3.5 h-3.5 text-[#8B1E1E]" /> SECTOR FILTER:
-            </span>
-            {sectors.map((sec) => (
-              <button
-                key={sec}
-                onClick={() => setSelectedSector(sec)}
-                className={`font-mono text-[11px] uppercase tracking-wider px-4 py-1.5 transition-all cursor-pointer ${
-                  selectedSector === sec
-                    ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold shadow-[0_0_10px_rgba(139,30,30,0.4)]'
-                    : 'bg-[#0B0B0D] text-[#A1A1AA] border hairline-border hover:bg-[#222228] hover:text-[#F2F0EA]'
-                }`}
-              >
-                {sec}
-              </button>
-            ))}
+        {/* Analyst models — companies with a hand-built, verified data file */}
+        <div className="mb-4 flex items-baseline justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 bg-[#8B1E1E]" />
+              <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+                Analyst models
+              </span>
+            </div>
+            <p className="font-sans text-sm font-light text-[#A1A1AA] max-w-2xl leading-relaxed">
+              These companies have a model built by hand and reconciled to the
+              filings line by line. Every other company is modelled automatically
+              from its reported history — search for it above.
+            </p>
           </div>
         </div>
 

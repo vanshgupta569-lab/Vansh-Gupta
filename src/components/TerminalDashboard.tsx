@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE } from '../data/companies';
+import { loadDerivedModelData } from '../data/autoCompany';
 import {
   TrendingUp,
   BarChart2,
@@ -111,12 +112,42 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Recalculate DCF live
   // Auto-generated companies carry their own derived data file; Apple uses the
   // curated one. Same engine either way — only the inputs differ.
+  // ---- Model view: derived vs analyst ------------------------------------
+  // A company always has a derived model, built from its filings. A few also
+  // have an analyst model — a data file built by hand in Excel and verified
+  // line by line. Where both exist the user can switch between them and see
+  // exactly what the hand work changes.
+  const analystSource = company.engineBacked ? AAPL_SOURCE : null;
+  const [viewMode, setViewMode] = useState<'DERIVED' | 'ANALYST'>(
+    company.engineBacked ? 'ANALYST' : 'DERIVED'
+  );
+
+  // For a curated company we still fetch its derived counterpart, so the
+  // comparison is available. For everything else the derived model is already
+  // on the record.
+  const [derivedSource, setDerivedSource] = useState<any>(company.modelData ?? null);
+
+  useEffect(() => {
+    setViewMode(company.engineBacked ? 'ANALYST' : 'DERIVED');
+    setDerivedSource(company.modelData ?? null);
+
+    if (!company.modelData) {
+      let cancelled = false;
+      loadDerivedModelData(company.ticker)
+        .then((md) => { if (!cancelled) setDerivedSource(md); })
+        .catch(() => { /* toggle simply stays unavailable */ });
+      return () => { cancelled = true; };
+    }
+  }, [company.ticker]);
+
+  const activeSource =
+    viewMode === 'ANALYST' && analystSource ? analystSource : derivedSource;
+
+  const canCompare = Boolean(analystSource && derivedSource);
+
   const runDCF = React.useCallback(
-    (d: ValuationDrivers) =>
-      company.modelData
-        ? calculateDCFFor(company.modelData, d, displayPrice)
-        : calculateDCFFor(AAPL_SOURCE, d, displayPrice),
-    [company.modelData, displayPrice]
+    (d: ValuationDrivers) => calculateDCFFor(activeSource ?? AAPL_SOURCE, d, displayPrice),
+    [activeSource, displayPrice]
   );
 
   // A placeholder record has neither its own model nor a curated one, so any
@@ -257,6 +288,37 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               </div>
             </div>
 
+            {/* Derived vs analyst model switch — only where both exist */}
+            {canCompare && (
+              <div className="text-left md:text-right">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  Model
+                </div>
+                <div className="flex border hairline-border">
+                  <button
+                    onClick={() => setViewMode('DERIVED')}
+                    className={`font-mono text-[10px] px-3 py-2 uppercase tracking-wider cursor-pointer transition-colors ${
+                      viewMode === 'DERIVED'
+                        ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold'
+                        : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
+                    }`}
+                  >
+                    Derived
+                  </button>
+                  <button
+                    onClick={() => setViewMode('ANALYST')}
+                    className={`font-mono text-[10px] px-3 py-2 uppercase tracking-wider cursor-pointer transition-colors ${
+                      viewMode === 'ANALYST'
+                        ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold'
+                        : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
+                    }`}
+                  >
+                    Analyst
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Model Implied Value & Premium/Discount */}
             {hasRealModel ? (
               <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner">
@@ -270,6 +332,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
                     {premiumDiscountLabel}
                   </span>
+                </div>
+                <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-2">
+                  {viewMode === 'ANALYST' && analystSource
+                    ? 'Analyst model — built by hand, verified against the filings'
+                    : 'Derived model — assumptions from reported history'}
                 </div>
               </div>
             ) : (
@@ -896,7 +963,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   className="w-full accent-[#8B1E1E] cursor-pointer"
                 />
                 <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  Target EBIT margin after non-GAAP footnote reconciliation.
+                  Target EBIT margin applied across the forecast years.
                 </p>
               </div>
 

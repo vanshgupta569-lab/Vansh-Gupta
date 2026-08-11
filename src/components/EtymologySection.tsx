@@ -6,7 +6,7 @@ export const EtymologySection: React.FC = () => {
   const containerRef = useRef(null);
   const isInView = useInView(containerRef, { once: true, margin: "-100px" });
 
-  const sentence = "In corporate financial reporting, headline metrics and glossed pitch decks rarely tell the full story. The true economic condition of an enterprise is recorded deep within the footnote disclosures, audit commentaries, and balance sheet adjustments — the financial marginalia. Our singular purpose is to parse these critical disclosures and present ";
+  const sentence = "In corporate financial reporting, headline metrics and polished summaries rarely tell the full story. What a business is actually worth depends on the working capital, the capital expenditure, the debt and the assumptions behind the forecast — the financial marginalia. Our purpose is to build those workings in the open, and to show every assumption behind ";
 
   return (
     <section id="etymology" className="bg-[#111114] hairline-border-b py-20 overflow-hidden">

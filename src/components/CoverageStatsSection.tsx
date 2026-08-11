@@ -53,7 +53,7 @@ export const CoverageStatsSection: React.FC = () => {
           <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
             Companies Covered
           </div>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">AAPL · META · NVDA · RELIANCE · SPCX</div>
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">Any listed company, modelled on demand</div>
         </motion.div>
 
         <motion.div 
@@ -69,7 +69,7 @@ export const CoverageStatsSection: React.FC = () => {
           <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
             Historical Data
           </div>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">3 years of audited filed statements</div>
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">3 years of reported figures per company</div>
         </motion.div>
 
         <motion.div 
