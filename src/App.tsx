@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, useScroll } from 'motion/react';
+import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { EtymologySection } from './components/EtymologySection';
@@ -149,6 +150,9 @@ export default function App() {
 
       {/* Institutional Footer */}
       <Footer />
+
+      {/* Vercel Analytics Tracker */}
+      <Analytics />
     </div>
   );
 }
