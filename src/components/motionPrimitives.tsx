@@ -179,52 +179,76 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
 
   if (!active) return null;
 
+  // Rendered as a centred overlay rather than inline. Inline, it sits below the
+  // suggestion list and lands off-screen exactly when the user has just picked
+  // a company — so the one moment it matters is the one moment it is unseen.
   return (
-    <div className="mt-4 border hairline-border bg-[#0B0B0D] p-5">
-      {STAGES.map((label, index) => {
-        const done = index < stage;
-        const current = index === stage;
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0D]/85 backdrop-blur-sm px-6"
+      role="status"
+      aria-live="polite"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="w-full max-w-md border hairline-border bg-[#111114] p-7 shadow-2xl"
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <span className="w-2 h-2 bg-[#8B1E1E]" />
+          <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+            Building the model
+          </span>
+        </div>
 
-        return (
-          <motion.div
-            key={label}
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: done || current ? 1 : 0.35, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05 }}
-            className="flex items-center gap-3 py-1.5 font-mono text-[11px]"
-          >
-            <span
-              className={`w-3.5 h-3.5 border flex items-center justify-center text-[8px] shrink-0 ${
-                done
-                  ? 'border-[#8B1E1E] bg-[#8B1E1E] text-[#F2F0EA]'
-                  : current
-                  ? 'border-[#8B1E1E] text-[#8B1E1E]'
-                  : 'border-[#222228] text-transparent'
-              }`}
+        {STAGES.map((label, index) => {
+          const done = index < stage;
+          const current = index === stage;
+
+          return (
+            <motion.div
+              key={label}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: done || current ? 1 : 0.3, x: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.05 }}
+              className="flex items-center gap-3 py-2 font-mono text-[11px]"
             >
-              {done ? '✓' : current ? '·' : ''}
-            </span>
-            <span className={done || current ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}>
-              {label}
-            </span>
-            {current && (
-              <motion.span
-                className="h-[1px] bg-[#8B1E1E] ml-1"
-                initial={{ width: 0 }}
-                animate={{ width: 28 }}
-                transition={{ duration: 0.55, repeat: Infinity, repeatType: 'reverse' }}
-              />
-            )}
-          </motion.div>
-        );
-      })}
-    </div>
+              <span
+                className={`w-4 h-4 border flex items-center justify-center text-[9px] shrink-0 ${
+                  done
+                    ? 'border-[#8B1E1E] bg-[#8B1E1E] text-[#F2F0EA]'
+                    : current
+                    ? 'border-[#8B1E1E] text-[#8B1E1E]'
+                    : 'border-[#222228] text-transparent'
+                }`}
+              >
+                {done ? '✓' : current ? '·' : ''}
+              </span>
+              <span className={done || current ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}>
+                {label}
+              </span>
+              {current && (
+                <motion.span
+                  className="h-[1px] bg-[#8B1E1E] ml-1"
+                  initial={{ width: 0 }}
+                  animate={{ width: 28 }}
+                  transition={{ duration: 0.6, repeat: Infinity, repeatType: 'reverse' }}
+                />
+              )}
+            </motion.div>
+          );
+        })}
+
+        <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 border-t hairline-border-t leading-relaxed">
+          Reading the filings and running the same engine used for every company
+        </div>
+      </motion.div>
+    </motion.div>
   );
 };
-
-/* ------------------------------------------------------------------ */
-/* Bars that grow from the baseline when scrolled into view            */
-/* ------------------------------------------------------------------ */
 
 export const GrowBar: React.FC<{
   height: string;
