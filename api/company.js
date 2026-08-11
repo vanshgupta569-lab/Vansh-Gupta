@@ -236,171 +236,141 @@ async function fetchFromSEC(ticker) {
 // SECTION 2 — YAHOO FINANCE (everything that isn't a US filer)
 // ===========================================================================
 
-// Yahoo's field names, mapped onto the same shape SEC data produces, so the
-// front end never has to care which source a company came from.
-const YAHOO_INCOME = {
-  revenue: ['totalRevenue'],
-  cogs: ['costOfRevenue'],
-  rnd: ['researchDevelopment'],
-  sga: ['sellingGeneralAdministrative'],
-  operatingIncome: ['operatingIncome', 'ebit'],
-  pretaxIncome: ['incomeBeforeTax'],
-  taxExpense: ['incomeTaxExpense'],
-  netIncome: ['netIncome'],
+// Yahoo's old quoteSummary statement modules still answer, but they now come
+// back mostly empty — balance sheet and cash flow return nothing. The endpoint
+// that does still carry full statements is the "fundamentals timeseries" one,
+// so that is what we use. Each line item is requested by name.
+//
+// The names on the left are ours (identical to the SEC path, so the front end
+// never cares where a company came from). The names on the right are Yahoo's.
+const YAHOO_FIELDS = {
+  revenue: 'annualTotalRevenue',
+  cogs: 'annualCostOfRevenue',
+  rnd: 'annualResearchAndDevelopment',
+  sga: 'annualSellingGeneralAndAdministration',
+  operatingIncome: 'annualOperatingIncome',
+  pretaxIncome: 'annualPretaxIncome',
+  taxExpense: 'annualTaxProvision',
+  netIncome: 'annualNetIncome',
+
+  cash: 'annualCashAndCashEquivalents',
+  receivables: 'annualAccountsReceivable',
+  inventory: 'annualInventory',
+  currentAssets: 'annualCurrentAssets',
+  ppeNet: 'annualNetPPE',
+  totalAssets: 'annualTotalAssets',
+  payables: 'annualAccountsPayable',
+  currentLiabilities: 'annualCurrentLiabilities',
+  longTermDebt: 'annualLongTermDebt',
+  totalLiabilities: 'annualTotalLiabilitiesNetMinorityInterest',
+  equity: 'annualStockholdersEquity',
+
+  depreciation: 'annualDepreciationAndAmortization',
+  capex: 'annualCapitalExpenditure',
+  operatingCashFlow: 'annualOperatingCashFlow',
+  dividendsPaid: 'annualCashDividendsPaid',
+  buybacks: 'annualRepurchaseOfCapitalStock',
+  stockComp: 'annualStockBasedCompensation',
+  dilutedShares: 'annualDilutedAverageShares',
 };
 
-const YAHOO_BALANCE = {
-  cash: ['cash', 'cashAndCashEquivalents'],
-  receivables: ['netReceivables'],
-  inventory: ['inventory'],
-  currentAssets: ['totalCurrentAssets'],
-  ppeNet: ['propertyPlantEquipment'],
-  totalAssets: ['totalAssets'],
-  payables: ['accountsPayable'],
-  currentLiabilities: ['totalCurrentLiabilities'],
-  longTermDebt: ['longTermDebt'],
-  totalLiabilities: ['totalLiab'],
-  equity: ['totalStockholderEquity'],
-};
+// Yahoo reports money leaving the company as a negative number. The engine
+// expects these as positive amounts, matching how they appear in the Excel
+// model, so their sign gets flipped on the way in.
+const OUTFLOW_FIELDS = new Set(['capex', 'dividendsPaid', 'buybacks']);
 
-const YAHOO_CASHFLOW = {
-  depreciation: ['depreciation'],
-  capex: ['capitalExpenditures'],
-  operatingCashFlow: ['totalCashFromOperatingActivities'],
-  dividendsPaid: ['dividendsPaid'],
-  buybacks: ['repurchaseOfStock'],
-};
-
-function yahooValue(block, keys) {
-  for (const key of keys) {
-    const cell = block?.[key];
-    if (cell && typeof cell.raw === 'number') return cell.raw;
-    if (typeof cell === 'number') return cell;
-  }
-  return null;
-}
-
-// Yahoo now rejects anonymous requests to its financial statement endpoint
-// with a 401. Access requires two things obtained in sequence: a session
-// cookie, then a "crumb" token tied to that cookie. Both are free, need no
-// account, and are fetched fresh here. This is why Reliance failed initially.
-let yahooAuth = null;
-
-async function getYahooAuth() {
-  if (yahooAuth) return yahooAuth;
-
-  const browserHeaders = {
-    'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
-    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  };
-
-  // Step one: ask for any Yahoo page and keep the cookie it hands back.
-  const cookieRes = await fetch('https://fc.yahoo.com', {
-    headers: browserHeaders,
-    redirect: 'follow',
-  });
-
-  const rawCookie = cookieRes.headers.get('set-cookie');
-  if (!rawCookie) throw new Error('Yahoo did not issue a session cookie');
-
-  // A set-cookie header can carry several attributes; we only need the value.
-  const cookie = rawCookie.split(',')
-    .map((part) => part.split(';')[0].trim())
-    .filter(Boolean)
-    .join('; ');
-
-  // Step two: exchange the cookie for a crumb token.
-  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
-    headers: { ...browserHeaders, Cookie: cookie },
-  });
-
-  const crumb = (await crumbRes.text()).trim();
-  if (!crumb || crumb.length > 20 || crumb.includes('<')) {
-    throw new Error('Yahoo did not issue a crumb token');
-  }
-
-  yahooAuth = { cookie, crumb, browserHeaders };
-  return yahooAuth;
-}
+// Share counts are counts, not currency — they must not be divided into
+// millions the way every monetary figure is.
+const COUNT_FIELDS = new Set(['dilutedShares']);
 
 async function fetchFromYahoo(symbol) {
-  const modules = [
-    'incomeStatementHistory',
-    'balanceSheetHistory',
-    'cashflowStatementHistory',
-    'defaultKeyStatistics',
-    'summaryDetail',
-    'price',
-    'assetProfile',
-  ].join('%2C');
-
   const auth = await getYahooAuth();
 
+  // First call: the company's name, currency and sector.
+  let profile = {};
+  try {
+    const profileRes = await fetch(
+      `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+        symbol
+      )}?modules=price%2CassetProfile&crumb=${encodeURIComponent(auth.crumb)}`,
+      { headers: { ...auth.browserHeaders, Cookie: auth.cookie } }
+    );
+    if (profileRes.ok) {
+      const body = await profileRes.json();
+      profile = body?.quoteSummary?.result?.[0] || {};
+    }
+  } catch {
+    // Non-fatal — we can fall back to the ticker as a name.
+  }
+
+  // Second call: the actual financial statements.
+  const types = Object.values(YAHOO_FIELDS).join(',');
+  const now = Math.floor(Date.now() / 1000);
+
   const res = await fetch(
-    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+    `https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/${encodeURIComponent(
       symbol
-    )}?modules=${modules}&crumb=${encodeURIComponent(auth.crumb)}`,
+    )}?symbol=${encodeURIComponent(symbol)}` +
+      `&type=${types}&period1=0&period2=${now}&merge=false` +
+      `&crumb=${encodeURIComponent(auth.crumb)}`,
     { headers: { ...auth.browserHeaders, Cookie: auth.cookie } }
   );
 
   if (!res.ok) throw new Error(`Yahoo Finance unavailable (${res.status})`);
 
   const body = await res.json();
-  const result = body?.quoteSummary?.result?.[0];
-  if (!result) return null;
+  const series = body?.timeseries?.result || [];
+  if (series.length === 0) return null;
 
-  const income = result.incomeStatementHistory?.incomeStatementHistory || [];
-  const balance = result.balanceSheetHistory?.balanceSheetStatements || [];
-  const cashflow = result.cashflowStatementHistory?.cashflowStatements || [];
-
-  if (income.length === 0) return null;
-
-  // Yahoo returns newest first; flip so oldest year comes first, like SEC.
-  const periods = income.slice(0, YEARS_WANTED).reverse();
-
-  const statements = periods.map((incomeRow, index) => {
-    // Walk the balance and cash flow arrays in the same reversed order.
-    const offset = Math.min(YEARS_WANTED, income.length) - 1 - index;
-    const balanceRow = balance[offset] || {};
-    const cashflowRow = cashflow[offset] || {};
-
-    const row = {
-      fiscalYear: new Date((incomeRow.endDate?.raw || 0) * 1000).getUTCFullYear(),
-    };
-
-    for (const [field, keys] of Object.entries(YAHOO_INCOME)) {
-      const v = yahooValue(incomeRow, keys);
-      row[field] = v === null ? null : v / 1e6;
+  // Yahoo returns one array per line item, each entry stamped with its own
+  // date. Reshape that into { fieldName: { year: value } }, matching how the
+  // SEC path already works.
+  const byField = {};
+  for (const [ourName, yahooName] of Object.entries(YAHOO_FIELDS)) {
+    byField[ourName] = {};
+    const block = series.find((entry) => entry?.meta?.type?.[0] === yahooName);
+    for (const point of block?.[yahooName] || []) {
+      if (!point?.asOfDate) continue;
+      const raw = point.reportedValue?.raw;
+      if (typeof raw !== 'number') continue;
+      byField[ourName][Number(point.asOfDate.slice(0, 4))] = raw;
     }
-    for (const [field, keys] of Object.entries(YAHOO_BALANCE)) {
-      const v = yahooValue(balanceRow, keys);
-      row[field] = v === null ? null : v / 1e6;
-    }
-    for (const [field, keys] of Object.entries(YAHOO_CASHFLOW)) {
-      const v = yahooValue(cashflowRow, keys);
-      // Yahoo reports capex, dividends and buybacks as negative outflows.
-      // The engine expects positive numbers for these, so flip the sign.
-      const flip = field === 'capex' || field === 'dividendsPaid' || field === 'buybacks';
-      row[field] = v === null ? null : Math.abs(v) / 1e6 * (flip ? 1 : Math.sign(v) || 1);
-    }
+  }
 
-    row.stockComp = null; // Yahoo does not expose this reliably.
-    row.dilutedShares =
-      result.defaultKeyStatistics?.sharesOutstanding?.raw ?? null;
+  const years = Object.keys(byField.revenue)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .slice(0, YEARS_WANTED)
+    .reverse();
 
+  if (years.length === 0) return null;
+
+  const statements = years.map((year) => {
+    const row = { fiscalYear: year };
+    for (const field of Object.keys(YAHOO_FIELDS)) {
+      const value = byField[field][year];
+      if (typeof value !== 'number') {
+        row[field] = null;
+      } else if (COUNT_FIELDS.has(field)) {
+        row[field] = value;
+      } else {
+        row[field] = (OUTFLOW_FIELDS.has(field) ? Math.abs(value) : value) / 1e6;
+      }
+    }
     return row;
   });
+
+  const currency = profile.price?.currency || 'USD';
 
   return {
     source: 'Yahoo Finance',
     sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`,
-    name: result.price?.longName || result.price?.shortName || symbol,
-    currency: result.price?.currency || 'USD',
-    currencySymbol: currencySymbolFor(result.price?.currency),
+    name: profile.price?.longName || profile.price?.shortName || symbol,
+    currency,
+    currencySymbol: currencySymbolFor(currency),
     sicCode: null,
-    sicDescription: result.assetProfile?.industry || null,
-    sector: result.assetProfile?.sector || null,
+    sicDescription: profile.assetProfile?.industry || null,
+    sector: profile.assetProfile?.sector || null,
     statements,
   };
 }
