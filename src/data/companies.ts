@@ -1,331 +1,365 @@
-import { CompanyData, ValuationDrivers } from '../types';
+// @ts-ignore — JS engine and data files have no TS declarations
+import AAPL_DATA from './AAPL.js';
+// @ts-ignore
+import { buildModel, buildDCF } from '../engine/model.js';
 
-export const COMPANIES_DATA: Record<string, CompanyData> = {
-  AAPL: {
-    ticker: 'AAPL',
-    name: 'Apple Inc.',
-    isin: 'US0378331005',
-    currency: 'USD',
-    currencySymbol: '$',
-    price: 189.43,
-    priceChangePct: 1.24,
-    marketCapStr: '3.02T',
-    roePct: 145.6,
-    roaPct: 28.2,
-    opMarginPct: 30.0,
-    netDebtEbitda: '2.3x',
-    sector: 'Consumer Electronics & Software',
-    exchange: 'NASDAQ',
-    description: 'Global leader in consumer hardware, software services, and ecosystem integration.',
-    financials: {
-      years: ['FY21', 'FY22', 'FY23', 'FY24', 'FY25E'],
-      revenue: [365817, 394328, 383285, 391035, 412500],
-      revenueGrowth: [33.3, 7.8, -2.8, 2.0, 5.5],
-      grossMargin: [41.8, 43.3, 44.1, 46.2, 46.8],
-      ebitdaMargin: [32.9, 33.1, 33.7, 34.0, 34.8],
-      netIncome: [94680, 99803, 96995, 93736, 101200],
-      operatingCashFlow: [104038, 122151, 110543, 118250, 125000],
-      freeCashFlow: [92953, 111443, 99584, 108800, 114500],
-      totalDebt: [124719, 120069, 111088, 101200, 95000],
-      cashAndEquivalents: [62639, 48304, 61555, 65200, 68000],
-      capex: [11085, 10708, 10959, 9450, 10500],
-    },
-    defaultDrivers: {
-      revenueGrowthPct: 5.2,
-      operatingMarginPct: 30.5,
-      taxRatePct: 15.8,
-      capexPctOfRev: 4.2,
-      waccPct: 8.2,
-      terminalGrowthPct: 2.5,
-      sharesOutstandingBillion: 15.2,
-      netDebtBillion: 45.0,
-    },
-    healthMetrics: {
-      balanceSheetStrength: 92,
-      earningsQuality: 95,
-      accrualRisk: 88,
-      cashFlowCoverage: 96,
-      valuationMoat: 90,
-      overallScore: 92,
-    },
-    recentNews: [
-      { id: '1', time: '09:42 AM', headline: 'Apple wins $178M enterprise defense contract for Vision Pro spatial computing', source: 'SEC Filing 8-K', type: 'CONTRACT' },
-      { id: '2', time: '08:15 AM', headline: 'Analyst Upgrade: Services gross margins expected to expand to 74%', source: 'Morgan Stanley', type: 'UPGRADE' },
-      { id: '3', time: 'Yesterday', headline: 'Q3 Earnings Call Transcript: Forensic accrual analysis shows zero revenue pulling', source: 'Marginalia Research', type: 'EARNINGS' },
-      { id: '4', time: '2 Days Ago', headline: 'Form 10-Q Disclosure: Off-balance sheet supplier commitments reduced by 4.2%', source: 'SEC Filing 10-Q', type: 'FILING' },
-    ],
-  },
-  META: {
-    ticker: 'META',
-    name: 'Meta Platforms',
-    isin: 'US30303M1027',
-    currency: 'USD',
-    currencySymbol: '$',
-    price: 485.58,
-    priceChangePct: -0.12,
-    marketCapStr: '1.23T',
-    roePct: 32.4,
-    roaPct: 18.6,
-    opMarginPct: 38.2,
-    netDebtEbitda: '0.4x',
-    sector: 'Interactive Media & AI Infra',
-    exchange: 'NASDAQ',
-    description: 'Family of apps & AI infrastructure enterprise generating ultra-high free cash flow.',
-    financials: {
-      years: ['FY21', 'FY22', 'FY23', 'FY24', 'FY25E'],
-      revenue: [117929, 116609, 134902, 156200, 182000],
-      revenueGrowth: [37.2, -1.1, 15.7, 15.8, 16.5],
-      grossMargin: [80.3, 79.6, 80.8, 81.5, 82.0],
-      ebitdaMargin: [46.8, 36.2, 43.1, 47.2, 48.5],
-      netIncome: [39370, 23200, 39098, 51200, 61500],
-      operatingCashFlow: [57683, 50475, 71113, 82400, 94000],
-      freeCashFlow: [38439, 18439, 43000, 52000, 60000],
-      totalDebt: [14400, 27000, 37000, 38000, 35000],
-      cashAndEquivalents: [48000, 40700, 65400, 72000, 78000],
-      capex: [19244, 32036, 28113, 30400, 34000],
-    },
-    defaultDrivers: {
-      revenueGrowthPct: 14.2,
-      operatingMarginPct: 39.0,
-      taxRatePct: 16.5,
-      capexPctOfRev: 18.0,
-      waccPct: 9.1,
-      terminalGrowthPct: 3.0,
-      sharesOutstandingBillion: 2.54,
-      netDebtBillion: -34.0, // Net Cash
-    },
-    healthMetrics: {
-      balanceSheetStrength: 95,
-      earningsQuality: 91,
-      accrualRisk: 86,
-      cashFlowCoverage: 94,
-      valuationMoat: 89,
-      overallScore: 91,
-    },
-    recentNews: [
-      { id: '1', time: '10:11 AM', headline: 'Llama 3.5 Enterprise adoption reaches 42% of Fortune 500 tech stack', source: 'Tech Intelligence', type: 'CONTRACT' },
-      { id: '2', time: '07:30 AM', headline: 'SEC Footnote Audit: AI Capex capitalization matches hardware useful life tables', source: 'Marginalia Forensics', type: 'FILING' },
-    ],
-  },
-  NVDA: {
-    ticker: 'NVDA',
-    name: 'Nvidia Corp',
-    isin: 'US67066G1040',
-    currency: 'USD',
-    currencySymbol: '$',
-    price: 875.28,
-    priceChangePct: 2.15,
-    marketCapStr: '2.15T',
-    roePct: 118.2,
-    roaPct: 52.4,
-    opMarginPct: 61.5,
-    netDebtEbitda: '0.1x',
-    sector: 'Semiconductors & Compute',
-    exchange: 'NASDAQ',
-    description: 'Accelerated computing platform pioneer dominating data center AI compute.',
-    financials: {
-      years: ['FY21', 'FY22', 'FY23', 'FY24', 'FY25E'],
-      revenue: [26914, 26974, 60922, 126000, 168000],
-      revenueGrowth: [61.4, 0.2, 125.9, 106.8, 33.3],
-      grossMargin: [64.9, 56.9, 72.7, 75.4, 76.2],
-      ebitdaMargin: [41.2, 33.4, 58.2, 64.5, 66.0],
-      netIncome: [9752, 4368, 29760, 68000, 92000],
-      operatingCashFlow: [9108, 5641, 28090, 72000, 98000],
-      freeCashFlow: [8132, 3808, 26947, 68000, 93000],
-      totalDebt: [10946, 12034, 11056, 9500, 8000],
-      cashAndEquivalents: [21200, 13296, 25980, 36000, 48000],
-      capex: [976, 1833, 1143, 4000, 5000],
-    },
-    defaultDrivers: {
-      revenueGrowthPct: 28.5,
-      operatingMarginPct: 62.0,
-      taxRatePct: 13.5,
-      capexPctOfRev: 3.5,
-      waccPct: 9.8,
-      terminalGrowthPct: 3.5,
-      sharesOutstandingBillion: 2.46,
-      netDebtBillion: -26.5,
-    },
-    healthMetrics: {
-      balanceSheetStrength: 98,
-      earningsQuality: 93,
-      accrualRisk: 90,
-      cashFlowCoverage: 98,
-      valuationMoat: 97,
-      overallScore: 95,
-    },
-    recentNews: [
-      { id: '1', time: '11:05 AM', headline: 'Blackwell architecture yield milestones confirmed via Taiwan TSMC filing', source: 'Supply Chain Audit', type: 'FILING' },
-      { id: '2', time: '09:00 AM', headline: 'Hyperscaler capex commitment updates show zero deceleration in H2', source: 'Goldman Sachs', type: 'UPGRADE' },
-    ],
-  },
-  RELIANCE: {
-    ticker: 'RELIANCE',
-    name: 'Reliance Industries',
-    isin: 'INE002A01018',
-    currency: 'INR',
-    currencySymbol: '₹',
-    price: 2954.10,
-    priceChangePct: 0.45,
-    marketCapStr: '₹20.0T',
-    roePct: 11.2,
-    roaPct: 6.8,
-    opMarginPct: 17.8,
-    netDebtEbitda: '1.8x',
-    sector: 'Energy, Telecom & Retail Conglomerate',
-    exchange: 'NSE',
-    description: 'India\'s largest conglomerate spanning Digital Services (Jio), Retail, and New Energy.',
-    financials: {
-      years: ['FY21', 'FY22', 'FY23', 'FY24', 'FY25E'],
-      revenue: [466924, 699962, 879468, 914472, 1020000],
-      revenueGrowth: [-22.0, 49.9, 25.6, 4.0, 11.5],
-      grossMargin: [30.2, 28.5, 29.1, 31.0, 32.2],
-      ebitdaMargin: [16.8, 15.8, 16.2, 17.8, 18.5],
-      netIncome: [53739, 60705, 66702, 69624, 78500],
-      operatingCashFlow: [26185, 110654, 115200, 132000, 148000],
-      freeCashFlow: [-72200, -18200, -25000, 12000, 32000],
-      totalDebt: [251811, 266305, 313961, 320000, 300000],
-      cashAndEquivalents: [254000, 241846, 222000, 235000, 250000],
-      capex: [98335, 128854, 140200, 120000, 116000],
-    },
-    defaultDrivers: {
-      revenueGrowthPct: 10.8,
-      operatingMarginPct: 18.2,
-      taxRatePct: 22.0,
-      capexPctOfRev: 11.5,
-      waccPct: 11.2,
-      terminalGrowthPct: 4.5,
-      sharesOutstandingBillion: 6.76,
-      netDebtBillion: 75.0,
-    },
-    healthMetrics: {
-      balanceSheetStrength: 84,
-      earningsQuality: 88,
-      accrualRisk: 82,
-      cashFlowCoverage: 85,
-      valuationMoat: 94,
-      overallScore: 86,
-    },
-    recentNews: [
-      { id: '1', time: '02:15 PM', headline: 'Jio 5G ARPU expansion reaches ₹186.2 with enterprise lease momentum', source: 'NSE Disclosure', type: 'EARNINGS' },
-      { id: '2', time: '11:40 AM', headline: 'New Energy Gigafactory commissioning timeline ahead of Schedule in Jamnagar', source: 'Marginalia Field Note', type: 'CONTRACT' },
-    ],
-  },
-  SPCX: {
-    ticker: 'SPCX',
-    name: 'SpaceX (Private/Pre-IPO)',
-    isin: 'US84852P1088',
-    currency: 'USD',
-    currencySymbol: '$',
-    price: 42.15,
-    priceChangePct: 0.00,
-    marketCapStr: '$180B',
-    roePct: 18.5,
-    roaPct: 12.1,
-    opMarginPct: 22.4,
-    netDebtEbitda: '0.8x',
-    sector: 'Aerospace & Orbital Communications',
-    exchange: 'PRIVATE',
-    description: 'Pioneer in reusable launch technology and Starlink orbital satellite broadband network.',
-    financials: {
-      years: ['FY21', 'FY22', 'FY23', 'FY24', 'FY25E'],
-      revenue: [2300, 4600, 8700, 13200, 18500],
-      revenueGrowth: [80.0, 100.0, 89.1, 51.7, 40.2],
-      grossMargin: [22.0, 35.0, 48.0, 56.0, 62.0],
-      ebitdaMargin: [10.0, 20.0, 31.0, 38.0, 44.0],
-      netIncome: [-400, 150, 1200, 2800, 4900],
-      operatingCashFlow: [200, 900, 3100, 5400, 8100],
-      freeCashFlow: [-1800, -1200, 400, 2100, 4200],
-      totalDebt: [3200, 4100, 4800, 4500, 4000],
-      cashAndEquivalents: [2800, 3400, 4200, 5800, 7500],
-      capex: [2000, 2100, 2700, 3300, 3900],
-    },
-    defaultDrivers: {
-      revenueGrowthPct: 32.0,
-      operatingMarginPct: 38.0,
-      taxRatePct: 18.0,
-      capexPctOfRev: 18.5,
-      waccPct: 10.5,
-      terminalGrowthPct: 4.0,
-      sharesOutstandingBillion: 4.27,
-      netDebtBillion: -1.5,
-    },
-    healthMetrics: {
-      balanceSheetStrength: 89,
-      earningsQuality: 92,
-      accrualRisk: 87,
-      cashFlowCoverage: 91,
-      valuationMoat: 99,
-      overallScore: 91,
-    },
-    recentNews: [
-      { id: '1', time: '01:20 PM', headline: 'Starlink subscriber count passes 3.2 million globally with positive cash flow per user', source: 'Private Tender Offer Memo', type: 'EARNINGS' },
-      { id: '2', time: '08:45 AM', headline: 'Starship Flight 5 FAA orbital clearance granted for catch tower retrieval test', source: 'FAA Filing', type: 'FILING' },
-    ],
-  },
+import { CompanyData, ValuationDrivers, DCFResult, ForecastRow } from '../types';
+
+// ---------------------------------------------------------------------------
+// HELPERS
+// ---------------------------------------------------------------------------
+const r = (n: number | null, dp = 0): number => {
+  if (n == null) return 0;
+  const f = Math.pow(10, dp);
+  return Math.round(n * f) / f;
 };
 
-/**
- * Perform dynamic DCF valuation based on drivers
- */
-export function calculateDCF(drivers: ValuationDrivers) {
-  const {
-    revenueGrowthPct,
-    operatingMarginPct,
-    taxRatePct,
-    capexPctOfRev,
-    waccPct,
-    terminalGrowthPct,
-    sharesOutstandingBillion,
-    netDebtBillion,
-  } = drivers;
+// ---------------------------------------------------------------------------
+// BUILD A MODEL RUN WITH SLIDER OVERRIDES
+// ---------------------------------------------------------------------------
+function buildOverridden(drivers: ValuationDrivers): any {
+  // Deep-clone so we never mutate the original data file
+  const d = JSON.parse(JSON.stringify(AAPL_DATA));
 
-  // Assume base revenue of $100 Billion for benchmark multiplier ratio
-  const baseRevenue = 100;
-  const years = 5;
-  const fcfProjections: number[] = [];
-  const discountFactors: number[] = [];
-
-  let currentRev = baseRevenue;
-  const waccDec = waccPct / 100;
-  const termGrowthDec = terminalGrowthPct / 100;
-
-  for (let t = 1; t <= years; t++) {
-    currentRev *= 1 + revenueGrowthPct / 100;
-    const ebit = currentRev * (operatingMarginPct / 100);
-    const nopat = ebit * (1 - taxRatePct / 100);
-    const capex = currentRev * (capexPctOfRev / 100);
-    // Working capital assumption (~2% of rev growth)
-    const nwcChange = currentRev * 0.02;
-    const fcf = nopat - capex - nwcChange;
-    fcfProjections.push(fcf);
-
-    const discountFactor = Math.pow(1 + waccDec, t);
-    discountFactors.push(1 / discountFactor);
+  // 1. Revenue growth — apply as a uniform blended rate across all segments
+  const rg = drivers.revenueGrowthPct / 100;
+  for (const seg of Object.keys(d.assumptions.segmentGrowth)) {
+    d.assumptions.segmentGrowth[seg] = [rg, rg, rg, rg, rg];
   }
 
-  // Sum of PV of explicitly projected 5-yr cash flows
-  const pvExplicitFCF = fcfProjections.reduce((sum, fcf, idx) => sum + fcf * discountFactors[idx], 0);
+  // 2. Operating margin — keep R&D and SG&A, adjust gross margin to hit target
+  //    Target operating margin = gross margin - R&D margin - SG&A margin
+  const rndBase: number = d.assumptions.researchDevelopmentMargin[0];
+  const histRev: number[] = d.historical.incomeStatement.revenue;
+  const histSga: number[] = d.historical.incomeStatement.sellingGeneralAdmin;
+  const sgaAvg = histRev.reduce((sum: number, rev: number, i: number) =>
+    sum + (-histSga[i] / rev), 0) / histRev.length;
+  const targetGross = drivers.operatingMarginPct / 100 + rndBase + sgaAvg;
+  d.assumptions.grossMargin = [targetGross, targetGross, targetGross, targetGross, targetGross];
 
-  // Terminal Value using Gordon Growth
-  const lastFCF = fcfProjections[years - 1];
-  const terminalFCF = lastFCF * (1 + termGrowthDec);
-  const terminalValue = (waccDec - termGrowthDec > 0.005)
-    ? terminalFCF / (waccDec - termGrowthDec)
-    : terminalFCF / 0.05; // Fallback to safe floor
+  // 3. Tax rate override
+  d.assumptions.taxRate = drivers.taxRatePct / 100;
 
-  const pvTerminalValue = terminalValue * discountFactors[years - 1];
+  // 4. Capex as % of revenue
+  d.assumptions.capexMethod = 'percentOfRevenue';
+  d.assumptions.capexRatio = drivers.capexPctOfRev / 100;
 
-  // Enterprise Value (Scaled to absolute company scale ratio)
-  const enterpriseValueBillion = (pvExplicitFCF + pvTerminalValue) * 32.5;
-  const impliedEquityValueBillion = enterpriseValueBillion - netDebtBillion;
-  const targetPrice = impliedEquityValueBillion / sharesOutstandingBillion;
+  // 5. WACC direct override (bypasses CAPM)
+  d.dcf.waccOverride = drivers.waccPct / 100;
+
+  // 6. Terminal growth
+  d.dcf.longTermGrowthRate = drivers.terminalGrowthPct / 100;
+
+  return d;
+}
+
+// ---------------------------------------------------------------------------
+// CALCULATE DCF — called by TerminalDashboard on every slider change
+// ---------------------------------------------------------------------------
+export function calculateDCF(drivers: ValuationDrivers): DCFResult {
+  const d = buildOverridden(drivers);
+  const M = buildModel(d);
+  const D = buildDCF(M, d);
+
+  // Guard: engine said DCF is not applicable
+  if (!D.applicable) {
+    return {
+      applicable: false,
+      message: D.message,
+      targetPrice: 0,
+      pvExplicitFCF: 0,
+      pvTerminalValue: 0,
+      enterpriseValueBillion: 0,
+      impliedEquityValueBillion: 0,
+      wacc: drivers.waccPct / 100,
+      terminalGrowthRate: drivers.terminalGrowthPct / 100,
+      forecastRows: [],
+    };
+  }
+
+  // Build the 5-year forecast rows for the FORECASTED tab
+  const forecastRows: ForecastRow[] = D.years.map((year: number, t: number) => {
+    const i = M.nH + t;
+    const wcChange =
+      -(M.wc.accountsReceivable.change[i] ?? 0)
+      - (M.wc.inventory.change[i] ?? 0)
+      + (M.wc.accountsPayable.change[i] ?? 0)
+      + (M.wc.accruedExpenses.change[i] ?? 0)
+      - (M.wc.otherCurrentAssets.change[i] ?? 0)
+      - (M.wc.deferredTaxAssets.change[i] ?? 0)
+      - (M.wc.otherAssets.change[i] ?? 0)
+      + (M.wc.otherNonCurrentLiabilities.change[i] ?? 0);
+    return {
+      year,
+      revenue: r(M.revenue[i]),
+      revenueGrowthPct: r((M.revenueGrowth[i] ?? 0) * 100, 1),
+      ebit: r(M.ebit[i]),
+      operatingMarginPct: r(((M.ebit[i] ?? 0) / (M.revenue[i] ?? 1)) * 100, 1),
+      taxAmt: r(-(M.taxes[i] ?? 0)),
+      ebiat: r(D.ebiat[t]),
+      da: r(M.depreciationAmortisation[i] ?? 0),
+      capex: r(-(M.ppe.capex[i] ?? 0)),   // positive = cash outflow
+      wcChange: r(-wcChange),              // positive = cash outflow
+      ufcf: r(D.unleveredFCF[t]),
+      discountFactor: r(D.discountFactor[t], 4),
+      pvUfcf: r(D.presentValue[t]),
+    };
+  });
+
+  // Equity bridge uses netDebt from the engine (negative = net cash)
+  const equityBridge = D.perpetuity;
+  const evM = equityBridge.enterpriseValue;          // in $M
+  const eqM = equityBridge.equityValue;              // in $M
+  const shareCount = AAPL_DATA.dcf.dilutedSharesCount; // millions
 
   return {
-    enterpriseValueBillion: Math.round(enterpriseValueBillion),
-    impliedEquityValueBillion: Math.round(impliedEquityValueBillion),
-    targetPrice: Number(targetPrice.toFixed(2)),
-    pvExplicitFCF: Math.round(pvExplicitFCF * 32.5),
-    pvTerminalValue: Math.round(pvTerminalValue * 32.5),
+    applicable: true,
+    targetPrice: r(equityBridge.valuePerShare, 2),
+    pvExplicitFCF: r(D.pvStageOne / 1000, 1),         // billions
+    pvTerminalValue: r(D.pvTerminalPerpetuity / 1000, 1),
+    enterpriseValueBillion: r(evM / 1000, 1),
+    impliedEquityValueBillion: r(eqM / 1000, 1),
+    wacc: D.wacc,
+    terminalGrowthRate: d.dcf.longTermGrowthRate,
+    forecastRows,
   };
 }
+
+// ---------------------------------------------------------------------------
+// PRE-RUN THE BASE APPLE MODEL (module load time)
+// ---------------------------------------------------------------------------
+const _M = buildModel(AAPL_DATA);
+const _D = buildDCF(_M, AAPL_DATA);
+const _nH: number = _M.nH;
+
+// Historical operating cash flow per year (from reported data in the data file)
+// FY2023 and FY2024 are known filings; FY2025 is derived from model components.
+const _histOCF: number[] = [110543, 118254, 0];
+const _histCapex: number[] = [10959, 9447, 12715];
+_histOCF[2] = r(
+  (_M.netIncome[2] ?? 0)
+  + (_M.depreciationAmortisation[2] ?? 0)
+  + (_M.stockBasedCompensation[2] ?? 0)
+  - (_M.wc.accountsReceivable.change[2] ?? 0)
+  - (_M.wc.inventory.change[2] ?? 0)
+  + (_M.wc.accountsPayable.change[2] ?? 0)
+  + (_M.wc.accruedExpenses.change[2] ?? 0)
+  - (_M.wc.otherCurrentAssets.change[2] ?? 0)
+  - (_M.wc.deferredTaxAssets.change[2] ?? 0)
+);
+
+const _lastH = _nH - 1;
+const _netDebtM: number =
+  (_M.balanceSheet.longTermDebt[_lastH] ?? 0)
+  - (_M.balanceSheet.cashAndSecurities[_lastH] ?? 0);
+const _ebitdaLast: number = _M.ebitda[_lastH] ?? 1;
+const _revLast: number = _M.revenue[_lastH] ?? 1;
+
+// Default drivers from the real engine (first forecast year)
+const _realWacc: number = (_D.applicable ? _D.wacc : 0.0936) * 100;
+const _rg26 = r(((_M.revenue[_nH] ?? _revLast) / _revLast - 1) * 100, 1);
+const _ebit26 = _M.ebit[_nH] ?? 0;
+const _rev26  = _M.revenue[_nH] ?? 1;
+
+const AAPL_DEFAULT_DRIVERS: ValuationDrivers = {
+  revenueGrowthPct:   _rg26,
+  operatingMarginPct: r((_ebit26 / _rev26) * 100, 1),
+  taxRatePct:         r((_M.taxRate[_nH] ?? 0.152) * 100, 1),
+  capexPctOfRev:      r(Math.abs((_M.ppe.capex[_nH] ?? 0) / _rev26) * 100, 1),
+  waccPct:            r(_realWacc, 1),
+  terminalGrowthPct:  r((AAPL_DATA.dcf.longTermGrowthRate ?? 0.04) * 100, 1),
+  // net debt in billions; negative = net cash (Apple has net cash)
+  netDebtBillion:     r(_netDebtM / 1000, 2),
+  sharesOutstandingBillion: r((AAPL_DATA.dcf.dilutedSharesCount ?? 14714.676) / 1000, 3),
+};
+
+// Health score: derived from real model ratios
+const _roe = Math.abs(_M.ratios.roe[_lastH] ?? 0);
+const _roa = _M.ratios.roa[_lastH] ?? 0;
+const _netMargin = (_M.netIncome[_lastH] ?? 0) / _revLast;
+const _fcfM = _histOCF[_lastH] - _histCapex[_lastH];
+const _fcfMargin = _fcfM / _revLast;
+// Scale to 0-100 (capped)
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const AAPL_HEALTH: import('../types').HealthScoreMetrics = {
+  balanceSheetStrength: clamp(r((_M.balanceSheet.cashAndSecurities[_lastH] ?? 0) / (_M.balanceSheet.totalAssets[_lastH] ?? 1) * 200), 0, 100),
+  earningsQuality:      clamp(r(_fcfMargin * 400), 0, 100),
+  accrualRisk:          clamp(r(90 - Math.abs(_netMargin - _fcfMargin) * 500), 0, 100),
+  cashFlowCoverage:     clamp(r(_fcfMargin * 500), 0, 100),
+  valuationMoat:        clamp(r(_netMargin * 400), 0, 100),
+  overallScore:         0,
+};
+AAPL_HEALTH.overallScore = r((AAPL_HEALTH.balanceSheetStrength + AAPL_HEALTH.earningsQuality + AAPL_HEALTH.cashFlowCoverage + AAPL_HEALTH.valuationMoat) / 4);
+
+// ---------------------------------------------------------------------------
+// COMPANY RECORDS
+// ---------------------------------------------------------------------------
+export const COMPANIES_DATA: Record<string, CompanyData> = {
+
+  AAPL: {
+    ticker:          'AAPL',
+    name:            'Apple Inc.',
+    isin:            'US0378331005',
+    currency:        'USD',
+    currencySymbol:  '$',
+    price:           AAPL_DATA.dcf.sharePrice,
+    priceChangePct:  -1.23,   // placeholder — will come from fetcher
+    marketCapStr:    r(AAPL_DATA.dcf.sharePrice * AAPL_DATA.dcf.dilutedSharesCount / 1e6, 2) + 'T',
+    roePct:          r((_M.ratios.roe[_lastH] ?? 0) * 100, 1),
+    roaPct:          r((_M.ratios.roa[_lastH] ?? 0) * 100, 1),
+    opMarginPct:     r((_ebit26 / _rev26) * 100, 1),
+    netDebtEbitda:   (_netDebtM / _ebitdaLast) < 0
+      ? r(Math.abs(_netDebtM / _ebitdaLast), 2) + 'x net cash'
+      : r(_netDebtM / _ebitdaLast, 2) + 'x',
+    sector:          'Technology',
+    exchange:        'NASDAQ',
+    description:     'Designer and maker of iPhone, Mac, iPad, wearables, and the Services ecosystem.',
+    engineBacked:    true,
+    financials: {
+      years: _M.years.slice(0, _nH).map((y: number) => 'FY' + String(y).slice(2)),
+      revenue:           _M.revenue.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
+      revenueGrowth:     _M.revenueGrowth.slice(0, _nH).map((v: number | null) => r((v ?? 0) * 100, 1)),
+      grossMargin:       _M.grossMargin.slice(0, _nH).map((v: number | null) => r((v ?? 0) * 100, 1)),
+      ebitdaMargin:      _M.ebitda.slice(0, _nH).map((v: number | null, i: number) =>
+        r(((v ?? 0) / (_M.revenue[i] ?? 1)) * 100, 1)),
+      netIncome:         _M.netIncome.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
+      operatingCashFlow: _histOCF.slice(0, _nH),
+      freeCashFlow:      _histOCF.slice(0, _nH).map((ocf, i) => ocf - _histCapex[i]),
+      totalDebt:         _M.balanceSheet.longTermDebt.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
+      cashAndEquivalents:_M.balanceSheet.cashAndSecurities.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
+      capex:             _histCapex.slice(0, _nH),
+    },
+    defaultDrivers:  AAPL_DEFAULT_DRIVERS,
+    healthMetrics:   AAPL_HEALTH,
+    recentNews: [
+      {
+        id: '1',
+        time: 'Loading...',
+        headline: 'Live news will appear here once the news fetcher is connected.',
+        source: 'Marginalia',
+        type: 'PLACEHOLDER',
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // The four companies below do not yet have a real engine data file.
+  // Historical numbers are placeholder / illustrative and are clearly marked.
+  // -------------------------------------------------------------------------
+
+  META: {
+    ticker: 'META', name: 'Meta Platforms Inc.', isin: 'US30303M1027',
+    currency: 'USD', currencySymbol: '$', price: 588.77, priceChangePct: 0.83,
+    marketCapStr: '1.51T', roePct: 35.2, roaPct: 19.8, opMarginPct: 38.0,
+    netDebtEbitda: '0.1x net cash', sector: 'Technology', exchange: 'NASDAQ',
+    description: 'Family of social applications and next-generation computing platforms.',
+    engineBacked: false,
+    financials: {
+      years: ['FY22', 'FY23', 'FY24'],
+      revenue: [116609, 134902, 164501],
+      revenueGrowth: [-1.1, 15.7, 21.9],
+      grossMargin: [78.5, 80.8, 81.7],
+      ebitdaMargin: [34.8, 42.7, 52.6],
+      netIncome: [23200, 39098, 53997],
+      operatingCashFlow: [35613, 71113, 91780],
+      freeCashFlow: [18913, 43015, 52046],
+      totalDebt: [9559, 18387, 29062],
+      cashAndEquivalents: [40740, 65401, 77813],
+      capex: [32277, 28096, 39657],
+    },
+    defaultDrivers: {
+      revenueGrowthPct: 14.0, operatingMarginPct: 37.0, taxRatePct: 18.0,
+      capexPctOfRev: 20.0, waccPct: 10.5, terminalGrowthPct: 4.0,
+      sharesOutstandingBillion: 2.56, netDebtBillion: -48.75,
+    },
+    healthMetrics: { balanceSheetStrength: 88, earningsQuality: 91, accrualRisk: 85, cashFlowCoverage: 87, valuationMoat: 86, overallScore: 87 },
+    recentNews: [{ id: '1', time: '—', headline: 'News feed not yet connected for this company.', source: 'Marginalia', type: 'PLACEHOLDER' }],
+  },
+
+  NVDA: {
+    ticker: 'NVDA', name: 'NVIDIA Corporation', isin: 'US67066G1040',
+    currency: 'USD', currencySymbol: '$', price: 137.34, priceChangePct: 2.15,
+    marketCapStr: '3.36T', roePct: 123.8, roaPct: 55.1, opMarginPct: 61.1,
+    netDebtEbitda: '0.1x net cash', sector: 'Technology', exchange: 'NASDAQ',
+    description: 'Designer of graphics processing units and system-on-chip for AI, gaming and data centres.',
+    engineBacked: false,
+    financials: {
+      years: ['FY23', 'FY24', 'FY25'],
+      revenue: [26974, 60922, 130497],
+      revenueGrowth: [0.2, 122.0, 114.2],
+      grossMargin: [56.9, 72.7, 74.6],
+      ebitdaMargin: [20.9, 57.7, 62.4],
+      netIncome: [4368, 29760, 72880],
+      operatingCashFlow: [5641, 28083, 64083],
+      freeCashFlow: [3808, 26942, 60847],
+      totalDebt: [9702, 8462, 9283],
+      cashAndEquivalents: [13622, 25984, 53626],
+      capex: [976, 1069, 3116],
+    },
+    defaultDrivers: {
+      revenueGrowthPct: 35.0, operatingMarginPct: 58.0, taxRatePct: 14.0,
+      capexPctOfRev: 2.5, waccPct: 12.0, terminalGrowthPct: 4.5,
+      sharesOutstandingBillion: 24.41, netDebtBillion: -44.34,
+    },
+    healthMetrics: { balanceSheetStrength: 90, earningsQuality: 94, accrualRisk: 90, cashFlowCoverage: 95, valuationMoat: 95, overallScore: 93 },
+    recentNews: [{ id: '1', time: '—', headline: 'News feed not yet connected for this company.', source: 'Marginalia', type: 'PLACEHOLDER' }],
+  },
+
+  RELIANCE: {
+    ticker: 'RELIANCE', name: 'Reliance Industries Ltd.', isin: 'INE002A01018',
+    currency: 'INR', currencySymbol: '₹', price: 2890.50, priceChangePct: -0.45,
+    marketCapStr: '₹19.6L Cr', roePct: 8.9, roaPct: 4.3, opMarginPct: 13.2,
+    netDebtEbitda: '1.8x', sector: 'Conglomerate / Energy & Retail', exchange: 'NSE',
+    description: 'India\'s largest conglomerate spanning O2C, Jio telecom, retail and new energy.',
+    engineBacked: false,
+    financials: {
+      years: ['FY22', 'FY23', 'FY24'],
+      revenue: [721634, 900112, 899041],
+      revenueGrowth: [50.8, 24.7, -0.1],
+      grossMargin: [22.6, 17.6, 19.2],
+      ebitdaMargin: [17.1, 15.1, 17.6],
+      netIncome: [60705, 73670, 79020],
+      operatingCashFlow: [111860, 115820, 159110],
+      freeCashFlow: [7510, 25340, 50660],
+      totalDebt: [359015, 339022, 344990],
+      cashAndEquivalents: [193432, 187540, 157870],
+      capex: [104350, 90480, 108450],
+    },
+    defaultDrivers: {
+      revenueGrowthPct: 8.0, operatingMarginPct: 12.5, taxRatePct: 25.0,
+      capexPctOfRev: 12.0, waccPct: 11.0, terminalGrowthPct: 5.5,
+      sharesOutstandingBillion: 6.77, netDebtBillion: 0.1882,
+    },
+    healthMetrics: { balanceSheetStrength: 70, earningsQuality: 75, accrualRisk: 68, cashFlowCoverage: 72, valuationMoat: 76, overallScore: 72 },
+    recentNews: [{ id: '1', time: '—', headline: 'News feed not yet connected for this company.', source: 'Marginalia', type: 'PLACEHOLDER' }],
+  },
+
+  SPCX: {
+    ticker: 'SPCX', name: 'Space Exploration Technologies Corp.', isin: 'US84612A1007',
+    currency: 'USD', currencySymbol: '$', price: 185.40, priceChangePct: 3.21,
+    marketCapStr: '$420B', roePct: 4.2, roaPct: 2.1, opMarginPct: 6.8,
+    netDebtEbitda: '1.2x', sector: 'Aerospace & Defence', exchange: 'NASDAQ',
+    description: 'Designer and operator of reusable rockets, Starship, and the Starlink satellite internet constellation.',
+    engineBacked: false,
+    financials: {
+      years: ['FY24*', 'FY25E*', 'FY26E*'],
+      revenue: [13000, 15200, 19800],
+      revenueGrowth: [0, 16.9, 30.3],
+      grossMargin: [18.0, 21.0, 24.0],
+      ebitdaMargin: [5.0, 8.0, 13.0],
+      netIncome: [-270, 380, 1200],
+      operatingCashFlow: [1100, 2100, 3800],
+      freeCashFlow: [-2400, -1200, 800],
+      totalDebt: [6800, 6200, 5800],
+      cashAndEquivalents: [1900, 2800, 3800],
+      capex: [3500, 3300, 3000],
+    },
+    defaultDrivers: {
+      revenueGrowthPct: 28.0, operatingMarginPct: 9.0, taxRatePct: 21.0,
+      capexPctOfRev: 16.0, waccPct: 13.5, terminalGrowthPct: 5.0,
+      sharesOutstandingBillion: 2.27, netDebtBillion: 4.9,
+    },
+    healthMetrics: { balanceSheetStrength: 55, earningsQuality: 50, accrualRisk: 58, cashFlowCoverage: 48, valuationMoat: 82, overallScore: 59 },
+    recentNews: [{ id: '1', time: '—', headline: 'News feed not yet connected for this company.', source: 'Marginalia', type: 'PLACEHOLDER' }],
+  },
+};
