@@ -114,6 +114,8 @@ const US_TAGS = {
   dividendsPaid: [
     'PaymentsOfDividendsCommonStock',
     'PaymentsOfDividends',
+    'PaymentsOfDistributionsToAffiliates',
+    'PaymentsOfOrdinaryDividends',
   ],
   buybacks: ['PaymentsForRepurchaseOfCommonStock'],
   dilutedShares: [
@@ -125,6 +127,13 @@ const US_TAGS = {
 // Pull one line item out of the giant XBRL blob, for the annual periods only.
 // Returns an object like { 2023: 383285000000, 2024: 391035000000 }
 function extractUSFact(facts, tagList) {
+  // Walk EVERY tag in the list and merge the results, rather than stopping at
+  // the first tag that has any data at all. This matters: a company may file
+  // one tag for older years and a different tag for recent years. Stopping at
+  // the first match would return only the old years and leave recent ones
+  // blank — which is exactly why dividends came back empty for Apple.
+  const byYear = {};
+
   for (const tag of tagList) {
     const entry = facts['us-gaap']?.[tag];
     if (!entry) continue;
@@ -133,22 +142,19 @@ function extractUSFact(facts, tagList) {
     const unitKey = Object.keys(entry.units || {})[0];
     if (!unitKey) continue;
 
-    const byYear = {};
     for (const point of entry.units[unitKey]) {
       // fp === 'FY' and form 10-K keeps us to full-year audited figures only,
       // filtering out quarterly and amended noise.
       if (point.fp !== 'FY' || !point.form?.startsWith('10-K')) continue;
       if (!point.fy) continue;
 
-      // Income statement items cover a period (start + end). Balance sheet
-      // items are a snapshot (end only). Both are handled the same way here:
-      // the most recently filed value for a fiscal year wins.
-      byYear[point.fy] = point.val;
+      // Earlier tags in the list are the preferred ones, so don't let a later
+      // tag overwrite a year an earlier tag already filled.
+      if (byYear[point.fy] === undefined) byYear[point.fy] = point.val;
     }
-
-    if (Object.keys(byYear).length > 0) return byYear;
   }
-  return {};
+
+  return byYear;
 }
 
 async function fetchFromSEC(ticker) {
@@ -163,6 +169,26 @@ async function fetchFromSEC(ticker) {
 
   const body = await res.json();
   const facts = body.facts || {};
+
+  // The industry classification (SIC) code lives in a different SEC endpoint
+  // from the financial facts. We need it because it is how banks, insurers and
+  // other financial companies get identified — those are the companies where a
+  // discounted cash flow model does not apply and must be suppressed.
+  let sicCode = null;
+  let sicDescription = null;
+  try {
+    const profileRes = await fetch(
+      `https://data.sec.gov/submissions/CIK${match.cik}.json`,
+      { headers: { 'User-Agent': SEC_CONTACT } }
+    );
+    if (profileRes.ok) {
+      const profile = await profileRes.json();
+      sicCode = profile.sic || null;
+      sicDescription = profile.sicDescription || null;
+    }
+  } catch {
+    // Non-fatal — the financial statements matter more than the label.
+  }
 
   // Build { fieldName: { year: value } } for every field we care about.
   const extracted = {};
@@ -200,8 +226,8 @@ async function fetchFromSEC(ticker) {
     name: match.name,
     currency: 'USD',
     currencySymbol: '$',
-    sicCode: body.sic || null,
-    sicDescription: body.sicDescription || null,
+    sicCode,
+    sicDescription,
     statements,
   };
 }
@@ -254,6 +280,50 @@ function yahooValue(block, keys) {
   return null;
 }
 
+// Yahoo now rejects anonymous requests to its financial statement endpoint
+// with a 401. Access requires two things obtained in sequence: a session
+// cookie, then a "crumb" token tied to that cookie. Both are free, need no
+// account, and are fetched fresh here. This is why Reliance failed initially.
+let yahooAuth = null;
+
+async function getYahooAuth() {
+  if (yahooAuth) return yahooAuth;
+
+  const browserHeaders = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  };
+
+  // Step one: ask for any Yahoo page and keep the cookie it hands back.
+  const cookieRes = await fetch('https://fc.yahoo.com', {
+    headers: browserHeaders,
+    redirect: 'follow',
+  });
+
+  const rawCookie = cookieRes.headers.get('set-cookie');
+  if (!rawCookie) throw new Error('Yahoo did not issue a session cookie');
+
+  // A set-cookie header can carry several attributes; we only need the value.
+  const cookie = rawCookie.split(',')
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+
+  // Step two: exchange the cookie for a crumb token.
+  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+    headers: { ...browserHeaders, Cookie: cookie },
+  });
+
+  const crumb = (await crumbRes.text()).trim();
+  if (!crumb || crumb.length > 20 || crumb.includes('<')) {
+    throw new Error('Yahoo did not issue a crumb token');
+  }
+
+  yahooAuth = { cookie, crumb, browserHeaders };
+  return yahooAuth;
+}
+
 async function fetchFromYahoo(symbol) {
   const modules = [
     'incomeStatementHistory',
@@ -265,11 +335,13 @@ async function fetchFromYahoo(symbol) {
     'assetProfile',
   ].join('%2C');
 
+  const auth = await getYahooAuth();
+
   const res = await fetch(
     `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
       symbol
-    )}?modules=${modules}`,
-    { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
+    )}?modules=${modules}&crumb=${encodeURIComponent(auth.crumb)}`,
+    { headers: { ...auth.browserHeaders, Cookie: auth.cookie } }
   );
 
   if (!res.ok) throw new Error(`Yahoo Finance unavailable (${res.status})`);
