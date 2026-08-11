@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, useScroll } from 'motion/react';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { EtymologySection } from './components/EtymologySection';
@@ -12,6 +13,20 @@ import { COMPANIES_DATA } from './data/companies';
 import { loadCompany } from './data/autoCompany';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
+
+// Scroll Progress Bar Component
+const ScrollProgressBar: React.FC = () => {
+  const { scrollYProgress } = useScroll();
+
+  return (
+    <div className="fixed top-20 left-0 right-0 h-[2px] bg-transparent z-50 pointer-events-none">
+      <motion.div
+        style={{ scaleX: scrollYProgress }}
+        className="h-full bg-[#8B1E1E] origin-left shadow-[0_0_10px_rgba(139,30,30,0.8)]"
+      />
+    </div>
+  );
+};
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('HOME');
@@ -83,6 +98,9 @@ export default function App() {
         onScrollToSection={scrollToSection}
         activeSection={activeSection}
       />
+
+      {/* Scroll Progress Indicator Line */}
+      <ScrollProgressBar />
 
       {/* Screen Views */}
       <main className="flex-grow">
