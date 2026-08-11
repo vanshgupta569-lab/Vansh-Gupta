@@ -3,13 +3,13 @@ export type ScreenType = 'HOME' | 'DIRECTORY' | 'ANALYSIS';
 
 export interface CompanyFinancials {
   years: string[];
-  revenue: number[]; // in Millions
-  revenueGrowth: number[]; // %
-  grossMargin: number[]; // %
-  ebitdaMargin: number[]; // %
-  netIncome: number[]; // in Millions
-  operatingCashFlow: number[]; // in Millions
-  freeCashFlow: number[]; // in Millions
+  revenue: number[];
+  revenueGrowth: number[];        // %
+  grossMargin: number[];          // %
+  ebitdaMargin: number[];         // %
+  netIncome: number[];
+  operatingCashFlow: number[];
+  freeCashFlow: number[];
   totalDebt: number[];
   cashAndEquivalents: number[];
   capex: number[];
@@ -23,15 +23,48 @@ export interface ValuationDrivers {
   waccPct: number;
   terminalGrowthPct: number;
   sharesOutstandingBillion: number;
-  netDebtBillion: number;
+  netDebtBillion: number;         // positive = net debt; negative = net cash
+}
+
+// One row in the 5-year forecast table
+export interface ForecastRow {
+  year: number;
+  revenue: number;
+  revenueGrowthPct: number;
+  ebit: number;
+  operatingMarginPct: number;
+  taxAmt: number;
+  ebiat: number;
+  da: number;
+  capex: number;
+  wcChange: number;
+  ufcf: number;
+  discountFactor: number;
+  pvUfcf: number;
+}
+
+export interface DCFResult {
+  applicable: boolean;
+  message?: string;
+  // Valuation outputs
+  targetPrice: number;
+  pvExplicitFCF: number;          // billions
+  pvTerminalValue: number;        // billions
+  enterpriseValueBillion: number;
+  impliedEquityValueBillion: number;
+  // For sensitivity grid
+  wacc: number;
+  terminalGrowthRate: number;
+  // Forecast rows (drives the FORECASTED tab)
+  forecastRows: ForecastRow[];
 }
 
 export interface HealthScoreMetrics {
-  balanceSheetStrength: number; // 0-100
-  earningsQuality: number; // 0-100
-  accrualRisk: number; // 0-100 (lower is better or inverted)
-  cashFlowCoverage: number; // 0-100
-  valuationMoat: number; // 0-100
+  balanceSheetStrength: number;   // 0-100
+  earningsQuality: number;        // 0-100
+  accrualRisk: number;            // 0-100
+  cashFlowCoverage: number;       // 0-100
+  valuationMoat: number;          // 0-100
   overallScore: number;
 }
 
@@ -40,7 +73,7 @@ export interface NewsItem {
   time: string;
   headline: string;
   source: string;
-  type: 'FILING' | 'UPGRADE' | 'CONTRACT' | 'EARNINGS';
+  type: 'FILING' | 'UPGRADE' | 'CONTRACT' | 'EARNINGS' | 'PLACEHOLDER';
 }
 
 export interface CompanyData {
@@ -63,6 +96,8 @@ export interface CompanyData {
   defaultDrivers: ValuationDrivers;
   healthMetrics: HealthScoreMetrics;
   recentNews: NewsItem[];
+  // Engine-sourced flag — true for companies with a real data file
+  engineBacked: boolean;
 }
 
 export interface AccessRequestForm {
