@@ -608,12 +608,44 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
-            <div>Bal Sheet: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.balanceSheetStrength}%</span></div>
-            <div>Earnings Quality: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.earningsQuality}%</span></div>
-            <div>Cash Flow: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.cashFlowCoverage}%</span></div>
-            <div>Moat Rating: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.valuationMoat}%</span></div>
-          </div>
+          {/* The score is only worth showing if the reasoning is shown with it:
+              each ratio, its actual value, and the threshold it was judged on. */}
+          {company.healthDetail ? (
+            <div className="pt-3 border-t hairline-border-t space-y-1.5">
+              {Object.values(company.healthDetail.components).map((c: any) => (
+                <div
+                  key={c.label}
+                  className="flex items-baseline justify-between gap-3 font-mono text-[10px]"
+                  title={c.basis}
+                >
+                  <span className="text-[#8A8A8F] uppercase tracking-widest truncate">
+                    {c.label}
+                  </span>
+                  <span className="flex items-baseline gap-2 shrink-0">
+                    <span className="text-[#A1A1AA]">
+                      {c.ratio == null ? '—' : c.ratio}
+                      {c.unit.startsWith('%') ? '%' : ''}
+                    </span>
+                    <span className="text-[#F2F0EA] font-semibold w-8 text-right">
+                      {c.score == null ? 'n/a' : Math.round(c.score)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+              <div className="font-mono text-[9px] text-[#8A8A8F] pt-2 leading-relaxed">
+                Five reported ratios scored against fixed thresholds, then
+                averaged. Hover any line for its basis. Nothing here uses the
+                share price.
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
+              <div>Bal Sheet: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.balanceSheetStrength}%</span></div>
+              <div>Earnings Quality: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.earningsQuality}%</span></div>
+              <div>Cash Flow: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.cashFlowCoverage}%</span></div>
+              <div>Moat Rating: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.valuationMoat}%</span></div>
+            </div>
+          )}
         </div>
 
       </div>

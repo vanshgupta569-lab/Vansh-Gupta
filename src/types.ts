@@ -104,6 +104,9 @@ export interface CompanyData {
   modelData?: any;
   // Plain-English note on where each derived assumption came from.
   provenance?: Record<string, string>;
+  // The reasoning behind the health score: each ratio, its value, and the
+  // threshold it was judged against.
+  healthDetail?: any;
 }
 
 export interface AccessRequestForm {

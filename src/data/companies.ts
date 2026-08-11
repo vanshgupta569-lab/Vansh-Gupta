@@ -2,6 +2,8 @@
 import AAPL_DATA from './AAPL.js';
 // @ts-ignore
 import { buildModel, buildDCF } from '../engine/model.js';
+// @ts-ignore
+import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 
 import { CompanyData, ValuationDrivers, DCFResult, ForecastRow } from '../types';
 
@@ -195,23 +197,30 @@ const AAPL_DEFAULT_DRIVERS: ValuationDrivers = {
   sharesOutstandingBillion: r((AAPL_DATA.dcf.dilutedSharesCount ?? 14714.676) / 1000, 3),
 };
 
-// Health score: derived from real model ratios
-const _roe = Math.abs(_M.ratios.roe[_lastH] ?? 0);
-const _roa = _M.ratios.roa[_lastH] ?? 0;
-const _netMargin = (_M.netIncome[_lastH] ?? 0) / _revLast;
-const _fcfM = _histOCF[_lastH] - _histCapex[_lastH];
-const _fcfMargin = _fcfM / _revLast;
-// Scale to 0-100 (capped)
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const AAPL_HEALTH: import('../types').HealthScoreMetrics = {
-  balanceSheetStrength: clamp(r((_M.balanceSheet.cashAndSecurities[_lastH] ?? 0) / (_M.balanceSheet.totalAssets[_lastH] ?? 1) * 200), 0, 100),
-  earningsQuality:      clamp(r(_fcfMargin * 400), 0, 100),
-  accrualRisk:          clamp(r(90 - Math.abs(_netMargin - _fcfMargin) * 500), 0, 100),
-  cashFlowCoverage:     clamp(r(_fcfMargin * 500), 0, 100),
-  valuationMoat:        clamp(r(_netMargin * 400), 0, 100),
-  overallScore:         0,
-};
-AAPL_HEALTH.overallScore = r((AAPL_HEALTH.balanceSheetStrength + AAPL_HEALTH.earningsQuality + AAPL_HEALTH.cashFlowCoverage + AAPL_HEALTH.valuationMoat) / 4);
+// Health score — the same five-ratio calculation every company gets, fed from
+// Apple's reported years so the curated and derived views are comparable.
+const _healthRows = _M.years.slice(0, _nH).map((year: number, i: number) => ({
+  fiscalYear: year,
+  revenue: _M.revenue[i],
+  operatingIncome: _M.ebit[i],
+  netIncome: _M.netIncome[i],
+  depreciation: _M.depreciationAmortisation[i],
+  cash: _M.balanceSheet.cashAndSecurities[i],
+  currentAssets:
+    (_M.balanceSheet.cashAndSecurities[i] ?? 0) +
+    (_M.wc.accountsReceivable.ending[i] ?? 0) +
+    (_M.wc.inventory.ending[i] ?? 0) +
+    (_M.wc.otherCurrentAssets.ending[i] ?? 0) +
+    (_M.wc.deferredTaxAssets.ending[i] ?? 0),
+  currentLiabilities:
+    (_M.wc.accountsPayable.ending[i] ?? 0) + (_M.wc.accruedExpenses.ending[i] ?? 0),
+  longTermDebt: _M.balanceSheet.longTermDebt[i],
+  totalAssets: _M.balanceSheet.totalAssets[i],
+  operatingCashFlow: _histOCF[i],
+}));
+
+const _aaplHealthDetail = computeHealthScore(_healthRows);
+const AAPL_HEALTH: import('../types').HealthScoreMetrics = toRadarMetrics(_aaplHealthDetail);
 
 // ---------------------------------------------------------------------------
 // COMPANY RECORDS
@@ -253,6 +262,7 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
     },
     defaultDrivers:  AAPL_DEFAULT_DRIVERS,
     healthMetrics:   AAPL_HEALTH,
+    healthDetail:    _aaplHealthDetail,
     recentNews: [
       {
         id: '1',
