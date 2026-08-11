@@ -6,7 +6,7 @@ export const EtymologySection: React.FC = () => {
   const containerRef = useRef(null);
   const isInView = useInView(containerRef, { once: true, margin: "-100px" });
 
-  const sentence = "In corporate financial reporting, headline metrics and polished summaries rarely tell the full story. What a business is actually worth depends on the working capital, the capital expenditure, the debt and the assumptions behind the forecast — the financial marginalia. Our purpose is to build those workings in the open, and to show every assumption behind ";
+  const sentence = "In corporate financial reporting, headline metrics and polished summaries rarely tell the full story. What a business is actually worth depends on the working capital, the capital expenditure, the debt and the assumptions behind the forecast: the financial marginalia. Our purpose is to build those workings in the open, and to show every assumption behind ";
 
   return (
     <section id="etymology" className="bg-[#111114] hairline-border-b py-20 overflow-hidden">
@@ -56,7 +56,7 @@ export const EtymologySection: React.FC = () => {
               className="font-mono text-xs text-[#8A8A8F] border-l-2 border-[#8B1E1E] pl-5 max-w-sm leading-relaxed"
             >
               <strong className="text-[#F2F0EA] block tracking-widest mb-1 uppercase">mar·gi·na·li·a</strong>
-              <span className="italic">noun</span> /ˌmɑːrdʒɪˈneɪliə/ — Notes, commentary, and critical disclosures written in the margins of a text.
+              <span className="italic">noun</span> /ˌmɑːrdʒɪˈneɪliə/ · Notes, commentary, and critical disclosures written in the margins of a text.
             </motion.div>
           </div>
 
@@ -88,8 +88,8 @@ export const EtymologySection: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
             { icon: BookOpen, title: "Notes in the Margins", desc: "Every model starts from what companies actually reported: filed income statements, balance sheets and cash flow statements. No numbers are invented; if a figure isn't in the filing, it isn't in the model." },
-            { icon: BookmarkCheck, title: "Assumptions in Plain Sight", desc: "Every forecast number is driven by a named, visible assumption — revenue growth, gross margin, WACC, terminal growth rate. Nothing is hidden inside a black box. Change an assumption and watch every downstream figure recalculate instantly." },
-            { icon: Shield, title: "Reported vs. Modelled", desc: "Historical figures are clearly separated from forecast figures. The model tells you what a set of assumptions implies — not what will happen. The distance between the model's implied value and the market price is shown without a verdict attached." }
+            { icon: BookmarkCheck, title: "Assumptions in Plain Sight", desc: "Every forecast number is driven by a named, visible assumption: revenue growth, gross margin, WACC, terminal growth rate. Nothing is hidden inside a black box. Change an assumption and watch every downstream figure recalculate instantly." },
+            { icon: Shield, title: "Reported vs. Modelled", desc: "Historical figures are clearly separated from forecast figures. The model tells you what a set of assumptions implies, not what will happen. The distance between the model's implied value and the market price is shown without a verdict attached." }
           ].map((item, index) => (
             <motion.div 
               key={index}

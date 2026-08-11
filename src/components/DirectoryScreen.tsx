@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
-import { Search, ArrowRight, Building2, TrendingUp, Sparkles } from 'lucide-react';
+import { Search, ArrowRight, Building2, TrendingUp, Sparkles, Mail, FileSpreadsheet } from 'lucide-react';
 
 interface DirectoryScreenProps {
   companies: Record<string, CompanyData>;
@@ -101,7 +101,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                 }
                 if (e.key === 'Escape') setSearchQuery('');
               }}
-              placeholder="Search any listed company — Apple, Reliance, Nvidia, Tata Motors..."
+              placeholder="Search any listed company: Apple, Reliance, Nvidia, Tata Motors..."
               className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm pl-14 pr-32 py-5 outline-none placeholder:text-[#52525B] transition-colors rounded-none shadow-inner"
               autoFocus
             />
@@ -146,7 +146,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
 
           <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed uppercase tracking-wider">
             US filings come from SEC EDGAR; everywhere else from exchange
-            disclosures. Banks, insurers and lenders are shown without a DCF —
+            disclosures. Banks, insurers and lenders are shown without a DCF, because
             discounted cash flow does not apply to them.
           </div>
 
@@ -166,12 +166,32 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                 Analyst models
               </span>
             </div>
-            <p className="font-sans text-sm font-light text-[#A1A1AA] max-w-2xl leading-relaxed">
+            <p className="font-sans text-sm font-light text-[#A1A1AA] max-w-3xl leading-relaxed">
               These companies have a model built by hand and reconciled to the
               filings line by line. Every other company is modelled automatically
-              from its reported history — search for it above.
+              from its reported history. Search for it above.
             </p>
           </div>
+        </div>
+
+        {/* What an analyst model is, and how to request one */}
+        <div className="border hairline-border bg-[#111114] p-6 sm:p-7 mb-6 shadow-lg">
+          <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed max-w-3xl">
+            The workbooks below were prepared by the analyst himself, after a
+            detailed study of the company and its filings, with each assumption
+            chosen and defended individually. They are not the output of the
+            automated engine. If you would like a model of this depth for a
+            particular company, rather than the engine-generated version, please
+            get in touch.
+          </p>
+
+          <a
+            href="mailto:vanshgupta569@gmail.com?subject=Request%20for%20a%20custom%20financial%20model"
+            className="inline-flex items-center gap-2 mt-4 font-mono text-[11px] text-[#8B1E1E] hover:text-[#F2F0EA] transition-colors tracking-wider uppercase border-b border-[#8B1E1E]/40 hover:border-[#F2F0EA] pb-0.5"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            vanshgupta569@gmail.com
+          </a>
         </div>
 
         {/* Company Grid Cards */}
@@ -231,6 +251,31 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                   </div>
                 </div>
 
+                {/* Excel workbooks behind this model, where they exist. The
+                    click is stopped so the card underneath doesn't also open. */}
+                {comp.excelModels && comp.excelModels.length > 0 && (
+                  <div className="border-t hairline-border-t pt-4 mt-5">
+                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mb-2.5">
+                      Download the Excel workbooks
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {comp.excelModels.map((model) => (
+                        <a
+                          key={model.label}
+                          href={model.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-2 font-mono text-[10px] text-[#A1A1AA] hover:text-[#F2F0EA] border hairline-border hover:border-[#8B1E1E] px-3 py-2 transition-colors bg-[#0B0B0D]"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#8B1E1E]" />
+                          {model.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center border-t hairline-border-t pt-5 mt-6">
                   <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {comp.isin}</span>
                   <button className="font-mono text-[10px] text-[#8B1E1E] group-hover:text-[#F2F0EA] tracking-widest font-semibold uppercase flex items-center gap-2 transition-colors duration-300">
@@ -246,10 +291,10 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
         {filteredCompanies.length === 0 && (
           <div className="text-center py-24 bg-[#111114] border hairline-border p-8 shadow-inner">
             <div className="font-mono text-sm text-[#A1A1AA] tracking-wide mb-2">
-              No companies matching query <span className="text-[#F2F0EA]">"{searchQuery}"</span>.
+              No hand-built analyst models yet.
             </div>
             <div className="font-sans text-xs font-light text-[#8A8A8F] tracking-wide">
-              Try searching for established coverage tickers like AAPL, META, or NVDA.
+              Use the search above to model any listed company automatically.
             </div>
           </div>
         )}

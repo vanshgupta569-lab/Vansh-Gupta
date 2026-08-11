@@ -19,7 +19,7 @@ const PIPELINE_STEPS = [
     phase: 'PHASE 02',
     title: 'Uniform Assumption Architecture',
     subtitle: 'Normalized Modeling Framework',
-    description: 'The fetched history feeds into a standardized 3-statement projection engine. Every forecast line item is driven by transparent, named assumptions—including revenue growth, operating margins, effective tax rates, and CapEx intensity.',
+    description: 'The fetched history feeds into a standardized 3-statement projection engine. Every forecast line item is driven by transparent, named assumptions, including revenue growth, operating margins, effective tax rates, and CapEx intensity.',
     icon: Sliders,
     detail: 'Users retain full interactive control to override default parameters via live terminal sliders in real time.',
   },

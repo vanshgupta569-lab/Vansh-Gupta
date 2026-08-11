@@ -16,13 +16,13 @@ const HERO_SLIDES = [
   {
     tag: 'FULL 3-STATEMENT MODEL',
     title: 'Every Schedule. Every Line.',
-    subtitle: 'Segment revenue, working capital, PP&E, debt and equity schedules — integrated and balance-checked.',
+    subtitle: 'Segment revenue, working capital, PP&E, debt and equity schedules, all integrated and balance-checked.',
     detail: 'One shared calculation engine runs identically for every company. Each company is just a data file in the same schema. The balance sheet balances in every forecast year.',
   },
   {
     tag: 'LIVE DCF WITH SLIDERS',
     title: 'Adjust Assumptions. Watch It Move.',
-    subtitle: 'WACC, terminal growth, margins and capex are sliders — the implied value recalculates instantly.',
+    subtitle: 'WACC, terminal growth, margins and capex are sliders, so the implied value recalculates instantly.',
     detail: 'Two terminal value methods: Gordon Growth perpetuity and EV/EBITDA exit multiple. A 5×5 sensitivity grid shows the range across WACC and growth assumptions.',
   },
 ];
@@ -214,7 +214,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
           <span className="tracking-widest uppercase">SCROLL TO EXPLORE THE METHODOLOGY AND COVERAGE</span>
         </div>
         <div className="hidden sm:block text-[10px] tracking-widest uppercase text-[#8A8A8F]/70">
-          INDEPENDENT RESEARCH — ASSUMPTIONS VISIBLE
+          INDEPENDENT RESEARCH · ASSUMPTIONS VISIBLE
         </div>
       </motion.div>
     </section>

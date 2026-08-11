@@ -107,6 +107,8 @@ export interface CompanyData {
   // The reasoning behind the health score: each ratio, its value, and the
   // threshold it was judged against.
   healthDetail?: any;
+  // Downloadable Excel workbooks, for companies modelled by hand.
+  excelModels?: { label: string; url: string }[];
 }
 
 export interface AccessRequestForm {

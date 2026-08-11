@@ -206,7 +206,7 @@ export const CoverageStatsSection: React.FC = () => {
           )}
           
           <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
-            * SECURE WEB3FORMS ENDPOINT — RESPONSES ROUTED DIRECTLY TO YOUR INBOX
+            * SECURE WEB3FORMS ENDPOINT · RESPONSES ROUTED DIRECTLY TO YOUR INBOX
           </div>
         </form>
       </motion.div>

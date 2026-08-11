@@ -263,6 +263,16 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
     defaultDrivers:  AAPL_DEFAULT_DRIVERS,
     healthMetrics:   AAPL_HEALTH,
     healthDetail:    _aaplHealthDetail,
+    excelModels: [
+      {
+        label: '3-Statement Model',
+        url: 'https://drive.google.com/file/d/1JXl7kpF8iZw5KVpKFd4IUkvUYcdoY51X/view?usp=sharing',
+      },
+      {
+        label: 'DCF Valuation Model',
+        url: 'https://drive.google.com/file/d/13pl9-M7EskMqasRM6dCHepnqnUfymS5D/view?usp=sharing',
+      },
+    ],
     recentNews: [
       {
         id: '1',
