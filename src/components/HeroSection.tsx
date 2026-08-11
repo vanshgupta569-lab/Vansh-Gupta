@@ -8,22 +8,22 @@ interface HeroSectionProps {
 
 const HERO_SLIDES = [
   {
-    tag: 'INSTITUTIONAL STANDARD',
-    title: 'Institutional Research. Rebuilt.',
-    subtitle: 'Eliminating the distance between raw data and actionable signal.',
-    detail: 'Automated 10-K and 10-Q forensic audit engines parsing non-GAAP adjustments, off-balance sheet lease obligations, and deferred tax asset divergences.',
+    tag: 'FILED DATA, NOT ESTIMATES',
+    title: 'Real Financials. Live Models.',
+    subtitle: 'Three years of audited income statements, balance sheets and cash flows — exactly as reported.',
+    detail: 'Historical figures come from official filings. Nothing is estimated or adjusted. Forecast figures are clearly labelled and driven by named, adjustable assumptions.',
   },
   {
-    tag: 'FORENSIC PRECISION',
-    title: 'Footnotes Uncovered. Edge Quantified.',
-    subtitle: 'Where conventional consensus fails, forensic accrual models deliver alpha.',
-    detail: 'Continuous tracking of inventory build vs sales velocity, working capital distortions, and revenue recognition velocity.',
+    tag: 'FULL 3-STATEMENT MODEL',
+    title: 'Every Schedule. Every Line.',
+    subtitle: 'Segment revenue, working capital, PP&E, debt and equity schedules — integrated and balance-checked.',
+    detail: 'One shared calculation engine runs identically for every company. Each company is just a data file in the same schema. The balance sheet balances in every forecast year.',
   },
   {
-    tag: 'DETERMINISTIC VALUATION',
-    title: 'Dynamic DCF Engine. Live Assumptions.',
-    subtitle: '3-statement integrated financial modeling driven by scenario parameters.',
-    detail: 'Adjust WACC, tax rates, terminal growth, and operating margins with immediate recalculation of fair enterprise values.',
+    tag: 'LIVE DCF WITH SLIDERS',
+    title: 'Adjust Assumptions. Watch It Move.',
+    subtitle: 'WACC, terminal growth, margins and capex are sliders — the implied value recalculates instantly.',
+    detail: 'Two terminal value methods: Gordon Growth perpetuity and EV/EBITDA exit multiple. A 5×5 sensitivity grid shows the range across WACC and growth assumptions.',
   },
 ];
 
@@ -53,7 +53,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
     <section id="hero" className="pt-28 lg:pt-36 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12 hairline-border-b min-h-[680px] flex flex-col justify-between">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         
-        {/* Left Column - Scroll-driven Slide content */}
+        {/* Left Column */}
         <div className="lg:col-span-6 flex flex-col gap-6">
           <div className="flex items-center gap-3">
             <span className="w-2 h-2 bg-[#8B1E1E]" />
@@ -85,7 +85,6 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
             </motion.div>
           </AnimatePresence>
 
-          {/* Slide Indicator Dots & Navigation */}
           <div className="flex items-center gap-6 mt-4 pt-4 hairline-border-t">
             <div className="flex gap-2">
               {HERO_SLIDES.map((_, idx) => (
@@ -111,27 +110,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
           </div>
         </div>
 
-        {/* Center Graphic Column - Smooth Geometric SVG Animation */}
+        {/* Centre Graphic */}
         <div className="lg:col-span-4 relative h-80 sm:h-96 w-full flex items-center justify-center">
           <div className="relative w-72 h-80 flex items-center justify-center">
-            
-            {/* Outer Box with Hairline Border */}
             <div className="absolute inset-0 hairline-border p-4 bg-[#111114]/40 flex items-center justify-center">
-              
-              {/* Concentric Rotating Rings */}
               <motion.div
                 style={{ rotate: rotation }}
                 className="w-64 h-64 border hairline-border rounded-full flex items-center justify-center relative"
               >
-                {/* Secondary Pulsing Ring */}
                 <motion.div
                   animate={{ scale: [1, 1.05, 1] }}
                   transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
                   className="w-48 h-48 border border-[#8B1E1E]/40 rounded-full flex items-center justify-center"
                 >
                   <div className="w-32 h-32 border border-[#8B1E1E]/70 rounded-full flex items-center justify-center">
-                    
-                    {/* Inner Solid Red Center */}
                     <motion.div
                       animate={{ opacity: [0.7, 1, 0.7] }}
                       transition={{ duration: 2, repeat: Infinity }}
@@ -142,50 +134,44 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                     </motion.div>
                   </div>
                 </motion.div>
-
-                {/* Radar Line Sweep */}
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
                   className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-gradient-to-b from-[#8B1E1E] via-transparent to-transparent origin-center"
                 />
               </motion.div>
-
-              {/* Corner Grid Crosshairs */}
-              <span className="absolute top-2 left-2 font-mono text-[9px] text-[#8A8A8F]">+0.00</span>
-              <span className="absolute top-2 right-2 font-mono text-[9px] text-[#8A8A8F]">SEC 10-K</span>
-              <span className="absolute bottom-2 left-2 font-mono text-[9px] text-[#8A8A8F]">VAL: DCF</span>
-              <span className="absolute bottom-2 right-2 font-mono text-[9px] text-[#8B1E1E] animate-pulse">● LIVE</span>
+              <span className="absolute top-2 left-2 font-mono text-[9px] text-[#8A8A8F]">HISTORICAL</span>
+              <span className="absolute top-2 right-2 font-mono text-[9px] text-[#8A8A8F]">FORECAST</span>
+              <span className="absolute bottom-2 left-2 font-mono text-[9px] text-[#8A8A8F]">3-STATEMENT</span>
+              <span className="absolute bottom-2 right-2 font-mono text-[9px] text-[#8B1E1E] animate-pulse">● DCF</span>
             </div>
           </div>
         </div>
 
-        {/* Right Column - Key Quant Stats Bar */}
+        {/* Right Stats Column */}
         <div className="lg:col-span-2 flex lg:flex-col gap-8 justify-center border-l hairline-border-l pl-8 py-2">
           <div>
-            <div className="font-mono text-3xl font-semibold text-[#8B1E1E] mb-1">09</div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider">SECTIONS PARSED</div>
+            <div className="font-mono text-3xl font-semibold text-[#8B1E1E] mb-1">5</div>
+            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider">COMPANIES</div>
           </div>
           <div className="hairline-border-t pt-4">
-            <div className="font-mono text-3xl font-semibold text-[#8B1E1E] mb-1">20</div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider">KEY RATIOS</div>
+            <div className="font-mono text-3xl font-semibold text-[#8B1E1E] mb-1">8</div>
+            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider">SCHEDULES</div>
           </div>
           <div className="hairline-border-t pt-4">
-            <div className="font-mono text-3xl font-semibold text-[#8B1E1E] mb-1">130+</div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider">CITATIONS</div>
+            <div className="font-mono text-3xl font-semibold text-[#8B1E1E] mb-1">5 YR</div>
+            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider">FORECAST</div>
           </div>
         </div>
-
       </div>
 
-      {/* Down indicator */}
       <div className="flex justify-between items-center mt-12 pt-6 hairline-border-t text-xs font-mono text-[#8A8A8F]">
         <div className="flex items-center gap-2">
           <ArrowDown className="w-3.5 h-3.5 text-[#8B1E1E] animate-bounce" />
-          <span>SCROLL TO EXPLORE METHODOLOGY & PLATFORM</span>
+          <span>SCROLL TO EXPLORE THE METHODOLOGY AND COVERAGE</span>
         </div>
         <div className="hidden sm:block text-[11px] text-[#8A8A8F]">
-          FINANCIAL INTELLIGENCE TERMINAL — NO MOCK STUBS
+          INDEPENDENT RESEARCH — ASSUMPTIONS VISIBLE
         </div>
       </div>
     </section>
