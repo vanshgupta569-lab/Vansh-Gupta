@@ -6,7 +6,7 @@ export const CoverageStatsSection: React.FC = () => {
       <div className="flex items-center gap-2 mb-10">
         <span className="w-2 h-2 bg-[#8B1E1E]" />
         <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
-          03 - COVERAGE STATS & CAPACITY
+          03 - CURRENT COVERAGE
         </span>
       </div>
 
@@ -16,9 +16,9 @@ export const CoverageStatsSection: React.FC = () => {
             5
           </div>
           <div className="font-mono text-[11px] text-[#dfbfbc] uppercase tracking-wider">
-            Benchmark Equities
+            Companies Covered
           </div>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">AAPL, META, NVDA, RELIANCE, SPCX</div>
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">AAPL · META · NVDA · RELIANCE · SPCX</div>
         </div>
 
         <div className="text-center p-4 border-r hairline-border-r last:border-r-0">
@@ -28,17 +28,17 @@ export const CoverageStatsSection: React.FC = () => {
           <div className="font-mono text-[11px] text-[#dfbfbc] uppercase tracking-wider">
             Historical Data
           </div>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">3-Year Audited Statements</div>
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">3 years of audited filed statements</div>
         </div>
 
         <div className="text-center p-4 border-r hairline-border-r last:border-r-0">
           <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold">
-            130+
+            8
           </div>
           <div className="font-mono text-[11px] text-[#dfbfbc] uppercase tracking-wider">
-            Line-Item Disclosures
+            Integrated Schedules
           </div>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">Reconciled Footnote Audits</div>
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">IS · BS · CF · WC · PP&E · Debt · Equity · DCF</div>
         </div>
 
         <div className="text-center p-4">
@@ -48,7 +48,7 @@ export const CoverageStatsSection: React.FC = () => {
           <div className="font-mono text-[11px] text-[#dfbfbc] uppercase tracking-wider">
             Zero Platform Cost
           </div>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">Free Institutional Tier</div>
+          <div className="font-mono text-[10px] text-[#8A8A8F] mt-1">No subscription, no paywall</div>
         </div>
       </div>
     </section>
