@@ -127,49 +127,56 @@ const US_TAGS = {
 // Pull one line item out of the giant XBRL blob, for the annual periods only.
 // Returns an object like { 2023: 383285000000, 2024: 391035000000 }
 function extractUSFact(facts, tagList) {
-  // Walk EVERY tag in the list and merge the results, rather than stopping at
-  // the first tag that has any data at all. This matters: a company may file
-  // one tag for older years and a different tag for recent years. Stopping at
-  // the first match would return only the old years and leave recent ones
-  // blank — which is exactly why dividends came back empty for Apple.
-  const byYear = {};
+  // Two different ideas of "which value wins" apply here, and they must not be
+  // confused — mixing them up is how Apple's SG&A briefly came back as bare
+  // G&A, missing the selling costs entirely:
+  //
+  //   WITHIN one tag  -> the most recently filed figure wins, so that a
+  //                      restated number supersedes the original.
+  //   ACROSS tags     -> the earliest tag in the list wins, because the list
+  //                      is written in order of preference. A fallback tag may
+  //                      only fill a year the preferred tag left empty.
+  const merged = {};
 
   for (const tag of tagList) {
     const entry = facts['us-gaap']?.[tag];
     if (!entry) continue;
 
-    // Companies report in different units; take whichever unit this tag uses.
     const unitKey = Object.keys(entry.units || {})[0];
     if (!unitKey) continue;
+
+    // Collect this tag's figures on their own first.
+    const thisTag = {};
 
     for (const point of entry.units[unitKey]) {
       if (!point.form?.startsWith('10-K') || !point.end) continue;
 
-      // IMPORTANT: do not trust point.fy. That field is the fiscal year of the
-      // FILING, not of the figure. Every 10-K restates the two prior years as
-      // comparatives, and all of them carry the filing's own fy stamp — so
-      // relying on it silently files old figures under recent years.
-      // The figure's real period is in its start/end dates instead.
+      // Do not trust point.fy — that is the fiscal year of the FILING, not of
+      // the figure. Every 10-K restates two prior years as comparatives, all
+      // stamped with the filing's own fy. The figure's real period is in its
+      // start and end dates.
       if (point.start) {
-        // A flow item (revenue, profit, cash flow) covers a span of time.
-        // Keep only full-year spans, discarding quarters and half-years.
-        const days =
-          (new Date(point.end) - new Date(point.start)) / 86400000;
+        // A flow item (revenue, profit, cash flow) spans a period. Keep only
+        // full-year spans, discarding quarters and half-years.
+        const days = (new Date(point.end) - new Date(point.start)) / 86400000;
         if (days < 300 || days > 400) continue;
       }
-      // A stock item (cash, assets, equity) is a snapshot with no start date,
-      // and is dated by its end date alone.
+      // A stock item (cash, assets, equity) is a snapshot dated by end alone.
 
       const year = Number(point.end.slice(0, 4));
       if (!year) continue;
 
-      // Later entries are from more recent filings, so let them win: a figure
-      // restated in a subsequent year supersedes the original.
-      byYear[year] = point.val;
+      // Later entries come from more recent filings, so let them overwrite.
+      thisTag[year] = point.val;
+    }
+
+    // Now fold into the result, never displacing a preferred tag's figure.
+    for (const [year, value] of Object.entries(thisTag)) {
+      if (merged[year] === undefined) merged[year] = value;
     }
   }
 
-  return byYear;
+  return merged;
 }
 
 async function fetchFromSEC(ticker) {
