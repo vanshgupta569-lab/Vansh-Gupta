@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor } from '../data/companies';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements } from '../data/companies';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
 import {
@@ -197,6 +197,22 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     }
     return merged as ValuationDrivers;
   }, [activeSource, company.defaultDrivers]);
+
+  // Reported history is the same whichever model is selected, so it is read
+  // from the filings that travel with the derived model rather than from a
+  // model file. That is why every company now shows every year the source
+  // provided (five, where there are five) instead of the three the hand-built
+  // Apple file happens to carry.
+  const historicals = useMemo(() => {
+    const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
+    return raw && raw.length ? financialsFromStatements(raw) : company.financials;
+  }, [derivedSource, activeSource, company.financials]);
+
+  // A figure the filing does not give us is an absence, not a zero.
+  const money = (v: number | null | undefined) =>
+    v === null || v === undefined ? '—' : `${company.currencySymbol}${v.toLocaleString()}`;
+  const pct = (v: number | null | undefined, signed = false) =>
+    v === null || v === undefined ? '—' : `${signed && v > 0 ? '+' : ''}${v}%`;
 
   // Switching between the derived and analyst models resets the sliders to
   // that model's own starting point. Anything the user had moved is cleared,
@@ -569,10 +585,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
             {/* Custom Bar Visualization */}
             <div className="h-52 flex items-end justify-between gap-3 pt-8 pb-2 px-2 border-b hairline-border-b relative">
-              {company.financials.years.map((yr, idx) => {
-                const maxRev = Math.max(...company.financials.revenue);
-                const revHeightPct = Math.round((company.financials.revenue[idx] / maxRev) * 100);
-                const margin = company.financials.ebitdaMargin[idx];
+              {historicals.years.map((yr, idx) => {
+                const revValues = historicals.revenue.filter(
+                  (x): x is number => typeof x === 'number'
+                );
+                const maxRev = revValues.length ? Math.max(...revValues) : 0;
+                const thisRev = historicals.revenue[idx];
+                const revHeightPct =
+                  maxRev > 0 && typeof thisRev === 'number'
+                    ? Math.round((thisRev / maxRev) * 100)
+                    : 0;
+                const margin = historicals.ebitdaMargin[idx] ?? 0;
 
                 return (
                   <div
@@ -585,7 +608,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     {hoveredBarIndex === idx && (
                       <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-3 z-20 font-mono text-[10px] text-[#A1A1AA] whitespace-nowrap shadow-xl">
                         <div className="text-[#8B1E1E] font-bold tracking-widest uppercase mb-1">{yr} Metrics</div>
-                        <div className="tracking-wider">Rev: <span className="text-[#F2F0EA]">{company.currencySymbol}{(company.financials.revenue[idx] / 1000).toFixed(1)}B</span></div>
+                        <div className="tracking-wider">Rev: <span className="text-[#F2F0EA]">{typeof thisRev === 'number' ? `${company.currencySymbol}${(thisRev / 1000).toFixed(1)}B` : '—'}</span></div>
                         <div className="tracking-wider">EBITDA Margin: <span className="text-[#F2F0EA]">{margin}%</span></div>
                       </div>
                     )}
@@ -847,14 +870,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <span className="font-mono text-[11px] tracking-widest text-[#8A8A8F] uppercase">
                 3-Statement GAAP Financial Summary ({company.currency} Millions)
               </span>
-              <span className="font-mono text-[10px] tracking-widest text-[#8B1E1E] bg-[#8B1E1E]/5 px-2 py-0.5 border border-[#8B1E1E]/30">AUDITED SEC DATA</span>
+              <span className="font-mono text-[10px] tracking-widest text-[#8B1E1E] bg-[#8B1E1E]/5 px-2 py-0.5 border border-[#8B1E1E]/30">
+                AS REPORTED{company.dataSource ? ` · ${company.dataSource}` : ''}
+              </span>
             </div>
 
             <table className="w-full text-left font-mono text-xs border-collapse">
               <thead>
                 <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase tracking-widest">
                   <th className="py-3 pr-6 font-medium">Line Item</th>
-                  {company.financials.years.map((y) => (
+                  {historicals.years.map((y) => (
                     <th key={y} className="py-3 px-4 text-right font-medium">
                       {y}
                     </th>
@@ -864,82 +889,68 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <tbody className="divide-y divide-[#222228] text-[#F2F0EA] tracking-wider">
                 <tr className="hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Total Revenue</td>
-                  {company.financials.revenue.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">
-                      {company.currencySymbol}{v.toLocaleString()}
-                    </td>
+                  {historicals.revenue.map((v, i) => (
+                    <td key={i} className="py-3 px-4 text-right">{money(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Revenue Growth %</td>
-                  {company.financials.revenueGrowth.map((v, i) => (
-                    <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${v >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {v > 0 ? '+' : ''}{v}%
+                  {historicals.revenueGrowth.map((v, i) => (
+                    <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${
+                      v === null || v === undefined ? 'text-[#8A8A8F]' : v >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {pct(v, true)}
                     </td>
                   ))}
                 </tr>
 
                 <tr className="text-[#A1A1AA] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium">Gross Margin %</td>
-                  {company.financials.grossMargin.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">
-                      {v}%
-                    </td>
+                  {historicals.grossMargin.map((v, i) => (
+                    <td key={i} className="py-3 px-4 text-right">{pct(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="text-[#A1A1AA] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium">EBITDA Margin %</td>
-                  {company.financials.ebitdaMargin.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">
-                      {v}%
-                    </td>
+                  {historicals.ebitdaMargin.map((v, i) => (
+                    <td key={i} className="py-3 px-4 text-right">{pct(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Net Income</td>
-                  {company.financials.netIncome.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">
-                      {company.currencySymbol}{v.toLocaleString()}
-                    </td>
+                  {historicals.netIncome.map((v, i) => (
+                    <td key={i} className="py-3 px-4 text-right">{money(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 pl-3 text-[#A1A1AA]">Operating Cash Flow</td>
-                  {company.financials.operatingCashFlow.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right text-[#A1A1AA]">
-                      {company.currencySymbol}{v.toLocaleString()}
-                    </td>
+                  {historicals.operatingCashFlow.map((v, i) => (
+                    <td key={i} className="py-3 px-4 text-right text-[#A1A1AA]">{money(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-3 pr-6 font-semibold text-[#8B1E1E]">Free Cash Flow (FCF)</td>
-                  {company.financials.freeCashFlow.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right font-semibold text-[#8B1E1E]">
-                      {company.currencySymbol}{v.toLocaleString()}
-                    </td>
+                  {historicals.freeCashFlow.map((v, i) => (
+                    <td key={i} className="py-3 px-4 text-right font-semibold text-[#8B1E1E]">{money(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-2.5 pr-6">Total Debt</td>
-                  {company.financials.totalDebt.map((v, i) => (
-                    <td key={i} className="py-2.5 px-4 text-right">
-                      {company.currencySymbol}{v.toLocaleString()}
-                    </td>
+                  {historicals.totalDebt.map((v, i) => (
+                    <td key={i} className="py-2.5 px-4 text-right">{money(v)}</td>
                   ))}
                 </tr>
 
                 <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
                   <td className="py-2.5 pr-6">Cash & Equivalents</td>
-                  {company.financials.cashAndEquivalents.map((v, i) => (
-                    <td key={i} className="py-2.5 px-4 text-right">
-                      {company.currencySymbol}{v.toLocaleString()}
-                    </td>
+                  {historicals.cashAndEquivalents.map((v, i) => (
+                    <td key={i} className="py-2.5 px-4 text-right">{money(v)}</td>
                   ))}
                 </tr>
               </tbody>

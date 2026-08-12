@@ -1,18 +1,21 @@
 export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT';
 export type ScreenType = 'HOME' | 'DIRECTORY' | 'ANALYSIS';
 
+// Reported history. null means the filing does not give us that figure for
+// that year — it is NOT zero, and the dashboard renders it as an em dash. The
+// two are very different things and printing $0 for an absence is a lie.
 export interface CompanyFinancials {
   years: string[];
-  revenue: number[];
-  revenueGrowth: number[];        // %
-  grossMargin: number[];          // %
-  ebitdaMargin: number[];         // %
-  netIncome: number[];
-  operatingCashFlow: number[];
-  freeCashFlow: number[];
-  totalDebt: number[];
-  cashAndEquivalents: number[];
-  capex: number[];
+  revenue: (number | null)[];
+  revenueGrowth: (number | null)[];        // %
+  grossMargin: (number | null)[];          // %
+  ebitdaMargin: (number | null)[];         // %
+  netIncome: (number | null)[];
+  operatingCashFlow: (number | null)[];
+  freeCashFlow: (number | null)[];
+  totalDebt: (number | null)[];
+  cashAndEquivalents: (number | null)[];
+  capex: (number | null)[];
 }
 
 export interface ValuationDrivers {
@@ -109,6 +112,9 @@ export interface CompanyData {
   healthDetail?: any;
   // Downloadable Excel workbooks, for companies modelled by hand.
   excelModels?: { label: string; url: string }[];
+  // Where the reported history came from, e.g. 'SEC EDGAR'. Shown on the
+  // historicals table so the badge never claims a source it does not have.
+  dataSource?: string;
 }
 
 export interface AccessRequestForm {

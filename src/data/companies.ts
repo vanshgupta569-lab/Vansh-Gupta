@@ -5,7 +5,7 @@ import { buildModel, buildDCF } from '../engine/model.js';
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 
-import { CompanyData, ValuationDrivers, DCFResult, ForecastRow } from '../types';
+import { CompanyData, CompanyFinancials, ValuationDrivers, DCFResult, ForecastRow } from '../types';
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -17,7 +17,7 @@ const r = (n: number | null, dp = 0): number => {
 };
 
 // ---------------------------------------------------------------------------
-// BUILD A MODEL RUN WITH SLIDER OVERRIDES
+// DEFAULT SLIDER POSITIONS FOR A GIVEN DATA FILE
 // ---------------------------------------------------------------------------
 // What the sliders read when nobody has touched them. These are taken from the
 // model's FIRST forecast year, which is how the dashboard has always populated
@@ -47,6 +47,68 @@ export function defaultDriversFor(source: any): Partial<ValuationDrivers> {
     // everything, which is the behaviour this file had before.
     return {};
   }
+}
+
+// ---------------------------------------------------------------------------
+// REPORTED HISTORY, STRAIGHT FROM THE FILINGS
+// ---------------------------------------------------------------------------
+// Reported history is a FACT. It does not belong to a model, and it must not
+// change when the user switches between the derived and analyst views. So this
+// reads the fetched statements directly rather than anything the engine
+// produced, which also means every company shows every year the filing gave us
+// (five, where the source has five) instead of however many years a hand-built
+// data file happens to carry.
+//
+// A figure the filing does not provide comes back as null, never 0. Apple's
+// FY2023 balance sheet lines were previously printed as "$0" when what was
+// meant was "not available".
+export function financialsFromStatements(statements: any[]): CompanyFinancials {
+  const rows = Array.isArray(statements) ? statements : [];
+  const num = (v: any): number | null =>
+    typeof v === 'number' && isFinite(v) ? v : null;
+
+  const pick = (fn: (row: any, i: number) => number | null, dp = 0) =>
+    rows.map((row, i) => {
+      const v = fn(row, i);
+      return v === null ? null : r(v, dp);
+    });
+
+  return {
+    years: rows.map((row) => 'FY' + String(row.fiscalYear).slice(2)),
+    revenue: pick((row) => num(row.revenue)),
+    revenueGrowth: pick((row, i) => {
+      const prev = num(rows[i - 1]?.revenue);
+      const now = num(row.revenue);
+      // The earliest year has no prior year to grow from. That is an absence,
+      // not zero growth.
+      if (prev === null || now === null || prev === 0) return null;
+      return (now / prev - 1) * 100;
+    }, 1),
+    grossMargin: pick((row) => {
+      const rev = num(row.revenue), cogs = num(row.cogs);
+      if (rev === null || cogs === null || rev === 0) return null;
+      return ((rev - cogs) / rev) * 100;
+    }, 1),
+    ebitdaMargin: pick((row) => {
+      const rev = num(row.revenue);
+      const ebit = num(row.operatingIncome), da = num(row.depreciation);
+      if (rev === null || ebit === null || rev === 0) return null;
+      return ((ebit + (da ?? 0)) / rev) * 100;
+    }, 1),
+    netIncome: pick((row) => num(row.netIncome)),
+    operatingCashFlow: pick((row) => num(row.operatingCashFlow)),
+    freeCashFlow: pick((row) => {
+      const ocf = num(row.operatingCashFlow), capex = num(row.capex);
+      if (ocf === null || capex === null) return null;
+      return ocf - Math.abs(capex);
+    }),
+    totalDebt: pick((row) => num(row.longTermDebt)),
+    cashAndEquivalents: pick((row) => num(row.cash)),
+    capex: pick((row) => {
+      const capex = num(row.capex);
+      return capex === null ? null : Math.abs(capex);
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +394,7 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
       cashAndEquivalents:_M.balanceSheet.cashAndSecurities.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
       capex:             _histCapex.slice(0, _nH),
     },
+    dataSource:      'SEC EDGAR',
     defaultDrivers:  AAPL_DEFAULT_DRIVERS,
     healthMetrics:   AAPL_HEALTH,
     healthDetail:    _aaplHealthDetail,

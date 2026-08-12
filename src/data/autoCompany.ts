@@ -11,6 +11,7 @@ import { buildModel, buildDCF } from '../engine/model.js';
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
+import { financialsFromStatements } from './companies';
 
 const r = (n: number | null | undefined, dp = 0): number => {
   if (n == null || !isFinite(n)) return 0;
@@ -35,7 +36,10 @@ export async function loadCompany(ticker: string): Promise<CompanyData> {
     );
   }
 
-  const modelData = deriveModel(fetched);
+  const modelData: any = deriveModel(fetched);
+  // The filings themselves travel with the model, so the dashboard can show
+  // reported history without going back through the engine.
+  modelData.rawStatements = fetched.statements;
   return buildCompanyRecord(fetched, modelData);
 }
 
@@ -47,7 +51,9 @@ export async function loadDerivedModelData(ticker: string): Promise<any> {
   if (!response.ok || fetched.error || !fetched.statements) {
     throw new Error(fetched.error || `Could not load ${ticker}`);
   }
-  return deriveModel(fetched);
+  const modelData: any = deriveModel(fetched);
+  modelData.rawStatements = fetched.statements;
+  return modelData;
 }
 
 export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
@@ -119,24 +125,10 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
     // about being derived, and the dashboard labels it accordingly.
     engineBacked: false,
 
-    financials: {
-      years: years.map((y: number) => 'FY' + String(y).slice(2)),
-      revenue: years.map((_, i) => r(M.revenue[i])),
-      revenueGrowth: years.map((_, i) => r((M.revenueGrowth[i] ?? 0) * 100, 1)),
-      grossMargin: years.map((_, i) => r((M.grossMargin[i] ?? 0) * 100, 1)),
-      ebitdaMargin: years.map((_, i) =>
-        r(((M.ebitda[i] ?? 0) / (M.revenue[i] ?? 1)) * 100, 1)),
-      netIncome: years.map((_, i) => r(M.netIncome[i])),
-      operatingCashFlow: years.map((_, i) =>
-        r((M.netIncome[i] ?? 0) + (M.depreciationAmortisation[i] ?? 0) +
-          (M.stockBasedCompensation[i] ?? 0))),
-      freeCashFlow: years.map((_, i) =>
-        r((M.netIncome[i] ?? 0) + (M.depreciationAmortisation[i] ?? 0) +
-          (M.stockBasedCompensation[i] ?? 0) - Math.abs(M.ppe.capex[i] ?? 0))),
-      totalDebt: years.map((_, i) => r(M.balanceSheet.longTermDebt[i])),
-      cashAndEquivalents: years.map((_, i) => r(M.balanceSheet.cashAndSecurities[i])),
-      capex: years.map((_, i) => r(Math.abs(M.ppe.capex[i] ?? 0))),
-    },
+    // Reported history comes from the filings, not the model. See
+    // financialsFromStatements in companies.ts.
+    financials: financialsFromStatements(fetched.statements),
+    dataSource: fetched.source,
 
     defaultDrivers,
     healthMetrics: health,
