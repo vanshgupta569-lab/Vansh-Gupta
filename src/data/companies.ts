@@ -19,38 +19,110 @@ const r = (n: number | null, dp = 0): number => {
 // ---------------------------------------------------------------------------
 // BUILD A MODEL RUN WITH SLIDER OVERRIDES
 // ---------------------------------------------------------------------------
+// What the sliders read when nobody has touched them. These are taken from the
+// model's FIRST forecast year, which is how the dashboard has always populated
+// them. Recomputed here from the same source so that buildOverridden can tell
+// an untouched slider from a moved one.
+//
+// This function is exported because the dashboard needs the same numbers to
+// show the default in grey beside anything the user has changed.
+export function defaultDriversFor(source: any): Partial<ValuationDrivers> {
+  try {
+    const M: any = buildModel(source);
+    const D: any = buildDCF(M, source);
+    const nH: number = M.nH;
+    const revLast: number = M.revenue[nH - 1] ?? 1;
+    const revNext: number = M.revenue[nH] ?? revLast;
+    const ebitNext: number = M.ebit[nH] ?? 0;
+    return {
+      revenueGrowthPct: r((revNext / revLast - 1) * 100, 1),
+      operatingMarginPct: r((ebitNext / revNext) * 100, 1),
+      taxRatePct: r((M.taxRate[nH] ?? 0.21) * 100, 1),
+      capexPctOfRev: r(Math.abs((M.ppe.capex[nH] ?? 0) / revNext) * 100, 1),
+      waccPct: D.applicable ? r(D.wacc * 100, 1) : undefined,
+      terminalGrowthPct: r((source.dcf?.longTermGrowthRate ?? 0.025) * 100, 1),
+    };
+  } catch {
+    // If the clean run fails for any reason, fall back to overriding
+    // everything, which is the behaviour this file had before.
+    return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// BUILD A MODEL RUN WITH SLIDER OVERRIDES
+// ---------------------------------------------------------------------------
+// IMPORTANT: an override is applied ONLY where the user has actually moved that
+// slider away from its default. Previously every driver was written into the
+// data file on every run, which quietly replaced the file's own assumptions
+// even when nobody had touched anything.
+//
+// That mattered. Apple's curated file forecasts DECAYING segment growth (iPhone
+// 3.0% falling to 1.0%, Services 13% falling to 11%). The old code read the
+// first forecast year's blended rate, 5.5%, and held it flat for all five
+// years, which compounded into a larger 2030 and a larger valuation: $169.61 a
+// share instead of the workbook's $154.34. The site was showing an overridden
+// model and calling it the analyst model.
+//
+// With this change, an untouched dashboard reproduces the data file exactly,
+// and the sliders do what they appear to do: change one thing at a time.
 function buildOverridden(source: any, drivers: ValuationDrivers): any {
   // Deep-clone so we never mutate the original data file
   const d = JSON.parse(JSON.stringify(source));
 
+  const defaults = defaultDriversFor(source);
+
+  // A driver counts as "touched" when it differs from its default. Both sides
+  // are rounded to one decimal place, which is the precision the sliders work
+  // in, so floating-point noise never counts as a change.
+  const touched = (key: keyof ValuationDrivers): boolean => {
+    const fallback = defaults[key];
+    if (fallback === undefined || fallback === null) return true; // no default known: honour the slider
+    return r(Number(drivers[key]), 1) !== r(Number(fallback), 1);
+  };
+
   // 1. Revenue growth — apply as a uniform blended rate across all segments
-  const rg = drivers.revenueGrowthPct / 100;
-  for (const seg of Object.keys(d.assumptions.segmentGrowth)) {
-    d.assumptions.segmentGrowth[seg] = [rg, rg, rg, rg, rg];
+  if (touched('revenueGrowthPct')) {
+    const rg = drivers.revenueGrowthPct / 100;
+    for (const seg of Object.keys(d.assumptions.segmentGrowth)) {
+      d.assumptions.segmentGrowth[seg] = [rg, rg, rg, rg, rg];
+    }
   }
 
   // 2. Operating margin — keep R&D and SG&A, adjust gross margin to hit target
   //    Target operating margin = gross margin - R&D margin - SG&A margin
-  const rndBase: number = d.assumptions.researchDevelopmentMargin[0];
-  const histRev: number[] = d.historical.incomeStatement.revenue;
-  const histSga: number[] = d.historical.incomeStatement.sellingGeneralAdmin;
-  const sgaAvg = histRev.reduce((sum: number, rev: number, i: number) =>
-    sum + (-histSga[i] / rev), 0) / histRev.length;
-  const targetGross = drivers.operatingMarginPct / 100 + rndBase + sgaAvg;
-  d.assumptions.grossMargin = [targetGross, targetGross, targetGross, targetGross, targetGross];
+  if (touched('operatingMarginPct')) {
+    const rndBase: number = d.assumptions.researchDevelopmentMargin[0];
+    const histRev: number[] = d.historical.incomeStatement.revenue;
+    const histSga: number[] = d.historical.incomeStatement.sellingGeneralAdmin;
+    const sgaAvg = histRev.reduce((sum: number, rev: number, i: number) =>
+      sum + (-histSga[i] / rev), 0) / histRev.length;
+    const targetGross = drivers.operatingMarginPct / 100 + rndBase + sgaAvg;
+    d.assumptions.grossMargin = [targetGross, targetGross, targetGross, targetGross, targetGross];
+  }
 
   // 3. Tax rate override
-  d.assumptions.taxRate = drivers.taxRatePct / 100;
+  if (touched('taxRatePct')) {
+    d.assumptions.taxRate = drivers.taxRatePct / 100;
+  }
 
   // 4. Capex as % of revenue
-  d.assumptions.capexMethod = 'percentOfRevenue';
-  d.assumptions.capexRatio = drivers.capexPctOfRev / 100;
+  if (touched('capexPctOfRev')) {
+    d.assumptions.capexMethod = 'percentOfRevenue';
+    d.assumptions.capexRatio = drivers.capexPctOfRev / 100;
+  }
 
-  // 5. WACC direct override (bypasses CAPM)
-  d.dcf.waccOverride = drivers.waccPct / 100;
+  // 5. WACC direct override (bypasses CAPM). Left alone when untouched, so the
+  //    engine's own CAPM figure is used at full precision rather than the
+  //    one-decimal rounded version the slider displays.
+  if (touched('waccPct')) {
+    d.dcf.waccOverride = drivers.waccPct / 100;
+  }
 
   // 6. Terminal growth
-  d.dcf.longTermGrowthRate = drivers.terminalGrowthPct / 100;
+  if (touched('terminalGrowthPct')) {
+    d.dcf.longTermGrowthRate = drivers.terminalGrowthPct / 100;
+  }
 
   return d;
 }
