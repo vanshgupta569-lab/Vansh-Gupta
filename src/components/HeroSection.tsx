@@ -10,7 +10,7 @@ const HERO_SLIDES = [
   {
     tag: 'FILED DATA, NOT ESTIMATES',
     title: 'Real Financials. Live Models.',
-    subtitle: 'Three years of income statements, balance sheets and cash flows, pulled from official filings exactly as reported.',
+    subtitle: 'Up to five years of income statements, balance sheets and cash flows, pulled from official filings exactly as reported.',
     detail: 'Historical figures come straight from SEC EDGAR and exchange filings. Nothing is estimated or adjusted. Forecast figures are clearly labelled and driven by named, adjustable assumptions.',
   },
   {

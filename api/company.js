@@ -1,7 +1,7 @@
 // Marginalia — universal company data fetcher
 //
-// Give it a ticker, it gives back three years of financial statements plus the
-// current share price, in one consistent shape, for any listed company.
+// Give it a ticker, it gives back up to five years of financial statements plus
+// the current share price, in one consistent shape, for any listed company.
 //
 //   /api/company?ticker=AAPL       -> US filer, comes from SEC EDGAR
 //   /api/company?ticker=RELIANCE.NS -> not a US filer, comes from Yahoo Finance
@@ -17,7 +17,11 @@
 const SEC_CONTACT = 'Marginalia Research vanshgupta569@gmail.com';
 // ---------------------------------------------------------------------------
 
-const YEARS_WANTED = 3;
+// How many years of history to return. Five gives the growth calculations a
+// longer base than three did. This is a CEILING, not a requirement: SEC EDGAR
+// normally has five or more, while Yahoo often carries only four. Whatever
+// exists is returned, and a company with fewer years still works.
+const YEARS_WANTED = 5;
 
 // ===========================================================================
 // SECTION 1 — SEC EDGAR (United States filers)

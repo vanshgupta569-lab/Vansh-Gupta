@@ -150,7 +150,7 @@ export const FlashOnChange: React.FC<{
 
 const STAGES = [
   'Locating the filings',
-  'Reading three years of statements',
+  'Reading the filed statements',
   'Deriving assumptions from history',
   'Building the forecast and schedules',
   'Discounting cash flows',
