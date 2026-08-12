@@ -77,6 +77,48 @@ export function deriveModel(fetched) {
   const cogs = pick('cogs');
   const provenance = {};
 
+  // ---- Tying operating profit to what the company actually reported -------
+  //
+  // The engine builds operating profit from the cost lines: revenue less COGS,
+  // R&D and SG&A. That works when those lines account for every operating cost,
+  // which is true of SEC filings — Apple's revenue less COGS, R&D and SG&A comes
+  // to its reported operating income to the last dollar.
+  //
+  // It is NOT true of every source. Yahoo's SG&A for Reliance is a narrow
+  // selling-and-admin figure that leaves out depreciation and a large block of
+  // other operating expenses. Built from those lines alone the model gave
+  // Reliance an operating profit of 2,320,970 against the 1,213,770 it actually
+  // reported: a 91% overstatement, carried straight into the valuation, which
+  // is where the model's claim that the shares were worth more than twice their
+  // market price came from.
+  //
+  // So where the filing reports operating income, the gap between it and the
+  // cost lines is treated as an operating cost and added to SG&A. The forecast
+  // is then anchored to a margin the company has actually earned. Where the gap
+  // is nil, as with every SEC filer, nothing changes.
+  const unexplainedOperatingCosts = rows.map((row) => {
+    if (!isNum(row.operatingIncome) || !isNum(row.revenue) || !isNum(row.cogs)) return 0;
+    const fromCostLines =
+      row.revenue - row.cogs - (isNum(row.rnd) ? row.rnd : 0) - (isNum(row.sga) ? row.sga : 0);
+    const gap = fromCostLines - row.operatingIncome;
+    // A tiny gap is rounding in the source, not a missing cost line.
+    return Math.abs(gap) > Math.abs(row.revenue) * 0.001 ? gap : 0;
+  });
+
+  // SG&A as the model uses it: the reported figure plus whatever else the
+  // company charged above the operating profit line.
+  const sgaTotal = rows.map((row, i) =>
+    isNum(row.sga) || unexplainedOperatingCosts[i] !== 0
+      ? (isNum(row.sga) ? row.sga : 0) + unexplainedOperatingCosts[i]
+      : null
+  );
+  const anyPlugged = unexplainedOperatingCosts.some((v) => v !== 0);
+  if (anyPlugged) {
+    provenance.operatingCostReconciliation =
+      'the source does not break out every operating cost, so the difference ' +
+      'between the reported operating profit and the cost lines is carried in SG&A';
+  }
+
   // ------------------------------------------------------------ historicals
 
   // Balance sheet lines the filing doesn't break out, derived from totals.
@@ -100,7 +142,7 @@ export function deriveModel(fetched) {
       researchDevelopment: pickNeg('rnd').map((v, i) =>
         v === null && isNum(revenue[i]) ? 0 : v
       ),
-      sellingGeneralAdmin: pickNeg('sga'),
+      sellingGeneralAdmin: sgaTotal.map((v) => (isNum(v) ? -v : null)),
       otherIncomeExpense: rows.map(() => 0),
       taxes: pickNeg('taxExpense'),
       basicShares: pick('dilutedShares').map((v) => (isNum(v) ? v / 1e6 : null)),
@@ -130,7 +172,14 @@ export function deriveModel(fetched) {
       // whole balance in one line keeps the balance sheet correct; the split
       // between paid-in capital and retained earnings is presentational and
       // does not affect the valuation.
-      commonStockAPIC: pick('equity'),
+      //
+      // Equity is taken as total assets less total liabilities rather than the
+      // reported equity line, because the two are not always the same figure.
+      // Yahoo reports Reliance's equity excluding minority interests, so the
+      // reported line left the balance sheet out by 1.1 to 1.8 million lakh and
+      // the balance check failed every year. For an SEC filer the two are
+      // identical: Apple's 359,241 less 285,508 is exactly its reported 73,733.
+      commonStockAPIC: rows.map((row) => plug(row.totalAssets, row.totalLiabilities)),
       treasuryStock: rows.map(() => 0),
       retainedEarnings: rows.map(() => 0),
       otherComprehensiveIncome: rows.map(() => 0),
@@ -202,7 +251,7 @@ export function deriveModel(fetched) {
   const rndMargin = clamp(latest(rndMargins), 0, 0.5, 0);
 
   const sgaMargins = revenue.map((rev, i) => {
-    const sga = rows[i]?.sga;
+    const sga = sgaTotal[i];
     return isNum(rev) && isNum(sga) && rev !== 0 ? sga / rev : null;
   });
   const sgaMargin = clamp(latest(sgaMargins), 0, 0.6, 0.1);
