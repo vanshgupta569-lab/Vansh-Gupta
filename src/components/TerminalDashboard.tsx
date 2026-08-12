@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE } from '../data/companies';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor } from '../data/companies';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
 import {
@@ -177,6 +177,35 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   const canCompare = Boolean(analystSource && derivedSource);
 
+  // The starting assumptions belong to the MODEL, not to the company. The
+  // derived model and the analyst model reach different conclusions about
+  // growth, margin, tax, capex and WACC, so each has its own defaults.
+  //
+  // This used to be missed. `drivers` was set from company.defaultDrivers and
+  // only reset when the ticker changed, so switching Apple to DERIVED ran the
+  // derived data file with the ANALYST model's assumptions: 5.5% growth and
+  // 4.0% terminal growth instead of the derived 3.3% and 2.5%. That produced
+  // $168.48 a share, against $146.60 for the derived model actually run on its
+  // own assumptions. Two models were being mixed and the result belonged to
+  // neither.
+  const activeDefaults: ValuationDrivers = useMemo(() => {
+    if (!activeSource) return company.defaultDrivers;
+    const derived = defaultDriversFor(activeSource);
+    const merged: any = { ...company.defaultDrivers };
+    for (const [key, value] of Object.entries(derived)) {
+      if (value !== undefined && value !== null) merged[key] = value;
+    }
+    return merged as ValuationDrivers;
+  }, [activeSource, company.defaultDrivers]);
+
+  // Switching between the derived and analyst models resets the sliders to
+  // that model's own starting point. Anything the user had moved is cleared,
+  // which is correct: a slider position means nothing once the underlying
+  // model has changed beneath it.
+  useEffect(() => {
+    setDrivers(activeDefaults);
+  }, [viewMode, derivedSource, analystSource]);
+
   const runDCF = React.useCallback(
     (d: ValuationDrivers) => calculateDCFFor(activeSource ?? AAPL_SOURCE, d, displayPrice),
     [activeSource, displayPrice]
@@ -219,7 +248,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   // Preset Scenario Handlers
   const applyPreset = (preset: 'BASE' | 'BULL' | 'BEAR' | 'FORENSIC') => {
-    const base = company.defaultDrivers;
+    // Presets flex the ACTIVE model's own defaults, not the company record's.
+    const base = activeDefaults;
     if (preset === 'BASE') {
       setDrivers(base);
     } else if (preset === 'BULL') {
