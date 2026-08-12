@@ -152,10 +152,26 @@ export function deriveModel(fetched) {
   };
 
   // ------------------------------------------------------------ assumptions
+  //
+  // Forecast conventions follow the approach set out in the Wall Street Prep
+  // financial statement modeling cheat sheet. Where the cheat sheet allows more
+  // than one method, the one actually used is named in `provenance` so a reader
+  // can check the working rather than take it on trust.
 
-  // Revenue growth: trailing CAGR, capped either side. A company growing 60%
-  // for three years will not do so for five more, and a shrinking company
-  // shouldn't be extrapolated into oblivion.
+  // The most recent reported value in a series. Used wherever the convention is
+  // "last actual year" rather than an average.
+  const latest = (series) => {
+    for (let i = series.length - 1; i >= 0; i--) {
+      if (isNum(series[i])) return series[i];
+    }
+    return null;
+  };
+
+  // REVENUE — cheat sheet approach 1: an aggregate growth rate. Approach 2
+  // (segment level, price x volume) needs segment detail, which is not
+  // machine-readable from any free source. Capped either side: a company
+  // growing 60% for three years will not do so for five more, and a shrinking
+  // one should not be extrapolated into oblivion.
   const rawGrowth = cagr(revenue);
   const growth = clamp(rawGrowth, -0.10, 0.25, 0.03);
   provenance.revenueGrowth = `${(growth * 100).toFixed(1)}% — trailing ${
@@ -164,20 +180,53 @@ export function deriveModel(fetched) {
     isNum(rawGrowth) && rawGrowth !== growth ? ', capped' : ''
   }`;
 
+  // MARGINS — the cheat sheet says to make a % margin assumption but does not
+  // say which years to read it from. This model uses the LAST REPORTED YEAR,
+  // not an average of the reported years, for the same reason the cheat sheet
+  // uses the last actual effective tax rate: an average taken across a company
+  // that has changed shape describes no year that ever existed. Nvidia is the
+  // clearest case — its five-year average operating margin sits far below
+  // anything the current business earns.
   const grossMargins = revenue.map((rev, i) =>
     isNum(rev) && isNum(cogs[i]) && rev !== 0 ? (rev - cogs[i]) / rev : null
   );
-  const grossMargin = clamp(mean(grossMargins), 0.01, 0.95, 0.35);
+  const grossMargin = clamp(latest(grossMargins), 0.01, 0.95, 0.35);
   provenance.grossMargin = `${(grossMargin * 100).toFixed(
     1
-  )}% — average of the reported years, held flat`;
+  )}% — the last reported year, held flat`;
 
   const rndMargins = revenue.map((rev, i) => {
     const rnd = rows[i]?.rnd;
     return isNum(rev) && isNum(rnd) && rev !== 0 ? rnd / rev : null;
   });
-  const rndMargin = clamp(mean(rndMargins), 0, 0.5, 0);
+  const rndMargin = clamp(latest(rndMargins), 0, 0.5, 0);
 
+  const sgaMargins = revenue.map((rev, i) => {
+    const sga = rows[i]?.sga;
+    return isNum(rev) && isNum(sga) && rev !== 0 ? sga / rev : null;
+  });
+  const sgaMargin = clamp(latest(sgaMargins), 0, 0.6, 0.1);
+  provenance.operatingCosts = `R&D ${(rndMargin * 100).toFixed(1)}% and SG&A ${(
+    sgaMargin * 100
+  ).toFixed(1)}% of revenue — the last reported year, held flat`;
+
+  // TAXES — the cheat sheet is explicit: apply the last actual year's effective
+  // rate. Previously this averaged the first and last years, which let a year
+  // with a one-off charge sit in the forecast forever. Apple FY2024 is exactly
+  // that case: a European State-aid charge pushed the effective rate to 24%.
+  const effectiveTaxRates = rows.map((row) =>
+    isNum(row.taxExpense) && isNum(row.pretaxIncome) && row.pretaxIncome !== 0
+      ? row.taxExpense / row.pretaxIncome
+      : null
+  );
+  const taxRate = clamp(latest(effectiveTaxRates), 0, 0.5, 0.21);
+  provenance.taxRate = `${(taxRate * 100).toFixed(
+    1
+  )}% — the last reported year's effective rate`;
+
+  // CAPEX — "in line with historical trends as a % of sales". Capex is lumpy
+  // year to year in a way margins are not, so this one stays an average: a
+  // single heavy building year should not become the permanent run rate.
   const capexRatios = revenue.map((rev, i) => {
     const capex = rows[i]?.capex;
     return isNum(rev) && isNum(capex) && rev !== 0 ? capex / rev : null;
@@ -187,30 +236,63 @@ export function deriveModel(fetched) {
     1
   )}% of revenue — average of the reported years`;
 
-  // Interest cost implied by the debt on the books. No free source gives the
-  // actual coupon, so a conservative flat rate is applied to closing debt.
-  const lastDebt = rows[rows.length - 1]?.longTermDebt;
-  const interestExpense = isNum(lastDebt) ? Math.round(lastDebt * 0.045) : 0;
-  provenance.interest = `estimated at 4.5% of closing debt`;
+  // DIVIDENDS — the cheat sheet says to use the historical average payout ratio
+  // (common dividends / net income). This replaces a linear regression through
+  // the payout history, which could trend the ratio somewhere the company has
+  // never been, including above 100% of earnings.
+  const payoutRatios = rows.map((row) =>
+    isNum(row.dividendsPaid) && isNum(row.netIncome) && row.netIncome > 0
+      ? row.dividendsPaid / row.netIncome
+      : null
+  );
+  const payoutRatio = clamp(mean(payoutRatios), 0, 1, 0);
+  provenance.dividends = `${(payoutRatio * 100).toFixed(
+    1
+  )}% of net income — average payout ratio across the reported years`;
+
+  // INTEREST — the cheat sheet computes interest as average debt x an interest
+  // rate. No free source publishes the coupon on each tranche, so a flat rate
+  // is applied to the average of the reported debt balances. Debt is then held
+  // flat (straight-lined) rather than run down a maturity ladder we cannot see,
+  // which the cheat sheet says is the safer treatment in any case.
+  const debtBalances = rows.map((row) =>
+    isNum(row.longTermDebt) ? row.longTermDebt : null
+  );
+  const averageDebt = mean(debtBalances) ?? 0;
+  const interestExpense = Math.round(averageDebt * 0.045);
+  provenance.interest = `average debt of ${Math.round(
+    averageDebt
+  ).toLocaleString()} at an assumed 4.5%`;
 
   const assumptions = {
     grossMargin: Array(FORECAST_YEARS).fill(grossMargin),
     researchDevelopmentMargin: Array(FORECAST_YEARS).fill(rndMargin),
-    sellingGeneralAdminMargin: 'avgOfHistory',
-    taxRate: 'avgOfFirstAndLast',
+    sellingGeneralAdminMargin: sgaMargin,
+    taxRate,
 
     segmentGrowth: { 'Total revenue': Array(FORECAST_YEARS).fill(growth) },
 
+    // Non-recurring items are forecast as 0, per the cheat sheet.
     otherIncomeExpense: Array(FORECAST_YEARS).fill(0),
 
     capexRatio,
     capexMethod: 'percentOfRevenue',
+    // PP&E roll-forward: opening balance + capex - depreciation = closing,
+    // with depreciation as a % of capex guided by history.
     depreciationAsPercentOfCapex: 'avgOfHistory',
 
+    // Working capital, per the cheat sheet:
+    //   receivables grow at the revenue growth rate  (constant DSO)
+    //   inventory grows at the COGS growth rate      (constant turnover)
+    //   payables grow at the COGS growth rate
+    //   accrued expenses grow with revenue
+    // Payables previously grew with revenue, which is the convention used in
+    // the hand-built Apple workbook. The cheat sheet ties them to COGS, and
+    // that is what the derived models now follow.
     workingCapitalDrivers: {
       accountsReceivable: 'revenue',
       inventory: 'cogs',
-      accountsPayable: 'revenue',
+      accountsPayable: 'cogs',
       accruedExpenses: 'revenue',
       otherCurrentAssets: 'cogs',
       deferredTaxAssets: 'revenue',
@@ -221,14 +303,17 @@ export function deriveModel(fetched) {
     interestExpenseOnLongTermDebt: Array(FORECAST_YEARS).fill(interestExpense),
     interestExpenseFY2025: interestExpense,
     pikAccrualFY2025: 0,
-    // No free source publishes a maturity ladder, so debt is held flat rather
-    // than invented. The user can change this.
+    // Straight-lined: no free source publishes a maturity ladder, and the
+    // cheat sheet notes that most companies refinance maturing debt anyway.
     debtRepaymentSchedule: Array(FORECAST_YEARS).fill(0),
 
     newShareIssuance: Array(FORECAST_YEARS).fill(0),
+    // SBC as a share of operating expenses. The cheat sheet gives two formulas,
+    // SBC/revenue and SBC/operating expense; the engine implements the second,
+    // and both are sanctioned.
     sbcAsPercentOfOperatingExpenses: 'lastHistoricalYear',
 
-    dividendPayoutRatio: 'linearRegression',
+    dividendPayoutRatio: payoutRatio,
     authorisedBuybackCeiling: {
       historical: rows.map((r) => (isNum(r.buybacks) ? r.buybacks : 0)),
       forecast: Array(FORECAST_YEARS).fill('avgOfPriorFour'),
