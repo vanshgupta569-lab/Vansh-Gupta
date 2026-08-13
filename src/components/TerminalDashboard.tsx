@@ -7,6 +7,7 @@ import { FootballField, RatioBand } from './valuationSections';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
 import { SavedModelsPanel } from './savedModelsPanel';
+import { CompsPanel } from './compsPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
@@ -52,7 +53,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
   const [nerdView, setNerdView] = useState<
-    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED'
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS'
   >(null);
 
 
@@ -93,6 +94,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       }
     })();
   };
+
 
   // Escape closes the open view.
   useEffect(() => {
@@ -356,11 +358,29 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // The engine run behind whichever full-screen view is open, built from the
   // same source and the same drivers as the value on the front page.
   const nerdModel = useMemo(() => {
-    if (!nerdView || nerdView === 'QUALITATIVE' || nerdView === 'SAVED' || !activeSource)
+    if (
+      !nerdView ||
+      nerdView === 'QUALITATIVE' ||
+      nerdView === 'SAVED' ||
+      nerdView === 'COMPS' ||
+      !activeSource
+    )
       return null;
     try {
       const built = buildFullModel(activeSource, drivers);
       return built;
+    } catch {
+      return null;
+    }
+  }, [nerdView, activeSource, drivers]);
+
+  // The comps screen needs this company's own EBITDA, net debt and share
+  // count, but not the whole three-statement build, so it gets its own light
+  // run rather than forcing the heavier one.
+  const nerdDcf = useMemo(() => {
+    if (nerdView !== 'COMPS' || !activeSource) return null;
+    try {
+      return buildFullModel(activeSource, drivers).dcf;
     } catch {
       return null;
     }
@@ -1078,6 +1098,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               hint: 'your own judgement, routed through the assumptions it belongs in',
             },
             {
+              view: 'COMPS' as const,
+              label: 'Comparable Companies',
+              hint: 'what the market pays for similar businesses, as a cross-check',
+            },
+            {
               view: 'SAVED' as const,
               label: 'Saved Models',
               hint: 'save a set of assumptions and come back to it later',
@@ -1139,6 +1164,28 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             onChange={setDrivers}
             currencySymbol={company.currencySymbol}
             unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
+
+      {nerdView === 'COMPS' && (
+        <FullScreenPanel
+          title={`${company.name} — Comparable Companies`}
+          subtitle="the market cross-check on the discounted cash flow"
+          onClose={() => setNerdView(null)}
+        >
+          <CompsPanel
+            ticker={company.ticker}
+            companyName={company.name}
+            currencySymbol={company.currencySymbol}
+            ebitda={
+              Array.isArray(nerdDcf?.ebitda)
+                ? nerdDcf.ebitda[nerdDcf.ebitda.length - 1]
+                : null
+            }
+            netDebt={nerdDcf?.netDebt ?? null}
+            dilutedShares={nerdDcf?.perpetuity?.dilutedShares ?? null}
+            dcfValuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
           />
         </FullScreenPanel>
       )}
