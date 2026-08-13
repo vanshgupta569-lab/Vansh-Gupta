@@ -52,6 +52,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // three-statement model is thirty schedules wide; reading it squeezed under a
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
+  const [workingsOpen, setWorkingsOpen] = useState(false);
   const [nerdView, setNerdView] = useState<
     null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS'
   >(null);
@@ -1029,11 +1030,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
       {/* Ratios, the valuation range, and the plain-English walkthrough. */}
       <div className="space-y-6 mb-10">
+        <div id="ratios" className="scroll-mt-24">
         <RatioBand
           reported={ratioData.reported as any}
           forecast={ratioData.forecast as any}
         />
+        </div>
         {dcfResult.applicable !== false && (
+          <div id="football" className="scroll-mt-24">
           <FootballField
             bands={valuationBands}
             marketPrice={displayPrice}
@@ -1041,8 +1045,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
             currencySymbol={company.currencySymbol}
           />
+          </div>
         )}
         {activeSource && (
+          <div id="working" className="scroll-mt-24">
           <HowCalculated
             source={activeSource}
             dcfResult={dcfResult}
@@ -1060,7 +1066,75 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             methods={blendedValue?.parts}
             blendedValue={blendedValue?.value ?? null}
           />
+          </div>
         )}
+      </div>
+
+      {/* ------------------------------------------------------------------
+          SECTION BAR — sticky, so the deeper screens are reachable from
+          anywhere on the page rather than only from the bottom of it.
+          ------------------------------------------------------------------ */}
+      <div className="sticky top-0 z-30 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D]/95 backdrop-blur border-y border-[#222228]">
+        <div className="flex items-center justify-between gap-4 py-2.5 overflow-x-auto">
+          <div className="flex items-center gap-1 shrink-0">
+            {[
+              { id: 'ratios', label: 'Ratios' },
+              { id: 'football', label: 'Valuation range' },
+              { id: 'working', label: 'How it was calculated' },
+            ].map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById(entry.id)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setWorkingsOpen((v) => !v)}
+              className={`font-mono text-[11px] uppercase tracking-widest px-4 py-2 border whitespace-nowrap transition-colors ${
+                workingsOpen
+                  ? 'border-[#8B1E1E] bg-[#8B1E1E]/25 text-[#F2F0EA]'
+                  : 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/10 hover:bg-[#8B1E1E]/25'
+              }`}
+            >
+              Full working ▾
+            </button>
+
+            {workingsOpen && (
+              <div className="absolute right-0 mt-2 w-[280px] border border-[#222228] bg-[#111114] shadow-2xl z-40">
+                {[
+                  { view: 'THREE_STATEMENT' as const, label: '3-Statement Model' },
+                  { view: 'DCF' as const, label: 'DCF Model' },
+                  { view: 'COMPS' as const, label: 'Comparable Companies' },
+                  { view: 'QUALITATIVE' as const, label: 'Qualitative Adjustments' },
+                  { view: 'SAVED' as const, label: 'Saved Models' },
+                ].map((entry) => (
+                  <button
+                    key={entry.view}
+                    type="button"
+                    onClick={() => {
+                      setNerdView(entry.view);
+                      setWorkingsOpen(false);
+                    }}
+                    className="w-full text-left font-mono text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] hover:bg-[#8B1E1E]/15 border-b border-[#222228] last:border-b-0 transition-colors"
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------
@@ -1077,7 +1151,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
         <p className="text-[15px] font-semibold text-[#F2F0EA] max-w-2xl mb-5">
           Check out this for detailed behind the scenes working and making
-          assumption adjustments.
+          assumption adjustments. These are also reachable at any point from the
+          bar at the top of the page.
         </p>
 
         <div className="flex flex-wrap gap-3">

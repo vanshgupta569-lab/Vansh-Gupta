@@ -81,19 +81,19 @@ async function fetchPeers(symbol, auth) {
     return list
       .map((entry) => entry?.symbol)
       .filter((s) => typeof s === 'string' && s && s !== symbol)
-      .slice(0, 6);
+      .slice(0, 15);
   } catch {
     return [];
   }
 }
 
-/** The figures needed to compute a multiple, for one company. */
+/** The figures needed to compute a multiple, plus what business it is in. */
 async function fetchFundamentals(symbol, auth) {
   try {
     const res = await fetch(
       `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
         symbol
-      )}?modules=price%2CdefaultKeyStatistics%2CfinancialData%2CsummaryDetail&crumb=${encodeURIComponent(
+      )}?modules=price%2CdefaultKeyStatistics%2CfinancialData%2CsummaryDetail%2CassetProfile&crumb=${encodeURIComponent(
         auth.crumb
       )}`,
       { headers: { ...auth.browserHeaders, Cookie: auth.cookie } }
@@ -108,6 +108,7 @@ async function fetchFundamentals(symbol, auth) {
     const stats = r.defaultKeyStatistics || {};
     const fin = r.financialData || {};
     const summary = r.summaryDetail || {};
+    const profile = r.assetProfile || {};
 
     const marketCap = num(price.marketCap) ?? num(summary.marketCap);
     const enterpriseValue = num(stats.enterpriseValue);
@@ -128,6 +129,8 @@ async function fetchFundamentals(symbol, auth) {
       symbol,
       name: price.longName || price.shortName || symbol,
       currency: price.currency || null,
+      sector: profile.sector || null,
+      industry: profile.industry || null,
       marketCap,
       enterpriseValue,
       revenue,
@@ -139,6 +142,73 @@ async function fetchFundamentals(symbol, auth) {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// CHOOSING THE PEERS
+// ---------------------------------------------------------------------------
+// The data source's "recommended symbols" list is really a people-also-viewed
+// list, and for an Indian conglomerate it returned TCS, three banks and L&T:
+// the largest companies on the exchange, not companies in the same business.
+// Three of them had no EBITDA at all, because banks do not report one.
+//
+// So the list is now treated as CANDIDATES and filtered:
+//
+//   1. same industry as the subject, which is the tight match
+//   2. failing that, same sector
+//   3. a financial company is never compared with a non-financial one, in
+//      either direction, because the multiples are not the same measure
+//   4. what survives is ranked by how close it is in size, since a company ten
+//      times larger is not really a comparable either
+//
+// If too few survive, that is reported rather than padded out. A short honest
+// peer set beats a long misleading one.
+const FINANCIAL_SECTORS = new Set(['Financial Services', 'Financial', 'Financials']);
+
+function isFinancial(entry) {
+  return FINANCIAL_SECTORS.has(String(entry?.sector || ''));
+}
+
+function selectPeers(subject, candidates) {
+  const usable = candidates.filter(Boolean);
+  const subjectFinancial = isFinancial(subject);
+
+  const sameKind = usable.filter((c) => isFinancial(c) === subjectFinancial);
+
+  const sameIndustry = sameKind.filter(
+    (c) => subject?.industry && c.industry && c.industry === subject.industry
+  );
+  const sameSector = sameKind.filter(
+    (c) => subject?.sector && c.sector && c.sector === subject.sector
+  );
+
+  let chosen = sameIndustry.length >= 2 ? sameIndustry : sameSector;
+  let basis =
+    sameIndustry.length >= 2
+      ? 'same industry'
+      : sameSector.length >= 2
+      ? 'same sector'
+      : 'none';
+
+  if (basis === 'none') return { peers: [], basis };
+
+  // Rank by closeness in size, on a log scale so a peer half the size and one
+  // twice the size are treated as equally close.
+  const subjectCap = subject?.marketCap;
+  if (typeof subjectCap === 'number' && subjectCap > 0) {
+    chosen = chosen
+      .map((c) => ({
+        c,
+        distance:
+          typeof c.marketCap === 'number' && c.marketCap > 0
+            ? Math.abs(Math.log(c.marketCap / subjectCap))
+            : Number.POSITIVE_INFINITY,
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .map((x) => x.c);
+  }
+
+  return { peers: chosen.slice(0, 6), basis };
 }
 
 function median(values) {
@@ -179,20 +249,33 @@ export default async function handler(req, res) {
     );
 
     const subject = all[0];
-    const peers = all.slice(1).filter(Boolean);
+    const { peers, basis } = selectPeers(subject, all.slice(1));
+
+    if (!peers.length) {
+      res.status(200).json({
+        ticker,
+        subject,
+        peers: [],
+        medians: {},
+        message:
+          'The companies the data source associates with this one are not in the same business, so no comparable set is shown. A misleading peer set is worse than none.',
+        fetchedAt: new Date().toISOString(),
+      });
+      return;
+    }
 
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
     res.status(200).json({
       ticker,
       subject,
       peers,
+      basis,
       medians: {
         evToEbitda: median(peers.map((p) => p.evToEbitda)),
         evToSales: median(peers.map((p) => p.evToSales)),
         priceToEarnings: median(peers.map((p) => p.priceToEarnings)),
       },
-      note:
-        'Peer set as associated by the data source, not a comp set chosen by an analyst. Trailing figures, not forward.',
+      note: `Peers matched on ${basis} and ranked by closeness in size. Trailing figures, not forward.`,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

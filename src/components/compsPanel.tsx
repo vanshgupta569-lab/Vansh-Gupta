@@ -16,6 +16,8 @@ import React, { useEffect, useState } from 'react';
 interface Peer {
   symbol: string;
   name: string;
+  sector?: string | null;
+  industry?: string | null;
   marketCap: number | null;
   enterpriseValue: number | null;
   evToEbitda: number | null;
@@ -25,6 +27,7 @@ interface Peer {
 
 interface CompsResponse {
   peers: Peer[];
+  basis?: string;
   subject?: Peer | null;
   medians: {
     evToEbitda?: number | null;
@@ -201,11 +204,12 @@ export const CompsPanel: React.FC<Props> = ({
 
           <div className="text-[13px] leading-relaxed text-[#8A8A8F] space-y-2 max-w-2xl">
             <p>
-              <span className="text-[#F2F0EA]">Read this carefully.</span> The
-              peer set is the one the data source associates with this company,
-              not a comp set an analyst has chosen. A proper comp set is argued
-              for company by company, and this is a starting point for that
-              argument rather than a substitute for it.
+              <span className="text-[#F2F0EA]">Read this carefully.</span>{' '}
+              {data.basis === 'same industry'
+                ? 'These companies were matched on the same industry as this one and ranked by how close they are in size.'
+                : 'No close industry match was available, so these were matched on the same sector and ranked by size.'}{' '}
+              That is a reasonable starting point, not a comp set an analyst has
+              argued for company by company.
             </p>
             <p>
               The multiples are trailing, not forward. Analysts usually compare
