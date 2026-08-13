@@ -1,4 +1,4 @@
-export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT';
+export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT' | 'QUALITATIVE';
 export type ScreenType = 'HOME' | 'DIRECTORY' | 'ANALYSIS';
 
 // Reported history. null means the filing does not give us that figure for

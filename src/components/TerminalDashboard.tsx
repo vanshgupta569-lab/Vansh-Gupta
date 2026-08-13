@@ -4,6 +4,7 @@ import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsIte
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor } from '../data/companies';
 import { FootballField, RatioBand } from './valuationSections';
 import { HowCalculated } from './howCalculated';
+import { QualitativeAdjustments } from './qualitative';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
@@ -41,6 +42,12 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   // Tab State
   const [activeTab, setActiveTab] = useState<TabType>('DCF_OUTPUT');
+
+  // "For the nerds" starts CLOSED. The main screen answers the question a
+  // reader came with; the full working is here for anyone who wants to check
+  // it, which is a different and much smaller audience. The assumption sliders
+  // live in here too, so nobody adjusts a model they have not read.
+  const [nerdsOpen, setNerdsOpen] = useState(false);
 
   // Live news headlines, fetched from our own /api/news proxy.
   // Starts empty; if the fetch fails or returns nothing, the ticker falls back
@@ -891,8 +898,61 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         )}
       </div>
 
-      {/* Interactive Terminal Workspace Tabs */}
-      <div className="bg-[#111114] border hairline-border p-6 lg:p-8 shadow-xl">
+      {/* ------------------------------------------------------------------
+          FOR THE NERDS — the full working, closed by default
+          ------------------------------------------------------------------ */}
+      <section className="border border-[#222228] bg-[#111114] mb-10">
+        <div className="p-5 sm:p-7">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+            <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
+              For the nerds
+            </h2>
+            <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+              04 — the full working
+            </span>
+          </div>
+          <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-5">
+            Every schedule behind the number, laid out the way the workbook lays
+            it out, plus the assumption sliders. Nothing here is needed to read
+            the page above. It is here so the page above can be checked.
+          </p>
+
+          <div className="flex flex-wrap gap-3">
+            {[
+              { tab: 'HISTORICAL' as TabType, label: '3-Statement Model' },
+              { tab: 'DCF_OUTPUT' as TabType, label: 'DCF Model' },
+              { tab: 'QUALITATIVE' as TabType, label: 'Qualitative Adjustments' },
+            ].map((entry) => (
+              <button
+                key={entry.tab}
+                type="button"
+                onClick={() => {
+                  setActiveTab(entry.tab);
+                  setNerdsOpen(true);
+                }}
+                className={`font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border transition-colors ${
+                  nerdsOpen && activeTab === entry.tab
+                    ? 'border-[#8B1E1E] bg-[#8B1E1E]/20 text-[#F2F0EA]'
+                    : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA]'
+                }`}
+              >
+                {entry.label}
+              </button>
+            ))}
+            {nerdsOpen && (
+              <button
+                type="button"
+                onClick={() => setNerdsOpen(false)}
+                className="font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+              >
+                Close
+              </button>
+            )}
+          </div>
+        </div>
+
+        {nerdsOpen && (
+      <div className="border-t border-[#222228] p-6 lg:p-8">
         
         {/* Navigation Tabs Header */}
         <div className="flex flex-wrap gap-4 sm:gap-8 border-b hairline-border-b pb-4 mb-8">
@@ -901,6 +961,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             { id: 'FORECASTED', label: 'Forecasted Financial Statements', icon: LineChart },
             { id: 'DRIVERS', label: 'Driver Assumptions', icon: Sliders },
             { id: 'DCF_OUTPUT', label: 'DCF Model Output', icon: TrendingUp },
+            { id: 'QUALITATIVE', label: 'Qualitative Adjustments', icon: Sliders },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1529,7 +1590,22 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           </div>
         )}
 
+        {/* Qualitative adjustments: the reader's own judgement, routed through
+            the drivers rather than multiplied over the answer. */}
+        {activeTab === 'QUALITATIVE' && (
+          <QualitativeAdjustments
+            drivers={drivers}
+            defaults={activeDefaults}
+            onApply={(next) => setDrivers(next)}
+            onReset={() => setDrivers(activeDefaults)}
+            currencySymbol={company.currencySymbol}
+            currentValue={dcfResult.targetPrice}
+          />
+        )}
+
       </div>
+        )}
+      </section>
     </section>
   );
 };
