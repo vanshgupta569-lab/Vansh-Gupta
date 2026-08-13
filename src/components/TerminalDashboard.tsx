@@ -52,11 +52,30 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // three-statement model is thirty schedules wide; reading it squeezed under a
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
-  const [workingsOpen, setWorkingsOpen] = useState(false);
   const [nerdView, setNerdView] = useState<
     null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS'
   >(null);
 
+
+  // Each deep screen is opened from beside the content it relates to, so the
+  // reader meets it where the question arises rather than hunting a menu.
+  const OpenScreen: React.FC<{
+    view: 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS';
+    label: string;
+    strong?: boolean;
+  }> = ({ view, label, strong }) => (
+    <button
+      type="button"
+      onClick={() => setNerdView(view)}
+      className={`inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border transition-colors ${
+        strong
+          ? 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/15 hover:bg-[#8B1E1E]/30'
+          : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E]'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   // Hand the user a working Excel model: the same run that is on screen,
   // written out with live formulas rather than pasted numbers.
@@ -595,6 +614,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                 {exporting ? 'Building the workbook…' : 'Download Excel model'}
               </button>
             )}
+            {hasRealModel && (
+              <button
+                type="button"
+                onClick={() => setNerdView('SAVED')}
+                className="mt-5 ml-3 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
+              >
+                Saved models
+              </button>
+            )}
           </div>
 
           <div className="flex flex-col gap-6 w-full md:w-auto md:min-w-[340px]">
@@ -735,69 +763,35 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       <div ref={headerSentinel} className="h-px w-full" aria-hidden="true" />
 
       {/* ------------------------------------------------------------------
-          SECTION BAR — sticky, so the deeper screens are reachable from
-          anywhere on the page rather than only from the bottom of it.
+          SECTION BAR — anchors only. Each deep screen now has a home beside
+          the content it belongs to, so a dropdown of all five here would just
+          be a second way to reach things that are already in front of you.
+
+          z-40 and a solid background: at z-30 it slid underneath the condensed
+          header that appears on scroll, and the translucent background made
+          the overlap look like a rendering fault.
           ------------------------------------------------------------------ */}
-      <div className="sticky top-[52px] z-30 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D]/95 backdrop-blur border-y border-[#222228]">
-        <div className="flex items-center justify-between gap-4 py-2.5 overflow-x-auto">
-          <div className="flex items-center gap-1 shrink-0">
-            {[
-              { id: 'ratios', label: 'Ratios' },
-              { id: 'football', label: 'Valuation range' },
-              { id: 'working', label: 'How it was calculated' },
-            ].map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() =>
-                  document
-                    .getElementById(entry.id)
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
-              >
-                {entry.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative shrink-0">
+      <div className="sticky top-[56px] z-40 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D] border-y border-[#222228]">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2.5">
+          {[
+            { id: 'ratios', label: 'Ratios' },
+            { id: 'football', label: 'Valuation range' },
+            { id: 'working', label: 'How it was calculated' },
+            { id: 'nerds', label: 'Full working' },
+          ].map((entry) => (
             <button
+              key={entry.id}
               type="button"
-              onClick={() => setWorkingsOpen((v) => !v)}
-              className={`font-mono text-[11px] uppercase tracking-widest px-4 py-2 border whitespace-nowrap transition-colors ${
-                workingsOpen
-                  ? 'border-[#8B1E1E] bg-[#8B1E1E]/25 text-[#F2F0EA]'
-                  : 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/10 hover:bg-[#8B1E1E]/25'
-              }`}
+              onClick={() =>
+                document
+                  .getElementById(entry.id)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
             >
-              Full working ▾
+              {entry.label}
             </button>
-
-            {workingsOpen && (
-              <div className="absolute right-0 mt-2 w-[280px] border border-[#222228] bg-[#111114] shadow-2xl z-40">
-                {[
-                  { view: 'THREE_STATEMENT' as const, label: '3-Statement Model' },
-                  { view: 'DCF' as const, label: 'DCF Model' },
-                  { view: 'COMPS' as const, label: 'Comparable Companies' },
-                  { view: 'QUALITATIVE' as const, label: 'Qualitative Adjustments' },
-                  { view: 'SAVED' as const, label: 'Saved Models' },
-                ].map((entry) => (
-                  <button
-                    key={entry.view}
-                    type="button"
-                    onClick={() => {
-                      setNerdView(entry.view);
-                      setWorkingsOpen(false);
-                    }}
-                    className="w-full text-left font-mono text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] hover:bg-[#8B1E1E]/15 border-b border-[#222228] last:border-b-0 transition-colors"
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       </div>
 
@@ -1112,6 +1106,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
             currencySymbol={company.currencySymbol}
           />
+          <div className="border border-t-0 border-[#222228] bg-[#111114] px-5 sm:px-7 py-5">
+            <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-4">
+              A second opinion on the same question: what the market is paying
+              today for companies in the same business.
+            </p>
+            <OpenScreen view="COMPS" label="Comparable companies" />
+          </div>
           </div>
         )}
         {activeSource && (
@@ -1133,9 +1134,42 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             methods={blendedValue?.parts}
             blendedValue={blendedValue?.value ?? null}
           />
+          <div className="border border-t-0 border-[#222228] bg-[#111114] px-5 sm:px-7 py-5">
+            <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-4">
+              A model reads accounts. It cannot read a management team, a
+              regulator or a competitor. Put your own judgement through the
+              assumptions it belongs in.
+            </p>
+            <OpenScreen view="QUALITATIVE" label="Qualitative adjustments" />
+          </div>
           </div>
         )}
       </div>
+
+      {/* ------------------------------------------------------------------
+          FOR THE NERDS — the detailed working. Kept as its own section at the
+          foot of the page, because that is where a reader who has read
+          everything else arrives, and it is what they would want next.
+          ------------------------------------------------------------------ */}
+      <section id="nerds" className="scroll-mt-32 border border-[#222228] bg-[#111114] mb-10 p-5 sm:p-7">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+          <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
+            For the nerds
+          </h2>
+          <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+            04 — the full working
+          </span>
+        </div>
+        <p className="text-[15px] font-semibold text-[#F2F0EA] max-w-2xl mb-5">
+          Check this out for the detailed working behind the scenes and for
+          altering the assumptions.
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <OpenScreen view="THREE_STATEMENT" label="3-Statement Model" strong />
+          <OpenScreen view="DCF" label="DCF Model" strong />
+        </div>
+      </section>
 
       {/* ------------------------------------------------------------------
           THE FULL-SCREEN VIEWS
