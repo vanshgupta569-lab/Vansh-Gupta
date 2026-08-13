@@ -1,3 +1,4 @@
+// FILE: src/components/CoverageStatsSection.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, useInView, animate } from 'motion/react';
 import { Send, MessageSquare, Mail } from 'lucide-react';
@@ -97,12 +98,18 @@ export const CoverageStatsSection: React.FC = () => {
             className="text-center p-8 sm:p-12 border-b md:border-b-0 md:border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
           >
             <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              3 <span className="text-3xl sm:text-4xl">YRS</span>
+              5 <span className="text-3xl sm:text-4xl">YRS</span>
             </div>
             <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
               Historical Data
             </div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">Audited filed income & cash flows</div>
+            {/* "Up to" matters: SEC filers give five, some international sources
+                carry four, and the engine uses whatever exists rather than
+                failing. A flat "5 YRS" would be a claim the site cannot always
+                honour. */}
+            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
+              Up to five years, as filed
+            </div>
           </motion.div>
 
           <motion.div 
