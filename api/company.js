@@ -1,3 +1,4 @@
+// FILE: api/company.js
 // Marginalia — universal company data fetcher
 //
 // Give it a ticker, it gives back up to five years of financial statements plus
@@ -450,6 +451,61 @@ function currencySymbolFor(code) {
 }
 
 // ===========================================================================
+// SECTION 2b — COMPANY PROFILE (for the qualitative screen)
+// ===========================================================================
+// Judging a moat, a management team or a regulatory risk needs more than the
+// accounts. This pulls the business description, the industry, the head count
+// and the named officers from Yahoo's assetProfile module, which is free and
+// covers US filers as well as everything else.
+//
+// It is strictly best-effort. If it fails the qualitative screen simply shows
+// less; nothing else on the site depends on it. And it is never mixed into the
+// financial statements: this is descriptive context, not reported figures.
+async function fetchProfile(symbol) {
+  try {
+    const auth = await getYahooAuth();
+    const res = await fetch(
+      `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+        symbol
+      )}?modules=assetProfile%2CsummaryProfile&crumb=${encodeURIComponent(auth.crumb)}`,
+      { headers: { ...auth.browserHeaders, Cookie: auth.cookie } }
+    );
+    if (!res.ok) return null;
+
+    const body = await res.json();
+    const result = body?.quoteSummary?.result?.[0] || {};
+    const asset = result.assetProfile || result.summaryProfile || {};
+
+    const officers = Array.isArray(asset.companyOfficers)
+      ? asset.companyOfficers
+          .filter((o) => o && o.name && o.title)
+          .slice(0, 8)
+          .map((o) => ({
+            name: String(o.name),
+            title: String(o.title),
+          }))
+      : [];
+
+    const hasSomething =
+      asset.longBusinessSummary || asset.industry || asset.sector || officers.length;
+    if (!hasSomething) return null;
+
+    return {
+      summary: asset.longBusinessSummary || null,
+      industry: asset.industry || null,
+      sector: asset.sector || null,
+      website: asset.website || null,
+      country: asset.country || null,
+      employees:
+        typeof asset.fullTimeEmployees === 'number' ? asset.fullTimeEmployees : null,
+      officers,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ===========================================================================
 // SECTION 3 — LIVE PRICE (works for every market, no key needed)
 // ===========================================================================
 
@@ -559,7 +615,12 @@ export default async function handler(req, res) {
       return;
     }
 
-    const quote = await fetchQuote(raw);
+    // Price and profile in parallel: neither depends on the other, and the
+    // profile must never hold up the page if Yahoo is slow.
+    const [quote, profile] = await Promise.all([
+      fetchQuote(raw),
+      fetchProfile(raw).catch(() => null),
+    ]);
 
     // Cache for six hours. Financial statements change four times a year, so
     // this is generous, and it keeps us far inside every free tier.
@@ -572,6 +633,7 @@ export default async function handler(req, res) {
       ticker: raw,
       ...data,
       quote,
+      profile,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

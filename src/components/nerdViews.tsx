@@ -843,6 +843,92 @@ export const DCFView: React.FC<ViewProps> = ({
         </div>
       </section>
 
+      {/* The two methods do not agree, and the published figure is the average
+          of them. Showing that arithmetic here, rather than only the two halves
+          above, means the headline number can be checked in one place. */}
+      <section className="mb-12">
+        <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
+          The two methods, weighted equally
+        </h3>
+        <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
+          Neither method is more correct than the other, so each carries half
+          the weight. This is the figure published at the top of the company
+          page.
+        </p>
+        <div className="border border-[#222228] divide-y divide-[#222228]">
+          {[
+            {
+              label: 'Growing forever, at 50%',
+              value: money(D.perpetuity?.valuePerShare, 2),
+              weight: '50%',
+            },
+            {
+              label: 'Sold at the end, at 50%',
+              value: money(D.exitMultipleValuation?.valuePerShare, 2),
+              weight: '50%',
+            },
+            {
+              label: 'Weighted average — the published value',
+              value:
+                num(D.perpetuity?.valuePerShare) &&
+                num(D.exitMultipleValuation?.valuePerShare)
+                  ? money(
+                      (D.perpetuity.valuePerShare +
+                        D.exitMultipleValuation.valuePerShare) /
+                        2,
+                      2
+                    )
+                  : '—',
+              bold: true,
+            },
+            {
+              label: 'Spread between the two methods',
+              value:
+                num(D.perpetuity?.valuePerShare) &&
+                num(D.exitMultipleValuation?.valuePerShare) &&
+                D.perpetuity.valuePerShare > 0
+                  ? `${(
+                      (Math.abs(
+                        D.exitMultipleValuation.valuePerShare -
+                          D.perpetuity.valuePerShare
+                      ) /
+                        ((D.exitMultipleValuation.valuePerShare +
+                          D.perpetuity.valuePerShare) /
+                          2)) *
+                      100
+                    ).toFixed(1)}%`
+                  : '—',
+              note:
+                'How far apart the two methods land. A wide spread means the answer depends heavily on which view of the future you take, and the average should be treated with more caution.',
+            },
+          ].map((line: any) => (
+            <div key={line.label} className="px-4 py-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <span
+                  className={`text-[15px] ${
+                    line.bold ? 'text-[#F2F0EA] font-semibold' : 'text-[#A1A1AA]'
+                  }`}
+                >
+                  {line.label}
+                </span>
+                <span
+                  className={`font-mono text-[15px] ${
+                    line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
+                  }`}
+                >
+                  {line.value}
+                </span>
+              </div>
+              {line.note && (
+                <p className="text-[13px] leading-relaxed text-[#8A8A8F] mt-1.5 max-w-2xl">
+                  {line.note}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="mb-12">
         <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
           From the whole company to one share

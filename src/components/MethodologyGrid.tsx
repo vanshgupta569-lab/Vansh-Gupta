@@ -1,3 +1,4 @@
+// FILE: src/components/MethodologyGrid.tsx
 import React, { useRef } from 'react';
 import { Database, Sliders, Cpu, Calculator, ArrowRight } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
@@ -11,7 +12,7 @@ const PIPELINE_STEPS = [
     phase: 'PHASE 01',
     title: 'Ticker Lookup & Data Ingestion',
     subtitle: 'User Selection & SEC/Exchange Record Retrieval',
-    description: 'When a user selects an equity ticker from the directory, the platform instantly queries structured financial databases to pull the exact trailing 3-year audited financial statements. US companies come from SEC EDGAR, while international listings use exchange suffixes (.NS for India, .L for London, .TO for Toronto). No estimates or approximations are introduced at this ingestion stage.',
+    description: 'When a user selects an equity ticker from the directory, the platform instantly queries structured financial databases to pull up to five years of the exact filed financial statements. SEC filers normally provide five; some international sources carry four, and whatever exists is used rather than failing. US companies come from SEC EDGAR, while international listings use exchange suffixes (.NS for India, .L for London, .TO for Toronto). No estimates or approximations are introduced at this ingestion stage.',
     icon: Database,
     detail: 'Pulls raw Balance Sheets, Income Statements, and Cash Flow schedules directly from primary regulatory filings as reported.',
   },

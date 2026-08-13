@@ -98,15 +98,19 @@
 }
 
 /* Marquee animation */
+/* The ticker used to start fully off the right edge, so even once the
+   headlines had arrived the box sat empty while they travelled into view.
+   Starting at zero means the first headline is readable immediately. The
+   duration is lengthened to compensate, so the reading speed is unchanged. */
 @keyframes marquee {
-  0% { transform: translateX(100%); }
+  0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
 }
 
 .animate-marquee {
   display: inline-block;
   white-space: nowrap;
-  animation: marquee 75s linear infinite;
+  animation: marquee 110s linear infinite;
 }
 
 .animate-marquee:hover {

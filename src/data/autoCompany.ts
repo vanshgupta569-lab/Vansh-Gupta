@@ -1,3 +1,4 @@
+// FILE: src/data/autoCompany.ts
 // Marginalia — auto-generated company records
 //
 // Takes what /api/company returns for any ticker, derives a model from it,
@@ -130,7 +131,8 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
     // Reported history comes from the filings, not the model. See
     // financialsFromStatements in companies.ts.
     financials: financialsFromStatements(fetched.statements),
-    dataSource: fetched.source,
+dataSource: fetched.source,
+    profile: fetched.profile || null,
 
     defaultDrivers,
     healthMetrics: health,

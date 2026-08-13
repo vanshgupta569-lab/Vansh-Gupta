@@ -93,6 +93,16 @@ interface QualitativeProps {
   onClose: () => void;
   currencySymbol: string;
   currentValue: number;
+  companyName: string;
+  profile?: {
+    summary?: string | null;
+    industry?: string | null;
+    sector?: string | null;
+    website?: string | null;
+    country?: string | null;
+    employees?: number | null;
+    officers?: { name: string; title: string }[];
+  } | null;
 }
 
 export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
@@ -103,6 +113,8 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
   onClose,
   currencySymbol,
   currentValue,
+  companyName,
+  profile,
 }) => {
   const [verdicts, setVerdicts] = useState<Record<string, Verdict>>({});
 
@@ -173,6 +185,73 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           steps above.
         </p>
       </div>
+
+      {/* What the company says about itself. Descriptive context only: none of
+          it is a reported figure and none of it feeds the model. It is here
+          because judging a moat or a management team from a balance sheet
+          alone is not really judging it at all. */}
+      {profile && (profile.summary || profile.officers?.length) ? (
+        <div className="border border-[#222228] bg-[#0B0B0D] p-5 mb-8">
+          <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+            About {companyName}
+          </div>
+
+          {(profile.industry || profile.sector || profile.employees || profile.country) && (
+            <div className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-[13px] text-[#8A8A8F] mb-4">
+              {profile.sector && <span>Sector: {profile.sector}</span>}
+              {profile.industry && <span>Industry: {profile.industry}</span>}
+              {profile.employees ? (
+                <span>Employees: {profile.employees.toLocaleString()}</span>
+              ) : null}
+              {profile.country && <span>{profile.country}</span>}
+            </div>
+          )}
+
+          {profile.summary && (
+            <p className="text-[14px] leading-relaxed text-[#A1A1AA] mb-5">
+              {profile.summary}
+            </p>
+          )}
+
+          {profile.officers && profile.officers.length > 0 && (
+            <div>
+              <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
+                Who runs it
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
+                {profile.officers.map((officer) => (
+                  <div
+                    key={officer.name + officer.title}
+                    className="flex items-baseline justify-between gap-4 border-b border-[#222228]/60 py-1.5"
+                  >
+                    <span className="text-[14px] text-[#F2F0EA]">{officer.name}</span>
+                    <span className="font-mono text-[13px] text-[#8A8A8F] text-right">
+                      {officer.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {profile.website && (
+            <a
+              href={profile.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-4 font-mono text-[13px] text-[#8B1E1E] hover:text-[#F2F0EA] transition-colors"
+            >
+              {profile.website}
+            </a>
+          )}
+
+          <p className="text-[13px] leading-relaxed text-[#8A8A8F] mt-4">
+            Description and officers as published by the company. None of it is
+            a reported figure and none of it feeds the model. Read the news on
+            the company page alongside it.
+          </p>
+        </div>
+      ) : null}
 
       <div className="space-y-6">
         {FACTORS.map((factor) => {

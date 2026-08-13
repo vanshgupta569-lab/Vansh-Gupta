@@ -1,3 +1,4 @@
+// FILE: src/types.ts
 export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT' | 'QUALITATIVE';
 export type ScreenType = 'HOME' | 'DIRECTORY' | 'ANALYSIS';
 
@@ -131,6 +132,18 @@ export interface CompanyData {
   // Where the reported history came from, e.g. 'SEC EDGAR'. Shown on the
   // historicals table so the badge never claims a source it does not have.
   dataSource?: string;
+
+  // Descriptive context for the qualitative screen. Never mixed with reported
+  // figures: this is what the company says about itself, not what it filed.
+  profile?: {
+    summary?: string | null;
+    industry?: string | null;
+    sector?: string | null;
+    website?: string | null;
+    country?: string | null;
+    employees?: number | null;
+    officers?: { name: string; title: string }[];
+  } | null;
 }
 
 export interface AccessRequestForm {

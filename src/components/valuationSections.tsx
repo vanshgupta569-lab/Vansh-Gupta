@@ -87,7 +87,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
     <section className="border border-[#222228] bg-[#111114] p-5 sm:p-7">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
-          What the model is worth, and what it costs
+          Football field
         </h2>
         <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           02 — valuation range
@@ -95,10 +95,12 @@ export const FootballField: React.FC<FootballFieldProps> = ({
       </div>
 
       <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-7">
-        Each bar is a value this model produces under the inputs named beside
-        it. There is no confidence interval here and no forecast of the share
-        price: the width of a bar is the range the model gives when the terminal
-        assumption is moved, nothing more.
+        The standard way an analyst lays out every value a company could be
+        worth, side by side, against what it actually trades at. Each bar is a
+        value this model produces under the inputs named beside it. There is no
+        confidence interval here and no forecast of the share price: the width
+        of a bar is the range the model gives when the terminal assumption is
+        moved, nothing more.
       </p>
 
       {/* One vertical line for the market price, drawn across every bar. It has

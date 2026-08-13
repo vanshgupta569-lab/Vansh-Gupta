@@ -72,6 +72,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Starts empty; if the fetch fails or returns nothing, the ticker falls back
   // to whatever placeholder text lives in the company data file.
   const [liveNews, setLiveNews] = useState<NewsItem[]>([]);
+  // Whether the news request is still in flight, so the ticker can say so
+  // instead of sitting blank.
+  const [newsLoading, setNewsLoading] = useState(true);
 
   // Live quote for the company on screen. Curated data files carry the price as
   // at the date the model was built, which goes stale; the header should always
@@ -141,6 +144,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   useEffect(() => {
     let cancelled = false;
     setLiveNews([]);
+    setNewsLoading(true);
 
     fetch(
       `/api/news?ticker=${encodeURIComponent(company.ticker)}` +
@@ -153,7 +157,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         }
       })
       .catch(() => {
-        // Silent — the placeholder headline stays on screen.
+        // Silent — the ticker will say there is nothing rather than sit blank.
+      })
+      .finally(() => {
+        if (!cancelled) setNewsLoading(false);
       });
 
     return () => {
@@ -268,38 +275,34 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return valuationBandsFor(activeSource, drivers, displayPrice);
   }, [activeSource, drivers, displayPrice]);
 
-  // The headline is a RANGE, not one number. The model runs two terminal
-  // methods and they genuinely disagree; publishing the perpetuity figure alone
-  // would be picking one and hiding the other. The low and high are the two
-  // methods' own base cases, so both ends are defensible line by line.
-  const valuationRange = useMemo(() => {
-    const points = valuationBands
-      .map((band) => band.point)
-      .filter((v) => typeof v === 'number' && isFinite(v) && v > 0);
-    if (points.length < 2) return null;
-    return { low: Math.min(...points), high: Math.max(...points) };
+  // The headline is ONE number: the two terminal methods, weighted equally.
+  //
+  // Both are real outputs of the model, neither is more correct than the other,
+  // so a 50/50 blend states that plainly rather than picking a winner. What it
+  // must not do is hide the disagreement, because the gap between the two IS
+  // information: a company whose methods land 20% apart is a different
+  // proposition from one where they agree. So both figures stay on screen
+  // underneath, and the football field below shows the full spread.
+  const blendedValue = useMemo(() => {
+    const parts = valuationBands
+      .filter((band) => typeof band.point === 'number' && isFinite(band.point) && band.point > 0)
+      .map((band) => ({
+        label: band.label.replace('DCF — ', ''),
+        value: band.point,
+      }));
+    if (parts.length < 2) return null;
+    const value = parts.reduce((sum, part) => sum + part.value, 0) / parts.length;
+    return { value, parts };
   }, [valuationBands]);
 
-  // Where the traded price sits against that range. Saying "18% above the top
-  // of the range" is both truer and more useful than a premium to a single
-  // number that was only ever one of two answers.
-  const rangePosition = useMemo(() => {
-    if (!valuationRange) return null;
-    const { low, high } = valuationRange;
-    if (displayPrice > high) {
-      return {
-        label: `${(((displayPrice - high) / high) * 100).toFixed(1)}% ABOVE RANGE`,
-        inside: false,
-      };
-    }
-    if (displayPrice < low) {
-      return {
-        label: `${(((low - displayPrice) / low) * 100).toFixed(1)}% BELOW RANGE`,
-        inside: false,
-      };
-    }
-    return { label: 'WITHIN RANGE', inside: true };
-  }, [valuationRange, displayPrice]);
+  // Premium or discount against that blended value.
+  const blendedPremiumPct = useMemo(() => {
+    if (!blendedValue || blendedValue.value <= 0) return null;
+    return Number(
+      (((displayPrice - blendedValue.value) / blendedValue.value) * 100).toFixed(1)
+    );
+  }, [blendedValue, displayPrice]);
+
 
 
   // A figure the filing does not give us is an absence, not a zero.
@@ -501,9 +504,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
       {/* Primary Header Info Bar */}
       <div className="bg-[#111114] border hairline-border p-6 lg:p-8 mb-6 shadow-lg">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-6">
-          <div>
-            <div className="flex items-center gap-3 mb-3">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mb-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
               <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
                 {company.exchange}: {company.ticker}
               </span>
@@ -515,8 +518,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="text-left md:text-right border-l md:border-l-0 md:border-r-0 hairline-border-l pl-4 md:pl-0">
+          <div className="flex flex-col gap-5 w-full md:w-auto md:min-w-[380px]">
+            <div className="flex flex-wrap items-end justify-start md:justify-end gap-6">
+            <div className="text-left md:text-right">
               <div className="font-mono text-[11px] text-[#8A8A8F] tracking-widest mb-1 uppercase">
                 {liveQuote ? 'LIVE PRICING' : 'LAST STORED PRICE'} ({company.currency})
               </div>
@@ -565,50 +569,50 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               </div>
             )}
 
-            {/* Model Implied Value & Premium/Discount */}
+            </div>
+
+            {/* Model Implied Value & Premium/Discount — its own row, so the
+                price and the model switch never squeeze it. */}
             {hasRealModel ? (
-              <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner">
+              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
                 <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
                   MODEL IMPLIED VALUE
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
                   <FlashOnChange watch={viewMode} className="px-1 -mx-1">
-                    <span className="font-display text-2xl text-[#8B1E1E] font-bold">
-                      {valuationRange ? (
-                        <>
-                          <TweenNumber
-                            value={valuationRange.low}
-                            prefix={company.currencySymbol}
-                          />
-                          <span className="text-[#8A8A8F] px-1.5">to</span>
-                          <TweenNumber
-                            value={valuationRange.high}
-                            prefix={company.currencySymbol}
-                          />
-                        </>
-                      ) : (
-                        <TweenNumber
-                          value={dcfResult.targetPrice}
-                          prefix={company.currencySymbol}
-                        />
-                      )}
+                    <span className="font-display text-3xl text-[#8B1E1E] font-bold">
+                      <TweenNumber
+                        value={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+                        prefix={company.currencySymbol}
+                      />
                     </span>
                   </FlashOnChange>
                   <span
-                    className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${
-                      rangePosition
-                        ? rangePosition.inside
-                          ? 'text-emerald-400 border-emerald-400/40 bg-emerald-400/5'
-                          : premiumDiscountStyle
-                        : premiumDiscountStyle
+                    className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border whitespace-nowrap ${
+                      blendedPremiumPct === null ? premiumDiscountStyle : premiumDiscountStyle
                     }`}
                   >
-                    {rangePosition ? rangePosition.label : premiumDiscountLabel}
+                    {blendedPremiumPct === null
+                      ? premiumDiscountLabel
+                      : blendedPremiumPct > 0
+                      ? `${blendedPremiumPct}% premium to model`
+                      : `${Math.abs(blendedPremiumPct)}% discount to model`}
                   </span>
                 </div>
-                {valuationRange && (
-                  <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-1.5">
-                    Two methods: growing forever, and sold at the end
+
+                {blendedValue && (
+                  <div className="font-mono text-[10px] text-[#8A8A8F] mt-2 leading-relaxed">
+                    <span className="uppercase tracking-widest">
+                      Two methods, weighted equally
+                    </span>
+                    <span className="block mt-0.5">
+                      {blendedValue.parts
+                        .map(
+                          (part) =>
+                            `${company.currencySymbol}${part.value.toFixed(2)} ${part.label}`
+                        )
+                        .join('  ·  ')}
+                    </span>
                   </div>
                 )}
                 <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-2">
@@ -618,7 +622,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner max-w-xs">
+              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
                 <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
                   NO MODEL BUILT
                 </div>
@@ -675,6 +679,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <span>NEWS DISPATCH:</span>
         </div>
         <div className="overflow-hidden relative w-full">
+          {newsToShow.length === 0 ? (
+            <span className="font-mono text-xs text-[#8A8A8F] tracking-wide">
+              {newsLoading ? 'Loading the news…' : 'No recent headlines found for this company.'}
+            </span>
+          ) : (
           <div className="animate-marquee flex gap-12 font-mono text-xs text-[#A1A1AA]">
             {newsToShow.map((news) =>
               news.url ? (
@@ -698,6 +707,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               )
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -986,6 +996,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             }
             companyName={company.name}
             isDerived={viewMode === 'DERIVED' || !company.engineBacked}
+            methods={blendedValue?.parts}
+            blendedValue={blendedValue?.value ?? null}
           />
         )}
       </div>
@@ -1002,11 +1014,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             04 — the full working
           </span>
         </div>
-        <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-5">
-          Every schedule behind the number, laid out the way the workbook lays
-          it out, with each assumption adjustable on the row it belongs to.
-          Nothing here is needed to read the page above. It is here so the page
-          above can be checked.
+        <p className="text-[15px] font-semibold text-[#F2F0EA] max-w-2xl mb-5">
+          Check out this for detailed behind the scenes working and making
+          assumption adjustments.
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -1039,10 +1049,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           ))}
         </div>
 
-        <p className="font-mono text-[11px] text-[#8A8A8F] tracking-wide mt-5">
-          Check this out for the detailed working and for altering the
-          assumptions.
-        </p>
       </section>
 
       {/* ------------------------------------------------------------------
@@ -1104,7 +1110,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             onReset={() => setDrivers(activeDefaults)}
             onClose={() => setNerdView(null)}
             currencySymbol={company.currencySymbol}
-            currentValue={dcfResult.targetPrice}
+            currentValue={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+            companyName={company.name}
+            profile={company.profile}
           />
         </FullScreenPanel>
       )}
