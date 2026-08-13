@@ -274,6 +274,97 @@ export function calculateDCFFor(
   };
 }
 
+// The engine model for a source with the current slider positions applied.
+// Exported so the dashboard can read forecast ratios off the same schedules the
+// valuation uses, rather than rebuilding the forecast a second way.
+export function buildModelFor(source: any, drivers?: ValuationDrivers): any {
+  const d = drivers ? buildOverridden(source, drivers) : source;
+  return buildModel(d);
+}
+
+// ---------------------------------------------------------------------------
+// THE VALUATION RANGE — what feeds the football field chart
+// ---------------------------------------------------------------------------
+// The published range is not an invented band around a single number. It is the
+// two valuation methods the model actually runs, each widened by the same
+// sensitivity steps the grid already uses, which is exactly how the football
+// field in the Excel workbook is built (DCF sheet rows 120 to 144):
+//
+//   perpetuity, at terminal growth plus and minus one percentage point
+//   exit multiple, at the exit EBITDA multiple plus and minus one turn
+//   the 52-week trading range, for comparison
+//
+// Nothing here is a confidence interval and none of it is a forecast of the
+// share price. Each bar is a value the model produces under stated inputs.
+export interface ValuationBand {
+  label: string;
+  low: number;
+  high: number;
+  point: number;
+  detail: string;
+}
+
+export function valuationBandsFor(
+  source: any,
+  drivers: ValuationDrivers,
+  marketPriceOverride?: number | null
+): ValuationBand[] {
+  try {
+    const d = buildOverridden(source, drivers);
+    if (typeof marketPriceOverride === 'number' && marketPriceOverride > 0) {
+      d.dcf.sharePrice = marketPriceOverride;
+    }
+    const M: any = buildModel(d);
+    const D: any = buildDCF(M, d);
+    if (!D.applicable) return [];
+
+    const bands: ValuationBand[] = [];
+
+    // The sensitivity grids are [waccStep][otherStep]. The middle wacc row is
+    // the base WACC, so reading across it varies only the terminal assumption.
+    const middle = Math.floor((d.dcf.sensitivity.waccSteps.length - 1) / 2);
+    const growthRow: number[] = (D.sensitivity?.perpetuity || [])[middle] || [];
+    const multipleRow: number[] = (D.sensitivity?.exitMultiple || [])[middle] || [];
+
+    const clean = (row: number[]) =>
+      row.filter((v) => typeof v === 'number' && isFinite(v) && v > 0);
+
+    const growthValues = clean(growthRow);
+    if (growthValues.length) {
+      const growthPct = (d.dcf.longTermGrowthRate ?? 0) * 100;
+      const step = (d.dcf.sensitivity.growthSteps.slice(-1)[0] ?? 0.01) * 100;
+      bands.push({
+        label: 'DCF — perpetuity growth',
+        low: Math.min(...growthValues),
+        high: Math.max(...growthValues),
+        point: r(D.perpetuity.valuePerShare, 2),
+        detail: `terminal growth ${(growthPct - step).toFixed(1)}% to ${(
+          growthPct + step
+        ).toFixed(1)}%`,
+      });
+    }
+
+    const multipleValues = clean(multipleRow);
+    if (multipleValues.length) {
+      const multiple = d.dcf.exitEbitdaMultiple ?? 0;
+      const step = d.dcf.sensitivity.multipleSteps.slice(-1)[0] ?? 1;
+      bands.push({
+        label: 'DCF — EV / EBITDA exit',
+        low: Math.min(...multipleValues),
+        high: Math.max(...multipleValues),
+        point: r(D.exitMultipleValuation.valuePerShare, 2),
+        detail: `exit multiple ${(multiple - step).toFixed(1)}x to ${(
+          multiple + step
+        ).toFixed(1)}x`,
+      });
+    }
+
+    return bands;
+  } catch {
+    return [];
+  }
+}
+
 // Apple's curated, Excel-verified data file, exported so the dashboard can run
 // it directly.
 export const AAPL_SOURCE = AAPL_DATA;

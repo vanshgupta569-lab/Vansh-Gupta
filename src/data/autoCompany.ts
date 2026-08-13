@@ -104,6 +104,8 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
     currencySymbol: symbol,
     price: r(price, 2),
     priceChangePct: fetched.quote?.changePct ?? 0,
+    fiftyTwoWeekHigh: fetched.quote?.fiftyTwoWeekHigh ?? null,
+    fiftyTwoWeekLow: fetched.quote?.fiftyTwoWeekLow ?? null,
     marketCapStr:
       marketCap >= 1e6
         ? r(marketCap / 1e6, 2) + 'T'

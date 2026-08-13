@@ -471,7 +471,6 @@ async function fetchQuote(symbol) {
   if (!meta) return null;
 
   const price = meta.regularMarketPrice ?? null;
-  const previous = meta.chartPreviousClose ?? meta.previousClose ?? null;
 
   // The 52-week range, worked out from the year of daily highs and lows we
   // just fetched. Yahoo also publishes its own fiftyTwoWeek figures on the
@@ -492,6 +491,18 @@ async function fetchQuote(symbol) {
     : typeof meta.fiftyTwoWeekLow === 'number'
     ? meta.fiftyTwoWeekLow
     : null;
+
+  // Yesterday's close. Over a one-year range Yahoo's chartPreviousClose is the
+  // close from a YEAR ago, not the previous session, so using it would put a
+  // twelve-month move in the little percentage beside the price. The last two
+  // closes in the series are the honest source.
+  const closes = (quoteBlock.close || []).filter((v) => typeof v === 'number');
+  const previous =
+    closes.length >= 2
+      ? closes[closes.length - 2]
+      : typeof meta.previousClose === 'number'
+      ? meta.previousClose
+      : null;
 
   return {
     price,

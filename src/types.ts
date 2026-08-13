@@ -88,6 +88,10 @@ export interface CompanyData {
   currencySymbol: string;
   price: number;
   priceChangePct: number;
+  // The 52-week trading range, for the football field chart. Optional because
+  // a curated record may not carry one and the chart simply omits the bar.
+  fiftyTwoWeekHigh?: number | null;
+  fiftyTwoWeekLow?: number | null;
   marketCapStr: string;
   roePct: number;
   roaPct: number;

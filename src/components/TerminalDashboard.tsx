@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements } from '../data/companies';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor } from '../data/companies';
+import { FootballField, RatioBand } from './valuationSections';
+import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
 import {
@@ -47,7 +49,12 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Live quote for the company on screen. Curated data files carry the price as
   // at the date the model was built, which goes stale; the header should always
   // show what the shares actually trade at now.
-  const [liveQuote, setLiveQuote] = useState<{ price: number; changePct: number } | null>(null);
+  const [liveQuote, setLiveQuote] = useState<{
+    price: number;
+    changePct: number;
+    fiftyTwoWeekHigh: number | null;
+    fiftyTwoWeekLow: number | null;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +67,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           setLiveQuote({
             price: data.quote.price,
             changePct: data.quote.changePct ?? 0,
+            fiftyTwoWeekHigh: data.quote.fiftyTwoWeekHigh ?? null,
+            fiftyTwoWeekLow: data.quote.fiftyTwoWeekLow ?? null,
           });
         }
       })
@@ -207,6 +216,30 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
     return raw && raw.length ? financialsFromStatements(raw) : company.financials;
   }, [derivedSource, activeSource, company.financials]);
+
+  // Ratios: reported years straight from the filings, forecast years read off
+  // the engine's own schedules.
+  const ratioData = useMemo(() => {
+    const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
+    const reported = reportedRatios(raw || []);
+    let forecast: any = { periods: [], applicable: {} };
+    try {
+      if (activeSource) {
+        const model = buildModelFor(activeSource, drivers);
+        forecast = forecastRatios(model, activeSource.meta?.forecastYears || []);
+      }
+    } catch {
+      // A company the engine cannot model still shows its reported ratios.
+    }
+    return { reported, forecast };
+  }, [derivedSource, activeSource, drivers]);
+
+  // The bars for the football field: the two valuation methods, each widened
+  // by the sensitivity steps the grid already uses.
+  const valuationBands = useMemo(() => {
+    if (!activeSource) return [];
+    return valuationBandsFor(activeSource, drivers, displayPrice);
+  }, [activeSource, drivers, displayPrice]);
 
   // A figure the filing does not give us is an absence, not a zero.
   const money = (v: number | null | undefined) =>
@@ -566,6 +599,25 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Ratios and the valuation range. These sit above the analytics row for
+          now; the full reordering of this screen happens when the assumption
+          sliders move into the "for the nerds" section. */}
+      <div className="space-y-6 mb-10">
+        <RatioBand
+          reported={ratioData.reported as any}
+          forecast={ratioData.forecast as any}
+        />
+        {dcfResult.applicable !== false && (
+          <FootballField
+            bands={valuationBands}
+            marketPrice={displayPrice}
+            fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
+            fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
+            currencySymbol={company.currencySymbol}
+          />
+        )}
       </div>
 
       {/* Analytics Row (3 Columns: Rev Trend Bar Chart, DCF Sensitivity Heatmap, Health Radar) */}
