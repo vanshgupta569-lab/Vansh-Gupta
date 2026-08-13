@@ -59,6 +59,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
 
 
+
   // Each deep screen is opened from beside the content it relates to, so the
   // reader meets it where the question arises rather than hunting a menu.
   const OpenScreen: React.FC<{
@@ -331,8 +332,27 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     } catch {
       // A company the engine cannot model still shows its reported ratios.
     }
+    // A bank has no inventory, no payables in the trading sense, and its
+    // "capital employed" is not what ROCE was built to measure. Those rows are
+    // dropped rather than shown as noise.
+    if (company.residualIncome?.applicable) {
+      const drop = [
+        'debtorDays',
+        'inventoryDays',
+        'daysPayable',
+        'cashConversionCycle',
+        'roce',
+        'netDebtToEbitda',
+        'currentRatio',
+      ];
+      for (const key of drop) {
+        (reported as any).applicable[key] = false;
+        (forecast as any).applicable[key] = false;
+      }
+    }
+
     return { reported, forecast };
-  }, [derivedSource, activeSource, drivers]);
+  }, [derivedSource, activeSource, drivers, company.residualIncome]);
 
   // The bars for the football field: the two valuation methods, each widened
   // by the sensitivity steps the grid already uses.
@@ -441,6 +461,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     dcfResult.applicable === false && company.residualIncome?.applicable
       ? company.residualIncome
       : null;
+
+  const bankPremiumPct = useMemo(() => {
+    if (!bankModel || !(bankModel.valuePerShare > 0)) return null;
+    return Number(((displayPrice / bankModel.valuePerShare - 1) * 100).toFixed(1));
+  }, [bankModel, displayPrice]);
 
   // Premium or discount TO THE MODEL, so the model value is the denominator.
   //
@@ -690,7 +715,32 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
             {/* Model Implied Value & Premium/Discount — its own row, so the
                 price and the model switch never squeeze it. */}
-            {hasRealModel ? (
+            {bankModel ? (
+              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  INTRINSIC VALUE
+                </div>
+                <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
+                  <span className="font-display text-3xl text-[#8B1E1E] font-bold">
+                    {company.currencySymbol}
+                    {bankModel.valuePerShare.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                  {bankPremiumPct !== null && (
+                    <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border whitespace-nowrap ${premiumDiscountStyle}`}>
+                      {bankPremiumPct > 0
+                        ? `${bankPremiumPct}% premium`
+                        : `${Math.abs(bankPremiumPct)}% discount`}
+                    </span>
+                  )}
+                </div>
+                <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
+                  valued as a bank · (the working is explained below)
+                </div>
+              </div>
+            ) : hasRealModel && dcfResult.applicable !== false ? (
               <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
                 <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
                   INTRINSIC VALUE
@@ -721,32 +771,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   (the working is explained below)
                 </div>
               </div>
-            ) : bankModel ? (
-              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
-                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  INTRINSIC VALUE
-                </div>
-                <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
-                  <span className="font-display text-3xl text-[#8B1E1E] font-bold">
-                    {company.currencySymbol}
-                    {bankModel.valuePerShare.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-                <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
-                  valued as a bank · (the working is explained below)
-                </div>
-              </div>
             ) : (
               <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
                 <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  NO MODEL BUILT
+                  NO VALUE SHOWN
                 </div>
                 <div className="font-mono text-[11px] text-[#A1A1AA] leading-relaxed">
-                  Placeholder record. Search this ticker in the directory to build
-                  a model from its filings.
+                  {dcfResult.applicable === false && dcfResult.message
+                    ? dcfResult.message
+                    : 'Placeholder record. Search this ticker in the directory to build a model from its filings.'}
                 </div>
               </div>
             )}
@@ -775,15 +808,44 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roaPct} decimals={1} suffix="%" /></span>
           </motion.div>
 
-          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Op Margin</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /></span>
-          </motion.div>
+          {/* The last two cards depend on the kind of company. Operating margin
+              and net debt to EBITDA are meaningless for a bank: a bank's
+              borrowing is its raw material, so "net debt" is not a burden to be
+              measured against earnings. Price to book and the model's implied
+              price to book are what a bank is actually judged on. */}
+          {bankModel ? (
+            <>
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Price / Book</span>
+                <span className="font-mono text-lg text-[#F2F0EA] font-semibold">
+                  {bankModel.bookPerShare > 0
+                    ? `${(displayPrice / bankModel.bookPerShare).toFixed(2)}x`
+                    : '—'}
+                </span>
+              </motion.div>
 
-          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Net Debt / EBITDA</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.netDebtEbitda}</span>
-          </motion.div>
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Model P / B</span>
+                <span className="font-mono text-lg text-[#F2F0EA] font-semibold">
+                  {typeof bankModel.impliedPriceToBook === 'number'
+                    ? `${bankModel.impliedPriceToBook.toFixed(2)}x`
+                    : '—'}
+                </span>
+              </motion.div>
+            </>
+          ) : (
+            <>
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Op Margin</span>
+                <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /></span>
+              </motion.div>
+
+              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Net Debt / EBITDA</span>
+                <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.netDebtEbitda}</span>
+              </motion.div>
+            </>
+          )}
         </motion.div>
       </div>
 
@@ -802,10 +864,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       <div className="sticky top-[56px] z-40 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D] border-y border-[#222228]">
         <div className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2.5">
           {[
+            { id: 'working', label: bankModel ? 'How it was valued' : 'How it was calculated' },
             { id: 'ratios', label: 'Ratios' },
-            { id: 'football', label: 'Valuation range' },
-            { id: 'working', label: 'How it was calculated' },
-            { id: 'nerds', label: 'Full working' },
+            ...(bankModel ? [] : [{ id: 'football', label: 'Valuation range' }]),
+            ...(bankModel ? [] : [{ id: 'nerds', label: 'Full working' }]),
           ].map((entry) => (
             <button
               key={entry.id}
@@ -1199,6 +1261,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           foot of the page, because that is where a reader who has read
           everything else arrives, and it is what they would want next.
           ------------------------------------------------------------------ */}
+      {!bankModel && (
       <section id="nerds" className="scroll-mt-32 border border-[#222228] bg-[#111114] mb-10 p-5 sm:p-7">
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
           <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
@@ -1218,6 +1281,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <OpenScreen view="DCF" label="DCF Model" strong />
         </div>
       </section>
+      )}
 
       {/* ------------------------------------------------------------------
           THE FULL-SCREEN VIEWS
