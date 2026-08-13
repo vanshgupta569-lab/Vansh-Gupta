@@ -41,6 +41,25 @@ export function defaultDriversFor(source: any): Partial<ValuationDrivers> {
       capexPctOfRev: r(Math.abs((M.ppe.capex[nH] ?? 0) / revNext) * 100, 1),
       waccPct: D.applicable ? r(D.wacc * 100, 1) : undefined,
       terminalGrowthPct: r((source.dcf?.longTermGrowthRate ?? 0.025) * 100, 1),
+
+      // Deeper assumptions, adjustable from the full-screen model views.
+      betaValue: r(
+        D.waccDetail?.beta ?? source.dcf?.costOfCapital?.equityBeta ?? 1,
+        2
+      ),
+      riskFreeRatePct: r((source.dcf?.costOfCapital?.riskFreeRate ?? 0.045) * 100, 2),
+      marketRiskPremiumPct: r(
+        (source.dcf?.costOfCapital?.marketRiskPremium ?? 0.05) * 100,
+        2
+      ),
+      exitMultipleX: r(source.dcf?.exitEbitdaMultiple ?? 12, 1),
+      rndMarginPct: r(((M.rndMargin?.[nH] ?? 0) as number) * 100, 1),
+      sgaMarginPct: r(((M.sgaMargin?.[nH] ?? 0) as number) * 100, 1),
+      depreciationPctOfCapex: r(
+        ((M.depreciationPercentOfCapex?.[nH] ?? 0) as number) * 100,
+        1
+      ),
+      dividendPayoutPct: r(((M.dividendPayoutRatio?.[nH] ?? 0) as number) * 100, 1),
     };
   } catch {
     // If the clean run fails for any reason, fall back to overriding
@@ -137,6 +156,12 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
   // A driver counts as "touched" when it differs from its default. Both sides
   // are rounded to one decimal place, which is the precision the sliders work
   // in, so floating-point noise never counts as a change.
+  const touchedNum = (key: keyof ValuationDrivers, dp: number): boolean => {
+    const fallback = defaults[key];
+    if (fallback === undefined || fallback === null) return false;
+    return r(Number(drivers[key]), dp) !== r(Number(fallback), dp);
+  };
+
   const touched = (key: keyof ValuationDrivers): boolean => {
     const fallback = defaults[key];
     if (fallback === undefined || fallback === null) return true; // no default known: honour the slider
@@ -184,6 +209,59 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
   // 6. Terminal growth
   if (touched('terminalGrowthPct')) {
     d.dcf.longTermGrowthRate = drivers.terminalGrowthPct / 100;
+  }
+
+  // 7. The deeper assumptions, adjustable from the full-screen model views.
+  //    Beta, the risk-free rate and the market risk premium are the three
+  //    inputs the discount rate is actually built from, so changing them is
+  //    more honest than dragging the finished WACC: the reader can see the
+  //    figure they moved flow through the CAPM line into the rate.
+  if (drivers.betaValue !== undefined && d.dcf?.costOfCapital) {
+    if (r(Number(drivers.betaValue), 2) !== r(Number(defaults.betaValue), 2)) {
+      d.dcf.costOfCapital.equityBeta = Number(drivers.betaValue);
+      d.dcf.costOfCapital.betaSource = 'equityBeta';
+      // A hand-set beta replaces the CAPM output, so any WACC override that
+      // was sitting there from the slider must go, or it would win.
+      delete d.dcf.waccOverride;
+    }
+  }
+  if (drivers.riskFreeRatePct !== undefined && d.dcf?.costOfCapital) {
+    if (r(Number(drivers.riskFreeRatePct), 2) !== r(Number(defaults.riskFreeRatePct), 2)) {
+      d.dcf.costOfCapital.riskFreeRate = Number(drivers.riskFreeRatePct) / 100;
+      delete d.dcf.waccOverride;
+    }
+  }
+  if (drivers.marketRiskPremiumPct !== undefined && d.dcf?.costOfCapital) {
+    if (
+      r(Number(drivers.marketRiskPremiumPct), 2) !==
+      r(Number(defaults.marketRiskPremiumPct), 2)
+    ) {
+      d.dcf.costOfCapital.marketRiskPremium = Number(drivers.marketRiskPremiumPct) / 100;
+      delete d.dcf.waccOverride;
+    }
+  }
+  if (drivers.exitMultipleX !== undefined && d.dcf) {
+    if (r(Number(drivers.exitMultipleX), 1) !== r(Number(defaults.exitMultipleX), 1)) {
+      d.dcf.exitEbitdaMultiple = Number(drivers.exitMultipleX);
+    }
+  }
+  if (drivers.rndMarginPct !== undefined && touchedNum('rndMarginPct', 1)) {
+    d.assumptions.researchDevelopmentMargin = Array(5).fill(
+      Number(drivers.rndMarginPct) / 100
+    );
+  }
+  if (drivers.sgaMarginPct !== undefined && touchedNum('sgaMarginPct', 1)) {
+    d.assumptions.sellingGeneralAdminMargin = Number(drivers.sgaMarginPct) / 100;
+  }
+  if (
+    drivers.depreciationPctOfCapex !== undefined &&
+    touchedNum('depreciationPctOfCapex', 1)
+  ) {
+    d.assumptions.depreciationAsPercentOfCapex =
+      Number(drivers.depreciationPctOfCapex) / 100;
+  }
+  if (drivers.dividendPayoutPct !== undefined && touchedNum('dividendPayoutPct', 1)) {
+    d.assumptions.dividendPayoutRatio = Number(drivers.dividendPayoutPct) / 100;
   }
 
   return d;
@@ -298,6 +376,16 @@ export function calculateDCFFor(
     terminalGrowthRate: d.dcf.longTermGrowthRate,
     forecastRows,
   };
+}
+
+// Both the model and the DCF for a source with the current slider positions
+// applied, for the full-screen views. One run, so every schedule on those
+// screens comes from the same calculation that produced the headline value.
+export function buildFullModel(source: any, drivers: ValuationDrivers): any {
+  const d = buildOverridden(source, drivers);
+  const M: any = buildModel(d);
+  const D: any = buildDCF(M, d);
+  return { model: M, dcf: D, applied: d };
 }
 
 // The engine model for a source with the current slider positions applied.

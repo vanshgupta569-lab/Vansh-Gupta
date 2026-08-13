@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CompanyData, TabType, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor } from '../data/companies';
+import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel } from '../data/companies';
 import { FootballField, RatioBand } from './valuationSections';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
+import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
@@ -41,13 +42,30 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const company = companies[selectedTicker] || companies['AAPL'];
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<TabType>('DCF_OUTPUT');
 
-  // "For the nerds" starts CLOSED. The main screen answers the question a
-  // reader came with; the full working is here for anyone who wants to check
-  // it, which is a different and much smaller audience. The assumption sliders
-  // live in here too, so nobody adjusts a model they have not read.
-  const [nerdsOpen, setNerdsOpen] = useState(false);
+  // "For the nerds" opens a WHOLE SCREEN, not a panel on the page. A
+  // three-statement model is thirty schedules wide; reading it squeezed under a
+  // dashboard is not reading it at all. null means no view is open.
+  const [nerdView, setNerdView] = useState<
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE'
+  >(null);
+
+
+  // Escape closes the open view.
+  useEffect(() => {
+    if (!nerdView) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNerdView(null);
+    };
+    window.addEventListener('keydown', onKey);
+    // Stop the page behind from scrolling while a full screen is open.
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [nerdView]);
 
   // Live news headlines, fetched from our own /api/news proxy.
   // Starts empty; if the fetch fails or returns nothing, the ticker falls back
@@ -254,6 +272,18 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     v === null || v === undefined ? '—' : `${company.currencySymbol}${v.toLocaleString()}`;
   const pct = (v: number | null | undefined, signed = false) =>
     v === null || v === undefined ? '—' : `${signed && v > 0 ? '+' : ''}${v}%`;
+
+  // The engine run behind whichever full-screen view is open, built from the
+  // same source and the same drivers as the value on the front page.
+  const nerdModel = useMemo(() => {
+    if (!nerdView || nerdView === 'QUALITATIVE' || !activeSource) return null;
+    try {
+      const built = buildFullModel(activeSource, drivers);
+      return built;
+    } catch {
+      return null;
+    }
+  }, [nerdView, activeSource, drivers]);
 
   // Switching between the derived and analyst models resets the sliders to
   // that model's own starting point. Anything the user had moved is cleared,
@@ -899,700 +929,107 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       </div>
 
       {/* ------------------------------------------------------------------
-          FOR THE NERDS — the full working, closed by default
+          FOR THE NERDS — three buttons, each opening a whole screen
           ------------------------------------------------------------------ */}
-      <section className="border border-[#222228] bg-[#111114] mb-10">
-        <div className="p-5 sm:p-7">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
-            <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
-              For the nerds
-            </h2>
-            <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
-              04 — the full working
-            </span>
-          </div>
-          <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-5">
-            Every schedule behind the number, laid out the way the workbook lays
-            it out, plus the assumption sliders. Nothing here is needed to read
-            the page above. It is here so the page above can be checked.
-          </p>
-
-          <div className="flex flex-wrap gap-3">
-            {[
-              { tab: 'HISTORICAL' as TabType, label: '3-Statement Model' },
-              { tab: 'DCF_OUTPUT' as TabType, label: 'DCF Model' },
-              { tab: 'QUALITATIVE' as TabType, label: 'Qualitative Adjustments' },
-            ].map((entry) => (
-              <button
-                key={entry.tab}
-                type="button"
-                onClick={() => {
-                  setActiveTab(entry.tab);
-                  setNerdsOpen(true);
-                }}
-                className={`font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border transition-colors ${
-                  nerdsOpen && activeTab === entry.tab
-                    ? 'border-[#8B1E1E] bg-[#8B1E1E]/20 text-[#F2F0EA]'
-                    : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA]'
-                }`}
-              >
-                {entry.label}
-              </button>
-            ))}
-            {nerdsOpen && (
-              <button
-                type="button"
-                onClick={() => setNerdsOpen(false)}
-                className="font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
-              >
-                Close
-              </button>
-            )}
-          </div>
+      <section className="border border-[#222228] bg-[#111114] mb-10 p-5 sm:p-7">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+          <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
+            For the nerds
+          </h2>
+          <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+            04 — the full working
+          </span>
         </div>
+        <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-5">
+          Every schedule behind the number, laid out the way the workbook lays
+          it out, with each assumption adjustable on the row it belongs to.
+          Nothing here is needed to read the page above. It is here so the page
+          above can be checked.
+        </p>
 
-        {nerdsOpen && (
-      <div className="border-t border-[#222228] p-6 lg:p-8">
-        
-        {/* Navigation Tabs Header */}
-        <div className="flex flex-wrap gap-4 sm:gap-8 border-b hairline-border-b pb-4 mb-8">
+        <div className="flex flex-wrap gap-3">
           {[
-            { id: 'HISTORICAL', label: 'Historical Financials', icon: BarChart2 },
-            { id: 'FORECASTED', label: 'Forecasted Financial Statements', icon: LineChart },
-            { id: 'DRIVERS', label: 'Driver Assumptions', icon: Sliders },
-            { id: 'DCF_OUTPUT', label: 'DCF Model Output', icon: TrendingUp },
-            { id: 'QUALITATIVE', label: 'Qualitative Adjustments', icon: Sliders },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`relative font-mono text-xs uppercase tracking-widest pb-2 flex items-center gap-2 transition-colors cursor-pointer ${
-                  isActive
-                    ? 'text-[#F2F0EA] font-semibold'
-                    : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
-                }`}
-              >
-                <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'}`} />
-                <span>{tab.label}</span>
-                {/* One underline shared across the tabs: motion moves it to
-                    whichever tab is active rather than redrawing it. */}
-                {isActive && (
-                  <motion.span
-                    layoutId="tab-underline"
-                    className="absolute left-0 right-0 -bottom-[1px] h-[2px] bg-[#8B1E1E]"
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                  />
-                )}
-              </button>
-            );
-          })}
+            {
+              view: 'THREE_STATEMENT' as const,
+              label: '3-Statement Model',
+              hint: 'income statement, balance sheet, cash flow and every schedule between them',
+            },
+            {
+              view: 'DCF' as const,
+              label: 'DCF Model',
+              hint: 'free cash flow, the discount rate, both terminal methods and the sensitivity grids',
+            },
+            {
+              view: 'QUALITATIVE' as const,
+              label: 'Qualitative Adjustments',
+              hint: 'your own judgement, routed through the assumptions it belongs in',
+            },
+          ].map((entry) => (
+            <button
+              key={entry.view}
+              type="button"
+              onClick={() => setNerdView(entry.view)}
+              title={entry.hint}
+              className="font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
+            >
+              {entry.label}
+            </button>
+          ))}
         </div>
+      </section>
 
-        {/* TAB 1: HISTORICAL FINANCIALS */}
-        {activeTab === 'HISTORICAL' && (
-          <div className="overflow-x-auto">
-            <div className="flex justify-between items-center mb-5">
-              <span className="font-mono text-[11px] tracking-widest text-[#8A8A8F] uppercase">
-                3-Statement GAAP Financial Summary ({company.currency} Millions)
-              </span>
-              <span className="font-mono text-[10px] tracking-widest text-[#8B1E1E] bg-[#8B1E1E]/5 px-2 py-0.5 border border-[#8B1E1E]/30">
-                AS REPORTED{company.dataSource ? ` · ${company.dataSource}` : ''}
-              </span>
-            </div>
+      {/* ------------------------------------------------------------------
+          THE FULL-SCREEN VIEWS
+          ------------------------------------------------------------------ */}
+      {nerdView === 'THREE_STATEMENT' && nerdModel && activeSource && (
+        <FullScreenPanel
+          title={`${company.name} — 3-Statement Model`}
+          subtitle={`${viewMode === 'ANALYST' ? 'analyst model' : 'derived model'} · ${
+            activeSource.meta?.unitLabel || ''
+          }`}
+          onClose={() => setNerdView(null)}
+        >
+          <ThreeStatementView
+            historicals={historicals}
+            model={nerdModel.model}
+            dcf={nerdModel.dcf}
+            source={activeSource}
+            drivers={drivers}
+            defaults={activeDefaults}
+            onChange={setDrivers}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
 
-            <table className="w-full text-left font-mono text-xs border-collapse">
-              <thead>
-                <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase tracking-widest">
-                  <th className="py-3 pr-6 font-medium">Line Item</th>
-                  {historicals.years.map((y) => (
-                    <th key={y} className="py-3 px-4 text-right font-medium">
-                      {y}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#222228] text-[#F2F0EA] tracking-wider">
-                <tr className="hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Total Revenue</td>
-                  {historicals.revenue.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">{money(v)}</td>
-                  ))}
-                </tr>
+      {nerdView === 'DCF' && nerdModel && activeSource && (
+        <FullScreenPanel
+          title={`${company.name} — DCF Model`}
+          subtitle={`${viewMode === 'ANALYST' ? 'analyst model' : 'derived model'} · ${
+            activeSource.meta?.unitLabel || ''
+          }`}
+          onClose={() => setNerdView(null)}
+        >
+          <DCFView
+            model={nerdModel.model}
+            dcf={nerdModel.dcf}
+            source={activeSource}
+            drivers={drivers}
+            defaults={activeDefaults}
+            onChange={setDrivers}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
 
-                <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Revenue Growth %</td>
-                  {historicals.revenueGrowth.map((v, i) => (
-                    <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${
-                      v === null || v === undefined ? 'text-[#8A8A8F]' : v >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                    }`}>
-                      {pct(v, true)}
-                    </td>
-                  ))}
-                </tr>
-
-                <tr className="text-[#A1A1AA] hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-3 pr-6 font-medium">Gross Margin %</td>
-                  {historicals.grossMargin.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">{pct(v)}</td>
-                  ))}
-                </tr>
-
-                <tr className="text-[#A1A1AA] hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-3 pr-6 font-medium">EBITDA Margin %</td>
-                  {historicals.ebitdaMargin.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">{pct(v)}</td>
-                  ))}
-                </tr>
-
-                <tr className="hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-3 pr-6 font-medium text-[#F2F0EA]">Net Income</td>
-                  {historicals.netIncome.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right">{money(v)}</td>
-                  ))}
-                </tr>
-
-                <tr className="bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-3 pr-6 pl-3 text-[#A1A1AA]">Operating Cash Flow</td>
-                  {historicals.operatingCashFlow.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right text-[#A1A1AA]">{money(v)}</td>
-                  ))}
-                </tr>
-
-                <tr className="hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-3 pr-6 font-semibold text-[#8B1E1E]">Free Cash Flow (FCF)</td>
-                  {historicals.freeCashFlow.map((v, i) => (
-                    <td key={i} className="py-3 px-4 text-right font-semibold text-[#8B1E1E]">{money(v)}</td>
-                  ))}
-                </tr>
-
-                <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-2.5 pr-6">Total Debt</td>
-                  {historicals.totalDebt.map((v, i) => (
-                    <td key={i} className="py-2.5 px-4 text-right">{money(v)}</td>
-                  ))}
-                </tr>
-
-                <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
-                  <td className="py-2.5 pr-6">Cash & Equivalents</td>
-                  {historicals.cashAndEquivalents.map((v, i) => (
-                    <td key={i} className="py-2.5 px-4 text-right">{money(v)}</td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* TAB 2: FORECASTED FINANCIAL STATEMENTS — driven by the real engine */}
-        {activeTab === 'FORECASTED' && (
-          <div className="overflow-x-auto space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0B0B0D] p-4 border hairline-border">
-              <div>
-                <span className="font-mono text-[11px] text-[#A1A1AA] uppercase tracking-widest font-semibold block mb-1">
-                  5-YEAR INTEGRATED MODEL ({company.currency} MILLIONS)
-                </span>
-                <span className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
-                  Revenue growth {drivers.revenueGrowthPct}% · Op margin {drivers.operatingMarginPct}% · Tax {drivers.taxRatePct}% · CapEx {drivers.capexPctOfRev}% of rev · WACC {drivers.waccPct}%
-                  {!company.engineBacked && ' · Figures illustrative — engine data file not yet built'}
-                </span>
-              </div>
-              <button
-                onClick={() => setActiveTab('DRIVERS')}
-                className="font-mono text-[11px] uppercase tracking-widest px-4 py-2 bg-[#8B1E1E] text-[#F2F0EA] hover:bg-[#6a1515] transition-colors cursor-pointer flex items-center gap-2 font-semibold whitespace-nowrap shadow-[0_0_10px_rgba(139,30,30,0.3)]"
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Adjust Drivers</span>
-              </button>
-            </div>
-
-            {!dcfResult.applicable ? (
-              <div className="p-8 border hairline-border bg-[#0B0B0D] font-mono text-xs text-[#8A8A8F] shadow-inner text-center tracking-wide">
-                <strong className="text-[#F2F0EA] block mb-2 uppercase tracking-widest">MODEL NOT APPLICABLE</strong>
-                {dcfResult.message}
-              </div>
-            ) : (
-              <table className="w-full text-left font-mono text-xs border-collapse">
-                <thead>
-                  <tr className="border-b hairline-border-b text-[#8A8A8F] text-[11px] uppercase tracking-widest">
-                    <th className="py-3 pr-6 font-medium">Line Item</th>
-                    {dcfResult.forecastRows.map((row: ForecastRow) => (
-                      <th key={row.year} className="py-3 px-4 text-right font-medium text-[#8B1E1E]">
-                        {row.year}E
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#222228] text-[#F2F0EA] tracking-wider">
-                  <tr className="hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-3 pr-6 font-medium">Revenue</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-3 px-4 text-right font-bold">
-                        {company.currencySymbol}{row.revenue.toLocaleString()}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Revenue Growth %</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className={`py-2.5 px-4 text-right text-[11px] font-semibold ${row.revenueGrowthPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {row.revenueGrowthPct >= 0 ? '+' : ''}{row.revenueGrowthPct}%
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="hover:bg-[#1a1a1f] transition-colors text-[#A1A1AA]">
-                    <td className="py-3 pr-6 font-medium">EBIT</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-3 px-4 text-right">
-                        {company.currencySymbol}{row.ebit.toLocaleString()}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#A1A1AA] bg-[#0B0B0D]/50 hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-2.5 pr-6 pl-3 text-[11px] uppercase tracking-widest">Operating Margin %</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-2.5 px-4 text-right text-[11px]">{row.operatingMarginPct}%</td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-2.5 pr-6">Taxes ({drivers.taxRatePct}%)</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-2.5 px-4 text-right">
-                        ({company.currencySymbol}{row.taxAmt.toLocaleString()})
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="font-semibold bg-[#0B0B0D]/30 hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-3 pr-6">EBIAT (NOPAT)</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-3 px-4 text-right">
-                        {company.currencySymbol}{row.ebiat.toLocaleString()}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-2.5 pr-6 pl-3">Add: D&A</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-2.5 px-4 text-right">
-                        {company.currencySymbol}{row.da.toLocaleString()}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-2.5 pr-6 pl-3">Less: CapEx</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-2.5 px-4 text-right">
-                        ({company.currencySymbol}{row.capex.toLocaleString()})
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#8A8A8F] text-[11px] hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-2.5 pr-6 pl-3">Less: Δ Working Capital</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-2.5 px-4 text-right">
-                        ({company.currencySymbol}{row.wcChange.toLocaleString()})
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="bg-[#8B1E1E]/10 border-t-2 border-[#8B1E1E]">
-                    <td className="py-3 pr-6 font-bold text-[#8B1E1E]">Unlevered FCF</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-3 px-4 text-right font-bold text-[#8B1E1E]">
-                        {company.currencySymbol}{row.ufcf.toLocaleString()}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="text-[#8A8A8F] text-[10px] uppercase tracking-widest hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-3 pr-6">Discount Factor (WACC {drivers.waccPct}%)</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-3 px-4 text-right">{row.discountFactor}</td>
-                    ))}
-                  </tr>
-                  <tr className="font-semibold bg-[#111114] border-t hairline-border-t">
-                    <td className="py-4 pr-6">PV of Unlevered FCF</td>
-                    {dcfResult.forecastRows.map((row: ForecastRow, i: number) => (
-                      <td key={i} className="py-4 px-4 text-right">
-                        {company.currencySymbol}{row.pvUfcf.toLocaleString()}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-
-        {/* TAB 3: DRIVER ASSUMPTIONS */}
-        {activeTab === 'DRIVERS' && (
-          <div className="space-y-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0B0B0D] p-5 border hairline-border shadow-inner">
-              <span className="font-mono text-[11px] text-[#A1A1AA] uppercase tracking-widest font-semibold">
-                SCENARIO PRESETS:
-              </span>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => applyPreset('BASE')}
-                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-[#222228] text-[#F2F0EA] hover:bg-[#8B1E1E] transition-colors cursor-pointer uppercase font-semibold"
-                >
-                  Reset Base Case
-                </button>
-                <button
-                  onClick={() => applyPreset('BULL')}
-                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-emerald-950/60 border border-emerald-700 text-emerald-300 hover:bg-emerald-900 transition-colors cursor-pointer uppercase font-semibold"
-                >
-                  Bull Case (+30% Growth)
-                </button>
-                <button
-                  onClick={() => applyPreset('BEAR')}
-                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-rose-950/60 border border-rose-700 text-rose-300 hover:bg-rose-900 transition-colors cursor-pointer uppercase font-semibold"
-                >
-                  Bear Case (-40% Growth)
-                </button>
-                <button
-                  onClick={() => applyPreset('FORENSIC')}
-                  className="font-mono text-[10px] tracking-widest px-4 py-2 bg-[#8B1E1E]/40 border border-[#8B1E1E] text-[#F2F0EA] hover:bg-[#8B1E1E] transition-colors cursor-pointer uppercase font-semibold shadow-[0_0_10px_rgba(139,30,30,0.2)]"
-                >
-                  Forensic Stress Test
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Slider 1: Revenue Growth % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
-                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
-                  <label className="text-[#8A8A8F] uppercase font-semibold">Revenue Growth %</label>
-                  <span className="text-[#8B1E1E] font-bold text-lg">{drivers.revenueGrowthPct}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="-10"
-                  max="50"
-                  step="0.5"
-                  value={drivers.revenueGrowthPct}
-                  onChange={(e) => setDrivers({ ...drivers, revenueGrowthPct: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B1E1E] cursor-pointer"
-                />
-                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  5-Year CAGR assumption driving explicit cash flow growth.
-                </p>
-              </div>
-
-              {/* Slider 2: Operating Margin % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
-                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
-                  <label className="text-[#8A8A8F] uppercase font-semibold">Operating Margin %</label>
-                  <span className="text-[#8B1E1E] font-bold text-lg">{drivers.operatingMarginPct}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="70"
-                  step="0.5"
-                  value={drivers.operatingMarginPct}
-                  onChange={(e) => setDrivers({ ...drivers, operatingMarginPct: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B1E1E] cursor-pointer"
-                />
-                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  Target EBIT margin applied across the forecast years.
-                </p>
-              </div>
-
-              {/* Slider 3: Tax Rate % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
-                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
-                  <label className="text-[#8A8A8F] uppercase font-semibold">Effective Tax Rate %</label>
-                  <span className="text-[#F2F0EA] font-bold text-lg">{drivers.taxRatePct}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="35"
-                  step="0.5"
-                  value={drivers.taxRatePct}
-                  onChange={(e) => setDrivers({ ...drivers, taxRatePct: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B1E1E] cursor-pointer"
-                />
-                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  Effective cash tax rate adjusted for R&D credits.
-                </p>
-              </div>
-
-              {/* Slider 4: CapEx % of Revenue */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
-                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
-                  <label className="text-[#8A8A8F] uppercase font-semibold">CapEx % of Revenue</label>
-                  <span className="text-[#F2F0EA] font-bold text-lg">{drivers.capexPctOfRev}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="30"
-                  step="0.5"
-                  value={drivers.capexPctOfRev}
-                  onChange={(e) => setDrivers({ ...drivers, capexPctOfRev: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B1E1E] cursor-pointer"
-                />
-                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  Capital expenditures required to sustain projected growth.
-                </p>
-              </div>
-
-              {/* Slider 5: WACC % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
-                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
-                  <label className="text-[#8A8A8F] uppercase font-semibold">WACC % (Discount Rate)</label>
-                  <span className="text-[#8B1E1E] font-bold text-lg">{drivers.waccPct}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="18"
-                  step="0.1"
-                  value={drivers.waccPct}
-                  onChange={(e) => setDrivers({ ...drivers, waccPct: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B1E1E] cursor-pointer"
-                />
-                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  Weighted Average Cost of Capital risk hurdle.
-                </p>
-              </div>
-
-              {/* Slider 6: Terminal Growth Rate % */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 shadow-md">
-                <div className="flex justify-between items-center font-mono text-[11px] tracking-widest">
-                  <label className="text-[#8A8A8F] uppercase font-semibold">Terminal Growth Rate %</label>
-                  <span className="text-[#F2F0EA] font-bold text-lg">{drivers.terminalGrowthPct}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="5.0"
-                  step="0.1"
-                  value={drivers.terminalGrowthPct}
-                  onChange={(e) => setDrivers({ ...drivers, terminalGrowthPct: parseFloat(e.target.value) })}
-                  className="w-full accent-[#8B1E1E] cursor-pointer"
-                />
-                <p className="font-sans text-xs font-light text-[#A1A1AA] tracking-wide mt-2 leading-relaxed">
-                  Perpetual long-term GDP growth rate benchmark.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: DCF MODEL OUTPUT */}
-        {activeTab === 'DCF_OUTPUT' && !dcfResult.applicable && (
-          <div className="p-8 border hairline-border bg-[#0B0B0D] font-mono text-xs text-[#8A8A8F] shadow-inner text-center tracking-wide">
-            <strong className="text-[#F2F0EA] block mb-2 uppercase tracking-widest">VALUATION NOT APPLICABLE</strong>
-            {dcfResult.message}
-          </div>
-        )}
-
-        {activeTab === 'DCF_OUTPUT' && dcfResult.applicable && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-
-            {!company.engineBacked && (
-              <div className="lg:col-span-12 p-4 border hairline-border bg-[#0B0B0D] font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest text-center">
-                Figures illustrative — engine data file not yet built for this company
-              </div>
-            )}
-            
-            {/* Left Inputs Summary */}
-            <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-5 shadow-md">
-                <div className="font-mono text-[11px] tracking-widest text-[#8A8A8F] uppercase border-b hairline-border-b pb-3 flex justify-between font-semibold">
-                  <span>ACTIVE MODEL PARAMETERS</span>
-                  <span className="text-[#8B1E1E]">LIVE STATE</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-5 font-mono text-xs">
-                  <div>
-                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">REVENUE GROWTH %</span>
-                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.revenueGrowthPct}%</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">TAX RATE %</span>
-                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.taxRatePct}%</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">CAPEX %</span>
-                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.capexPctOfRev}%</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">WACC %</span>
-                    <span className="text-[#8B1E1E] font-bold text-lg tracking-wider">{drivers.waccPct}%</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">OP MARGIN %</span>
-                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.operatingMarginPct}%</span>
-                  </div>
-
-                  <div>
-                    <span className="text-[#8A8A8F] block text-[9px] uppercase tracking-widest mb-1">TERMINAL G %</span>
-                    <span className="text-[#F2F0EA] font-bold text-lg tracking-wider">{drivers.terminalGrowthPct}%</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setActiveTab('DRIVERS')}
-                  className="w-full mt-4 font-mono text-[11px] tracking-widest bg-[#222228] text-[#F2F0EA] py-3 uppercase hover:bg-[#8B1E1E] transition-colors flex items-center justify-center gap-2 cursor-pointer font-semibold"
-                >
-                  <Sliders className="w-4 h-4" />
-                  <span>Adjust Assumptions</span>
-                </button>
-              </div>
-
-              {/* Cash Flow Bridge Breakdown */}
-              <div className="bg-[#0B0B0D] border hairline-border p-6 space-y-4 font-mono text-xs shadow-inner">
-                <div className="text-[#8A8A8F] uppercase tracking-widest text-[10px] border-b hairline-border-b pb-3 font-semibold">
-                  VALUATION BRIDGE COMPONENTS
-                </div>
-                <div className="flex justify-between text-[#A1A1AA] tracking-wider pt-1">
-                  <span>PV of Explicit 5-Yr Cash Flows:</span>
-                  <span className="text-[#F2F0EA] font-medium">{company.currencySymbol}{dcfResult.pvExplicitFCF.toLocaleString()}B</span>
-                </div>
-                <div className="flex justify-between text-[#A1A1AA] tracking-wider">
-                  <span>PV of Terminal Value:</span>
-                  <span className="text-[#F2F0EA] font-medium">{company.currencySymbol}{dcfResult.pvTerminalValue.toLocaleString()}B</span>
-                </div>
-                <div className="flex justify-between text-[#8A8A8F] text-[10px] uppercase tracking-widest pt-4 border-t hairline-border-t">
-                  <span>Terminal Share of Enterprise Value:</span>
-                  <span className="text-[#F2F0EA]">
-                    {Math.round(
-                      (dcfResult.pvTerminalValue / (dcfResult.pvExplicitFCF + dcfResult.pvTerminalValue)) * 100
-                    )}
-                    %
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Output Valuation Panel */}
-            <div className="lg:col-span-7 bg-[#0B0B0D] border hairline-border p-8 flex flex-col justify-between space-y-8 shadow-xl">
-              <div>
-                <div className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest mb-4 flex items-center justify-between font-semibold border-b hairline-border-b pb-3">
-                  <span>MODEL IMPLIED VALUE</span>
-                  <span className="text-[#8B1E1E]">MARKET vs. MODEL</span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-4 mb-8 mt-6">
-                  <FlashOnChange watch={viewMode} className="px-1 -mx-1">
-                    <div className="font-display text-5xl sm:text-6xl text-[#F2F0EA] font-semibold tracking-tight">
-                      <TweenNumber
-                        value={dcfResult.targetPrice}
-                        prefix={company.currencySymbol}
-                        flash
-                      />
-                    </div>
-                  </FlashOnChange>
-
-                  <div
-                    className={`font-mono text-[11px] px-3.5 py-1.5 font-bold uppercase tracking-widest flex items-center gap-1.5 ${
-                      potentialUpsidePct >= 0 ? 'bg-[#8B1E1E] text-[#F2F0EA] shadow-[0_0_15px_rgba(139,30,30,0.4)]' : 'bg-rose-950 text-rose-300 border border-rose-700'
-                    }`}
-                  >
-                    {potentialUpsidePct >= 0 ? (
-                      <>
-                        <ArrowUpRight className="w-4 h-4" />
-                        <span>+{potentialUpsidePct}% UPSIDE</span>
-                      </>
-                    ) : (
-                      <>
-                        <ArrowDownRight className="w-4 h-4" />
-                        <span>{potentialUpsidePct}% DOWNSIDE</span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Premium / Discount badge */}
-                  <div className={`font-mono text-[10px] px-3.5 py-1.5 font-semibold uppercase tracking-widest border flex items-center gap-2 ${premiumDiscountStyle}`}>
-                    <span className="w-2 h-2 rounded-full bg-current" />
-                    <span>{premiumDiscountLabel}</span>
-                  </div>
-                </div>
-
-                {/* Market price vs model implied value */}
-                <div className="p-6 border hairline-border bg-[#111114] mb-8 shadow-inner border-l-4 border-l-[#8B1E1E]">
-                  <strong className="block mb-2 font-mono text-[11px] text-[#F2F0EA] uppercase tracking-widest">
-                    MARKET PRICE vs. MODEL IMPLIED VALUE
-                  </strong>
-                  <p className="font-sans text-[13px] font-light text-[#A1A1AA] leading-loose tracking-wide">
-                    <strong className="font-semibold text-[#F2F0EA]">{company.currencySymbol}{company.price.toFixed(2)}</strong> market price ·{' '}
-                    <strong className="font-semibold text-[#F2F0EA]">{company.currencySymbol}{dcfResult.targetPrice.toFixed(2)}</strong> model implied value ·{' '}
-                    {premiumToModelPct > 0
-                      ? `market trades ${premiumToModelPct}% above this model`
-                      : `market trades ${Math.abs(premiumToModelPct)}% below this model`}.
-                    {' '}Use the sliders to adjust assumptions and see how the gap changes.
-                    This is a calculated gap — not a recommendation.
-                  </p>
-                </div>
-
-                <p className="font-sans text-xs font-light text-[#A1A1AA] leading-loose tracking-wide max-w-lg">
-                  Fair value based on 5-year explicit free cash flow projections discounted at {drivers.waccPct}% WACC and {drivers.terminalGrowthPct}% perpetual growth rate.
-                </p>
-              </div>
-
-              {/* Enterprise Value to Equity Value Ledger Table */}
-              <table className="w-full font-mono text-xs border-collapse">
-                <tbody className="tracking-wider">
-                  <tr className="border-b hairline-border-b hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-4 text-[#8A8A8F] uppercase tracking-widest text-[10px]">Implied Enterprise Value (EV)</td>
-                    <td className="py-4 text-right text-[#F2F0EA] font-semibold text-sm">
-                      {company.currencySymbol}{dcfResult.enterpriseValueBillion.toLocaleString()}B
-                    </td>
-                  </tr>
-
-                  <tr className="border-b hairline-border-b hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-4 text-[#A1A1AA]">
-                      {drivers.netDebtBillion < 0 ? 'Plus: Net Cash' : 'Less: Net Debt'}
-                    </td>
-                    <td className="py-4 text-right text-[#A1A1AA]">
-                      {drivers.netDebtBillion < 0
-                        ? `+${company.currencySymbol}${Math.abs(drivers.netDebtBillion).toFixed(1)}B`
-                        : `(${company.currencySymbol}${drivers.netDebtBillion.toFixed(1)}B)`}
-                    </td>
-                  </tr>
-
-                  <tr className="border-b hairline-border-b hover:bg-[#1a1a1f] bg-[#111114]/80 transition-colors">
-                    <td className="py-4 text-[#F2F0EA] font-semibold uppercase tracking-widest text-[11px]">Implied Equity Value</td>
-                    <td className="py-4 text-right text-[#8B1E1E] font-bold text-base">
-                      {company.currencySymbol}{dcfResult.impliedEquityValueBillion.toLocaleString()}B
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-[#1a1a1f] transition-colors">
-                    <td className="py-4 text-[#A1A1AA]">Diluted Shares Outstanding</td>
-                    <td className="py-4 text-right text-[#A1A1AA]">
-                      {drivers.sharesOutstandingBillion} Billion
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div className="font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4 border-t hairline-border-t flex justify-between items-center mt-2">
-                <span>
-                  {company.engineBacked
-                    ? 'MARGINALIA ENGINE · VERIFIED AGAINST EXCEL MODEL'
-                    : 'MARGINALIA ENGINE · ILLUSTRATIVE INPUTS'}
-                </span>
-                <span className="text-[#8B1E1E] font-bold">RECALCULATED REAL-TIME</span>
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {/* Qualitative adjustments: the reader's own judgement, routed through
-            the drivers rather than multiplied over the answer. */}
-        {activeTab === 'QUALITATIVE' && (
+      {nerdView === 'QUALITATIVE' && (
+        <FullScreenPanel
+          title={`${company.name} — Qualitative Adjustments`}
+          subtitle="your judgement, put through the model"
+          onClose={() => setNerdView(null)}
+        >
           <QualitativeAdjustments
             drivers={drivers}
             defaults={activeDefaults}
@@ -1601,11 +1038,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             currencySymbol={company.currencySymbol}
             currentValue={dcfResult.targetPrice}
           />
-        )}
+        </FullScreenPanel>
+      )}
 
-      </div>
-        )}
-      </section>
     </section>
   );
 };

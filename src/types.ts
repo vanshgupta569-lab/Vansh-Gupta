@@ -27,6 +27,18 @@ export interface ValuationDrivers {
   terminalGrowthPct: number;
   sharesOutstandingBillion: number;
   netDebtBillion: number;         // positive = net debt; negative = net cash
+
+  // Deeper assumptions, adjustable from the full-screen model views. Optional
+  // so that anything constructing a driver set without them still type-checks;
+  // when absent the model's own figure is used untouched.
+  betaValue?: number;
+  riskFreeRatePct?: number;
+  marketRiskPremiumPct?: number;
+  exitMultipleX?: number;
+  rndMarginPct?: number;
+  sgaMarginPct?: number;
+  depreciationPctOfCapex?: number;
+  dividendPayoutPct?: number;
 }
 
 // One row in the 5-year forecast table
