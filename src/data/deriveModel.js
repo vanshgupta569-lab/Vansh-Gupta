@@ -56,8 +56,108 @@ function plug(total, ...parts) {
 
 // ---------------------------------------------------------------- main
 
+// ---------------------------------------------------------------------------
+// IS THIS HISTORY ACTUALLY ONE COMPANY?
+// ---------------------------------------------------------------------------
+// A forecast built on a company's own history assumes the history describes the
+// same company throughout. After a demerger or a spin-off it does not, and the
+// data source gives no warning: it simply lists the periods side by side.
+//
+// Tata Motors is the case that exposed this. Its three reported periods were:
+//
+//   FY2024  revenue 4,312,120  — the old consolidated group, including JLR
+//   FY2025  revenue   577,880  — depreciation was 187% of net PP&E
+//   FY2026  revenue   833,900  — the demerged commercial vehicle business
+//
+// Read as one company that is trailing growth of -56%, capped to a permanent
+// -10% decline, and average capex of 25.3% of revenue against an operating
+// margin of 8.9%. Unlevered free cash flow came out negative in every forecast
+// year and the model printed a value of -2.56 a share. The engine's own guards
+// did not catch it: operating profit stayed positive, and normalised terminal
+// cash flow was positive because the terminal year sets capex equal to
+// depreciation, which strips the very distortion causing the problem.
+//
+// Two tests, both about whether a period can be compared with the ones around
+// it. Neither guesses at causes; both refuse rather than repair.
+function selectComparablePeriods(statements) {
+  const rows = Array.isArray(statements) ? statements.slice() : [];
+  const excluded = [];
+  if (rows.length < 2) return { rows, excluded };
+
+  // TEST 1 — a collapse in revenue means the reporting entity changed.
+  //
+  // Only a COLLAPSE counts. A surge is what fast growth looks like: Nvidia's
+  // revenue more than doubled in a single year and that history is perfectly
+  // usable. A fall of more than 60%, by contrast, is not something an operating
+  // business does while remaining the same reporting entity. Everything before
+  // the most recent such break is a different company and is dropped.
+  let breakAt = -1;
+  for (let i = 1; i < rows.length; i++) {
+    const before = rows[i - 1]?.revenue;
+    const after = rows[i]?.revenue;
+    if (
+      typeof before === 'number' &&
+      typeof after === 'number' &&
+      before > 0 &&
+      after / before < 0.4
+    ) {
+      breakAt = i;
+    }
+  }
+  let kept = rows;
+  if (breakAt > 0) {
+    for (const row of rows.slice(0, breakAt)) {
+      excluded.push({
+        fiscalYear: row.fiscalYear,
+        reason: 'revenue falls by more than 60% after this period, which is a change of reporting entity rather than a trading result',
+      });
+    }
+    kept = rows.slice(breakAt);
+  }
+
+  // TEST 2 — depreciation cannot exceed the assets being depreciated.
+  //
+  // A full year of depreciation larger than the closing net PP&E is not a
+  // going concern writing down its assets, it is a period that does not line up
+  // with the balance sheet beside it: a stub period, a restated set, or two
+  // different entities stitched together. Tata Motors FY2025 charged 232,560
+  // against net PP&E of 124,380.
+  kept = kept.filter((row) => {
+    if (
+      typeof row.depreciation === 'number' &&
+      typeof row.ppeNet === 'number' &&
+      row.ppeNet > 0 &&
+      row.depreciation > row.ppeNet
+    ) {
+      excluded.push({
+        fiscalYear: row.fiscalYear,
+        reason: 'depreciation for the period exceeds closing net property, plant and equipment, so the period does not line up with its own balance sheet',
+      });
+      return false;
+    }
+    return true;
+  });
+
+  return { rows: kept, excluded };
+}
+
 export function deriveModel(fetched) {
-  const rows = fetched.statements || [];
+  const { rows, excluded } = selectComparablePeriods(fetched.statements || []);
+
+  // Refuse rather than model a history that is not one company. Two comparable
+  // periods is the minimum for any growth rate at all.
+  if (rows.length < 2) {
+    const dropped = excluded
+      .map((e) => `FY${e.fiscalYear} (${e.reason})`)
+      .join('; ');
+    throw new Error(
+      `${fetched.ticker || 'This company'} does not have two comparable years of reported history, ` +
+        `so no forecast can be built from it. Periods set aside: ${dropped}. ` +
+        `This usually follows a demerger, spin-off or restatement, where the ` +
+        `figures published side by side describe different businesses. The ` +
+        `reported figures themselves are unaffected and can still be read below.`
+    );
+  }
   if (rows.length === 0) throw new Error('No statements to model from');
 
   const years = rows.map((r) => r.fiscalYear);
@@ -76,6 +176,11 @@ export function deriveModel(fetched) {
   const revenue = pick('revenue');
   const cogs = pick('cogs');
   const provenance = {};
+  if (excluded.length) {
+    provenance.excludedPeriods =
+      'set aside as not comparable: ' +
+      excluded.map((e) => `FY${e.fiscalYear} — ${e.reason}`).join('; ');
+  }
 
   // ---- Tying operating profit to what the company actually reported -------
   //
