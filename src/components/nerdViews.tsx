@@ -17,7 +17,7 @@
 // can see what it does.
 
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Download } from 'lucide-react';
 import { ValuationDrivers } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -210,8 +210,9 @@ export const FullScreenPanel: React.FC<{
   title: string;
   subtitle?: string;
   onClose: () => void;
+  onExport?: () => void;
   children: React.ReactNode;
-}> = ({ title, subtitle, onClose, children }) => (
+}> = ({ title, subtitle, onClose, onExport, children }) => (
   <div className="fixed inset-0 z-50 bg-[#0B0B0D] overflow-y-auto">
     <div className="sticky top-0 z-10 bg-[#0B0B0D]/95 backdrop-blur border-b border-[#222228]">
       <div className="max-w-[1440px] mx-auto px-5 sm:px-10 py-4 flex items-center justify-between gap-4">
@@ -223,14 +224,27 @@ export const FullScreenPanel: React.FC<{
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-3 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
-        >
-          <X className="w-4 h-4" />
-          <span className="hidden sm:inline">Close</span>
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          {onExport && (
+            <button
+              type="button"
+              onClick={onExport}
+              className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-3 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 transition-colors"
+              title="Download a working Excel model with live formulas"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-3 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Close</span>
+          </button>
+        </div>
       </div>
     </div>
     <div className="max-w-[1440px] mx-auto px-5 sm:px-10 py-8">{children}</div>

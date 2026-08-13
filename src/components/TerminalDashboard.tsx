@@ -7,6 +7,7 @@ import { FootballField, RatioBand } from './valuationSections';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
+import { downloadWorkbook } from '../data/excelExport';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
@@ -51,6 +52,31 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE'
   >(null);
 
+
+  // Hand the user a working Excel model: the same run that is on screen,
+  // written out with live formulas rather than pasted numbers.
+  const exportExcel = () => {
+    if (!nerdModel || !activeSource) return;
+    void (async () => {
+      try {
+        await downloadWorkbook({
+          model: nerdModel.model,
+          dcf: nerdModel.dcf,
+          source: { ...activeSource, rawStatements: derivedSource?.rawStatements ?? activeSource.rawStatements },
+          companyName: company.name,
+          ticker: company.ticker,
+          currencySymbol: company.currencySymbol,
+          unitLabel: activeSource.meta?.unitLabel || `${company.currencySymbol} millions`,
+          modelLabel:
+            viewMode === 'ANALYST' && company.engineBacked
+              ? 'Analyst model, built by hand from the filings'
+              : 'Derived model, assumptions taken from reported history',
+        });
+      } catch (error) {
+        console.error('Excel export failed', error);
+      }
+    })();
+  };
 
   // Escape closes the open view.
   useEffect(() => {
@@ -1061,6 +1087,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             activeSource.meta?.unitLabel || ''
           }`}
           onClose={() => setNerdView(null)}
+          onExport={exportExcel}
         >
           <ThreeStatementView
             historicals={historicals}
@@ -1083,6 +1110,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             activeSource.meta?.unitLabel || ''
           }`}
           onClose={() => setNerdView(null)}
+          onExport={exportExcel}
         >
           <DCFView
             model={nerdModel.model}
