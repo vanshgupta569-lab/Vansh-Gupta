@@ -89,6 +89,7 @@ interface QualitativeProps {
   defaults: ValuationDrivers;
   onApply: (next: ValuationDrivers) => void;
   onReset: () => void;
+  onClose: () => void;
   currencySymbol: string;
   currentValue: number;
 }
@@ -98,6 +99,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
   defaults,
   onApply,
   onReset,
+  onClose,
   currencySymbol,
   currentValue,
 }) => {
@@ -152,7 +154,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
         Your judgement, put through the model
       </h3>
 
-      <div className="text-[13px] leading-relaxed text-[#A1A1AA] space-y-3 mb-8">
+      <div className="text-[15px] leading-relaxed text-[#A1A1AA] space-y-3 mb-8">
         <p>
           A model reads accounts. It cannot read a management team, a regulator
           or a competitor. That part is yours.
@@ -182,7 +184,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
               <div className="text-[14px] text-[#F2F0EA] mb-1">
                 {factor.title}
               </div>
-              <div className="text-[13px] text-[#8A8A8F] mb-3 max-w-2xl">
+              <div className="text-[15px] text-[#8A8A8F] mb-3 max-w-2xl">
                 {factor.question}
               </div>
 
@@ -192,7 +194,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                     key={option}
                     type="button"
                     onClick={() => setVerdict(factor.key, option)}
-                    className={`font-mono text-[11px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${
+                    className={`font-mono text-[13px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${
                       verdict === option
                         ? 'border-[#8B1E1E] bg-[#8B1E1E]/20 text-[#F2F0EA]'
                         : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA]'
@@ -207,7 +209,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                 ))}
               </div>
 
-              <div className="font-mono text-[10px] text-[#8A8A8F] leading-relaxed">
+              <div className="font-mono text-[12px] text-[#8A8A8F] leading-relaxed">
                 {factor.reasoning}
               </div>
             </div>
@@ -216,12 +218,12 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
       </div>
 
       <div className="mt-8 border-t border-[#222228] pt-6">
-        <div className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+        <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
           What this would change
         </div>
 
         {changes.length === 0 ? (
-          <p className="text-[13px] text-[#8A8A8F]">
+          <p className="text-[15px] text-[#8A8A8F]">
             Nothing yet. Mark a factor as a strength or a weakness and the
             assumptions it moves will be listed here before anything is applied.
           </p>
@@ -230,7 +232,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
             {changes.map((change) => (
               <div
                 key={String(change.key)}
-                className="flex items-baseline justify-between gap-4 font-mono text-[12px]"
+                className="flex items-baseline justify-between gap-4 font-mono text-[14px]"
               >
                 <span className="text-[#8A8A8F]">
                   {driverLabels[String(change.key)] || String(change.key)}
@@ -247,8 +249,11 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           <button
             type="button"
             disabled={!anyVerdict || changes.length === 0}
-            onClick={() => onApply(proposed)}
-            className="font-mono text-[11px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#8B1E1E]/35 transition-colors"
+            onClick={() => {
+              onApply(proposed);
+              onClose();
+            }}
+            className="font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#8B1E1E]/35 transition-colors"
           >
             Apply to the model
           </button>
@@ -257,12 +262,15 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
             onClick={() => {
               setVerdicts({});
               onReset();
+              // "Back to the model" has to actually go back to it. This closes
+              // the full screen as well as clearing the views.
+              onClose();
             }}
-            className="font-mono text-[11px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+            className="font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
           >
             Clear and go back to the model
           </button>
-          <span className="font-mono text-[11px] text-[#8A8A8F]">
+          <span className="font-mono text-[13px] text-[#8A8A8F]">
             currently {currencySymbol}
             {currentValue.toLocaleString(undefined, {
               minimumFractionDigits: 2,
@@ -271,7 +279,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           </span>
         </div>
 
-        <p className="text-[12px] leading-relaxed text-[#8A8A8F] mt-5 max-w-2xl">
+        <p className="text-[14px] leading-relaxed text-[#8A8A8F] mt-5 max-w-2xl">
           These are your views, not the model's, and not a recommendation. The
           site does not know whether you are right. It only makes sure that if
           you are, the number changes for a reason you can follow.

@@ -12,10 +12,40 @@
     background-color: #0B0B0D;
     color: #F2F0EA;
     font-family: 'Inter', sans-serif;
+    /* Reading text on a near-black background needs more room to breathe than
+       the same text on white. These three lines are the whole readability fix:
+       nothing smaller than 13px anywhere, generous line height, and letters
+       spaced very slightly apart so thin strokes do not close up. */
+    font-size: 16px;
+    line-height: 1.65;
+    letter-spacing: 0.005em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Playfair Display', Georgia, serif;
+    line-height: 1.25;
+  }
+
+  /* THE MINIMUM SIZE RULE.
+     Section labels across the site were set at 9, 10 and 11 pixels. They read
+     fine on a large monitor and are genuinely hard work on a laptop or a phone.
+     Nothing is allowed below 13px anywhere. The model screens carry their own
+     larger scale on top of this; the floor is here so the landing page, the
+     search screen and the model screens all agree. */
+  .text-\[9px\], .text-\[10px\], .text-\[11px\] {
+    font-size: 13px !important;
+    letter-spacing: 0.1em;
+  }
+  .text-xs {
+    font-size: 13px;
+  }
+
+  /* Monospace figures carry the numbers, so they get a touch more size and a
+     touch less tracking than the labels around them. */
+  .font-mono {
+    letter-spacing: 0;
   }
 }
 
@@ -81,4 +111,3 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
-

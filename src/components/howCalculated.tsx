@@ -42,8 +42,8 @@ const Figure: React.FC<{
   defaultValue?: string | null;
 }> = ({ label, value, defaultValue }) => (
   <div className="flex items-baseline justify-between gap-4 py-1.5 border-b border-[#222228]/60 last:border-0">
-    <span className="text-[13px] text-[#8A8A8F]">{label}</span>
-    <span className="font-mono text-[13px] text-[#F2F0EA] text-right">
+    <span className="text-[15px] text-[#8A8A8F]">{label}</span>
+    <span className="font-mono text-[15px] text-[#F2F0EA] text-right">
       {value}
       {defaultValue ? (
         <span className="ml-2 text-[#8A8A8F]">was {defaultValue}</span>
@@ -141,7 +141,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
           <Figure label="Where the figures come from" value={sourceLabel} />
           <Figure label="Figures stated in" value={unitLabel} />
           {provenance.excludedPeriods ? (
-            <div className="pt-2 text-[12px] leading-relaxed text-[#8A8A8F]">
+            <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
               Some periods were set aside as not comparable:{' '}
               {provenance.excludedPeriods}
             </div>
@@ -209,7 +209,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             value={money(last.ebit)}
           />
           {isDerived && provenance.revenueGrowth ? (
-            <div className="pt-2 text-[12px] leading-relaxed text-[#8A8A8F]">
+            <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
               Where the growth rate came from: {provenance.revenueGrowth}.
               Margins: {provenance.grossMargin}.
             </div>
@@ -259,7 +259,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             label={`Depreciation, FY${String(first.year).slice(2)}`}
             value={money(first.da)}
           />
-          <div className="pt-2 text-[12px] leading-relaxed text-[#8A8A8F]">
+          <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
             Money owed by customers grows with revenue. Stock and money owed to
             suppliers grow with the cost of sales.
           </div>
@@ -423,7 +423,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             )}`}
           />
           {isDerived && provenance.wacc ? (
-            <div className="pt-2 text-[12px] leading-relaxed text-[#8A8A8F]">
+            <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
               {provenance.wacc}. {provenance.terminalGrowth}.
             </div>
           ) : null}
@@ -489,12 +489,12 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           How this was calculated
         </h2>
-        <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           03 — the working
         </span>
       </div>
 
-      <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-2">
+      <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-2">
         Eight steps from {companyName}'s published accounts to the value at the
         top of this page. Each step explains the idea in plain words first, then
         shows the figures it produced for this company. You do not need to know
@@ -502,12 +502,12 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       </p>
 
       {anyChanged ? (
-        <p className="font-mono text-[11px] text-[#8B1E1E] mb-6">
+        <p className="font-mono text-[13px] text-[#8B1E1E] mb-6">
           Showing your adjustments. The model's own figure is in grey beside
           anything you have changed.
         </p>
       ) : (
-        <p className="font-mono text-[11px] text-[#8A8A8F] mb-6">
+        <p className="font-mono text-[13px] text-[#8A8A8F] mb-6">
           Showing the model's own assumptions. Nothing has been adjusted.
         </p>
       )}
@@ -522,24 +522,24 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                 onClick={() => toggleStep(step.n)}
                 className="w-full flex items-baseline gap-4 py-4 text-left group"
               >
-                <span className="font-mono text-[11px] text-[#8B1E1E] shrink-0 pt-0.5">
+                <span className="font-mono text-[13px] text-[#8B1E1E] shrink-0 pt-0.5">
                   {String(step.n).padStart(2, '0')}
                 </span>
                 <span className="flex-1 text-[15px] text-[#F2F0EA] group-hover:text-[#8B1E1E] transition-colors">
                   {step.title}
                 </span>
-                <span className="font-mono text-[13px] text-[#8A8A8F] shrink-0">
+                <span className="font-mono text-[15px] text-[#8A8A8F] shrink-0">
                   {open ? '−' : '+'}
                 </span>
               </button>
 
               {open && (
                 <div className="pb-6 pl-0 sm:pl-10 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
-                  <div className="text-[13px] leading-relaxed text-[#A1A1AA] max-w-prose">
+                  <div className="text-[15px] leading-relaxed text-[#A1A1AA] max-w-prose">
                     {step.theory}
                   </div>
                   <div className="border border-[#222228] bg-[#0B0B0D] p-4">
-                    <div className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+                    <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
                       {companyName}
                     </div>
                     {step.figures}

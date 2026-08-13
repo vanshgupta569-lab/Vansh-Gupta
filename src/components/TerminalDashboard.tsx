@@ -267,6 +267,40 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return valuationBandsFor(activeSource, drivers, displayPrice);
   }, [activeSource, drivers, displayPrice]);
 
+  // The headline is a RANGE, not one number. The model runs two terminal
+  // methods and they genuinely disagree; publishing the perpetuity figure alone
+  // would be picking one and hiding the other. The low and high are the two
+  // methods' own base cases, so both ends are defensible line by line.
+  const valuationRange = useMemo(() => {
+    const points = valuationBands
+      .map((band) => band.point)
+      .filter((v) => typeof v === 'number' && isFinite(v) && v > 0);
+    if (points.length < 2) return null;
+    return { low: Math.min(...points), high: Math.max(...points) };
+  }, [valuationBands]);
+
+  // Where the traded price sits against that range. Saying "18% above the top
+  // of the range" is both truer and more useful than a premium to a single
+  // number that was only ever one of two answers.
+  const rangePosition = useMemo(() => {
+    if (!valuationRange) return null;
+    const { low, high } = valuationRange;
+    if (displayPrice > high) {
+      return {
+        label: `${(((displayPrice - high) / high) * 100).toFixed(1)}% ABOVE RANGE`,
+        inside: false,
+      };
+    }
+    if (displayPrice < low) {
+      return {
+        label: `${(((low - displayPrice) / low) * 100).toFixed(1)}% BELOW RANGE`,
+        inside: false,
+      };
+    }
+    return { label: 'WITHIN RANGE', inside: true };
+  }, [valuationRange, displayPrice]);
+
+
   // A figure the filing does not give us is an absence, not a zero.
   const money = (v: number | null | undefined) =>
     v === null || v === undefined ? '—' : `${company.currencySymbol}${v.toLocaleString()}`;
@@ -539,16 +573,43 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                 <div className="flex items-center gap-3 flex-wrap">
                   <FlashOnChange watch={viewMode} className="px-1 -mx-1">
                     <span className="font-display text-2xl text-[#8B1E1E] font-bold">
-                      <TweenNumber
-                        value={dcfResult.targetPrice}
-                        prefix={company.currencySymbol}
-                      />
+                      {valuationRange ? (
+                        <>
+                          <TweenNumber
+                            value={valuationRange.low}
+                            prefix={company.currencySymbol}
+                          />
+                          <span className="text-[#8A8A8F] px-1.5">to</span>
+                          <TweenNumber
+                            value={valuationRange.high}
+                            prefix={company.currencySymbol}
+                          />
+                        </>
+                      ) : (
+                        <TweenNumber
+                          value={dcfResult.targetPrice}
+                          prefix={company.currencySymbol}
+                        />
+                      )}
                     </span>
                   </FlashOnChange>
-                  <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${premiumDiscountStyle}`}>
-                    {premiumDiscountLabel}
+                  <span
+                    className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${
+                      rangePosition
+                        ? rangePosition.inside
+                          ? 'text-emerald-400 border-emerald-400/40 bg-emerald-400/5'
+                          : premiumDiscountStyle
+                        : premiumDiscountStyle
+                    }`}
+                  >
+                    {rangePosition ? rangePosition.label : premiumDiscountLabel}
                   </span>
                 </div>
+                {valuationRange && (
+                  <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-1.5">
+                    Two methods: growing forever, and sold at the end
+                  </div>
+                )}
                 <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-2">
                   {viewMode === 'ANALYST' && analystSource
                     ? 'Analyst model — built by hand, verified against the filings'
@@ -976,6 +1037,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </button>
           ))}
         </div>
+
+        <p className="font-mono text-[11px] text-[#8A8A8F] tracking-wide mt-5">
+          Check this out for the detailed working and for altering the
+          assumptions.
+        </p>
       </section>
 
       {/* ------------------------------------------------------------------
@@ -1035,6 +1101,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             defaults={activeDefaults}
             onApply={(next) => setDrivers(next)}
             onReset={() => setDrivers(activeDefaults)}
+            onClose={() => setNerdView(null)}
             currencySymbol={company.currencySymbol}
             currentValue={dcfResult.targetPrice}
           />

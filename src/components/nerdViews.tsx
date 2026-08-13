@@ -1,969 +1,1113 @@
-// Marginalia — the full-screen model views
-//
-// The three "for the nerds" buttons open a whole screen each, not a panel on
-// the page. That is deliberate: a three-statement model is thirty schedules
-// wide and reading it squeezed under a dashboard is not reading it at all.
-//
-// What is on screen here is the engine's own output, laid out the way the Excel
-// workbook lays it out. Nothing is recomputed for display. If a figure appears
-// here it came out of the same model run that produced the value on the front
-// page, so the two can never disagree.
-//
-// Every assumption carries its own adjuster, sitting on the row it belongs to.
-// Beta sits in the CAPM block, next to the cost of equity it feeds. Capex sits
-// on the PP&E roll-forward. That is the point of the section: not a panel of
-// sliders somewhere else, but a number you can change in the place where you
-// can see what it does.
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel } from '../data/companies';
+import { FootballField, RatioBand } from './valuationSections';
+import { HowCalculated } from './howCalculated';
+import { QualitativeAdjustments } from './qualitative';
+import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
+import { reportedRatios, forecastRatios } from '../data/ratios.js';
+import { loadDerivedModelData } from '../data/autoCompany';
+import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
+import {
+  TrendingUp,
+  BarChart2,
+  Sliders,
+  DollarSign,
+  Activity,
+  Maximize2,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  Layers,
+  ArrowUpRight,
+  ArrowDownRight,
+  LineChart,
+} from 'lucide-react';
 
-import React from 'react';
-import { X } from 'lucide-react';
-import { ValuationDrivers } from '../types';
-
-// ---------------------------------------------------------------------------
-// SHARED PIECES
-// ---------------------------------------------------------------------------
-
-const num = (v: any): v is number => typeof v === 'number' && isFinite(v);
-
-const fmt = (v: any, dp = 0) =>
-  num(v)
-    ? v.toLocaleString(undefined, {
-        minimumFractionDigits: dp,
-        maximumFractionDigits: dp,
-      })
-    : '—';
-
-const fmtPct = (v: any, dp = 1) => (num(v) ? `${(v * 100).toFixed(dp)}%` : '—');
-const fmtX = (v: any, dp = 1) => (num(v) ? `${v.toFixed(dp)}x` : '—');
-
-/** An assumption you can change, sitting on the row it drives. */
-export const Adjust: React.FC<{
-  driverKey: keyof ValuationDrivers;
-  drivers: ValuationDrivers;
-  defaults: ValuationDrivers;
-  onChange: (next: ValuationDrivers) => void;
-  step?: number;
-  suffix?: string;
-  width?: string;
-}> = ({ driverKey, drivers, defaults, onChange, step = 0.1, suffix = '%', width = 'w-20' }) => {
-  const value = drivers[driverKey];
-  const fallback = defaults[driverKey];
-  const changed =
-    value !== undefined && fallback !== undefined && Number(value) !== Number(fallback);
-
-  if (value === undefined) return null;
-
-  return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <input
-        type="number"
-        step={step}
-        value={Number(value)}
-        onChange={(e) => {
-          const next = e.target.value === '' ? 0 : Number(e.target.value);
-          if (!isFinite(next)) return;
-          onChange({ ...drivers, [driverKey]: next });
-        }}
-        className={`${width} bg-[#0B0B0D] border ${
-          changed ? 'border-[#8B1E1E]' : 'border-[#222228]'
-        } px-2 py-1 font-mono text-[12px] text-[#F2F0EA] text-right focus:outline-none focus:border-[#8B1E1E]`}
-      />
-      <span className="font-mono text-[11px] text-[#8A8A8F]">{suffix}</span>
-      {changed && (
-        <span className="font-mono text-[10px] text-[#8A8A8F]">
-          was {String(fallback)}
-          {suffix}
-        </span>
-      )}
-    </span>
-  );
-};
-
-interface Row {
-  label: string;
-  values?: any[];
-  format?: (v: any) => string;
-  bold?: boolean;
-  indent?: boolean;
-  muted?: boolean;
-  accent?: boolean;
-  adjuster?: React.ReactNode;
-  note?: string;
-  spacer?: boolean;
+interface TerminalDashboardProps {
+  companies: Record<string, CompanyData>;
+  selectedTicker: string;
+  onSelectTicker: (ticker: string) => void;
+  onOpenDirectory: () => void;
 }
 
-/** One schedule, rendered as a table with a year per column. */
-const Schedule: React.FC<{
-  title: string;
-  subtitle?: string;
-  years: (number | string)[];
-  firstForecast: number;
-  rows: Row[];
-}> = ({ title, subtitle, years, firstForecast, rows }) => (
-  <section className="mb-12">
-    <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
-      <h3 className="font-mono text-[11px] tracking-[0.2em] text-[#F2F0EA] uppercase">
-        {title}
-      </h3>
-      {subtitle && (
-        <span className="font-mono text-[10px] text-[#8A8A8F]">{subtitle}</span>
-      )}
-    </div>
+export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
+  companies,
+  selectedTicker,
+  onSelectTicker,
+  onOpenDirectory,
+}) => {
+  const company = companies[selectedTicker] || companies['AAPL'];
 
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] border-collapse">
-        <thead>
-          <tr className="border-b border-[#222228]">
-            <th className="text-left font-mono text-[10px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2 pr-4 w-[34%]">
-              &nbsp;
-            </th>
-            {years.map((year, i) => (
-              <th
-                key={String(year) + i}
-                className={`text-right font-mono text-[10px] tracking-[0.15em] uppercase pb-2 px-2 ${
-                  i >= firstForecast ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'
-                }`}
-              >
-                {typeof year === 'number' ? `FY${String(year).slice(2)}` : year}
-                {i === firstForecast && (
-                  <span className="block text-[9px] tracking-normal normal-case text-[#8A8A8F]">
-                    forecast
-                  </span>
+  // Tab State
+
+  // "For the nerds" opens a WHOLE SCREEN, not a panel on the page. A
+  // three-statement model is thirty schedules wide; reading it squeezed under a
+  // dashboard is not reading it at all. null means no view is open.
+  const [nerdView, setNerdView] = useState<
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE'
+  >(null);
+
+
+  // Escape closes the open view.
+  useEffect(() => {
+    if (!nerdView) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNerdView(null);
+    };
+    window.addEventListener('keydown', onKey);
+    // Stop the page behind from scrolling while a full screen is open.
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [nerdView]);
+
+  // Live news headlines, fetched from our own /api/news proxy.
+  // Starts empty; if the fetch fails or returns nothing, the ticker falls back
+  // to whatever placeholder text lives in the company data file.
+  const [liveNews, setLiveNews] = useState<NewsItem[]>([]);
+
+  // Live quote for the company on screen. Curated data files carry the price as
+  // at the date the model was built, which goes stale; the header should always
+  // show what the shares actually trade at now.
+  const [liveQuote, setLiveQuote] = useState<{
+    price: number;
+    changePct: number;
+    fiftyTwoWeekHigh: number | null;
+    fiftyTwoWeekLow: number | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLiveQuote(null);
+
+    fetch(`/api/company?ticker=${encodeURIComponent(company.ticker)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && data?.quote?.price) {
+          setLiveQuote({
+            price: data.quote.price,
+            changePct: data.quote.changePct ?? 0,
+            fiftyTwoWeekHigh: data.quote.fiftyTwoWeekHigh ?? null,
+            fiftyTwoWeekLow: data.quote.fiftyTwoWeekLow ?? null,
+          });
+        }
+      })
+      .catch(() => {
+        // Silent — the stored price stays on screen.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [company.ticker]);
+
+  const displayPrice = liveQuote?.price ?? company.price;
+
+  // A slim bar that appears once the full ticker header has scrolled away,
+  // keeping the ticker, live price and implied value in view while reading the
+  // statements below. Institutional terminals all do this; it is useful rather
+  // than decorative.
+  const [headerCondensed, setHeaderCondensed] = useState(false);
+  const headerSentinel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Measured against scroll position rather than IntersectionObserver: the
+    // marker is a zero-height element, and a zero-height box combined with a
+    // negative rootMargin does not reliably report as intersecting.
+    const check = () => {
+      const node = headerSentinel.current;
+      if (!node) return;
+      // Condense once the marker has passed above the top of the viewport.
+      setHeaderCondensed(node.getBoundingClientRect().top < 8);
+    };
+
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    window.addEventListener('resize', check);
+    return () => {
+      window.removeEventListener('scroll', check);
+      window.removeEventListener('resize', check);
+    };
+  }, []);
+  const displayChangePct = liveQuote?.changePct ?? company.priceChangePct;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLiveNews([]);
+
+    fetch(
+      `/api/news?ticker=${encodeURIComponent(company.ticker)}` +
+        `&name=${encodeURIComponent(company.name || '')}`
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.items) && data.items.length > 0) {
+          setLiveNews(data.items);
+        }
+      })
+      .catch(() => {
+        // Silent — the placeholder headline stays on screen.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [company.ticker]);
+
+  const newsToShow = liveNews.length > 0 ? liveNews : company.recentNews;
+
+  // Drivers State (initialized per company)
+  const [drivers, setDrivers] = useState<ValuationDrivers>(company.defaultDrivers);
+
+  // Switching company must load that company's own starting assumptions,
+  // otherwise the previous company's sliders silently carry over.
+  useEffect(() => {
+    setDrivers(company.defaultDrivers);
+  }, [company.ticker]);
+
+  // Update local drivers if ticker changes
+  React.useEffect(() => {
+    setDrivers(company.defaultDrivers);
+  }, [selectedTicker]);
+
+  // Recalculate DCF live
+  // Auto-generated companies carry their own derived data file; Apple uses the
+  // curated one. Same engine either way — only the inputs differ.
+  // ---- Model view: derived vs analyst ------------------------------------
+  // A company always has a derived model, built from its filings. A few also
+  // have an analyst model — a data file built by hand in Excel and verified
+  // line by line. Where both exist the user can switch between them and see
+  // exactly what the hand work changes.
+  const analystSource = company.engineBacked ? AAPL_SOURCE : null;
+  const [viewMode, setViewMode] = useState<'DERIVED' | 'ANALYST'>(
+    company.engineBacked ? 'ANALYST' : 'DERIVED'
+  );
+
+  // For a curated company we still fetch its derived counterpart, so the
+  // comparison is available. For everything else the derived model is already
+  // on the record.
+  const [derivedSource, setDerivedSource] = useState<any>(company.modelData ?? null);
+
+  useEffect(() => {
+    setViewMode(company.engineBacked ? 'ANALYST' : 'DERIVED');
+    setDerivedSource(company.modelData ?? null);
+
+    if (!company.modelData) {
+      let cancelled = false;
+      loadDerivedModelData(company.ticker)
+        .then((md) => { if (!cancelled) setDerivedSource(md); })
+        .catch(() => { /* toggle simply stays unavailable */ });
+      return () => { cancelled = true; };
+    }
+  }, [company.ticker]);
+
+  const activeSource =
+    viewMode === 'ANALYST' && analystSource ? analystSource : derivedSource;
+
+  const canCompare = Boolean(analystSource && derivedSource);
+
+  // The starting assumptions belong to the MODEL, not to the company. The
+  // derived model and the analyst model reach different conclusions about
+  // growth, margin, tax, capex and WACC, so each has its own defaults.
+  //
+  // This used to be missed. `drivers` was set from company.defaultDrivers and
+  // only reset when the ticker changed, so switching Apple to DERIVED ran the
+  // derived data file with the ANALYST model's assumptions: 5.5% growth and
+  // 4.0% terminal growth instead of the derived 3.3% and 2.5%. That produced
+  // $168.48 a share, against $146.60 for the derived model actually run on its
+  // own assumptions. Two models were being mixed and the result belonged to
+  // neither.
+  const activeDefaults: ValuationDrivers = useMemo(() => {
+    if (!activeSource) return company.defaultDrivers;
+    const derived = defaultDriversFor(activeSource);
+    const merged: any = { ...company.defaultDrivers };
+    for (const [key, value] of Object.entries(derived)) {
+      if (value !== undefined && value !== null) merged[key] = value;
+    }
+    return merged as ValuationDrivers;
+  }, [activeSource, company.defaultDrivers]);
+
+  // Reported history is the same whichever model is selected, so it is read
+  // from the filings that travel with the derived model rather than from a
+  // model file. That is why every company now shows every year the source
+  // provided (five, where there are five) instead of the three the hand-built
+  // Apple file happens to carry.
+  const historicals = useMemo(() => {
+    const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
+    return raw && raw.length ? financialsFromStatements(raw) : company.financials;
+  }, [derivedSource, activeSource, company.financials]);
+
+  // Ratios: reported years straight from the filings, forecast years read off
+  // the engine's own schedules.
+  const ratioData = useMemo(() => {
+    const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
+    const reported = reportedRatios(raw || []);
+    let forecast: any = { periods: [], applicable: {} };
+    try {
+      if (activeSource) {
+        const model = buildModelFor(activeSource, drivers);
+        forecast = forecastRatios(model, activeSource.meta?.forecastYears || []);
+      }
+    } catch {
+      // A company the engine cannot model still shows its reported ratios.
+    }
+    return { reported, forecast };
+  }, [derivedSource, activeSource, drivers]);
+
+  // The bars for the football field: the two valuation methods, each widened
+  // by the sensitivity steps the grid already uses.
+  const valuationBands = useMemo(() => {
+    if (!activeSource) return [];
+    return valuationBandsFor(activeSource, drivers, displayPrice);
+  }, [activeSource, drivers, displayPrice]);
+
+  // The headline is a RANGE, not one number. The model runs two terminal
+  // methods and they genuinely disagree; publishing the perpetuity figure alone
+  // would be picking one and hiding the other. The low and high are the two
+  // methods' own base cases, so both ends are defensible line by line.
+  const valuationRange = useMemo(() => {
+    const points = valuationBands
+      .map((band) => band.point)
+      .filter((v) => typeof v === 'number' && isFinite(v) && v > 0);
+    if (points.length < 2) return null;
+    return { low: Math.min(...points), high: Math.max(...points) };
+  }, [valuationBands]);
+
+  // Where the traded price sits against that range. Saying "18% above the top
+  // of the range" is both truer and more useful than a premium to a single
+  // number that was only ever one of two answers.
+  const rangePosition = useMemo(() => {
+    if (!valuationRange) return null;
+    const { low, high } = valuationRange;
+    if (displayPrice > high) {
+      return {
+        label: `${(((displayPrice - high) / high) * 100).toFixed(1)}% ABOVE RANGE`,
+        inside: false,
+      };
+    }
+    if (displayPrice < low) {
+      return {
+        label: `${(((low - displayPrice) / low) * 100).toFixed(1)}% BELOW RANGE`,
+        inside: false,
+      };
+    }
+    return { label: 'WITHIN RANGE', inside: true };
+  }, [valuationRange, displayPrice]);
+
+
+  // A figure the filing does not give us is an absence, not a zero.
+  const money = (v: number | null | undefined) =>
+    v === null || v === undefined ? '—' : `${company.currencySymbol}${v.toLocaleString()}`;
+  const pct = (v: number | null | undefined, signed = false) =>
+    v === null || v === undefined ? '—' : `${signed && v > 0 ? '+' : ''}${v}%`;
+
+  // The engine run behind whichever full-screen view is open, built from the
+  // same source and the same drivers as the value on the front page.
+  const nerdModel = useMemo(() => {
+    if (!nerdView || nerdView === 'QUALITATIVE' || !activeSource) return null;
+    try {
+      const built = buildFullModel(activeSource, drivers);
+      return built;
+    } catch {
+      return null;
+    }
+  }, [nerdView, activeSource, drivers]);
+
+  // Switching between the derived and analyst models resets the sliders to
+  // that model's own starting point. Anything the user had moved is cleared,
+  // which is correct: a slider position means nothing once the underlying
+  // model has changed beneath it.
+  useEffect(() => {
+    setDrivers(activeDefaults);
+  }, [viewMode, derivedSource, analystSource]);
+
+  const runDCF = React.useCallback(
+    (d: ValuationDrivers) => calculateDCFFor(activeSource ?? AAPL_SOURCE, d, displayPrice),
+    [activeSource, displayPrice]
+  );
+
+  // A placeholder record has neither its own model nor a curated one, so any
+  // valuation shown for it would be Apple's cash flows wearing another
+  // company's name. Say so instead of showing a number.
+  const hasRealModel = Boolean(company.modelData) || company.engineBacked;
+
+  const dcfResult = useMemo(() => runDCF(drivers), [drivers, runDCF]);
+
+  // Calculate Upside %
+  const potentialUpsidePct = useMemo(() => {
+    const diff = dcfResult.targetPrice - company.price;
+    return Number(((diff / company.price) * 100).toFixed(1));
+  }, [dcfResult.targetPrice, company.price]);
+
+  // Premium or discount TO THE MODEL, so the model value is the denominator.
+  //
+  // This used to divide by the market price, which produced figures that were
+  // arithmetically impossible: Reliance showed "133.9% DISCOUNT TO MODEL", and
+  // a discount cannot exceed 100% without the price being negative. Measured
+  // against the model value it is a 57% discount. Read it as: what the market
+  // is paying, relative to what the model says the shares are worth.
+  const premiumToModelPct = useMemo(() => {
+    const value = dcfResult.targetPrice;
+    if (!value || value <= 0) return 0;
+    return Number((((company.price - value) / value) * 100).toFixed(1));
+  }, [dcfResult.targetPrice, company.price]);
+
+  // premiumToModelPct > 0 → market is above model → PREMIUM to model
+  // premiumToModelPct < 0 → market is below model → DISCOUNT to model
+  const premiumDiscountLabel = premiumToModelPct > 0
+    ? `${premiumToModelPct}% PREMIUM TO MODEL`
+    : `${Math.abs(premiumToModelPct)}% DISCOUNT TO MODEL`;
+  const premiumDiscountStyle = potentialUpsidePct < 0
+    ? 'bg-rose-950/60 text-rose-300 border-rose-700'
+    : 'bg-emerald-950/60 text-emerald-300 border-emerald-700';
+
+  // Preset Scenario Handlers
+  const applyPreset = (preset: 'BASE' | 'BULL' | 'BEAR' | 'FORENSIC') => {
+    // Presets flex the ACTIVE model's own defaults, not the company record's.
+    const base = activeDefaults;
+    if (preset === 'BASE') {
+      setDrivers(base);
+    } else if (preset === 'BULL') {
+      setDrivers({
+        ...base,
+        revenueGrowthPct: Number((base.revenueGrowthPct * 1.3).toFixed(1)),
+        operatingMarginPct: Number((base.operatingMarginPct * 1.15).toFixed(1)),
+        waccPct: Number((base.waccPct * 0.9).toFixed(1)),
+      });
+    } else if (preset === 'BEAR') {
+      setDrivers({
+        ...base,
+        revenueGrowthPct: Number((base.revenueGrowthPct * 0.6).toFixed(1)),
+        operatingMarginPct: Number((base.operatingMarginPct * 0.8).toFixed(1)),
+        waccPct: Number((base.waccPct * 1.15).toFixed(1)),
+      });
+    } else if (preset === 'FORENSIC') {
+      setDrivers({
+        ...base,
+        operatingMarginPct: Number((base.operatingMarginPct * 0.75).toFixed(1)),
+        taxRatePct: Number((base.taxRatePct * 1.25).toFixed(1)),
+        capexPctOfRev: Number((base.capexPctOfRev * 1.4).toFixed(1)),
+        waccPct: Number((base.waccPct * 1.2).toFixed(1)),
+      });
+    }
+  };
+
+  // Sensitivity Matrix Calculations
+  const waccRange = [drivers.waccPct - 1.0, drivers.waccPct - 0.5, drivers.waccPct, drivers.waccPct + 0.5, drivers.waccPct + 1.0];
+  const gRange = [drivers.terminalGrowthPct - 1.0, drivers.terminalGrowthPct - 0.5, drivers.terminalGrowthPct, drivers.terminalGrowthPct + 0.5, drivers.terminalGrowthPct + 1.0];
+
+  const sensitivityMatrix = useMemo(() => {
+    return waccRange.map((w) =>
+      gRange.map((g) => {
+        const res = runDCF({ ...drivers, waccPct: Math.max(4, w), terminalGrowthPct: Math.max(0.5, g) });
+        return res.targetPrice;
+      })
+    );
+  }, [drivers, runDCF]);
+
+  const [hoveredMatrixCell, setHoveredMatrixCell] = useState<{ wacc: number; g: number; val: number } | null>(null);
+  const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
+
+  return (
+    <section id="terminal" className="pt-16 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12">
+      {/* Condensed header, shown once the full one has scrolled out of view */}
+      <AnimatePresence>
+        {headerCondensed && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -60, opacity: 0 }}
+            transition={{ duration: 0.28, ease: 'easeOut' }}
+            className="fixed top-0 left-0 right-0 z-40 bg-[#0B0B0D]/95 backdrop-blur-sm border-b hairline-border-b"
+          >
+            <div className="max-w-[1440px] mx-auto px-6 lg:px-12 py-3 flex items-center justify-between gap-6">
+              <div className="flex items-baseline gap-3 min-w-0">
+                <span className="font-mono text-[11px] text-[#8B1E1E] font-bold tracking-widest shrink-0">
+                  {company.ticker}
+                </span>
+                <span className="font-sans text-sm text-[#A1A1AA] font-light truncate hidden sm:block">
+                  {company.name}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-6 shrink-0">
+                <div className="text-right">
+                  <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+                    Price
+                  </div>
+                  <div className="font-mono text-sm text-[#F2F0EA]">
+                    <TweenNumber value={displayPrice} prefix={company.currencySymbol} />
+                  </div>
+                </div>
+
+                {hasRealModel && (
+                  <div className="text-right">
+                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+                      Implied
+                    </div>
+                    <div className="font-mono text-sm text-[#8B1E1E] font-semibold">
+                      <TweenNumber
+                        value={dcfResult.targetPrice}
+                        prefix={company.currencySymbol}
+                      />
+                    </div>
+                  </div>
                 )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, ri) => {
-            if (row.spacer) {
-              return (
-                <tr key={`spacer-${ri}`}>
-                  <td colSpan={years.length + 1} className="h-3" />
-                </tr>
-              );
-            }
-            const format = row.format || ((v: any) => fmt(v));
-            return (
-              <React.Fragment key={row.label + ri}>
-                <tr
-                  className={`border-b border-[#222228]/50 ${
-                    row.bold ? 'bg-[#111114]' : ''
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Terminal Title & Ticker Selector Bar */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 border-b hairline-border-b pb-6">
+        <div>
+          <h2 className="font-display text-2xl sm:text-3xl text-[#F2F0EA] tracking-tight">
+            Company Specific Analysis
+          </h2>
+        </div>
+
+        {/* Company Quick Ticker Selector */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] text-[#8A8A8F] mr-2 hidden sm:inline uppercase tracking-widest">SELECT TICKER:</span>
+          {Object.keys(companies).map((t) => (
+            <button
+              key={t}
+              onClick={() => onSelectTicker(t)}
+              className={`font-mono text-[11px] uppercase tracking-wider px-4 py-1.5 transition-all cursor-pointer ${
+                selectedTicker === t
+                  ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold border border-[#8B1E1E] shadow-[0_0_10px_rgba(139,30,30,0.3)]'
+                  : 'bg-[#111114] text-[#A1A1AA] border hairline-border hover:bg-[#222228] hover:text-[#F2F0EA]'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+          <button
+            onClick={onOpenDirectory}
+            className="font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 bg-transparent border hairline-border text-[#8B1E1E] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors cursor-pointer ml-2"
+          >
+            + All Companies
+          </button>
+        </div>
+      </div>
+
+      {/* Primary Header Info Bar */}
+      <div className="bg-[#111114] border hairline-border p-6 lg:p-8 mb-6 shadow-lg">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-6">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
+                {company.exchange}: {company.ticker}
+              </span>
+              <span className="font-mono text-[10px] tracking-widest uppercase text-[#8A8A8F]">{company.sector}</span>
+              <span className="font-mono text-[10px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {company.isin}</span>
+            </div>
+            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA] tracking-tight">
+              {company.name}
+            </h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="text-left md:text-right border-l md:border-l-0 md:border-r-0 hairline-border-l pl-4 md:pl-0">
+              <div className="font-mono text-[11px] text-[#8A8A8F] tracking-widest mb-1 uppercase">
+                {liveQuote ? 'LIVE PRICING' : 'LAST STORED PRICE'} ({company.currency})
+              </div>
+              <div className="flex items-baseline gap-3 md:justify-end">
+                <span className="font-display text-3xl sm:text-4xl text-[#F2F0EA] font-semibold">
+                  {company.currencySymbol}{displayPrice.toFixed(2)}
+                </span>
+                <span
+                  className={`font-mono text-[11px] tracking-wider font-semibold flex items-center gap-0.5 px-2 py-0.5 ${
+                    displayChangePct >= 0 ? 'text-emerald-400 bg-emerald-950/40' : 'text-rose-400 bg-rose-950/40'
                   }`}
                 >
-                  <td
-                    className={`py-2 pr-4 text-[12px] ${row.indent ? 'pl-4' : ''} ${
-                      row.bold
-                        ? 'text-[#F2F0EA] font-semibold'
-                        : row.accent
-                        ? 'text-[#8B1E1E]'
-                        : row.muted
-                        ? 'text-[#8A8A8F]'
-                        : 'text-[#A1A1AA]'
+                  {displayChangePct >= 0 ? '+' : ''}{displayChangePct}%
+                </span>
+              </div>
+            </div>
+
+            {/* Derived vs analyst model switch — only where both exist */}
+            {canCompare && (
+              <div className="text-left md:text-right">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  Model
+                </div>
+                <div className="flex border hairline-border">
+                  <button
+                    onClick={() => setViewMode('DERIVED')}
+                    className={`font-mono text-[10px] px-3 py-2 uppercase tracking-wider cursor-pointer transition-colors ${
+                      viewMode === 'DERIVED'
+                        ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold'
+                        : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
                     }`}
                   >
-                    <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span>{row.label}</span>
-                      {row.adjuster}
+                    Derived
+                  </button>
+                  <button
+                    onClick={() => setViewMode('ANALYST')}
+                    className={`font-mono text-[10px] px-3 py-2 uppercase tracking-wider cursor-pointer transition-colors ${
+                      viewMode === 'ANALYST'
+                        ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold'
+                        : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
+                    }`}
+                  >
+                    Analyst
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Model Implied Value & Premium/Discount */}
+            {hasRealModel ? (
+              <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  MODEL IMPLIED VALUE
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <FlashOnChange watch={viewMode} className="px-1 -mx-1">
+                    <span className="font-display text-2xl text-[#8B1E1E] font-bold">
+                      {valuationRange ? (
+                        <>
+                          <TweenNumber
+                            value={valuationRange.low}
+                            prefix={company.currencySymbol}
+                          />
+                          <span className="text-[#8A8A8F] px-1.5">to</span>
+                          <TweenNumber
+                            value={valuationRange.high}
+                            prefix={company.currencySymbol}
+                          />
+                        </>
+                      ) : (
+                        <TweenNumber
+                          value={dcfResult.targetPrice}
+                          prefix={company.currencySymbol}
+                        />
+                      )}
                     </span>
-                  </td>
-                  {years.map((_, i) => (
-                    <td
-                      key={i}
-                      className={`py-2 px-2 text-right font-mono text-[12px] ${
-                        row.bold
-                          ? 'text-[#F2F0EA] font-semibold'
-                          : i >= firstForecast
-                          ? 'text-[#A1A1AA]'
-                          : 'text-[#F2F0EA]'
+                  </FlashOnChange>
+                  <span
+                    className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border ${
+                      rangePosition
+                        ? rangePosition.inside
+                          ? 'text-emerald-400 border-emerald-400/40 bg-emerald-400/5'
+                          : premiumDiscountStyle
+                        : premiumDiscountStyle
+                    }`}
+                  >
+                    {rangePosition ? rangePosition.label : premiumDiscountLabel}
+                  </span>
+                </div>
+                {valuationRange && (
+                  <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-1.5">
+                    Two methods: growing forever, and sold at the end
+                  </div>
+                )}
+                <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-2">
+                  {viewMode === 'ANALYST' && analystSource
+                    ? 'Analyst model — built by hand, verified against the filings'
+                    : 'Derived model — assumptions from reported history'}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#0B0B0D] border hairline-border p-3 px-5 text-left md:text-right shadow-inner max-w-xs">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  NO MODEL BUILT
+                </div>
+                <div className="font-mono text-[11px] text-[#A1A1AA] leading-relaxed">
+                  Placeholder record. Search this ticker in the directory to build
+                  a model from its filings.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 5 Key Metric Cards */}
+        <motion.div
+          initial="hidden"
+          animate="shown"
+          variants={{ shown: { transition: { staggerChildren: 0.06 } } }}
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-6 hairline-border-t"
+        >
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Market Cap</span>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.marketCapStr}</span>
+          </motion.div>
+
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROE (LTM)</span>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roePct} decimals={1} suffix="%" /></span>
+          </motion.div>
+
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROA (LTM)</span>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roaPct} decimals={1} suffix="%" /></span>
+          </motion.div>
+
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Op Margin</span>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /></span>
+          </motion.div>
+
+          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
+            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Net Debt / EBITDA</span>
+            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.netDebtEbitda}</span>
+          </motion.div>
+        </motion.div>
+      </div>
+
+      {/* Marks where the full header ends, for the condensed bar above */}
+      <div ref={headerSentinel} className="h-px w-full" aria-hidden="true" />
+
+      {/* Live News Ticker Marquee */}
+      <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
+        <div className="font-mono text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
+          <Activity className="w-3.5 h-3.5 animate-pulse" />
+          <span>NEWS DISPATCH:</span>
+        </div>
+        <div className="overflow-hidden relative w-full">
+          <div className="animate-marquee flex gap-12 font-mono text-xs text-[#A1A1AA]">
+            {newsToShow.map((news) =>
+              news.url ? (
+                <a
+                  key={news.id}
+                  href={news.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
+                  <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
+                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                </a>
+              ) : (
+                <span key={news.id} className="inline-flex items-center gap-2">
+                  <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
+                  <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
+                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                </span>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Row (3 Columns: Rev Trend Bar Chart, DCF Sensitivity Heatmap, Health Radar) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+        
+        {/* Card 1: Revenue & Margin Trend Bar Chart */}
+        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
+                REV & MARGIN TREND
+              </span>
+              <span className="font-mono text-[9px] tracking-widest text-[#8B1E1E] border border-[#8B1E1E]/40 px-2 py-0.5 uppercase bg-[#8B1E1E]/5">
+                5-YEAR GAAP
+              </span>
+            </div>
+
+            {/* Custom Bar Visualization */}
+            <div className="h-52 flex items-end justify-between gap-3 pt-8 pb-2 px-2 border-b hairline-border-b relative">
+              {historicals.years.map((yr, idx) => {
+                const revValues = historicals.revenue.filter(
+                  (x): x is number => typeof x === 'number'
+                );
+                const maxRev = revValues.length ? Math.max(...revValues) : 0;
+                const thisRev = historicals.revenue[idx];
+                const revHeightPct =
+                  maxRev > 0 && typeof thisRev === 'number'
+                    ? Math.round((thisRev / maxRev) * 100)
+                    : 0;
+                const margin = historicals.ebitdaMargin[idx] ?? 0;
+
+                return (
+                  <div
+                    key={yr}
+                    onMouseEnter={() => setHoveredBarIndex(idx)}
+                    onMouseLeave={() => setHoveredBarIndex(null)}
+                    className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative"
+                  >
+                    {/* Hover Inspect Tooltip */}
+                    {hoveredBarIndex === idx && (
+                      <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-3 z-20 font-mono text-[10px] text-[#A1A1AA] whitespace-nowrap shadow-xl">
+                        <div className="text-[#8B1E1E] font-bold tracking-widest uppercase mb-1">{yr} Metrics</div>
+                        <div className="tracking-wider">Rev: <span className="text-[#F2F0EA]">{typeof thisRev === 'number' ? `${company.currencySymbol}${(thisRev / 1000).toFixed(1)}B` : '—'}</span></div>
+                        <div className="tracking-wider">EBITDA Margin: <span className="text-[#F2F0EA]">{margin}%</span></div>
+                      </div>
+                    )}
+
+                    {/* Red Accent Pin line for EBITDA Margin indicator */}
+                    <div
+                      style={{ bottom: `${Math.min(95, margin * 2)}%` }}
+                      className="absolute w-full h-[2px] bg-[#8B1E1E] z-10 group-hover:scale-y-150 transition-transform"
+                    />
+
+                    {/* Revenue Bar — grows from the baseline on first view,
+                        and eases to its new height when the company changes. */}
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: `${revHeightPct}%` }}
+                      transition={{
+                        duration: 0.75,
+                        delay: idx * 0.09,
+                        ease: [0.16, 1, 0.3, 1],
+                      }}
+                      className="w-full bg-[#222228] group-hover:bg-[#8B1E1E]/40 transition-colors relative"
+                    >
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#8B1E1E]" />
+                    </motion.div>
+
+                    <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] mt-3 group-hover:text-[#F2F0EA] transition-colors">
+                      {yr}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4">
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 bg-[#222228] border border-[#8B1E1E]" /> Revenue
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-3 h-0.5 bg-[#8B1E1E]" /> EBITDA Margin %
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: DCF Sensitivity Heatmap Matrix */}
+        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
+                DCF SENSITIVITY MATRIX
+              </span>
+              <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">WACC vs. G%</span>
+            </div>
+
+            {/* 5x5 Cell Matrix */}
+            <div className="grid grid-cols-5 gap-1 my-3 relative">
+              {sensitivityMatrix.map((row, rIdx) =>
+                row.map((val, cIdx) => {
+                  const currWacc = waccRange[rIdx];
+                  const currG = gRange[cIdx];
+                  const isCurrentDriver = rIdx === 2 && cIdx === 2;
+                  
+                  // Color calculation based on upside/downside
+                  const ratio = val / company.price;
+                  let cellBg = 'bg-[#1c1110]';
+                  if (ratio > 1.2) cellBg = 'bg-[#8B1E1E]';
+                  else if (ratio > 1.05) cellBg = 'bg-[#8B1E1E]/70';
+                  else if (ratio > 0.9) cellBg = 'bg-[#222228]';
+                  else cellBg = 'bg-[#111114]';
+
+                  return (
+                    <motion.div
+                      key={`${rIdx}-${cIdx}`}
+                      onMouseEnter={() => setHoveredMatrixCell({ wacc: currWacc, g: currG, val })}
+                      onMouseLeave={() => setHoveredMatrixCell(null)}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      /* Fill diagonally, so the grid resolves from the top-left
+                         corner outward rather than appearing all at once. */
+                      transition={{ duration: 0.28, delay: (rIdx + cIdx) * 0.035, ease: 'easeOut' }}
+                      className={`h-9 border border-[#222228] flex items-center justify-center cursor-pointer transition-colors duration-500 hover:scale-105 hover:z-10 ${cellBg} ${
+                        isCurrentDriver ? 'ring-1 ring-[#F2F0EA]' : ''
                       }`}
                     >
-                      {row.values ? format(row.values[i]) : ''}
-                    </td>
-                  ))}
-                </tr>
-                {row.note && (
-                  <tr>
-                    <td
-                      colSpan={years.length + 1}
-                      className="pb-2 text-[11px] leading-relaxed text-[#8A8A8F]"
-                    >
-                      {row.note}
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  </section>
-);
-
-// ---------------------------------------------------------------------------
-// FULL SCREEN WRAPPER
-// ---------------------------------------------------------------------------
-
-export const FullScreenPanel: React.FC<{
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}> = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 bg-[#0B0B0D] overflow-y-auto">
-    <div className="sticky top-0 z-10 bg-[#0B0B0D]/95 backdrop-blur border-b border-[#222228]">
-      <div className="max-w-[1440px] mx-auto px-5 sm:px-10 py-4 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="font-serif text-lg sm:text-2xl text-[#F2F0EA]">{title}</h2>
-          {subtitle && (
-            <p className="font-mono text-[10px] tracking-[0.15em] text-[#8A8A8F] uppercase mt-0.5">
-              {subtitle}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="shrink-0 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-3 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
-        >
-          <X className="w-4 h-4" />
-          <span className="hidden sm:inline">Close</span>
-        </button>
-      </div>
-    </div>
-    <div className="max-w-[1440px] mx-auto px-5 sm:px-10 py-8">{children}</div>
-  </div>
-);
-
-// ---------------------------------------------------------------------------
-// THREE STATEMENT MODEL
-// ---------------------------------------------------------------------------
-
-interface ViewProps {
-  historicals?: any;
-  model: any;
-  dcf: any;
-  source: any;
-  drivers: ValuationDrivers;
-  defaults: ValuationDrivers;
-  onChange: (next: ValuationDrivers) => void;
-  currencySymbol: string;
-  unitLabel: string;
-}
-
-export const ThreeStatementView: React.FC<ViewProps> = ({
-  historicals,
-  model: M,
-  source,
-  drivers,
-  defaults,
-  onChange,
-  unitLabel,
-}) => {
-  if (!M) return null;
-  const years: number[] = M.years || [];
-  const nH: number = M.nH;
-  const A = (key: keyof ValuationDrivers, props: any = {}) => (
-    <Adjust
-      driverKey={key}
-      drivers={drivers}
-      defaults={defaults}
-      onChange={onChange}
-      {...props}
-    />
-  );
-  const pct = (v: any) => fmtPct(v);
-
-  const bs = M.balanceSheet || {};
-  const wc = M.wc || {};
-  const segments = M.segments || {};
-
-  return (
-    <>
-      <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-3xl mb-8">
-        Every schedule the model builds, in the order the workbook builds them.
-        Figures in {unitLabel}. Reported years are shown in white, forecast years
-        in grey, and each assumption can be changed on the row it belongs to.
-      </p>
-
-      {historicals?.years?.length ? (
-        <Schedule
-          title="As reported, from the filings"
-          subtitle="the published figures, before any modelling"
-          years={historicals.years}
-          firstForecast={historicals.years.length}
-          rows={[
-            { label: 'Revenue', values: historicals.revenue, bold: true },
-            { label: 'Growth', values: historicals.revenueGrowth, format: (v: any) => (num(v) ? `${v}%` : '—'), indent: true, muted: true },
-            { label: 'Gross margin', values: historicals.grossMargin, format: (v: any) => (num(v) ? `${v}%` : '—'), indent: true, muted: true },
-            { label: 'EBITDA margin', values: historicals.ebitdaMargin, format: (v: any) => (num(v) ? `${v}%` : '—'), indent: true, muted: true },
-            { label: 'Net income', values: historicals.netIncome },
-            { label: 'Operating cash flow', values: historicals.operatingCashFlow },
-            { label: 'Free cash flow', values: historicals.freeCashFlow, accent: true },
-            { label: 'Total debt', values: historicals.totalDebt, indent: true },
-            { label: 'Cash and equivalents', values: historicals.cashAndEquivalents, indent: true },
-          ]}
-        />
-      ) : null}
-
-      <Schedule
-        title="Income statement"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Revenue', values: M.revenue, bold: true },
-          {
-            label: 'Growth',
-            values: M.revenueGrowth,
-            format: pct,
-            indent: true,
-            muted: true,
-            adjuster: A('revenueGrowthPct'),
-          },
-          { label: 'Cost of goods sold', values: M.cogs, indent: true },
-          { label: 'Gross profit', values: M.grossProfit, bold: true },
-          {
-            label: 'Gross margin',
-            values: M.grossMargin,
-            format: pct,
-            indent: true,
-            muted: true,
-            adjuster: A('operatingMarginPct'),
-            note:
-              'The operating margin adjuster works through gross margin: research and selling costs are held at their own percentages, so the gross margin is what moves to reach the operating margin you set.',
-          },
-          { spacer: true, label: '' },
-          {
-            label: 'Research and development',
-            values: M.rnd,
-            indent: true,
-            adjuster: A('rndMarginPct'),
-          },
-          {
-            label: 'Selling, general and administrative',
-            values: M.sga,
-            indent: true,
-            adjuster: A('sgaMarginPct'),
-          },
-          { label: 'Operating profit (EBIT)', values: M.ebit, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Interest income', values: M.interestIncome, indent: true },
-          { label: 'Interest expense', values: M.interestExpense, indent: true },
-          { label: 'Other income and expense', values: M.otherIncomeExpense, indent: true },
-          { label: 'Profit before tax', values: M.pretaxProfit, bold: true },
-          {
-            label: 'Tax',
-            values: M.taxes,
-            indent: true,
-            adjuster: A('taxRatePct'),
-          },
-          { label: 'Net income', values: M.netIncome, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Depreciation and amortisation', values: M.depreciationAmortisation, indent: true, muted: true },
-          { label: 'Stock based compensation', values: M.stockBasedCompensation, indent: true, muted: true },
-          { label: 'EBITDA', values: M.ebitda, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Basic shares', values: M.basicShares, indent: true, muted: true },
-          { label: 'Diluted shares', values: M.dilutedShares, indent: true, muted: true },
-          { label: 'Basic EPS', values: M.basicEPS, format: (v) => fmt(v, 2), indent: true },
-          { label: 'Diluted EPS', values: M.dilutedEPS, format: (v) => fmt(v, 2), bold: true },
-        ]}
-      />
-
-      {Object.keys(segments).length > 1 && (
-        <Schedule
-          title="Revenue by segment"
-          years={years}
-          firstForecast={nH}
-          rows={Object.keys(segments).flatMap((name) => [
-            { label: name, values: segments[name] },
-            {
-              label: `${name} growth`,
-              values: (M.segmentGrowth || {})[name],
-              format: pct,
-              indent: true,
-              muted: true,
-            },
-          ])}
-        />
-      )}
-
-      <Schedule
-        title="Balance sheet"
-        subtitle="assets, then liabilities and equity, with the balance check"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Cash and securities', values: bs.cashAndSecurities, indent: true },
-          { label: 'Accounts receivable', values: bs.accountsReceivable, indent: true },
-          { label: 'Inventory', values: bs.inventory, indent: true },
-          { label: 'Deferred tax assets', values: bs.deferredTaxAssets, indent: true },
-          { label: 'Other current assets', values: bs.otherCurrentAssets, indent: true },
-          { label: 'Property, plant and equipment', values: bs.propertyPlantEquipment, indent: true },
-          { label: 'Other assets', values: bs.otherAssets, indent: true },
-          { label: 'Total assets', values: bs.totalAssets, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Accounts payable', values: bs.accountsPayable, indent: true },
-          { label: 'Accrued expenses', values: bs.accruedExpenses, indent: true },
-          { label: 'Revolver', values: bs.revolver, indent: true },
-          { label: 'Long term debt', values: bs.longTermDebt, indent: true },
-          { label: 'Other non-current liabilities', values: bs.otherNonCurrentLiabilities, indent: true },
-          { label: 'Total liabilities', values: bs.totalLiabilities, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Common stock and paid-in capital', values: bs.commonStockAPIC, indent: true },
-          { label: 'Treasury stock', values: bs.treasuryStock, indent: true },
-          { label: 'Retained earnings', values: bs.retainedEarnings, indent: true },
-          { label: 'Other comprehensive income', values: bs.otherComprehensiveIncome, indent: true },
-          { label: 'Total equity', values: bs.totalEquity, bold: true },
-          {
-            label: 'Balance check (assets less liabilities and equity)',
-            values: bs.balanceCheck,
-            accent: true,
-            note:
-              'This row must be zero in every column. It is the model checking itself: if the balance sheet does not balance, something above it is wrong.',
-          },
-        ]}
-      />
-
-      <Schedule
-        title="Working capital"
-        subtitle="closing balances, with the ratios that drive the forecast"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Accounts receivable', values: wc.accountsReceivable?.ending, indent: true },
-          { label: 'Days sales outstanding', values: M.dso, format: (v) => fmt(v, 1), indent: true, muted: true },
-          { label: 'Inventory', values: wc.inventory?.ending, indent: true },
-          { label: 'Inventory turnover', values: M.inventoryTurnover, format: (v) => fmtX(v, 2), indent: true, muted: true },
-          { label: 'Accounts payable', values: wc.accountsPayable?.ending, indent: true },
-          { label: 'Days payable outstanding', values: M.dpo, format: (v) => fmt(v, 1), indent: true, muted: true },
-          { label: 'Accrued expenses', values: wc.accruedExpenses?.ending, indent: true },
-          { label: 'Other current assets', values: wc.otherCurrentAssets?.ending, indent: true },
-          { label: 'Deferred tax assets', values: wc.deferredTaxAssets?.ending, indent: true },
-          { label: 'Other assets', values: wc.otherAssets?.ending, indent: true },
-          { label: 'Other non-current liabilities', values: wc.otherNonCurrentLiabilities?.ending, indent: true },
-        ]}
-      />
-
-      <Schedule
-        title="Property, plant and equipment"
-        subtitle="opening balance, plus capex, less depreciation, equals closing"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Opening balance', values: M.ppe?.beginning, indent: true },
-          {
-            label: 'Capital expenditure',
-            values: M.ppe?.capex,
-            indent: true,
-            adjuster: A('capexPctOfRev'),
-          },
-          {
-            label: 'Depreciation',
-            values: M.ppe?.depreciation,
-            indent: true,
-            adjuster: A('depreciationPctOfCapex'),
-          },
-          { label: 'Closing balance', values: M.ppe?.ending, bold: true },
-          {
-            label: 'Depreciation as a share of capex',
-            values: M.depreciationPercentOfCapex,
-            format: pct,
-            indent: true,
-            muted: true,
-          },
-        ]}
-      />
-
-      <Schedule
-        title="Debt"
-        subtitle="including any interest rolled up rather than paid in cash"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Opening balance', values: M.debt?.beginning, indent: true },
-          { label: 'Borrowing and repayment', values: M.debt?.borrowing, indent: true },
-          { label: 'Interest added to the balance', values: M.debt?.pikAccrual, indent: true },
-          { label: 'Closing balance', values: M.debt?.ending, bold: true },
-          { label: 'Interest expense', values: M.debt?.interestExpense, indent: true, muted: true },
-          { label: 'Average rate', values: M.debt?.weightedAverageRate, format: pct, indent: true, muted: true },
-          { spacer: true, label: '' },
-          { label: 'Revolver opening', values: M.revolver?.beginning, indent: true },
-          { label: 'Drawn or repaid', values: M.revolver?.change, indent: true },
-          { label: 'Revolver closing', values: M.revolver?.ending, bold: true },
-        ]}
-      />
-
-      <Schedule
-        title="Equity"
-        subtitle="common stock, retained earnings, treasury stock and other comprehensive income"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Common stock opening', values: M.commonStock?.beginning, indent: true },
-          { label: 'Shares issued', values: M.commonStock?.issuances, indent: true },
-          { label: 'Stock based compensation', values: M.commonStock?.sbc, indent: true },
-          { label: 'Common stock closing', values: M.commonStock?.ending, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Retained earnings opening', values: M.retainedEarnings?.beginning, indent: true },
-          { label: 'Net income', values: M.retainedEarnings?.netIncome, indent: true },
-          {
-            label: 'Dividends',
-            values: M.retainedEarnings?.dividends,
-            indent: true,
-            adjuster: A('dividendPayoutPct'),
-          },
-          { label: 'Retained earnings closing', values: M.retainedEarnings?.ending, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Treasury stock opening', values: M.treasury?.beginning, indent: true },
-          { label: 'Share repurchases', values: M.treasury?.repurchases, indent: true },
-          { label: 'Treasury stock closing', values: M.treasury?.ending, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Other comprehensive income opening', values: M.oci?.beginning, indent: true },
-          { label: 'Change in the year', values: M.oci?.change, indent: true },
-          { label: 'Other comprehensive income closing', values: M.oci?.ending, bold: true },
-        ]}
-      />
-
-      <Schedule
-        title="Cash flow statement"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Cash from operating activities', values: M.cashFlow?.operating, bold: true },
-          { label: 'Cash from investing activities', values: M.cashFlow?.investing, bold: true },
-          { label: 'Cash from financing activities', values: M.cashFlow?.financing, bold: true },
-          { label: 'Net change in cash', values: M.cashFlow?.netChangeInCash, accent: true },
-          { spacer: true, label: '' },
-          { label: 'Cash opening', values: M.cash?.beginning, indent: true },
-          { label: 'Cash closing', values: M.cash?.ending, bold: true },
-        ]}
-      />
-
-      <Schedule
-        title="Ratios"
-        years={years}
-        firstForecast={nH}
-        rows={[
-          { label: 'Net debt', values: M.ratios?.netDebt, indent: true },
-          { label: 'Asset turnover', values: M.ratios?.assetTurnover, format: (v) => fmtX(v, 2), indent: true },
-          { label: 'Net margin', values: M.ratios?.netMargin, format: pct, indent: true },
-          { label: 'Return on assets', values: M.ratios?.roa, format: pct, indent: true },
-          { label: 'Return on equity', values: M.ratios?.roe, format: pct, indent: true },
-        ]}
-      />
-
-      {source?.meta?.circuitBreaker === 'ON' && (
-        <p className="text-[12px] leading-relaxed text-[#8A8A8F] max-w-3xl border-t border-[#222228] pt-5">
-          Circular references are switched off in this model. Interest is
-          calculated on the debt balance rather than solved simultaneously with
-          it, which avoids a loop that can oscillate instead of settling. The
-          difference to the answer is small; the difference to whether the model
-          can be trusted to converge is not.
-        </p>
-      )}
-    </>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// DCF MODEL
-// ---------------------------------------------------------------------------
-
-export const DCFView: React.FC<ViewProps> = ({
-  model: M,
-  dcf: D,
-  source,
-  drivers,
-  defaults,
-  onChange,
-  currencySymbol,
-  unitLabel,
-}) => {
-  if (!D || !D.applicable) {
-    return (
-      <p className="text-[14px] leading-relaxed text-[#A1A1AA] max-w-2xl">
-        {D?.message ||
-          'No discounted cash flow is shown for this company. The reported figures are unaffected.'}
-      </p>
-    );
-  }
-
-  const years: number[] = D.years || [];
-  const A = (key: keyof ValuationDrivers, props: any = {}) => (
-    <Adjust
-      driverKey={key}
-      drivers={drivers}
-      defaults={defaults}
-      onChange={onChange}
-      {...props}
-    />
-  );
-  const w = D.waccDetail || {};
-  const money = (v: any, dp = 0) => (num(v) ? `${currencySymbol}${fmt(v, dp)}` : '—');
-
-  return (
-    <>
-      <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-3xl mb-8">
-        The full discounted cash flow, in the order the workbook runs it.
-        Figures in {unitLabel}. Every assumption can be changed on the row it
-        belongs to, and the whole model recalculates as you do.
-      </p>
-
-      <Schedule
-        title="Unlevered free cash flow"
-        subtitle="what the business produces, before any interest"
-        years={years}
-        firstForecast={0}
-        rows={[
-          { label: 'EBITDA', values: D.ebitda, indent: true },
-          { label: 'Operating profit (EBIT)', values: D.ebit, bold: true },
-          {
-            label: 'Tax at the effective rate',
-            values: D.taxRate,
-            format: (v) => fmtPct(v),
-            indent: true,
-            muted: true,
-            adjuster: A('taxRatePct'),
-          },
-          { label: 'Operating profit after tax (EBIAT)', values: D.ebiat, bold: true },
-          { spacer: true, label: '' },
-          { label: 'Unlevered cash from operations', values: D.unleveredCFO, bold: true },
-          {
-            label: 'Capital expenditure',
-            values: D.capex,
-            indent: true,
-            adjuster: A('capexPctOfRev'),
-          },
-          { label: 'Unlevered free cash flow', values: D.unleveredFCF, bold: true, accent: true },
-          { spacer: true, label: '' },
-          {
-            label: 'Discount factor',
-            values: D.discountFactor,
-            format: (v) => fmt(v, 4),
-            indent: true,
-            muted: true,
-          },
-          { label: 'Present value', values: D.presentValue, bold: true },
-        ]}
-      />
-
-      <section className="mb-12">
-        <h3 className="font-mono text-[11px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
-          The discount rate
-        </h3>
-        <p className="text-[12px] text-[#8A8A8F] mb-4 max-w-3xl">
-          Built from the ground up rather than picked. Change beta, the
-          risk-free rate or the market risk premium and the cost of equity, the
-          weighted rate and every value on this page move with it.
-        </p>
-
-        <div className="border border-[#222228] divide-y divide-[#222228]">
-          {[
-            {
-              label: 'Risk-free rate',
-              value: fmtPct(w.riskFreeRate, 2),
-              adjuster: A('riskFreeRatePct', { step: 0.05 }),
-            },
-            {
-              label: 'Market risk premium',
-              value: fmtPct(w.marketRiskPremium, 2),
-              adjuster: A('marketRiskPremiumPct', { step: 0.05 }),
-            },
-            {
-              label: 'Beta',
-              value: num(w.beta) ? w.beta.toFixed(2) : '—',
-              adjuster: A('betaValue', { step: 0.05, suffix: '' }),
-              note:
-                'How much the share moves relative to the market. Above one means it swings harder than the market does, so an investor demands a higher return for holding it.',
-            },
-            { label: 'Cost of equity', value: fmtPct(w.costOfEquity, 2) },
-            { label: 'Cost of debt, after tax', value: fmtPct(w.afterTaxCostOfDebt, 2) },
-            { label: 'Weight of equity', value: fmtPct(w.weightEquity, 1) },
-            { label: 'Weight of debt', value: fmtPct(w.weightDebt, 1) },
-            {
-              label: 'Weighted average cost of capital',
-              value: fmtPct(D.wacc, 3),
-              bold: true,
-            },
-          ].map((line: any) => (
-            <div key={line.label} className="px-4 py-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <span
-                  className={`text-[13px] ${
-                    line.bold ? 'text-[#F2F0EA] font-semibold' : 'text-[#A1A1AA]'
-                  }`}
-                >
-                  {line.label}
-                </span>
-                <span className="flex items-baseline gap-4">
-                  {line.adjuster}
-                  <span
-                    className={`font-mono text-[13px] ${
-                      line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
-                    }`}
-                  >
-                    {line.value}
-                  </span>
-                </span>
-              </div>
-              {line.note && (
-                <p className="text-[11px] leading-relaxed text-[#8A8A8F] mt-1.5 max-w-2xl">
-                  {line.note}
-                </p>
+                      <span className="font-mono text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
+                        {company.currencySymbol}{Math.round(val)}
+                      </span>
+                    </motion.div>
+                  );
+                })
               )}
             </div>
-          ))}
-        </div>
 
-        {Array.isArray(w.comps) && w.comps.length > 0 && (
-          <div className="mt-5">
-            <div className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
-              Comparable companies used to unlever beta
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse">
-                <thead>
-                  <tr className="border-b border-[#222228]">
-                    {['Company', 'Equity beta', 'Debt / equity', 'Unlevered beta'].map((h) => (
-                      <th
-                        key={h}
-                        className="text-right first:text-left font-mono text-[10px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2 px-2"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {w.comps.map((c: any, i: number) => (
-                    <tr key={i} className="border-b border-[#222228]/50">
-                      <td className="py-2 px-2 text-[12px] text-[#A1A1AA]">{c.name}</td>
-                      <td className="py-2 px-2 text-right font-mono text-[12px] text-[#F2F0EA]">
-                        {num(c.equityBeta) ? c.equityBeta.toFixed(2) : '—'}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono text-[12px] text-[#A1A1AA]">
-                        {num(c.debtToEquity) ? c.debtToEquity.toFixed(2) : '—'}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono text-[12px] text-[#F2F0EA]">
-                        {num(c.unleveredBeta) ? c.unleveredBeta.toFixed(2) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Matrix Cell Inspector */}
+            <div className="bg-[#0B0B0D] border hairline-border p-3 font-mono text-[10px] text-[#A1A1AA] tracking-wider flex justify-between items-center min-h-[42px] shadow-inner mt-4">
+              {hoveredMatrixCell ? (
+                <>
+                  <span className="uppercase tracking-widest">
+                    WACC: <strong className="text-[#F2F0EA]">{hoveredMatrixCell.wacc.toFixed(1)}%</strong> | Term G:{' '}
+                    <strong className="text-[#F2F0EA]">{hoveredMatrixCell.g.toFixed(1)}%</strong>
+                  </span>
+                  <span className="text-[#8B1E1E] font-bold tracking-widest uppercase">
+                    Target: {company.currencySymbol}{hoveredMatrixCell.val.toFixed(2)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-[#8A8A8F] uppercase tracking-widest">Hover matrix cell to inspect valuation sensitivity.</span>
+              )}
             </div>
           </div>
-        )}
-      </section>
 
-      <section className="mb-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="border border-[#222228] p-5">
-          <h3 className="font-mono text-[11px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-4">
-            Method one — growing forever
-          </h3>
-          {[
-            {
-              label: 'Growth after the forecast',
-              value: fmtPct(D.longTermGrowthRate, 2),
-              adjuster: A('terminalGrowthPct', { step: 0.1 }),
-            },
-            { label: 'Normalised free cash flow', value: money(D.normalisedFCF) },
-            { label: 'Terminal value', value: money(D.terminalValuePerpetuity) },
-            { label: 'Value of that today', value: money(D.pvTerminalPerpetuity) },
-            { label: 'Value of the forecast years', value: money(D.pvStageOne) },
-            { label: 'Enterprise value', value: money(D.enterpriseValuePerpetuity), bold: true },
-            { label: 'Implied exit multiple', value: fmtX(D.impliedExitMultiple) },
-            { label: 'Value per share', value: money(D.perpetuity?.valuePerShare, 2), bold: true },
-          ].map((line: any) => (
-            <div
-              key={line.label}
-              className="flex flex-wrap items-baseline justify-between gap-3 py-2 border-b border-[#222228]/50 last:border-0"
-            >
-              <span className={`text-[12px] ${line.bold ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
-                {line.label}
+          <div className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F] flex justify-between items-center pt-3">
+            <span>Y-Axis: WACC (+/-1%)</span>
+            <span>X-Axis: Term Growth (+/-1%)</span>
+          </div>
+        </div>
+
+        {/* Card 3: Health Score Radar Chart */}
+        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
+                FINANCIAL HEALTH SCORE
               </span>
-              <span className="flex items-baseline gap-3">
-                {line.adjuster}
-                <span
-                  className={`font-mono text-[12px] ${
-                    line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
-                  }`}
+              <span className="font-mono text-[12px] text-[#8B1E1E] font-bold border border-[#8B1E1E] px-2 py-0.5 bg-[#8B1E1E]/5">
+                {company.healthMetrics.overallScore}/100
+              </span>
+            </div>
+
+            {/* SVG Geometric Radar Polygon Chart */}
+            <div className="h-52 flex items-center justify-center relative my-1">
+              <svg className="w-48 h-48 overflow-visible" viewBox="0 0 200 200">
+                {/* Concentric pentagon/rings */}
+                <polygon points="100,20 176,60 147,150 53,150 24,60" fill="none" stroke="#222228" strokeWidth="1" />
+                <polygon points="100,50 145,75 128,130 72,130 55,75" fill="none" stroke="#222228" strokeWidth="1" />
+                <polygon points="100,80 115,90 109,110 91,110 85,90" fill="none" stroke="#222228" strokeWidth="1" />
+
+                {/* Radar Axis lines */}
+                <line x1="100" y1="100" x2="100" y2="20" stroke="#222228" strokeWidth="1" />
+                <line x1="100" y1="100" x2="176" y2="60" stroke="#222228" strokeWidth="1" />
+                <line x1="100" y1="100" x2="147" y2="150" stroke="#222228" strokeWidth="1" />
+                <line x1="100" y1="100" x2="53" y2="150" stroke="#222228" strokeWidth="1" />
+                <line x1="100" y1="100" x2="24" y2="60" stroke="#222228" strokeWidth="1" />
+
+                {/* Calculated Polygon points based on metrics */}
+                {(() => {
+                  const m = company.healthMetrics;
+                  const p1 = [100, 100 - (80 * m.balanceSheetStrength) / 100];
+                  const p2 = [100 + (76 * m.earningsQuality) / 100, 100 - (40 * m.earningsQuality) / 100];
+                  const p3 = [100 + (47 * m.cashFlowCoverage) / 100, 100 + (50 * m.cashFlowCoverage) / 100];
+                  const p4 = [100 - (47 * m.accrualRisk) / 100, 100 + (50 * m.accrualRisk) / 100];
+                  const p5 = [100 - (76 * m.valuationMoat) / 100, 100 - (40 * m.valuationMoat) / 100];
+
+                  const pts = `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]} ${p5[0]},${p5[1]}`;
+
+                  // The polygon morphs between shapes when the company or the
+                  // model view changes, rather than snapping to the new one.
+                  return (
+                    <motion.polygon
+                      animate={{ points: pts }}
+                      initial={{ points: '100,100 100,100 100,100 100,100 100,100' }}
+                      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                      fill="rgba(139, 30, 30, 0.4)"
+                      stroke="#8B1E1E"
+                      strokeWidth="2"
+                    />
+                  );
+                })()}
+              </svg>
+            </div>
+          </div>
+
+          {/* The score is only worth showing if the reasoning is shown with it:
+              each ratio, its actual value, and the threshold it was judged on. */}
+          {company.healthDetail ? (
+            <div className="pt-3 border-t hairline-border-t space-y-1.5">
+              {Object.values(company.healthDetail.components).map((c: any) => (
+                <div
+                  key={c.label}
+                  className="flex items-baseline justify-between gap-3 font-mono text-[10px]"
+                  title={c.basis}
                 >
-                  {line.value}
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="border border-[#222228] p-5">
-          <h3 className="font-mono text-[11px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-4">
-            Method two — sold at the end
-          </h3>
-          {[
-            {
-              label: 'Exit multiple of EBITDA',
-              value: fmtX(D.exitMultiple),
-              adjuster: A('exitMultipleX', { step: 0.5, suffix: 'x' }),
-            },
-            { label: 'Terminal year EBITDA', value: money(D.terminalEBITDA) },
-            { label: 'Terminal value', value: money(D.terminalValueMultiple) },
-            { label: 'Value of that today', value: money(D.pvTerminalMultiple) },
-            { label: 'Value of the forecast years', value: money(D.pvStageOne) },
-            { label: 'Enterprise value', value: money(D.enterpriseValueMultiple), bold: true },
-            { label: 'Implied perpetual growth', value: fmtPct(D.impliedPerpetualGrowth, 2) },
-            {
-              label: 'Value per share',
-              value: money(D.exitMultipleValuation?.valuePerShare, 2),
-              bold: true,
-            },
-          ].map((line: any) => (
-            <div
-              key={line.label}
-              className="flex flex-wrap items-baseline justify-between gap-3 py-2 border-b border-[#222228]/50 last:border-0"
-            >
-              <span className={`text-[12px] ${line.bold ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
-                {line.label}
-              </span>
-              <span className="flex items-baseline gap-3">
-                {line.adjuster}
-                <span
-                  className={`font-mono text-[12px] ${
-                    line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
-                  }`}
-                >
-                  {line.value}
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-12">
-        <h3 className="font-mono text-[11px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
-          From the whole company to one share
-        </h3>
-        <p className="text-[12px] text-[#8A8A8F] mb-4 max-w-3xl">
-          A shareholder does not own the debt, so it comes off, and the cash in
-          the bank goes on.
-        </p>
-        <div className="border border-[#222228] divide-y divide-[#222228]">
-          {[
-            { label: 'Enterprise value', value: money(D.perpetuity?.enterpriseValue) },
-            {
-              label: D.netDebt < 0 ? 'Plus net cash' : 'Less net debt',
-              value: money(Math.abs(D.netDebt)),
-            },
-            { label: 'Equity value', value: money(D.perpetuity?.equityValue), bold: true },
-            { label: 'Diluted shares', value: fmt(D.dilutedShares, 1) },
-            {
-              label: 'Value per share',
-              value: money(D.perpetuity?.valuePerShare, 2),
-              bold: true,
-            },
-            { label: 'Market price', value: money(D.marketPrice, 2) },
-          ].map((line: any) => (
-            <div
-              key={line.label}
-              className="px-4 py-3 flex flex-wrap items-baseline justify-between gap-3"
-            >
-              <span className={`text-[13px] ${line.bold ? 'text-[#F2F0EA]' : 'text-[#A1A1AA]'}`}>
-                {line.label}
-              </span>
-              <span
-                className={`font-mono text-[13px] ${
-                  line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
-                }`}
-              >
-                {line.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {D.sensitivity?.perpetuity && D.sensitivityAxes && (
-        <section className="mb-4">
-          <h3 className="font-mono text-[11px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
-            Sensitivity
-          </h3>
-          <p className="text-[12px] text-[#8A8A8F] mb-4 max-w-3xl">
-            Value per share as the discount rate and the terminal assumption
-            move. The centre cell is the base case.
-          </p>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            {[
-              {
-                title: 'Growing forever',
-                grid: D.sensitivity.perpetuity,
-                axis: D.sensitivityAxes.growth,
-                label: (v: number) => fmtPct(v, 1),
-              },
-              {
-                title: 'Sold at the end',
-                grid: D.sensitivity.exitMultiple,
-                axis: D.sensitivityAxes.multiple,
-                label: (v: number) => fmtX(v, 1),
-              },
-            ].map((block) => (
-              <div key={block.title} className="overflow-x-auto">
-                <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mb-2">
-                  {block.title}
+                  <span className="text-[#8A8A8F] uppercase tracking-widest truncate">
+                    {c.label}
+                  </span>
+                  <span className="flex items-baseline gap-2 shrink-0">
+                    <span className="text-[#A1A1AA]">
+                      {c.ratio == null ? '—' : c.ratio}
+                      {c.unit.startsWith('%') ? '%' : ''}
+                    </span>
+                    <span className="text-[#F2F0EA] font-semibold w-8 text-right">
+                      {c.score == null ? 'n/a' : Math.round(c.score)}
+                    </span>
+                  </span>
                 </div>
-                <table className="w-full min-w-[420px] border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="font-mono text-[10px] text-[#8A8A8F] p-1.5 text-left">
-                        WACC
-                      </th>
-                      {(block.axis || []).map((a: number, i: number) => (
-                        <th
-                          key={i}
-                          className="font-mono text-[10px] text-[#8A8A8F] p-1.5 text-right"
-                        >
-                          {block.label(a)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(block.grid || []).map((row: number[], ri: number) => (
-                      <tr key={ri}>
-                        <td className="font-mono text-[10px] text-[#8A8A8F] p-1.5">
-                          {fmtPct(D.sensitivityAxes.wacc?.[ri], 2)}
-                        </td>
-                        {row.map((cell, ci) => {
-                          const centre =
-                            ri === Math.floor((block.grid.length - 1) / 2) &&
-                            ci === Math.floor((row.length - 1) / 2);
-                          return (
-                            <td
-                              key={ci}
-                              className={`font-mono text-[11px] p-1.5 text-right border ${
-                                centre
-                                  ? 'border-[#F2F0EA] text-[#F2F0EA]'
-                                  : 'border-[#222228] text-[#A1A1AA]'
-                              }`}
-                            >
-                              {num(cell) && cell > 0 ? money(cell, 0) : '—'}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              ))}
+              <div className="font-mono text-[9px] text-[#8A8A8F] pt-2 leading-relaxed">
+                Five reported ratios scored against fixed thresholds, then
+                averaged. Hover any line for its basis. Nothing here uses the
+                share price.
               </div>
-            ))}
-          </div>
-        </section>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
+              <div>Bal Sheet: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.balanceSheetStrength}%</span></div>
+              <div>Earnings Quality: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.earningsQuality}%</span></div>
+              <div>Cash Flow: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.cashFlowCoverage}%</span></div>
+              <div>Moat Rating: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.valuationMoat}%</span></div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* Ratios, the valuation range, and the plain-English walkthrough. */}
+      <div className="space-y-6 mb-10">
+        <RatioBand
+          reported={ratioData.reported as any}
+          forecast={ratioData.forecast as any}
+        />
+        {dcfResult.applicable !== false && (
+          <FootballField
+            bands={valuationBands}
+            marketPrice={displayPrice}
+            fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
+            fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
+            currencySymbol={company.currencySymbol}
+          />
+        )}
+        {activeSource && (
+          <HowCalculated
+            source={activeSource}
+            dcfResult={dcfResult}
+            drivers={drivers}
+            defaults={activeDefaults}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+            sourceLabel={
+              viewMode === 'ANALYST' && company.engineBacked
+                ? 'Built by hand from the filings, then checked figure by figure against them'
+                : activeSource.meta?.source || company.dataSource || 'the company filings'
+            }
+            companyName={company.name}
+            isDerived={viewMode === 'DERIVED' || !company.engineBacked}
+          />
+        )}
+      </div>
+
+      {/* ------------------------------------------------------------------
+          FOR THE NERDS — three buttons, each opening a whole screen
+          ------------------------------------------------------------------ */}
+      <section className="border border-[#222228] bg-[#111114] mb-10 p-5 sm:p-7">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+          <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
+            For the nerds
+          </h2>
+          <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+            04 — the full working
+          </span>
+        </div>
+        <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-5">
+          Every schedule behind the number, laid out the way the workbook lays
+          it out, with each assumption adjustable on the row it belongs to.
+          Nothing here is needed to read the page above. It is here so the page
+          above can be checked.
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          {[
+            {
+              view: 'THREE_STATEMENT' as const,
+              label: '3-Statement Model',
+              hint: 'income statement, balance sheet, cash flow and every schedule between them',
+            },
+            {
+              view: 'DCF' as const,
+              label: 'DCF Model',
+              hint: 'free cash flow, the discount rate, both terminal methods and the sensitivity grids',
+            },
+            {
+              view: 'QUALITATIVE' as const,
+              label: 'Qualitative Adjustments',
+              hint: 'your own judgement, routed through the assumptions it belongs in',
+            },
+          ].map((entry) => (
+            <button
+              key={entry.view}
+              type="button"
+              onClick={() => setNerdView(entry.view)}
+              title={entry.hint}
+              className="font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+
+        <p className="font-mono text-[11px] text-[#8A8A8F] tracking-wide mt-5">
+          Check this out for the detailed working and for altering the
+          assumptions.
+        </p>
+      </section>
+
+      {/* ------------------------------------------------------------------
+          THE FULL-SCREEN VIEWS
+          ------------------------------------------------------------------ */}
+      {nerdView === 'THREE_STATEMENT' && nerdModel && activeSource && (
+        <FullScreenPanel
+          title={`${company.name} — 3-Statement Model`}
+          subtitle={`${viewMode === 'ANALYST' ? 'analyst model' : 'derived model'} · ${
+            activeSource.meta?.unitLabel || ''
+          }`}
+          onClose={() => setNerdView(null)}
+        >
+          <ThreeStatementView
+            historicals={historicals}
+            model={nerdModel.model}
+            dcf={nerdModel.dcf}
+            source={activeSource}
+            drivers={drivers}
+            defaults={activeDefaults}
+            onChange={setDrivers}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
       )}
-    </>
+
+      {nerdView === 'DCF' && nerdModel && activeSource && (
+        <FullScreenPanel
+          title={`${company.name} — DCF Model`}
+          subtitle={`${viewMode === 'ANALYST' ? 'analyst model' : 'derived model'} · ${
+            activeSource.meta?.unitLabel || ''
+          }`}
+          onClose={() => setNerdView(null)}
+        >
+          <DCFView
+            model={nerdModel.model}
+            dcf={nerdModel.dcf}
+            source={activeSource}
+            drivers={drivers}
+            defaults={activeDefaults}
+            onChange={setDrivers}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
+
+      {nerdView === 'QUALITATIVE' && (
+        <FullScreenPanel
+          title={`${company.name} — Qualitative Adjustments`}
+          subtitle="your judgement, put through the model"
+          onClose={() => setNerdView(null)}
+        >
+          <QualitativeAdjustments
+            drivers={drivers}
+            defaults={activeDefaults}
+            onApply={(next) => setDrivers(next)}
+            onReset={() => setDrivers(activeDefaults)}
+            onClose={() => setNerdView(null)}
+            currencySymbol={company.currencySymbol}
+            currentValue={dcfResult.targetPrice}
+          />
+        </FullScreenPanel>
+      )}
+
+    </section>
   );
 };
-
-export default { FullScreenPanel, ThreeStatementView, DCFView, Adjust };

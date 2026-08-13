@@ -88,12 +88,12 @@ export const FootballField: React.FC<FootballFieldProps> = ({
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           What the model is worth, and what it costs
         </h2>
-        <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           02 — valuation range
         </span>
       </div>
 
-      <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-7">
+      <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-7">
         Each bar is a value this model produces under the inputs named beside
         it. There is no confidence interval here and no forecast of the share
         price: the width of a bar is the range the model gives when the terminal
@@ -121,10 +121,10 @@ export const FootballField: React.FC<FootballFieldProps> = ({
             return (
               <div key={row.label}>
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-2">
-                  <span className="font-mono text-[11px] tracking-wider text-[#F2F0EA] uppercase">
+                  <span className="font-mono text-[13px] tracking-wider text-[#F2F0EA] uppercase">
                     {row.label}
                   </span>
-                  <span className="font-mono text-[11px] text-[#8A8A8F]">
+                  <span className="font-mono text-[13px] text-[#8A8A8F]">
                     {fmt(row.low)} – {fmt(row.high)}
                   </span>
                 </div>
@@ -152,7 +152,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                   )}
                 </div>
 
-                <div className="font-mono text-[10px] text-[#8A8A8F] mt-1.5 tracking-wide">
+                <div className="font-mono text-[12px] text-[#8A8A8F] mt-1.5 tracking-wide">
                   {row.detail}
                   {!row.market && ` · base case ${fmt(row.point)}`}
                   <span className="ml-2 text-[#8A8A8F]">
@@ -167,12 +167,12 @@ export const FootballField: React.FC<FootballFieldProps> = ({
 
       {/* The scale, with the market price labelled directly under its line. */}
       <div className="relative mt-6 pt-4 border-t border-[#222228]">
-        <div className="flex justify-between font-mono text-[10px] text-[#8A8A8F]">
+        <div className="flex justify-between font-mono text-[12px] text-[#8A8A8F]">
           <span>{fmt(scale.min)}</span>
           <span>{fmt(scale.max)}</span>
         </div>
         <div
-          className="absolute top-4 font-mono text-[10px] text-[#F2F0EA] whitespace-nowrap"
+          className="absolute top-4 font-mono text-[12px] text-[#F2F0EA] whitespace-nowrap"
           style={{
             left: `${Math.min(88, Math.max(12, pos(marketPrice)))}%`,
             transform: 'translateX(-50%)',
@@ -236,12 +236,12 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           How the business actually runs
         </h2>
-        <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           01 — ratios
         </span>
       </div>
 
-      <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-6">
+      <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-6">
         Reported years come from the filings. Forecast years are read off the
         model's own schedules, so you can see whether the forecast quietly
         assumes the business gets better at collecting cash than it has ever
@@ -252,19 +252,19 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
         <table className="w-full min-w-[640px] border-collapse">
           <thead>
             <tr className="border-b border-[#222228]">
-              <th className="text-left font-mono text-[10px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 pr-4">
+              <th className="text-left font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 pr-4">
                 Ratio
               </th>
               {periods.map((period, i) => (
                 <th
                   key={period.label + i}
-                  className={`text-right font-mono text-[10px] tracking-[0.15em] uppercase pb-3 px-3 ${
+                  className={`text-right font-mono text-[12px] tracking-[0.15em] uppercase pb-3 px-3 ${
                     period.forecast ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'
                   }`}
                 >
                   {period.label}
                   {i === firstForecast && (
-                    <span className="block text-[9px] tracking-normal normal-case text-[#8A8A8F]">
+                    <span className="block text-[12px] tracking-normal normal-case text-[#8A8A8F]">
                       forecast
                     </span>
                   )}
@@ -279,7 +279,7 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
                 <tr>
                   <td
                     colSpan={periods.length + 1}
-                    className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase pt-5 pb-2"
+                    className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase pt-5 pb-2"
                   >
                     {group}
                   </td>
@@ -296,10 +296,10 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
                             onClick={() =>
                               setOpenFormula(openFormula === d.key ? null : d.key)
                             }
-                            className="text-left text-[13px] text-[#F2F0EA] hover:text-[#8B1E1E] transition-colors"
+                            className="text-left text-[15px] text-[#F2F0EA] hover:text-[#8B1E1E] transition-colors"
                           >
                             {d.label}
-                            <span className="ml-2 font-mono text-[10px] text-[#8A8A8F]">
+                            <span className="ml-2 font-mono text-[12px] text-[#8A8A8F]">
                               {openFormula === d.key ? '−' : '?'}
                             </span>
                           </button>
@@ -310,7 +310,7 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
                           return (
                             <td
                               key={period.label + i}
-                              className={`py-2.5 px-3 text-right font-mono text-[13px] ${
+                              className={`py-2.5 px-3 text-right font-mono text-[15px] ${
                                 cell?.display === null || cell?.display === undefined
                                   ? 'text-[#8A8A8F]'
                                   : period.forecast
@@ -328,7 +328,7 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
                         <tr>
                           <td
                             colSpan={periods.length + 1}
-                            className="pb-4 pt-1 text-[12px] leading-relaxed text-[#8A8A8F]"
+                            className="pb-4 pt-1 text-[14px] leading-relaxed text-[#8A8A8F]"
                           >
                             <span className="font-mono text-[#F2F0EA]">
                               {d.formula}
