@@ -13,6 +13,7 @@ import { loadDerivedModelData } from '../data/autoCompany';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
 import {
   TrendingUp,
+  Download,
   BarChart2,
   Sliders,
   DollarSign,
@@ -48,6 +49,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // "For the nerds" opens a WHOLE SCREEN, not a panel on the page. A
   // three-statement model is thirty schedules wide; reading it squeezed under a
   // dashboard is not reading it at all. null means no view is open.
+  const [exporting, setExporting] = useState(false);
   const [nerdView, setNerdView] = useState<
     null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE'
   >(null);
@@ -56,12 +58,23 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Hand the user a working Excel model: the same run that is on screen,
   // written out with live formulas rather than pasted numbers.
   const exportExcel = () => {
-    if (!nerdModel || !activeSource) return;
+    if (!activeSource) return;
+    // Built here rather than reusing the full-screen run, because the single
+    // download button lives on the page and must work with no view open.
+    let built: any = nerdModel;
+    if (!built) {
+      try {
+        built = buildFullModel(activeSource, drivers);
+      } catch {
+        return;
+      }
+    }
+    setExporting(true);
     void (async () => {
       try {
         await downloadWorkbook({
-          model: nerdModel.model,
-          dcf: nerdModel.dcf,
+          model: built.model,
+          dcf: built.dcf,
           source: { ...activeSource, rawStatements: derivedSource?.rawStatements ?? activeSource.rawStatements },
           companyName: company.name,
           ticker: company.ticker,
@@ -74,6 +87,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         });
       } catch (error) {
         console.error('Excel export failed', error);
+      } finally {
+        setExporting(false);
       }
     })();
   };
@@ -626,6 +641,19 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   </span>
                 </div>
 
+                {dcfResult.applicable !== false && (
+                  <button
+                    type="button"
+                    onClick={exportExcel}
+                    disabled={exporting}
+                    className="mt-3 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-3 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 disabled:opacity-40 transition-colors"
+                    title="Download the full model as one Excel workbook"
+                  >
+                    <Download className="w-4 h-4" />
+                    {exporting ? 'Building the workbook…' : 'Download Excel model'}
+                  </button>
+                )}
+
                 {blendedValue && (
                   <div className="font-mono text-[10px] text-[#8A8A8F] mt-2 leading-relaxed">
                     <span className="uppercase tracking-widest">
@@ -1087,7 +1115,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             activeSource.meta?.unitLabel || ''
           }`}
           onClose={() => setNerdView(null)}
-          onExport={exportExcel}
         >
           <ThreeStatementView
             historicals={historicals}
@@ -1110,7 +1137,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             activeSource.meta?.unitLabel || ''
           }`}
           onClose={() => setNerdView(null)}
-          onExport={exportExcel}
         >
           <DCFView
             model={nerdModel.model}
