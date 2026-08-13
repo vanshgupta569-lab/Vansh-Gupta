@@ -734,9 +734,76 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       {/* Marks where the full header ends, for the condensed bar above */}
       <div ref={headerSentinel} className="h-px w-full" aria-hidden="true" />
 
+      {/* ------------------------------------------------------------------
+          SECTION BAR — sticky, so the deeper screens are reachable from
+          anywhere on the page rather than only from the bottom of it.
+          ------------------------------------------------------------------ */}
+      <div className="sticky top-[52px] z-30 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D]/95 backdrop-blur border-y border-[#222228]">
+        <div className="flex items-center justify-between gap-4 py-2.5 overflow-x-auto">
+          <div className="flex items-center gap-1 shrink-0">
+            {[
+              { id: 'ratios', label: 'Ratios' },
+              { id: 'football', label: 'Valuation range' },
+              { id: 'working', label: 'How it was calculated' },
+            ].map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById(entry.id)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setWorkingsOpen((v) => !v)}
+              className={`font-mono text-[11px] uppercase tracking-widest px-4 py-2 border whitespace-nowrap transition-colors ${
+                workingsOpen
+                  ? 'border-[#8B1E1E] bg-[#8B1E1E]/25 text-[#F2F0EA]'
+                  : 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/10 hover:bg-[#8B1E1E]/25'
+              }`}
+            >
+              Full working ▾
+            </button>
+
+            {workingsOpen && (
+              <div className="absolute right-0 mt-2 w-[280px] border border-[#222228] bg-[#111114] shadow-2xl z-40">
+                {[
+                  { view: 'THREE_STATEMENT' as const, label: '3-Statement Model' },
+                  { view: 'DCF' as const, label: 'DCF Model' },
+                  { view: 'COMPS' as const, label: 'Comparable Companies' },
+                  { view: 'QUALITATIVE' as const, label: 'Qualitative Adjustments' },
+                  { view: 'SAVED' as const, label: 'Saved Models' },
+                ].map((entry) => (
+                  <button
+                    key={entry.view}
+                    type="button"
+                    onClick={() => {
+                      setNerdView(entry.view);
+                      setWorkingsOpen(false);
+                    }}
+                    className="w-full text-left font-mono text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] hover:bg-[#8B1E1E]/15 border-b border-[#222228] last:border-b-0 transition-colors"
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Live News Ticker Marquee */}
       <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
-        <div className="font-mono text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
+      <div className="font-mono text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
           <Activity className="w-3.5 h-3.5 animate-pulse" />
           <span>NEWS DISPATCH:</span>
         </div>
@@ -1068,73 +1135,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           />
           </div>
         )}
-      </div>
-
-      {/* ------------------------------------------------------------------
-          SECTION BAR — sticky, so the deeper screens are reachable from
-          anywhere on the page rather than only from the bottom of it.
-          ------------------------------------------------------------------ */}
-      <div className="sticky top-0 z-30 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D]/95 backdrop-blur border-y border-[#222228]">
-        <div className="flex items-center justify-between gap-4 py-2.5 overflow-x-auto">
-          <div className="flex items-center gap-1 shrink-0">
-            {[
-              { id: 'ratios', label: 'Ratios' },
-              { id: 'football', label: 'Valuation range' },
-              { id: 'working', label: 'How it was calculated' },
-            ].map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() =>
-                  document
-                    .getElementById(entry.id)
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
-              >
-                {entry.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => setWorkingsOpen((v) => !v)}
-              className={`font-mono text-[11px] uppercase tracking-widest px-4 py-2 border whitespace-nowrap transition-colors ${
-                workingsOpen
-                  ? 'border-[#8B1E1E] bg-[#8B1E1E]/25 text-[#F2F0EA]'
-                  : 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/10 hover:bg-[#8B1E1E]/25'
-              }`}
-            >
-              Full working ▾
-            </button>
-
-            {workingsOpen && (
-              <div className="absolute right-0 mt-2 w-[280px] border border-[#222228] bg-[#111114] shadow-2xl z-40">
-                {[
-                  { view: 'THREE_STATEMENT' as const, label: '3-Statement Model' },
-                  { view: 'DCF' as const, label: 'DCF Model' },
-                  { view: 'COMPS' as const, label: 'Comparable Companies' },
-                  { view: 'QUALITATIVE' as const, label: 'Qualitative Adjustments' },
-                  { view: 'SAVED' as const, label: 'Saved Models' },
-                ].map((entry) => (
-                  <button
-                    key={entry.view}
-                    type="button"
-                    onClick={() => {
-                      setNerdView(entry.view);
-                      setWorkingsOpen(false);
-                    }}
-                    className="w-full text-left font-mono text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] hover:bg-[#8B1E1E]/15 border-b border-[#222228] last:border-b-0 transition-colors"
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* ------------------------------------------------------------------
