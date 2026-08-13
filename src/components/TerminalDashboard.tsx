@@ -69,7 +69,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       onClick={() => setNerdView(view)}
       className={`inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border transition-colors ${
         strong
-          ? 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/15 hover:bg-[#8B1E1E]/30'
+          ? 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 font-semibold'
           : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E]'
       }`}
     >
@@ -1111,7 +1111,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               A second opinion on the same question: what the market is paying
               today for companies in the same business.
             </p>
-            <OpenScreen view="COMPS" label="Comparable companies" />
+            <OpenScreen view="COMPS" label="Comparable companies" strong />
           </div>
           </div>
         )}
@@ -1140,7 +1140,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               regulator or a competitor. Put your own judgement through the
               assumptions it belongs in.
             </p>
-            <OpenScreen view="QUALITATIVE" label="Qualitative adjustments" />
+            <OpenScreen view="QUALITATIVE" label="Qualitative adjustments" strong />
           </div>
           </div>
         )}
