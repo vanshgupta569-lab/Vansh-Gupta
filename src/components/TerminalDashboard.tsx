@@ -6,6 +6,7 @@ import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financ
 import { FootballField, RatioBand } from './valuationSections';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
+import { SavedModelsPanel } from './savedModelsPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
@@ -51,7 +52,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
   const [nerdView, setNerdView] = useState<
-    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE'
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED'
   >(null);
 
 
@@ -355,7 +356,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // The engine run behind whichever full-screen view is open, built from the
   // same source and the same drivers as the value on the front page.
   const nerdModel = useMemo(() => {
-    if (!nerdView || nerdView === 'QUALITATIVE' || !activeSource) return null;
+    if (!nerdView || nerdView === 'QUALITATIVE' || nerdView === 'SAVED' || !activeSource)
+      return null;
     try {
       const built = buildFullModel(activeSource, drivers);
       return built;
@@ -1075,6 +1077,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               label: 'Qualitative Adjustments',
               hint: 'your own judgement, routed through the assumptions it belongs in',
             },
+            {
+              view: 'SAVED' as const,
+              label: 'Saved Models',
+              hint: 'save a set of assumptions and come back to it later',
+            },
           ].map((entry) => (
             <button
               key={entry.view}
@@ -1132,6 +1139,31 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             onChange={setDrivers}
             currencySymbol={company.currencySymbol}
             unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
+
+      {nerdView === 'SAVED' && (
+        <FullScreenPanel
+          title={`${company.name} — Saved Models`}
+          subtitle="your assumptions, kept for next time"
+          onClose={() => setNerdView(null)}
+        >
+          <SavedModelsPanel
+            ticker={company.ticker}
+            companyName={company.name}
+            currencySymbol={company.currencySymbol}
+            viewMode={viewMode}
+            drivers={drivers}
+            defaults={activeDefaults}
+            valuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+            onRestore={(restored, mode) => {
+              setViewMode(mode);
+              // The stored set is applied after the model switch, because
+              // switching models resets the sliders to that model's defaults.
+              setTimeout(() => setDrivers(restored), 0);
+              setNerdView(null);
+            }}
           />
         </FullScreenPanel>
       )}
