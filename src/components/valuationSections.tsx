@@ -1,3 +1,4 @@
+// FILE: src/components/valuationSections.tsx
 // Marginalia — valuation range and ratio sections
 //
 // Two blocks that sit under the header on the company screen:

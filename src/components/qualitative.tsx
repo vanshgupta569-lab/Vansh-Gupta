@@ -1,3 +1,4 @@
+// FILE: src/components/qualitative.tsx
 // Marginalia — qualitative adjustments
 //
 // The original idea was to let a reader rate each qualitative factor as a

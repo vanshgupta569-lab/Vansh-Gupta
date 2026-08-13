@@ -1,3 +1,4 @@
+// FILE: src/components/howCalculated.tsx
 // Marginalia — "How this was calculated"
 //
 // The section that exists because a layman currently understands nothing on
