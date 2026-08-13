@@ -557,9 +557,24 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA] tracking-tight">
               {company.name}
             </h1>
+
+            {/* The download sits under the name, on its own, rather than
+                crowding the number it is meant to support. */}
+            {hasRealModel && dcfResult.applicable !== false && (
+              <button
+                type="button"
+                onClick={exportExcel}
+                disabled={exporting}
+                className="mt-5 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 disabled:opacity-40 transition-colors"
+                title="Download the full model as one Excel workbook"
+              >
+                <Download className="w-4 h-4" />
+                {exporting ? 'Building the workbook…' : 'Download Excel model'}
+              </button>
+            )}
           </div>
 
-          <div className="flex flex-col gap-5 w-full md:w-auto md:min-w-[380px]">
+          <div className="flex flex-col gap-6 w-full md:w-auto md:min-w-[340px]">
             <div className="flex flex-wrap items-end justify-start md:justify-end gap-6">
             <div className="text-left md:text-right">
               <div className="font-mono text-[11px] text-[#8A8A8F] tracking-widest mb-1 uppercase">
@@ -617,7 +632,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             {hasRealModel ? (
               <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
                 <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  MODEL IMPLIED VALUE
+                  INTRINSIC VALUE
                 </div>
                 <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
                   <FlashOnChange watch={viewMode} className="px-1 -mx-1">
@@ -636,43 +651,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     {blendedPremiumPct === null
                       ? premiumDiscountLabel
                       : blendedPremiumPct > 0
-                      ? `${blendedPremiumPct}% premium to model`
-                      : `${Math.abs(blendedPremiumPct)}% discount to model`}
+                      ? `${blendedPremiumPct}% premium`
+                      : `${Math.abs(blendedPremiumPct)}% discount`}
                   </span>
                 </div>
 
-                {dcfResult.applicable !== false && (
-                  <button
-                    type="button"
-                    onClick={exportExcel}
-                    disabled={exporting}
-                    className="mt-3 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-3 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 disabled:opacity-40 transition-colors"
-                    title="Download the full model as one Excel workbook"
-                  >
-                    <Download className="w-4 h-4" />
-                    {exporting ? 'Building the workbook…' : 'Download Excel model'}
-                  </button>
-                )}
-
-                {blendedValue && (
-                  <div className="font-mono text-[10px] text-[#8A8A8F] mt-2 leading-relaxed">
-                    <span className="uppercase tracking-widest">
-                      Two methods, weighted equally
-                    </span>
-                    <span className="block mt-0.5">
-                      {blendedValue.parts
-                        .map(
-                          (part) =>
-                            `${company.currencySymbol}${part.value.toFixed(2)} ${part.label}`
-                        )
-                        .join('  ·  ')}
-                    </span>
-                  </div>
-                )}
-                <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-2">
-                  {viewMode === 'ANALYST' && analystSource
-                    ? 'Analyst model — built by hand, verified against the filings'
-                    : 'Derived model — assumptions from reported history'}
+                <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
+                  (the working is explained below)
                 </div>
               </div>
             ) : (
