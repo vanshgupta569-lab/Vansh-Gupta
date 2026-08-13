@@ -13,6 +13,7 @@ import { buildModel, buildDCF } from '../engine/model.js';
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
 import { financialsFromStatements } from './companies';
+import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
 
 const r = (n: number | null | undefined, dp = 0): number => {
   if (n == null || !isFinite(n)) return 0;
@@ -133,6 +134,17 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
     financials: financialsFromStatements(fetched.statements),
 dataSource: fetched.source,
     profile: fetched.profile || null,
+
+    // Banks and financials get a residual income valuation instead of a
+    // discounted cash flow. The engine refuses them for good reason; this is
+    // the different method it refuses in favour of.
+    residualIncome: isFinancialCompany(fetched)
+      ? buildResidualIncome(fetched, {
+          riskFreeRate: modelData?.dcf?.costOfCapital?.riskFreeRate,
+          marketRiskPremium: modelData?.dcf?.costOfCapital?.marketRiskPremium,
+          beta: modelData?.dcf?.costOfCapital?.equityBeta,
+        })
+      : null,
 
     defaultDrivers,
     healthMetrics: health,

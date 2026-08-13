@@ -133,6 +133,10 @@ export interface CompanyData {
   // historicals table so the badge never claims a source it does not have.
   dataSource?: string;
 
+  // For banks and other financial companies, where unlevered free cash flow is
+  // not a meaningful concept, a residual income valuation is built instead.
+  residualIncome?: any | null;
+
   // Descriptive context for the qualitative screen. Never mixed with reported
   // figures: this is what the company says about itself, not what it filed.
   profile?: {

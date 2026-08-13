@@ -8,6 +8,7 @@ import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
 import { SavedModelsPanel } from './savedModelsPanel';
 import { CompsPanel } from './compsPanel';
+import { ResidualIncomePanel } from './residualIncomePanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
@@ -55,6 +56,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const [nerdView, setNerdView] = useState<
     null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS'
   >(null);
+
 
 
   // Each deep screen is opened from beside the content it relates to, so the
@@ -432,6 +434,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return Number(((diff / company.price) * 100).toFixed(1));
   }, [dcfResult.targetPrice, company.price]);
 
+  // A bank the discounted cash flow refuses, but the residual income model
+  // can value. The two are never blended: they answer different questions and
+  // mixing them would hide which one produced the number.
+  const bankModel =
+    dcfResult.applicable === false && company.residualIncome?.applicable
+      ? company.residualIncome
+      : null;
+
   // Premium or discount TO THE MODEL, so the model value is the denominator.
   //
   // This used to divide by the market price, which produced figures that were
@@ -709,6 +719,24 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
                 <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
                   (the working is explained below)
+                </div>
+              </div>
+            ) : bankModel ? (
+              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
+                  INTRINSIC VALUE
+                </div>
+                <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
+                  <span className="font-display text-3xl text-[#8B1E1E] font-bold">
+                    {company.currencySymbol}
+                    {bankModel.valuePerShare.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
+                  valued as a bank · (the working is explained below)
                 </div>
               </div>
             ) : (
@@ -1095,6 +1123,19 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
 
       </div>
+
+      {/* For a bank, the residual income working replaces the cash flow
+          walkthrough, since the cash flow model produced nothing. */}
+      {bankModel && (
+        <div id="working" className="scroll-mt-24 mb-10">
+          <ResidualIncomePanel
+            model={bankModel}
+            companyName={company.name}
+            currencySymbol={company.currencySymbol}
+            marketPrice={displayPrice}
+          />
+        </div>
+      )}
 
       {/* Ratios, the valuation range, and the plain-English walkthrough. */}
       <div className="space-y-6 mb-10">
