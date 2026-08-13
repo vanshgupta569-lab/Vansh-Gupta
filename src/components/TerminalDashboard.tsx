@@ -602,37 +602,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
       </div>
 
-      {/* Ratios and the valuation range. These sit above the analytics row for
-          now; the full reordering of this screen happens when the assumption
-          sliders move into the "for the nerds" section. */}
-      <div className="space-y-6 mb-10">
-        <RatioBand
-          reported={ratioData.reported as any}
-          forecast={ratioData.forecast as any}
-        />
-        {dcfResult.applicable !== false && (
-          <FootballField
-            bands={valuationBands}
-            marketPrice={displayPrice}
-            fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
-            fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
-            currencySymbol={company.currencySymbol}
-          />
-        )}
-        {activeSource && (
-          <HowCalculated
-            source={activeSource}
-            dcfResult={dcfResult}
-            drivers={drivers}
-            defaults={activeDefaults}
-            currencySymbol={company.currencySymbol}
-            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
-            companyName={company.name}
-            isDerived={viewMode === 'DERIVED' || !company.engineBacked}
-          />
-        )}
-      </div>
-
       {/* Analytics Row (3 Columns: Rev Trend Bar Chart, DCF Sensitivity Heatmap, Health Radar) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         
@@ -886,6 +855,40 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           )}
         </div>
 
+      </div>
+
+      {/* Ratios, the valuation range, and the plain-English walkthrough. */}
+      <div className="space-y-6 mb-10">
+        <RatioBand
+          reported={ratioData.reported as any}
+          forecast={ratioData.forecast as any}
+        />
+        {dcfResult.applicable !== false && (
+          <FootballField
+            bands={valuationBands}
+            marketPrice={displayPrice}
+            fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
+            fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
+            currencySymbol={company.currencySymbol}
+          />
+        )}
+        {activeSource && (
+          <HowCalculated
+            source={activeSource}
+            dcfResult={dcfResult}
+            drivers={drivers}
+            defaults={activeDefaults}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+            sourceLabel={
+              viewMode === 'ANALYST' && company.engineBacked
+                ? 'Built by hand from the filings, then checked figure by figure against them'
+                : activeSource.meta?.source || company.dataSource || 'the company filings'
+            }
+            companyName={company.name}
+            isDerived={viewMode === 'DERIVED' || !company.engineBacked}
+          />
+        )}
       </div>
 
       {/* Interactive Terminal Workspace Tabs */}

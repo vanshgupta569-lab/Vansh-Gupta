@@ -32,6 +32,7 @@ interface HowCalculatedProps {
   unitLabel: string;
   companyName: string;
   isDerived: boolean;
+  sourceLabel: string;
 }
 
 // A figure with its default shown beside it when the reader has changed it.
@@ -60,8 +61,18 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
   unitLabel,
   companyName,
   isDerived,
+  sourceLabel,
 }) => {
-  const [openStep, setOpenStep] = useState<number | null>(1);
+  // Every step starts OPEN. This section exists to be read straight through by
+  // someone who does not already know how a valuation works, and a reader like
+  // that cannot know which step holds the bit they are missing. Closing one
+  // step no longer closes the others: they are independent.
+  const [closedSteps, setClosedSteps] = useState<number[]>([]);
+  const isOpen = (n: number) => !closedSteps.includes(n);
+  const toggleStep = (n: number) =>
+    setClosedSteps((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+    );
 
   if (!dcfResult.applicable || !dcfResult.forecastRows.length) return null;
 
@@ -97,24 +108,26 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            A valuation is only as honest as the numbers underneath it, so the
-            first step is not a calculation at all. It is collecting the
-            company's own reported accounts: the income statement, which says
-            what it sold and what that cost; the balance sheet, which says what
-            it owns and owes on one day of the year; and the cash flow
-            statement, which says what actually moved in and out of the bank.
+            The first step is not a calculation. It is just collecting what the
+            company has already published.
           </p>
           <p className="mt-2">
-            Nothing is adjusted, smoothed or restated here. Everything that
-            follows is built on these figures, and any of them can be checked
-            against the filing itself.
+            Every listed company must publish its accounts each year. Those
+            accounts come in three parts. One shows what it sold and what that
+            cost. One shows what it owns and what it owes. One shows the money
+            that actually went in and out of its bank account.
+          </p>
+          <p className="mt-2">
+            Nothing here is adjusted or tidied up. These are the company's own
+            numbers, and you can check any of them against the published
+            accounts yourself.
           </p>
         </>
       ),
       figures: (
         <>
           <Figure
-            label="Years of reported history used"
+            label="Years of published accounts used"
             value={
               historicalYears.length
                 ? `${historicalYears.length} (FY${String(
@@ -125,7 +138,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                 : '—'
             }
           />
-          <Figure label="Source" value={meta.source || '—'} />
+          <Figure label="Where the figures come from" value={sourceLabel} />
           <Figure label="Figures stated in" value={unitLabel} />
           {provenance.excludedPeriods ? (
             <div className="pt-2 text-[12px] leading-relaxed text-[#8A8A8F]">
@@ -142,32 +155,35 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            The income statement is forecast first, because everything else
-            depends on it. Revenue is grown at one rate. Each cost is then set
-            as a percentage of that revenue, so if the company has historically
-            spent 46 pence of every pound on making its product, it is assumed
-            to keep doing so.
+            To work out what a company is worth, you first have to guess what it
+            will earn in the years ahead. That guess starts with sales.
           </p>
           <p className="mt-2">
-            Subtract the costs from revenue and you have operating profit: what
-            the business earns from trading, before the cost of its borrowings
-            and before tax. Tax is applied at the rate the company last actually
-            paid, not the headline rate, because reliefs and foreign earnings
-            mean the two are rarely the same.
+            Sales are assumed to grow at one steady rate. Then each cost is set
+            as a share of those sales. If the company has been spending 54 out
+            of every 100 rupees of sales on making its product, it is assumed to
+            keep doing that.
+          </p>
+          <p className="mt-2">
+            Sales minus costs leaves <strong>operating profit</strong>: what the
+            business earns from simply trading, before it pays interest on its
+            loans and before tax. Tax is then taken off at the rate the company
+            actually paid last year, not the official rate, because almost no
+            company pays exactly the official rate.
           </p>
         </>
       ),
       figures: (
         <>
           <Figure
-            label="Revenue growth, each year"
+            label="Sales growth assumed, each year"
             value={pct(drivers.revenueGrowthPct)}
             defaultValue={
               changed('revenueGrowthPct') ? pct(defaults.revenueGrowthPct) : null
             }
           />
           <Figure
-            label="Operating margin"
+            label="Operating profit as a share of sales"
             value={pct(drivers.operatingMarginPct)}
             defaultValue={
               changed('operatingMarginPct')
@@ -176,16 +192,16 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             }
           />
           <Figure
-            label="Tax rate"
+            label="Tax rate applied"
             value={pct(drivers.taxRatePct)}
             defaultValue={changed('taxRatePct') ? pct(defaults.taxRatePct) : null}
           />
           <Figure
-            label={`Revenue, FY${String(first.year).slice(2)}`}
+            label={`Sales, FY${String(first.year).slice(2)}`}
             value={money(first.revenue)}
           />
           <Figure
-            label={`Revenue, FY${String(last.year).slice(2)}`}
+            label={`Sales, FY${String(last.year).slice(2)}`}
             value={money(last.revenue)}
           />
           <Figure
@@ -207,33 +223,36 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            Selling more means being owed more. A company that doubles its sales
-            will usually find its customers owe it roughly twice as much, it is
-            holding roughly twice the stock, and it owes its own suppliers
-            roughly twice as much too. So the balance sheet is forecast by tying
-            each of those items to the line that drives it: money owed by
-            customers moves with revenue, stock and money owed to suppliers move
-            with the cost of sales.
+            Selling more is not free. A shop that sells twice as much has to
+            keep twice as much stock on its shelves, is waiting on twice as much
+            money from customers who have not paid yet, and owes twice as much
+            to its own suppliers.
           </p>
           <p className="mt-2">
-            Fixed assets are handled with a roll-forward: start with last year's
-            closing balance, add what is spent on new equipment, subtract
-            depreciation for wear and ageing, and the result is this year's
-            closing balance.
+            So each of those moves in step with whatever drives it. Money owed
+            by customers grows in line with sales. Stock and money owed to
+            suppliers grow in line with what it costs to make the goods.
+          </p>
+          <p className="mt-2">
+            Buildings and machinery are tracked year by year in a simple way:
+            take last year's total, add whatever is spent on new equipment, take
+            off a bit for wear and age, and that gives this year's total. The
+            amount taken off for wear is called{' '}
+            <strong>depreciation</strong>.
           </p>
         </>
       ),
       figures: (
         <>
           <Figure
-            label="Capital spending, as a share of revenue"
+            label="Spending on equipment, as a share of sales"
             value={pct(drivers.capexPctOfRev)}
             defaultValue={
               changed('capexPctOfRev') ? pct(defaults.capexPctOfRev) : null
             }
           />
           <Figure
-            label={`Capital spending, FY${String(first.year).slice(2)}`}
+            label={`Spending on equipment, FY${String(first.year).slice(2)}`}
             value={money(first.capex)}
           />
           <Figure
@@ -253,17 +272,21 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            Profit is not cash. A sale counts as profit the moment it is made,
-            even if the customer has not paid yet. Depreciation is deducted as a
-            cost even though no money leaves the building. So the cash flow
-            statement takes the profit and undoes every entry that was not
-            actually cash.
+            This is the step most people find surprising:{' '}
+            <strong>profit is not the same as cash</strong>.
           </p>
           <p className="mt-2">
-            Depreciation is added back because it never left. Increases in what
-            customers owe are subtracted, because that money has been earned but
-            not received. Increases in what is owed to suppliers are added,
-            because the goods are held but not yet paid for.
+            A sale counts as profit the moment it is agreed, even if the
+            customer will not pay for another three months. Depreciation is
+            taken off as a cost even though no money actually leaves the
+            building. So a company can report a healthy profit and still have an
+            empty bank account.
+          </p>
+          <p className="mt-2">
+            This step undoes all of that. Depreciation is added back, because it
+            never really left. Money the company has earned but not yet
+            collected is taken off. Money it owes but has not yet paid is added
+            back. What is left is real cash.
           </p>
         </>
       ),
@@ -273,9 +296,9 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             label={`Operating profit after tax, FY${String(first.year).slice(2)}`}
             value={money(first.ebiat)}
           />
-          <Figure label="Add back depreciation" value={money(first.da)} />
+          <Figure label="Add back depreciation (no money left)" value={money(first.da)} />
           <Figure
-            label="Cash tied up in working capital"
+            label="Cash tied up in stock and unpaid bills"
             value={money(-Math.abs(first.wcChange))}
           />
         </>
@@ -285,20 +308,24 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       n: 5,
       title: 'Work out the cash the business generates',
       theory: (
-        <p>
-          Putting those adjustments together gives the cash the trading business
-          produced in the year, before anything is spent on new equipment and
-          before a penny goes to lenders or shareholders. This is the raw
-          material of the valuation: money the business made, as opposed to
-          profit it reported.
-        </p>
+        <>
+          <p>
+            Put those adjustments together and you get the cash the business
+            genuinely produced in the year, before it spends anything on new
+            equipment and before anything goes to banks or shareholders.
+          </p>
+          <p className="mt-2">
+            This is the number the whole valuation is built on. Not the profit
+            the company reported, but the money it actually made.
+          </p>
+        </>
       ),
       figures: (
         <>
           {rows.map((r) => (
             <Figure
               key={r.year}
-              label={`FY${String(r.year).slice(2)} — operating profit after tax plus depreciation, less working capital`}
+              label={`FY${String(r.year).slice(2)} — cash generated`}
               value={money(r.ebiat + r.da - Math.abs(r.wcChange))}
             />
           ))}
@@ -311,17 +338,21 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            A business cannot keep all the cash it generates. Machines wear out,
-            shops need refitting, servers need replacing. Whatever must be spent
-            simply to keep going is not available to owners, so it is
-            subtracted.
+            A business cannot keep all the cash it makes. Machines wear out,
+            shops need repainting, delivery vans need replacing. That spending
+            is not optional, so it does not belong to the owners and it has to
+            come off.
           </p>
           <p className="mt-2">
-            What remains is <strong>free cash flow</strong>: the cash genuinely
-            left over once the business has paid its costs, its taxes and its
-            upkeep. It is called <em>unlevered</em> because it is measured
-            before any interest, which keeps the question about the business
-            itself rather than about how it happens to be financed.
+            What is left is called <strong>free cash flow</strong>: the money
+            genuinely spare after the company has paid its costs, its taxes and
+            its upkeep. Think of it as what would be left in your account at the
+            end of the year after the rent, the bills and fixing the roof.
+          </p>
+          <p className="mt-2">
+            It is measured before any interest is paid. That is deliberate. It
+            keeps the question about how good the business is, separate from the
+            question of how much it has borrowed.
           </p>
         </>
       ),
@@ -343,33 +374,36 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            A pound arriving in five years is worth less than a pound today,
-            because today's pound could be invested in the meantime, and because
-            the future one might not arrive at all. So each year's cash is
-            discounted: divided by a rate that reflects both the waiting and the
-            risk. That rate is the <strong>discount rate</strong>, and it is
-            built from what lenders charge the company and what shareholders
-            expect to earn.
+            Money you will get in five years is worth less to you than the same
+            money today. You could have invested today's money in the meantime,
+            and the future money might never turn up at all.
           </p>
           <p className="mt-2">
-            Five years of forecasts do not cover the whole life of a business,
-            so the years beyond are handled in two different ways. The first
-            assumes the company keeps growing slowly forever. The second assumes
-            it is sold at the end, at a multiple of its earnings, the way
-            comparable companies change hands. Neither is more correct than the
-            other, which is why both are shown.
+            So every future year's cash is shrunk to what it is worth right now.
+            How much it shrinks depends on the <strong>discount rate</strong>: a
+            single percentage that stands for both the waiting and the risk. A
+            riskier company gets a higher rate, so its future cash is worth less
+            today.
+          </p>
+          <p className="mt-2">
+            But a business does not stop after five years. What happens
+            afterwards is handled two different ways. One assumes the company
+            keeps growing slowly forever. The other assumes it is sold at the
+            end, at a price based on what similar companies sell for. Neither is
+            more right than the other, which is exactly why this site shows both
+            instead of picking one.
           </p>
         </>
       ),
       figures: (
         <>
           <Figure
-            label="Discount rate"
+            label="Discount rate (waiting plus risk)"
             value={pct(drivers.waccPct)}
             defaultValue={changed('waccPct') ? pct(defaults.waccPct) : null}
           />
           <Figure
-            label="Growth assumed after the forecast, forever"
+            label="Growth assumed after year five, forever"
             value={pct(drivers.terminalGrowthPct)}
             defaultValue={
               changed('terminalGrowthPct')
@@ -378,11 +412,11 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             }
           />
           <Figure
-            label="Value today of the five forecast years"
+            label="What the next five years are worth today"
             value={money(totalPvExplicit)}
           />
           <Figure
-            label="Value today of everything after them"
+            label="What everything after that is worth today"
             value={`${currencySymbol}${(dcfResult.pvTerminalValue * 1000).toLocaleString(
               undefined,
               { maximumFractionDigits: 0 }
@@ -402,35 +436,39 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       theory: (
         <>
           <p>
-            Adding those two pieces together values the whole enterprise: the
-            business as a going concern, regardless of who financed it. But a
-            shareholder does not own the debt. So borrowings are subtracted and
-            cash in the bank is added back, which leaves the part that belongs
-            to the owners.
+            Adding it all up gives the value of the whole company. But if you
+            buy a share, you do not get the whole company. The banks have to be
+            paid first.
           </p>
           <p className="mt-2">
-            Divide that by the number of shares in issue and the result is a
-            value per share, which can finally be set against what the shares
-            cost today.
+            It is like buying a house with a loan on it. The house may be worth
+            one crore, but if eighty lakh is still owed to the bank, what you
+            actually own is twenty lakh. So the company's debts are taken off,
+            and the cash sitting in its bank account is added on.
+          </p>
+          <p className="mt-2">
+            Divide what is left by the number of shares, and you finally have
+            what one share is worth. That is the number at the top of this page,
+            and you can now compare it with what one share actually costs.
           </p>
         </>
       ),
       figures: (
         <>
           <Figure
-            label="Value of the whole business"
+            label="Value of the whole company"
             value={`${currencySymbol}${(
               dcfResult.enterpriseValueBillion * 1000
             ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
           />
           <Figure
-            label="Value belonging to shareholders"
+            label="Left for shareholders, after debts"
             value={`${currencySymbol}${(
               dcfResult.impliedEquityValueBillion * 1000
             ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
           />
           <Figure
-            label="Value per share"
+            label="Value of one share"
             value={`${currencySymbol}${dcfResult.targetPrice.toLocaleString(
               undefined,
               { minimumFractionDigits: 2, maximumFractionDigits: 2 }
@@ -457,9 +495,10 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       </div>
 
       <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-2">
-        Eight steps from {companyName}'s filed accounts to the value at the top
-        of this page. Each one explains the idea first, then shows the figures
-        it produced. No prior knowledge assumed.
+        Eight steps from {companyName}'s published accounts to the value at the
+        top of this page. Each step explains the idea in plain words first, then
+        shows the figures it produced for this company. You do not need to know
+        anything about finance to follow it.
       </p>
 
       {anyChanged ? (
@@ -475,12 +514,12 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
 
       <div className="border-t border-[#222228]">
         {steps.map((step) => {
-          const open = openStep === step.n;
+          const open = isOpen(step.n);
           return (
             <div key={step.n} className="border-b border-[#222228]">
               <button
                 type="button"
-                onClick={() => setOpenStep(open ? null : step.n)}
+                onClick={() => toggleStep(step.n)}
                 className="w-full flex items-baseline gap-4 py-4 text-left group"
               >
                 <span className="font-mono text-[11px] text-[#8B1E1E] shrink-0 pt-0.5">
