@@ -100,75 +100,88 @@ export const FootballField: React.FC<FootballFieldProps> = ({
         assumption is moved, nothing more.
       </p>
 
-      <div className="space-y-6">
-        {rows.map((row) => {
-          const left = pos(row.low);
-          const right = pos(row.high);
-          const width = Math.max(right - left, 0.6);
-          const pointPos = pos(row.point);
+      {/* One vertical line for the market price, drawn across every bar. It has
+          to span the whole chart: a reader needs to see, at a glance, which
+          bars the traded price falls inside and which it does not. Drawn as an
+          overlay on the same 0-100% scale the bars use, so it lines up. */}
+      <div className="relative">
+        <div
+          className="pointer-events-none absolute top-0 bottom-0 w-px bg-[#F2F0EA]/70 z-10"
+          style={{ left: `${pos(marketPrice)}%` }}
+        />
 
-          return (
-            <div key={row.label}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-2">
-                <span className="font-mono text-[11px] tracking-wider text-[#F2F0EA] uppercase">
-                  {row.label}
-                </span>
-                <span className="font-mono text-[11px] text-[#8A8A8F]">
-                  {fmt(row.low)} – {fmt(row.high)}
-                </span>
-              </div>
+        <div className="space-y-6">
+          {rows.map((row) => {
+            const left = pos(row.low);
+            const right = pos(row.high);
+            const width = Math.max(right - left, 0.6);
+            const pointPos = pos(row.point);
+            const containsPrice = marketPrice >= row.low && marketPrice <= row.high;
 
-              <div className="relative h-7">
-                <div className="absolute inset-y-0 left-0 right-0 flex items-center">
-                  <div className="h-px w-full bg-[#222228]" />
+            return (
+              <div key={row.label}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-2">
+                  <span className="font-mono text-[11px] tracking-wider text-[#F2F0EA] uppercase">
+                    {row.label}
+                  </span>
+                  <span className="font-mono text-[11px] text-[#8A8A8F]">
+                    {fmt(row.low)} – {fmt(row.high)}
+                  </span>
                 </div>
 
-                <div
-                  className={`absolute inset-y-1 border ${
-                    row.market
-                      ? 'bg-[#8A8A8F]/10 border-[#8A8A8F]/40'
-                      : 'bg-[#8B1E1E]/25 border-[#8B1E1E]/60'
-                  }`}
-                  style={{ left: `${left}%`, width: `${width}%` }}
-                />
+                <div className="relative h-7">
+                  <div className="absolute inset-y-0 left-0 right-0 flex items-center">
+                    <div className="h-px w-full bg-[#222228]" />
+                  </div>
 
-                {!row.market && (
                   <div
-                    className="absolute inset-y-0 w-px bg-[#F2F0EA]"
-                    style={{ left: `${pointPos}%` }}
-                    title={`base case ${fmt(row.point)}`}
+                    className={`absolute inset-y-1 border ${
+                      row.market
+                        ? 'bg-[#8A8A8F]/10 border-[#8A8A8F]/40'
+                        : 'bg-[#8B1E1E]/25 border-[#8B1E1E]/60'
+                    }`}
+                    style={{ left: `${left}%`, width: `${width}%` }}
                   />
-                )}
-              </div>
 
-              <div className="font-mono text-[10px] text-[#8A8A8F] mt-1.5 tracking-wide">
-                {row.detail}
-                {!row.market && ` · base case ${fmt(row.point)}`}
+                  {!row.market && (
+                    <div
+                      className="absolute inset-y-0 w-px bg-[#F2F0EA]/40"
+                      style={{ left: `${pointPos}%` }}
+                      title={`base case ${fmt(row.point)}`}
+                    />
+                  )}
+                </div>
+
+                <div className="font-mono text-[10px] text-[#8A8A8F] mt-1.5 tracking-wide">
+                  {row.detail}
+                  {!row.market && ` · base case ${fmt(row.point)}`}
+                  <span className="ml-2 text-[#8A8A8F]">
+                    · market price sits {containsPrice ? 'inside' : marketPrice > row.high ? 'above' : 'below'} this range
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* The market price, drawn across every bar. */}
-      <div className="relative mt-7 pt-5 border-t border-[#222228]">
-        <div className="relative h-6">
-          <div className="absolute inset-y-0 left-0 right-0 flex items-center">
-            <div className="h-px w-full bg-[#222228]" />
-          </div>
-          <div
-            className="absolute inset-y-0 w-0.5 bg-[#F2F0EA]"
-            style={{ left: `${pos(marketPrice)}%` }}
-          />
-        </div>
-        <div className="flex justify-between font-mono text-[10px] text-[#8A8A8F] mt-1">
+      {/* The scale, with the market price labelled directly under its line. */}
+      <div className="relative mt-6 pt-4 border-t border-[#222228]">
+        <div className="flex justify-between font-mono text-[10px] text-[#8A8A8F]">
           <span>{fmt(scale.min)}</span>
-          <span className="text-[#F2F0EA]">
-            market price {fmt(marketPrice)}
-          </span>
           <span>{fmt(scale.max)}</span>
         </div>
+        <div
+          className="absolute top-4 font-mono text-[10px] text-[#F2F0EA] whitespace-nowrap"
+          style={{
+            left: `${Math.min(88, Math.max(12, pos(marketPrice)))}%`,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          market price {fmt(marketPrice)}
+        </div>
       </div>
+
     </section>
   );
 };
