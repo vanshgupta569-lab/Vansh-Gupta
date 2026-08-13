@@ -937,8 +937,12 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   const currG = gRange[cIdx];
                   const isCurrentDriver = rIdx === 2 && cIdx === 2;
                   
-                  // Color calculation based on upside/downside
-                  const ratio = val / company.price;
+                  // A cell can be non-finite where the discount rate meets the
+                  // growth rate, which makes the perpetuity formula diverge.
+                  // That is an undefined figure, not a very large one, so it
+                  // reads as a dash rather than printing infinity.
+                  const usable = typeof val === 'number' && isFinite(val) && val > 0;
+                  const ratio = usable ? val / company.price : 0;
                   let cellBg = 'bg-[#1c1110]';
                   if (ratio > 1.2) cellBg = 'bg-[#8B1E1E]';
                   else if (ratio > 1.05) cellBg = 'bg-[#8B1E1E]/70';
@@ -960,7 +964,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       }`}
                     >
                       <span className="font-mono text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
-                        {company.currencySymbol}{Math.round(val)}
+                        {usable ? `${company.currencySymbol}${Math.round(val)}` : '—'}
                       </span>
                     </motion.div>
                   );
@@ -977,7 +981,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     <strong className="text-[#F2F0EA]">{hoveredMatrixCell.g.toFixed(1)}%</strong>
                   </span>
                   <span className="text-[#8B1E1E] font-bold tracking-widest uppercase">
-                    Target: {company.currencySymbol}{hoveredMatrixCell.val.toFixed(2)}
+                    Target:{' '}
+                    {typeof hoveredMatrixCell.val === 'number' && isFinite(hoveredMatrixCell.val)
+                      ? `${company.currencySymbol}${hoveredMatrixCell.val.toFixed(2)}`
+                      : 'not defined at this rate'}
                   </span>
                 </>
               ) : (

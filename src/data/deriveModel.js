@@ -1,3 +1,4 @@
+// FILE: src/data/deriveModel.js
 // Marginalia — assumption derivation
 //
 // Turns raw fetched statements (from /api/company) into the exact data shape
@@ -489,6 +490,19 @@ export function deriveModel(fetched) {
   const shares = isNum(rows[rows.length - 1]?.dilutedShares)
     ? rows[rows.length - 1].dilutedShares / 1e6
     : null;
+
+  // Without a share count there is no such thing as a value per share. Dividing
+  // by nothing produced an intrinsic value of infinity and a market
+  // capitalisation of zero for Reliance Infrastructure, which reported no
+  // diluted share figure. Refuse instead: an absent denominator is a missing
+  // input, not a company worth infinity.
+  if (!isNum(shares) || shares <= 0) {
+    throw new Error(
+      `${fetched.ticker || 'This company'} does not report a diluted share count in the ` +
+        `data available, so no value per share can be calculated. The reported ` +
+        `figures below are unaffected.`
+    );
+  }
 
   const lastRow = rows[rows.length - 1] || {};
 

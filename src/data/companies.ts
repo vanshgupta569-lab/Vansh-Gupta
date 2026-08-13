@@ -1,3 +1,4 @@
+// FILE: src/data/companies.ts
 // @ts-ignore — JS engine and data files have no TS declarations
 import AAPL_DATA from './AAPL.js';
 // @ts-ignore
@@ -312,14 +313,26 @@ export function calculateDCFFor(
   // gets here, but the same thing can arise from a heavily indebted company
   // whose net debt exceeds the discounted value of its cash flows, and a
   // negative price per share is meaningless in either case.
-  if (!(D.perpetuity?.valuePerShare > 0)) {
+  // A value per share must be a real, positive, finite number. Infinity slipped
+  // through the old test because Infinity > 0 is true: a company with no share
+  // count divided by zero and the header printed an infinity sign with a NaN%
+  // discount beside it. The same test now catches a WACC at or below the
+  // terminal growth rate, which makes the perpetuity formula diverge.
+  const perShare = D.perpetuity?.valuePerShare;
+  const waccAboveGrowth = D.wacc > (d.dcf?.longTermGrowthRate ?? 0);
+  if (!(typeof perShare === 'number' && isFinite(perShare) && perShare > 0 && waccAboveGrowth)) {
     return {
       applicable: false,
-      message:
-        'This model produces a value per share at or below zero, which means ' +
-        'the discounted cash flows do not cover the net debt subtracted from ' +
-        'them. That is a failure of the model, not a cheap share, so no ' +
-        'implied value is shown. The reported figures below are unaffected.',
+      message: !waccAboveGrowth
+        ? 'The discount rate is at or below the growth assumed after the ' +
+          'forecast, which makes the valuation diverge: a company cannot grow ' +
+          'faster than its cost of capital forever. Lower the terminal growth ' +
+          'rate or raise the discount rate.'
+        : 'This model does not produce a usable value per share. Either the ' +
+          'discounted cash flows do not cover the net debt subtracted from ' +
+          'them, or an input the calculation depends on is missing. Either way ' +
+          'it is a failure of the model, not a cheap share, so no value is ' +
+          'shown. The reported figures below are unaffected.',
       targetPrice: 0,
       pvExplicitFCF: 0,
       pvTerminalValue: 0,
