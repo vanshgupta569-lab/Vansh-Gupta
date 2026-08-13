@@ -48,7 +48,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   // Tab State
 
-  // "For the nerds" opens a WHOLE SCREEN, not a panel on the page. A
+  // The deeper screens open WHOLE SCREENS, not panels on the page. A
   // three-statement model is thirty schedules wide; reading it squeezed under a
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
@@ -1136,66 +1136,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           </div>
         </div>
       </div>
-
-      {/* ------------------------------------------------------------------
-          FOR THE NERDS — three buttons, each opening a whole screen
-          ------------------------------------------------------------------ */}
-      <section className="border border-[#222228] bg-[#111114] mb-10 p-5 sm:p-7">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
-          <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
-            For the nerds
-          </h2>
-          <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
-            04 — the full working
-          </span>
-        </div>
-        <p className="text-[15px] font-semibold text-[#F2F0EA] max-w-2xl mb-5">
-          Check out this for detailed behind the scenes working and making
-          assumption adjustments. These are also reachable at any point from the
-          bar at the top of the page.
-        </p>
-
-        <div className="flex flex-wrap gap-3">
-          {[
-            {
-              view: 'THREE_STATEMENT' as const,
-              label: '3-Statement Model',
-              hint: 'income statement, balance sheet, cash flow and every schedule between them',
-            },
-            {
-              view: 'DCF' as const,
-              label: 'DCF Model',
-              hint: 'free cash flow, the discount rate, both terminal methods and the sensitivity grids',
-            },
-            {
-              view: 'QUALITATIVE' as const,
-              label: 'Qualitative Adjustments',
-              hint: 'your own judgement, routed through the assumptions it belongs in',
-            },
-            {
-              view: 'COMPS' as const,
-              label: 'Comparable Companies',
-              hint: 'what the market pays for similar businesses, as a cross-check',
-            },
-            {
-              view: 'SAVED' as const,
-              label: 'Saved Models',
-              hint: 'save a set of assumptions and come back to it later',
-            },
-          ].map((entry) => (
-            <button
-              key={entry.view}
-              type="button"
-              onClick={() => setNerdView(entry.view)}
-              title={entry.hint}
-              className="font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
-
-      </section>
 
       {/* ------------------------------------------------------------------
           THE FULL-SCREEN VIEWS
