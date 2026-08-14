@@ -6,8 +6,8 @@
 // model says, and how far apart those are. Sorted by that gap, because the gap
 // is the only reason to run a list rather than a single company.
 
-import React, { useMemo, useState } from 'react';
-import { Play, Download } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Play, Download, Search, X } from 'lucide-react';
 import { BatchRow, runBatch, downloadBatchCsv } from '../data/batchRun';
 
 type SortKey = 'entered' | 'gap' | 'ticker';
@@ -19,13 +19,71 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [sortKey, setSortKey] = useState<SortKey>('gap');
 
+  // Searching by name rather than typing tickers. Almost nobody knows that
+  // Reliance is RELIANCE.NS and Tata Motors is TMCV.NS, and getting a suffix
+  // wrong looks to the user like the site is broken rather than like a typo.
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<
+    { ticker: string; name: string; exchange: string }[]
+  >([]);
+  const [searching, setSearching] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (!cancelled) setSuggestions(data.results || []);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 220);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
   const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 
+  const tickerList = useMemo(
+    () =>
+      input
+        .split(/[\s,;\n]+/)
+        .map((t) => t.trim().toUpperCase())
+        .filter(Boolean),
+    [input]
+  );
+
+  const addTicker = (ticker: string) => {
+    const upper = ticker.trim().toUpperCase();
+    if (!upper) return;
+    if (!tickerList.includes(upper)) {
+      setInput((prev) => (prev.trim() ? `${prev.trim()}, ${upper}` : upper));
+    }
+    setQuery('');
+    setSuggestions([]);
+    inputRef.current?.focus();
+  };
+
+  const removeTicker = (ticker: string) => {
+    setInput(tickerList.filter((t) => t !== ticker).join(', '));
+  };
+
   const start = async () => {
-    const tickers = input
-      .split(/[\s,;\n]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tickers = tickerList;
     if (!tickers.length) return;
 
     setRunning(true);
@@ -70,13 +128,84 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
         long list takes a while.
       </p>
 
-      <textarea
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        rows={3}
-        placeholder="AAPL, NVDA, MSFT, RELIANCE.NS, HDFCBANK.NS"
-        className="w-full bg-[#0B0B0D] border border-[#222228] px-4 py-3 font-mono text-[14px] text-[#F2F0EA] placeholder:text-[#8A8A8F] focus:outline-none focus:border-[#8B1E1E] mb-4"
-      />
+      {/* Search by company name and add. The typed box below still works for
+          anyone who already knows the tickers, or has a list to paste. */}
+      <div className="relative mb-4">
+        <div className="flex items-center gap-2 bg-[#0B0B0D] border border-[#222228] px-4 py-3 focus-within:border-[#8B1E1E]">
+          <Search className="w-4 h-4 text-[#8A8A8F] shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && suggestions.length) {
+                e.preventDefault();
+                addTicker(suggestions[0].ticker);
+              }
+            }}
+            placeholder="Search a company by name, then press enter to add it"
+            className="flex-1 bg-transparent text-[14px] text-[#F2F0EA] placeholder:text-[#8A8A8F] focus:outline-none"
+          />
+          {searching && (
+            <span className="font-mono text-[12px] text-[#8A8A8F] shrink-0">searching…</span>
+          )}
+        </div>
+
+        {suggestions.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-20 border border-[#222228] bg-[#111114] shadow-2xl max-h-72 overflow-y-auto">
+            {suggestions.map((entry) => (
+              <button
+                key={entry.ticker}
+                type="button"
+                onClick={() => addTicker(entry.ticker)}
+                className="w-full text-left px-4 py-3 border-b border-[#222228] last:border-b-0 hover:bg-[#8B1E1E]/15 transition-colors"
+              >
+                <span className="text-[14px] text-[#F2F0EA]">{entry.name}</span>
+                <span className="ml-3 font-mono text-[12px] text-[#8A8A8F]">
+                  {entry.ticker}
+                  {entry.exchange ? ` · ${entry.exchange}` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* What is queued up, and a way to take one back out. */}
+      {tickerList.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {tickerList.map((ticker) => (
+            <span
+              key={ticker}
+              className="inline-flex items-center gap-2 font-mono text-[13px] px-3 py-1.5 border border-[#222228] text-[#F2F0EA]"
+            >
+              {ticker}
+              <button
+                type="button"
+                onClick={() => removeTicker(ticker)}
+                className="text-[#8A8A8F] hover:text-[#8B1E1E] transition-colors"
+                aria-label={`Remove ${ticker}`}
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <details className="mb-4">
+        <summary className="font-mono text-[12px] uppercase tracking-widest text-[#8A8A8F] hover:text-[#F2F0EA] cursor-pointer">
+          Or paste a list of tickers
+        </summary>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          rows={3}
+          placeholder="AAPL, NVDA, MSFT, RELIANCE.NS, HDFCBANK.NS"
+          className="w-full mt-3 bg-[#0B0B0D] border border-[#222228] px-4 py-3 font-mono text-[14px] text-[#F2F0EA] placeholder:text-[#8A8A8F] focus:outline-none focus:border-[#8B1E1E]"
+        />
+      </details>
 
       <div className="flex flex-wrap items-center gap-3 mb-8">
         <button
