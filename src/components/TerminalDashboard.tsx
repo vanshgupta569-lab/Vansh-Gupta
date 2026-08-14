@@ -9,6 +9,7 @@ import { QualitativeAdjustments } from './qualitative';
 import { SavedModelsPanel } from './savedModelsPanel';
 import { CompsPanel } from './compsPanel';
 import { ResidualIncomePanel } from './residualIncomePanel';
+import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
@@ -54,7 +55,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
   const [nerdView, setNerdView] = useState<
-    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS'
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'BATCH'
   >(null);
 
 
@@ -405,6 +406,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       nerdView === 'QUALITATIVE' ||
       nerdView === 'SAVED' ||
       nerdView === 'COMPS' ||
+      nerdView === 'BATCH' ||
       !activeSource
     )
       return null;
@@ -882,6 +884,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               {entry.label}
             </button>
           ))}
+
+          <span className="mx-2 h-4 w-px bg-[#222228]" aria-hidden="true" />
+
+          <button
+            type="button"
+            onClick={() => setNerdView('BATCH')}
+            className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/15 hover:bg-[#8B1E1E]/35 whitespace-nowrap transition-colors"
+          >
+            Model a list
+          </button>
         </div>
       </div>
 
@@ -1326,6 +1338,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             currencySymbol={company.currencySymbol}
             unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
           />
+        </FullScreenPanel>
+      )}
+
+      {nerdView === 'BATCH' && (
+        <FullScreenPanel
+          title="Model a list of companies"
+          subtitle="one row per company, sorted by how far the model sits from the market"
+          onClose={() => setNerdView(null)}
+        >
+          <BatchPanel seedTickers={[company.ticker]} />
         </FullScreenPanel>
       )}
 
