@@ -201,6 +201,77 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   };
 
   // =========================================================================
+  // COVER
+  // =========================================================================
+  const cover = wb.addWorksheet('Cover', {
+    views: [{ showGridLines: false }],
+    properties: { tabColor: { argb: OXBLOOD } },
+  });
+  cover.getColumn(1).width = 2;
+  cover.getColumn(2).width = 2;
+  cover.getColumn(3).width = 46;
+  cover.getColumn(4).width = 62;
+  title(cover, `${companyName} (${ticker})`, `Operating model and discounted cash flow. Figures in ${unitLabel}.`);
+
+  band(cover, 5, 'This file', OXBLOOD, WHITE, 4);
+  ([
+    ['Company', companyName],
+    ['Ticker', ticker],
+    ['Model', modelLabel],
+    ['Reported figures from', source?.meta?.source || 'company filings'],
+    ['Prepared', new Date().toISOString().slice(0, 10)],
+    ['Units', unitLabel],
+  ] as [string, string][]).forEach(([k, v], i) => {
+    cover.getCell(6 + i, 3).value = k;
+    cover.getCell(6 + i, 3).font = FONT;
+    cover.getCell(6 + i, 4).value = v;
+    cover.getCell(6 + i, 4).font = { ...FONT, color: { argb: BLUE } };
+  });
+
+  band(cover, 14, 'How to read this file', OXBLOOD, WHITE, 4);
+  ([
+    ['Yellow cells', 'assumptions. These are yours to change', BLACK, true],
+    ['Blue figures', 'reported history, hard-coded on purpose', BLUE, false],
+    ['Black figures', 'formulas', BLACK, false],
+    ['Green figures', 'links to another sheet in this file', GREEN, false],
+  ] as [string, string, string, boolean][]).forEach(([k, v, colour, fill], i) => {
+    const row = 15 + i;
+    const c = cover.getCell(row, 3);
+    c.value = k;
+    c.font = { ...FONT, bold: true, color: { argb: colour } };
+    if (fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_FILL } };
+    cover.getCell(row, 4).value = v;
+    cover.getCell(row, 4).font = FONT;
+  });
+
+  band(cover, 21, 'What you can change', OXBLOOD, WHITE, 4);
+  [
+    'Every schedule is driven by its own assumption row, one cell per year.',
+    'Revenue growth, gross margin, research and selling costs, the tax rate.',
+    'Receivables, inventory, payables and accruals, each against the line that drives them.',
+    'Capital expenditure as a percentage of revenue, depreciation as a percentage of capital expenditure.',
+    'Borrowing, the interest rate on debt, the return earned on cash.',
+    'Share issuance, buybacks, the dividend payout ratio, stock based compensation.',
+    'On the DCF sheet: the risk free rate, the market risk premium, beta, terminal growth and the exit multiple.',
+    '',
+    'Change any of them and the balance sheet, the cash flow statement and the valuation all move with it.',
+    'The balance check on the model sheet reads OK only while the balance sheet still balances.',
+  ].forEach((text, i) => {
+    cover.getCell(22 + i, 3).value = text;
+    cover.getCell(22 + i, 3).font = { ...FONT, size: 10, color: { argb: text ? BLACK : GREY } };
+  });
+
+  [
+    'Forecast conventions follow the approach set out in the Wall Street Prep financial statement modeling cheat sheet.',
+    'Marginalia is not affiliated with or endorsed by Wall Street Prep.',
+    '',
+    'This is a calculation tool. It is not investment advice and it is not a research report.',
+  ].forEach((text, i) => {
+    cover.getCell(34 + i, 3).value = text;
+    cover.getCell(34 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
+  });
+
+  // =========================================================================
   // 3-STATEMENT MODEL
   // =========================================================================
   const S = newSheet('3-StatementModel', 'FF7F7F7F');
@@ -360,7 +431,16 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     return row;
   };
 
-  /** End of period: reported years from the filings, forecast years a formula. */
+  /**
+   * End of period: reported years hard-coded from the filings, forecast years a
+   * formula.
+   *
+   * The reported years MUST be the reported figures. An earlier version rolled
+   * every schedule forward from a single opening balance, including across the
+   * reported years, which cannot reproduce what a company actually reported and
+   * left the historical balance sheet out by the difference. Reported history is
+   * a fact; only the forecast is derived.
+   */
   const eopRow = (
     key: string,
     name: string,
@@ -565,9 +645,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   bopRow('ppeBop', 'Beginning of period', at(M.ppe?.beginning, 0), 'ppeEnd');
   line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
   line('ppeDep', 'Less: depreciation', M.ppe?.depreciation, (c) => `-${c}${R.ppeCapex}*${c}${R.depPct}`, money());
-  eopRow('ppeEnd', 'End of period', null, (c) => `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}`, {
-    alwaysFormula: true,
-  });
+  eopRow('ppeEnd', 'End of period', M.ppe?.ending, (c) => `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}`);
   blank();
 
   // ---- DEBT AND REVOLVER --------------------------------------------------
@@ -579,9 +657,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     unit: UNIT,
   });
   bopRow('debtBop', 'Beginning of period', at(M.debt?.beginning, 0), 'debtEnd');
-  eopRow('debtEnd', 'End of period', null, (c) => `${c}${R.debtBop}+${c}${R.debtBorrow}+${c}${R.debtPik}`, {
-    alwaysFormula: true,
-  });
+  eopRow('debtEnd', 'End of period', M.debt?.ending, (c) => `${c}${R.debtBop}+${c}${R.debtBorrow}+${c}${R.debtPik}`);
   driver('revolver', 'Revolver', null, () => 0, money(), { unit: UNIT, indent: 1 });
 
   note(['REVOLVER HELD AT ZERO'], OXBLOOD, true);
@@ -601,9 +677,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   sub('Common stock & additional paid in capital');
   driver('csIssue', 'New share issuances', null, (i) => at(M.commonStock?.issuances, i) ?? 0, money(), { unit: UNIT });
   bopRow('csBop', 'Beginning of period', at(M.commonStock?.beginning, 0), 'csEnd');
-  eopRow('csEnd', 'End of period', null, (c) => `${c}${R.csBop}+${c}${R.csIssue}+${c}${R.sbc}`, {
-    alwaysFormula: true,
-  });
+  eopRow('csEnd', 'End of period', M.commonStock?.ending, (c) => `${c}${R.csBop}+${c}${R.csIssue}+${c}${R.sbc}`);
   blank();
 
   sub('Retained earnings');
@@ -620,21 +694,19 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   );
   bopRow('reBop', 'Beginning of period', at(M.retainedEarnings?.beginning, 0), 'reEnd');
   calc('reDiv', 'Less: common dividends', (c) => `-${c}${R.ni}*${c}${R.payout}`, money());
-  eopRow('reEnd', 'End of period', null, (c) => `${c}${R.reBop}+${c}${R.ni}+${c}${R.reDiv}`, {
-    alwaysFormula: true,
-  });
+  eopRow('reEnd', 'End of period', M.retainedEarnings?.ending, (c) => `${c}${R.reBop}+${c}${R.ni}+${c}${R.reDiv}`);
   blank();
 
   sub('Treasury stock');
   driver('buyback', 'Share repurchases', null, (i) => at(M.treasury?.repurchases, i) ?? 0, money(), { unit: UNIT });
   bopRow('tsBop', 'Beginning of period', at(M.treasury?.beginning, 0), 'tsEnd');
-  eopRow('tsEnd', 'End of period', null, (c) => `${c}${R.tsBop}+${c}${R.buyback}`, { alwaysFormula: true });
+  eopRow('tsEnd', 'End of period', M.treasury?.ending, (c) => `${c}${R.tsBop}+${c}${R.buyback}`);
   blank();
 
   sub('Other comprehensive income');
   driver('ociChg', 'Income / (loss) in the period', null, (i) => at(M.oci?.change, i) ?? 0, money(), { unit: UNIT });
   bopRow('ociBop', 'Beginning of period', at(M.oci?.beginning, 0), 'ociEnd');
-  eopRow('ociEnd', 'End of period', null, (c) => `${c}${R.ociBop}+${c}${R.ociChg}`, { alwaysFormula: true });
+  eopRow('ociEnd', 'End of period', M.oci?.ending, (c) => `${c}${R.ociBop}+${c}${R.ociChg}`);
   blank();
 
   // ---- CASH FLOW ----------------------------------------------------------
@@ -855,80 +927,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     V.getCell(58 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
   });
 
-  // =========================================================================
-  // COVER
-  // =========================================================================
-  const cover = wb.addWorksheet('Cover', {
-    views: [{ showGridLines: false }],
-    properties: { tabColor: { argb: OXBLOOD } },
-  });
-  cover.getColumn(1).width = 2;
-  cover.getColumn(2).width = 2;
-  cover.getColumn(3).width = 46;
-  cover.getColumn(4).width = 62;
-  title(cover, `${companyName} (${ticker})`, `Operating model and discounted cash flow. Figures in ${unitLabel}.`);
-
-  band(cover, 5, 'This file', OXBLOOD, WHITE, 4);
-  ([
-    ['Company', companyName],
-    ['Ticker', ticker],
-    ['Model', modelLabel],
-    ['Reported figures from', source?.meta?.source || 'company filings'],
-    ['Prepared', new Date().toISOString().slice(0, 10)],
-    ['Units', unitLabel],
-  ] as [string, string][]).forEach(([k, v], i) => {
-    cover.getCell(6 + i, 3).value = k;
-    cover.getCell(6 + i, 3).font = FONT;
-    cover.getCell(6 + i, 4).value = v;
-    cover.getCell(6 + i, 4).font = { ...FONT, color: { argb: BLUE } };
-  });
-
-  band(cover, 14, 'How to read this file', OXBLOOD, WHITE, 4);
-  ([
-    ['Yellow cells', 'assumptions. These are yours to change', BLACK, true],
-    ['Blue figures', 'reported history, hard-coded on purpose', BLUE, false],
-    ['Black figures', 'formulas', BLACK, false],
-    ['Green figures', 'links to another sheet in this file', GREEN, false],
-  ] as [string, string, string, boolean][]).forEach(([k, v, colour, fill], i) => {
-    const row = 15 + i;
-    const c = cover.getCell(row, 3);
-    c.value = k;
-    c.font = { ...FONT, bold: true, color: { argb: colour } };
-    if (fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INPUT_FILL } };
-    cover.getCell(row, 4).value = v;
-    cover.getCell(row, 4).font = FONT;
-  });
-
-  band(cover, 21, 'What you can change', OXBLOOD, WHITE, 4);
-  [
-    'Every schedule is driven by its own assumption row, one cell per year.',
-    'Revenue growth, gross margin, research and selling costs, the tax rate.',
-    'Receivables, inventory, payables and accruals, each against the line that drives them.',
-    'Capital expenditure as a percentage of revenue, depreciation as a percentage of capital expenditure.',
-    'Borrowing, the interest rate on debt, the return earned on cash.',
-    'Share issuance, buybacks, the dividend payout ratio, stock based compensation.',
-    'On the DCF sheet: the risk free rate, the market risk premium, beta, terminal growth and the exit multiple.',
-    '',
-    'Change any of them and the balance sheet, the cash flow statement and the valuation all move with it.',
-    'The balance check on the model sheet reads OK only while the balance sheet still balances.',
-  ].forEach((text, i) => {
-    cover.getCell(22 + i, 3).value = text;
-    cover.getCell(22 + i, 3).font = { ...FONT, size: 10, color: { argb: text ? BLACK : GREY } };
-  });
-
-  [
-    'Forecast conventions follow the approach set out in the Wall Street Prep financial statement modeling cheat sheet.',
-    'Marginalia is not affiliated with or endorsed by Wall Street Prep.',
-    '',
-    'This is a calculation tool. It is not investment advice and it is not a research report.',
-  ].forEach((text, i) => {
-    cover.getCell(34 + i, 3).value = text;
-    cover.getCell(34 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
-  });
-
-  // Cover first, then the model, then the valuation.
+  // Tab order. ExcelJS ignores a sort of the worksheets array, so each sheet is
+  // given an explicit position instead.
   const order = ['Cover', '3-StatementModel', 'DCFModel'];
-  wb.worksheets.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+  wb.eachSheet((sheet) => {
+    const position = order.indexOf(sheet.name);
+    if (position >= 0) (sheet as any).orderNo = position;
+  });
 
   return wb;
 }
