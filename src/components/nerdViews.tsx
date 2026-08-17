@@ -34,6 +34,25 @@ const fmt = (v: any, dp = 0) =>
       })
     : '—';
 
+// THE RULE FOR ADJUSTERS: an adjuster sits on the row whose figures it is
+// actually setting, in the same unit. The operating margin adjuster used to
+// sit on the GROSS margin row, so the box read 28% while the row beside it
+// read 41.6%, which looks like a fault even though both numbers were right.
+// Percentage drivers now live on percentage rows; money rows carry no
+// percentage boxes.
+const ratio = (top: any, bottom: any) =>
+  Array.isArray(top) && Array.isArray(bottom)
+    ? top.map((v: any, i: number) =>
+        num(v) && num(bottom[i]) && bottom[i] !== 0 ? Math.abs(v) / bottom[i] : null
+      )
+    : [];
+const signedRatio = (top: any, bottom: any) =>
+  Array.isArray(top) && Array.isArray(bottom)
+    ? top.map((v: any, i: number) =>
+        num(v) && num(bottom[i]) && bottom[i] !== 0 ? v / bottom[i] : null
+      )
+    : [];
+
 const fmtPct = (v: any, dp = 1) => (num(v) ? `${(v * 100).toFixed(dp)}%` : '—');
 const fmtX = (v: any, dp = 1) => (num(v) ? `${v.toFixed(dp)}x` : '—');
 
@@ -276,6 +295,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
   );
   const pct = (v: any) => fmtPct(v);
 
+
   const bs = M.balanceSheet || {};
   const wc = M.wc || {};
   const segments = M.segments || {};
@@ -330,33 +350,49 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             format: pct,
             indent: true,
             muted: true,
-            adjuster: A('operatingMarginPct'),
-            note:
-              'The operating margin adjuster works through gross margin: research and selling costs are held at their own percentages, so the gross margin is what moves to reach the operating margin you set.',
           },
           { spacer: true, label: '' },
+          { label: 'Research and development', values: M.rnd, indent: true },
           {
-            label: 'Research and development',
-            values: M.rnd,
+            label: 'R&D as a share of revenue',
+            values: ratio(M.rnd, M.revenue),
+            format: pct,
             indent: true,
+            muted: true,
             adjuster: A('rndMarginPct'),
           },
+          { label: 'Selling, general and administrative', values: M.sga, indent: true },
           {
-            label: 'Selling, general and administrative',
-            values: M.sga,
+            label: 'SG&A as a share of revenue',
+            values: ratio(M.sga, M.revenue),
+            format: pct,
             indent: true,
+            muted: true,
             adjuster: A('sgaMarginPct'),
           },
           { label: 'Operating profit (EBIT)', values: M.ebit, bold: true },
+          {
+            label: 'Operating margin',
+            values: signedRatio(M.ebit, M.revenue),
+            format: pct,
+            indent: true,
+            muted: true,
+            adjuster: A('operatingMarginPct'),
+            note:
+              'Setting the operating margin works through gross margin: research and selling costs are held at their own percentages above, so gross margin is what moves to reach the operating margin you ask for.',
+          },
           { spacer: true, label: '' },
           { label: 'Interest income', values: M.interestIncome, indent: true },
           { label: 'Interest expense', values: M.interestExpense, indent: true },
           { label: 'Other income and expense', values: M.otherIncomeExpense, indent: true },
           { label: 'Profit before tax', values: M.pretaxProfit, bold: true },
+          { label: 'Tax', values: M.taxes, indent: true },
           {
-            label: 'Tax',
-            values: M.taxes,
+            label: 'Effective tax rate',
+            values: M.taxRate,
+            format: pct,
             indent: true,
+            muted: true,
             adjuster: A('taxRatePct'),
           },
           { label: 'Net income', values: M.netIncome, bold: true },
@@ -454,26 +490,25 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
         firstForecast={nH}
         rows={[
           { label: 'Opening balance', values: M.ppe?.beginning, indent: true },
+          { label: 'Capital expenditure', values: M.ppe?.capex, indent: true },
           {
-            label: 'Capital expenditure',
-            values: M.ppe?.capex,
+            label: 'Capital expenditure as a share of revenue',
+            values: ratio(M.ppe?.capex, M.revenue),
+            format: pct,
             indent: true,
+            muted: true,
             adjuster: A('capexPctOfRev'),
           },
-          {
-            label: 'Depreciation',
-            values: M.ppe?.depreciation,
-            indent: true,
-            adjuster: A('depreciationPctOfCapex'),
-          },
-          { label: 'Closing balance', values: M.ppe?.ending, bold: true },
+          { label: 'Depreciation', values: M.ppe?.depreciation, indent: true },
           {
             label: 'Depreciation as a share of capex',
             values: M.depreciationPercentOfCapex,
             format: pct,
             indent: true,
             muted: true,
+            adjuster: A('depreciationPctOfCapex'),
           },
+          { label: 'Closing balance', values: M.ppe?.ending, bold: true },
         ]}
       />
 
@@ -509,10 +544,13 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
           { spacer: true, label: '' },
           { label: 'Retained earnings opening', values: M.retainedEarnings?.beginning, indent: true },
           { label: 'Net income', values: M.retainedEarnings?.netIncome, indent: true },
+          { label: 'Dividends', values: M.retainedEarnings?.dividends, indent: true },
           {
-            label: 'Dividends',
-            values: M.retainedEarnings?.dividends,
+            label: 'Dividend payout ratio',
+            values: M.dividendPayoutRatio,
+            format: pct,
             indent: true,
+            muted: true,
             adjuster: A('dividendPayoutPct'),
           },
           { label: 'Retained earnings closing', values: M.retainedEarnings?.ending, bold: true },
@@ -631,10 +669,13 @@ export const DCFView: React.FC<ViewProps> = ({
           { label: 'Operating profit after tax (EBIAT)', values: D.ebiat, bold: true },
           { spacer: true, label: '' },
           { label: 'Unlevered cash from operations', values: D.unleveredCFO, bold: true },
+          { label: 'Capital expenditure', values: D.capex, indent: true },
           {
-            label: 'Capital expenditure',
-            values: D.capex,
+            label: 'Capital expenditure as a share of revenue',
+            values: ratio(D.capex, M.revenue?.slice(M.nH)),
+            format: (v: any) => fmtPct(v),
             indent: true,
+            muted: true,
             adjuster: A('capexPctOfRev'),
           },
           { label: 'Unlevered free cash flow', values: D.unleveredFCF, bold: true, accent: true },
