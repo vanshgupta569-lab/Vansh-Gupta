@@ -5,7 +5,13 @@ import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from 
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel } from '../data/companies';
 import { FootballField, RatioBand } from './valuationSections';
 import type { FieldBand } from './valuationSections';
-import { MarketApproachPanel, ImpliedByPrice } from './valuationExtras';
+import { ImpliedByPrice } from './valuationExtras';
+import {
+  buildAssetApproach,
+  RECOVERY_PRESETS,
+  DEFAULT_RECOVERY,
+} from '../data/assetApproach';
+import type { AssetApproachResult, RecoveryRates } from '../data/assetApproach';
 import { buildMarketApproach, trailingFiguresFrom } from '../data/marketApproach';
 import type { MarketApproachResult } from '../data/marketApproach';
 import { reverseDcf } from '../data/reverseDcf';
@@ -418,6 +424,25 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return buildMarketApproach(compsData, subjectTrailing);
   }, [compsData, subjectTrailing]);
 
+  // ---------------------------------------------------------------------
+  // THE ASSET APPROACH
+  //
+  // Built from the FILINGS, not from the forecast. An asset approach is a
+  // statement about what exists today; the moment it borrows a projected
+  // balance sheet it stops answering its own question. So this reads the last
+  // reported year straight out of the fetched statements.
+  //
+  // The recovery rates are the reader's, not ours. Two presets, because the
+  // honest answer depends entirely on whether the company is being closed in a
+  // panic or wound down in an orderly way, and a single default hides that.
+  // ---------------------------------------------------------------------
+  const [recoveryKey, setRecoveryKey] = useState<'forcedSale' | 'orderly'>('forcedSale');
+  const recoveryRates: RecoveryRates = useMemo(
+    () => RECOVERY_PRESETS.find((p) => p.key === recoveryKey)?.rates ?? DEFAULT_RECOVERY,
+    [recoveryKey]
+  );
+
+
   // The bars for the football field: the two valuation methods, each widened
   // by the sensitivity steps the grid already uses.
   const valuationBands = useMemo(() => {
@@ -445,34 +470,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return { value, parts };
   }, [valuationBands]);
 
-  // The chart shows more than the headline does. The market approach is a bar
-  // on the football field but is deliberately NOT folded into the headline
-  // value: a discounted cash flow and a peer multiple answer different
-  // questions, and averaging them would produce a number that means neither.
-  const fieldBands: FieldBand[] = useMemo(() => {
-    const income: FieldBand[] = valuationBands.map((band) => ({
-      ...band,
-      variant: 'income' as const,
-    }));
-    const isNumber = (v: any): v is number => typeof v === 'number' && isFinite(v);
-    if (
-      marketApproach?.available &&
-      isNumber(marketApproach.low) &&
-      isNumber(marketApproach.high) &&
-      isNumber(marketApproach.mid)
-    ) {
-      const used = marketApproach.usable.length;
-      income.push({
-        label: 'Market — peer multiples',
-        low: marketApproach.low,
-        high: marketApproach.high,
-        point: marketApproach.mid,
-        detail: `${used} peer multiple${used === 1 ? '' : 's'} on reported figures`,
-        variant: 'market',
-      });
-    }
-    return income;
-  }, [valuationBands, marketApproach]);
 
   // Premium or discount against that blended value.
   const blendedPremiumPct = useMemo(() => {
@@ -570,6 +567,133 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       return null;
     }
   }, [activeSource, drivers, displayPrice, bankModel]);
+
+  const assetApproach: AssetApproachResult | null = useMemo(() => {
+    // Two sources of a reported balance sheet, in order of preference.
+    //
+    // 1. The filings as fetched. These carry goodwill and intangibles, so the
+    //    tangible book measure can be computed.
+    // 2. Failing that, the engine's own historical columns. A hand-built model
+    //    has no fetched statements behind it, and its data file does not carry
+    //    a goodwill line, so tangible book is reported as not disclosed rather
+    //    than guessed. Everything else still works.
+    const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
+    let lastReported: any = null;
+
+    if (Array.isArray(raw) && raw.length) {
+      lastReported = raw[raw.length - 1];
+    } else if (baseBuild?.model?.balanceSheet) {
+      const B = baseBuild.model.balanceSheet;
+      const i = (baseBuild.model.nH ?? 0) - 1;
+      const at = (series: any) =>
+        Array.isArray(series) && typeof series[i] === 'number' && isFinite(series[i])
+          ? series[i]
+          : null;
+      const sumOf = (...vals: (number | null)[]) => {
+        const present = vals.filter((v): v is number => typeof v === 'number');
+        return present.length ? present.reduce((a, b) => a + b, 0) : null;
+      };
+      lastReported = {
+        fiscalYear: activeSource?.meta?.historicalYears?.[i] ?? null,
+        cash: at(B.cashAndSecurities),
+        receivables: at(B.accountsReceivable),
+        inventory: at(B.inventory),
+        currentAssets: sumOf(
+          at(B.cashAndSecurities),
+          at(B.accountsReceivable),
+          at(B.inventory),
+          at(B.deferredTaxAssets),
+          at(B.otherCurrentAssets)
+        ),
+        ppeNet: at(B.propertyPlantEquipment),
+        totalAssets: at(B.totalAssets),
+        totalLiabilities: at(B.totalLiabilities),
+        goodwill: null,
+        intangibles: null,
+      };
+    }
+
+    if (!lastReported) return null;
+    // Share counts arrive from the filings as raw counts; every money figure is
+    // in millions. Divide so the two are in the same units before dividing one
+    // by the other.
+    const rawShares =
+      typeof lastReported?.dilutedShares === 'number'
+        ? lastReported.dilutedShares
+        : null;
+    const sharesInMillions =
+      typeof rawShares === 'number' && isFinite(rawShares) && rawShares > 0
+        ? rawShares / 1e6
+        : subjectTrailing?.dilutedShares ?? null;
+    try {
+      return buildAssetApproach(
+        lastReported,
+        sharesInMillions,
+        recoveryRates,
+        Boolean(bankModel) || Boolean(company.residualIncome?.applicable)
+      );
+    } catch {
+      return null;
+    }
+  }, [
+    derivedSource,
+    activeSource,
+    baseBuild,
+    subjectTrailing,
+    recoveryRates,
+    bankModel,
+    company.residualIncome,
+  ]);
+
+  // The chart shows more than the headline does. The market approach is a bar
+  // on the football field but is deliberately NOT folded into the headline
+  // value: a discounted cash flow and a peer multiple answer different
+  // questions, and averaging them would produce a number that means neither.
+  const fieldBands: FieldBand[] = useMemo(() => {
+    const income: FieldBand[] = valuationBands.map((band) => ({
+      ...band,
+      variant: 'income' as const,
+    }));
+    const isNumber = (v: any): v is number => typeof v === 'number' && isFinite(v);
+    if (
+      marketApproach?.available &&
+      isNumber(marketApproach.low) &&
+      isNumber(marketApproach.high) &&
+      isNumber(marketApproach.mid)
+    ) {
+      const used = marketApproach.usable.length;
+      income.push({
+        label: 'Market — peer multiples',
+        low: marketApproach.low,
+        high: marketApproach.high,
+        point: marketApproach.mid,
+        detail: `${used} peer multiple${used === 1 ? '' : 's'} on reported figures`,
+        variant: 'market',
+      });
+    }
+    // The asset approach is drawn as a floor rather than an estimate, which is
+    // what it is. Where only one measure survives the bar has no width, and
+    // that is honest: there is one figure, not a range.
+    if (
+      assetApproach?.available &&
+      isNumber(assetApproach.low) &&
+      isNumber(assetApproach.high) &&
+      isNumber(assetApproach.mid)
+    ) {
+      const count = assetApproach.usable.length;
+      income.push({
+        label: 'Asset — what it owns',
+        low: assetApproach.low,
+        high: assetApproach.high,
+        point: assetApproach.mid,
+        detail: `${count} balance sheet measure${count === 1 ? '' : 's'}${
+          assetApproach.informative ? '' : ', shown as a floor rather than a valuation'
+        }`,
+        variant: 'asset',
+      });
+    }
+    return income;
+  }, [valuationBands, marketApproach, assetApproach]);
 
   const bankPremiumPct = useMemo(() => {
     if (!bankModel || !(bankModel.valuePerShare > 0)) return null;
@@ -1044,6 +1168,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
       </div>
 
+      {/* Ratios come BEFORE the charts. A reader who has just been given a
+          value asks what kind of business produced it, and the ratios answer
+          that in words. The charts answer questions they have not asked yet. */}
+      <div id="ratios" className="scroll-mt-24 mb-10">
+        <RatioBand
+          reported={ratioData.reported as any}
+          forecast={ratioData.forecast as any}
+        />
+      </div>
+
       {/* Analytics Row (3 Columns: Rev Trend Bar Chart, DCF Sensitivity Heatmap, Health Radar) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         
@@ -1321,12 +1455,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
       {/* Ratios, the valuation range, and the plain-English walkthrough. */}
       <div className="space-y-6 mb-10">
-        <div id="ratios" className="scroll-mt-24">
-        <RatioBand
-          reported={ratioData.reported as any}
-          forecast={ratioData.forecast as any}
-        />
-        </div>
         {dcfResult.applicable !== false && (
           <div id="football" className="scroll-mt-24">
           <FootballField
@@ -1336,14 +1464,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
             currencySymbol={company.currencySymbol}
           />
-          <MarketApproachPanel
-            result={marketApproach}
-            loading={compsLoading}
-            currencySymbol={company.currencySymbol}
-            unitLabel={activeSource?.meta?.unitLabel || `${company.currencySymbol} millions`}
-          >
-            <OpenScreen view="COMPS" label="Comparable companies" strong />
-          </MarketApproachPanel>
           </div>
         )}
 
@@ -1371,15 +1491,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             isDerived={viewMode === 'DERIVED' || !company.engineBacked}
             methods={blendedValue?.parts}
             blendedValue={blendedValue?.value ?? null}
+            marketApproach={marketApproach}
+            assetApproach={assetApproach}
+            recoveryKey={recoveryKey}
+            onRecoveryKey={setRecoveryKey}
           />
-          <div className="border border-t-0 border-[#222228] bg-[#111114] px-5 sm:px-7 py-5">
-            <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-4">
-              A model reads accounts. It cannot read a management team, a
-              regulator or a competitor. Put your own judgement through the
-              assumptions it belongs in.
-            </p>
-            <OpenScreen view="QUALITATIVE" label="Qualitative adjustments" strong />
-          </div>
           </div>
         )}
       </div>
@@ -1407,6 +1523,19 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         <div className="flex flex-wrap gap-3">
           <OpenScreen view="THREE_STATEMENT" label="3-Statement Model" strong />
           <OpenScreen view="DCF" label="DCF Model" strong />
+          <OpenScreen view="COMPS" label="Market approach" strong />
+        </div>
+
+        {/* Judgement lives here now rather than in the body of the page. It is
+            asked for before the model is built; this is where a reader who has
+            since formed a view comes back to change it. */}
+        <div className="border-t border-[#222228] mt-6 pt-5">
+          <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-4">
+            A model reads accounts. It cannot read a management team, a
+            regulator or a competitor. Put your own judgement through the
+            assumptions it belongs in, and the value above will move.
+          </p>
+          <OpenScreen view="QUALITATIVE" label="Qualitative adjustments" strong />
         </div>
       </section>
       )}

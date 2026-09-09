@@ -1,29 +1,35 @@
 // FILE: src/components/howCalculated.tsx
-// Marginalia — "How this was calculated"
 //
-// The section that exists because a layman currently understands nothing on
-// this screen. Eight steps, each written the same way:
+// Marginalia — how this was calculated
 //
-//   1. the THEORY first, in plain English, with no jargon left undefined
-//   2. then THIS COMPANY'S figures underneath, so the reader can watch the
-//      general rule turn into a specific number
+// This section has one job: take somebody who has never valued a company and
+// leave them understanding where the number at the top of the page came from.
 //
-// Rules this section follows:
+// It is NOT the audit trail. That lives in the four full-screen models under
+// "For the nerds", where every figure can be read and moved. Trying to be both
+// is what made the earlier version eight steps long and dense with figures.
 //
-//   Nothing here recalculates anything. Every figure is read from the model
-//   that produced the value at the top of the screen, so the walkthrough can
-//   never drift away from the answer it claims to explain.
+// So the rules for everything below:
 //
-//   Where the reader has moved a slider, the figure shown is THEIRS and the
-//   model's own default is shown beside it in grey. A reader should always be
-//   able to see what they changed.
-//
-//   No step claims more than it can support. Where an assumption is a generic
-//   default rather than something read from the filings, it says so.
+//   1. The idea comes first, in the plainest words available, with an everyday
+//      example wherever one exists. Nobody learns discounting from a formula.
+//   2. Figures appear only where they make the idea land. Roughly three per
+//      approach, not forty. But NOT zero: "everything after year five is 71% of
+//      this company's value" teaches, "the terminal value is usually large"
+//      does not. Every figure shown is read from the same run that produced
+//      the headline, so the explanation can never drift from the answer.
+//   3. At rest the whole section is a paragraph, three cards and four closed
+//      headings. Almost nothing is open, so it cannot feel cluttered.
+//   4. One level of collapsing only. Inside a group the steps read straight
+//      through like an article, because a second click to reach a paragraph is
+//      a click nobody makes.
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { ValuationDrivers, DCFResult } from '../types';
+import { DCFResult, ValuationDrivers } from '../types';
+import type { MarketApproachResult } from '../data/marketApproach';
+import type { AssetApproachResult } from '../data/assetApproach';
+import { RECOVERY_PRESETS } from '../data/assetApproach';
 
 interface HowCalculatedProps {
   source: any;
@@ -37,21 +43,31 @@ interface HowCalculatedProps {
   sourceLabel: string;
   methods?: { label: string; value: number }[];
   blendedValue?: number | null;
+  marketApproach?: MarketApproachResult | null;
+  assetApproach?: AssetApproachResult | null;
+  /** Which set of recovery rates the liquidation figure is using. */
+  recoveryKey?: 'forcedSale' | 'orderly';
+  onRecoveryKey?: (key: 'forcedSale' | 'orderly') => void;
 }
 
-// A figure with its default shown beside it when the reader has changed it.
-const Figure: React.FC<{
-  label: string;
-  value: string;
-  defaultValue?: string | null;
-}> = ({ label, value, defaultValue }) => (
-  <div className="flex items-baseline justify-between gap-4 py-1.5 border-b border-[#222228]/60 last:border-0">
-    <span className="text-[15px] text-[#8A8A8F]">{label}</span>
-    <span className="font-mono text-[15px] text-[#F2F0EA] text-right">
-      {value}
-      {defaultValue ? (
-        <span className="ml-2 text-[#8A8A8F]">was {defaultValue}</span>
+const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+
+// A figure with its label. Deliberately plain: this is a teaching aid, not a
+// schedule.
+const Figure: React.FC<{ label: string; value: string; note?: string }> = ({
+  label,
+  value,
+  note,
+}) => (
+  <div className="flex items-baseline justify-between gap-4 py-2 border-b border-[#222228]/60 last:border-0">
+    <span className="text-[14px] text-[#8A8A8F] leading-snug">
+      {label}
+      {note ? (
+        <span className="block text-[12px] text-[#8A8A8F]/80 mt-0.5">{note}</span>
       ) : null}
+    </span>
+    <span className="font-mono text-[15px] text-[#F2F0EA] text-right tabular-nums shrink-0">
+      {value}
     </span>
   </div>
 );
@@ -59,470 +75,536 @@ const Figure: React.FC<{
 export const HowCalculated: React.FC<HowCalculatedProps> = ({
   source,
   dcfResult,
-  drivers,
-  defaults,
   currencySymbol,
-  unitLabel,
   companyName,
-  isDerived,
   sourceLabel,
   methods,
   blendedValue,
+  marketApproach,
+  assetApproach,
+  recoveryKey = 'forcedSale',
+  onRecoveryKey,
 }) => {
-  // Every step starts CLOSED, so the section reads as a contents page: eight
-  // titles you can scan in a second, and open whichever you want. Steps are
-  // independent, so opening one never shuts another.
-  const [openSteps, setOpenSteps] = useState<number[]>([]);
-  const isOpen = (n: number) => openSteps.includes(n);
-  const toggleStep = (n: number) =>
-    setOpenSteps((prev) =>
-      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
+  // Every group starts closed. At rest the reader sees a contents page.
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const toggle = (key: string) =>
+    setOpenGroups((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
 
-  if (!dcfResult.applicable || !dcfResult.forecastRows.length) return null;
-
-  const rows = dcfResult.forecastRows;
-  const first = rows[0];
-  const last = rows[rows.length - 1];
   const meta = source?.meta || {};
-  const provenance = source?.provenance || {};
   const historicalYears: number[] = meta.historicalYears || [];
+  const forecastYears: number[] = meta.forecastYears || [];
+  const rows = dcfResult?.forecastRows || [];
 
-  const money = (v: number | null | undefined) =>
-    typeof v === 'number' && isFinite(v)
-      ? `${currencySymbol}${Math.round(v).toLocaleString()}`
+  const money = (v: any, dp = 0) =>
+    isNum(v)
+      ? `${currencySymbol}${v.toLocaleString(undefined, {
+          minimumFractionDigits: dp,
+          maximumFractionDigits: dp,
+        })}`
       : '—';
-  const pct = (v: number | null | undefined, dp = 1) =>
-    typeof v === 'number' && isFinite(v) ? `${v.toFixed(dp)}%` : '—';
+  const perShare = (v: any) => (isNum(v) ? money(v, 2) : '—');
+  const pct = (v: any, dp = 0) => (isNum(v) ? `${v.toFixed(dp)}%` : '—');
 
-  // Only show a default beside a figure when the reader has actually moved it.
-  const changed = (key: keyof ValuationDrivers) =>
-    Number(drivers[key]) !== Number(defaults[key]);
+  const incomeValue = isNum(blendedValue)
+    ? blendedValue
+    : isNum(dcfResult?.targetPrice)
+    ? dcfResult.targetPrice
+    : null;
+  const marketValue = marketApproach?.available ? marketApproach.mid : null;
+  const assetValue = assetApproach?.available ? assetApproach.mid : null;
 
-  const totalPvExplicit = rows.reduce((sum, r) => sum + (r.pvUfcf || 0), 0);
+  // How much of the answer sits beyond the explicit forecast. This is the one
+  // number that changes how a reader thinks about a DCF, so it is worth
+  // computing carefully rather than describing loosely.
+  const pvExplicit = dcfResult?.pvExplicitFCF;
+  const pvTerminal = dcfResult?.pvTerminalValue;
+  const terminalShare =
+    isNum(pvExplicit) && isNum(pvTerminal) && pvExplicit + pvTerminal > 0
+      ? (pvTerminal / (pvExplicit + pvTerminal)) * 100
+      : null;
 
-  const steps: {
-    n: number;
-    title: string;
-    theory: React.ReactNode;
-    figures: React.ReactNode;
-  }[] = [
+  const cards = [
     {
-      n: 1,
-      title: 'Start with what the company actually filed',
-      theory: (
-        <>
-          <p>
-            The first step is not a calculation. It is just collecting what the
-            company has already published.
-          </p>
-          <p className="mt-2">
-            Every listed company must publish its accounts each year. Those
-            accounts come in three parts. One shows what it sold and what that
-            cost. One shows what it owns and what it owes. One shows the money
-            that actually went in and out of its bank account.
-          </p>
-          <p className="mt-2">
-            Nothing here is adjusted or tidied up. These are the company's own
-            numbers, and you can check any of them against the published
-            accounts yourself.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          <Figure
-            label="Years of published accounts used"
-            value={
-              historicalYears.length
-                ? `${historicalYears.length} (FY${String(
-                    historicalYears[0]
-                  ).slice(2)} to FY${String(
-                    historicalYears[historicalYears.length - 1]
-                  ).slice(2)})`
-                : '—'
-            }
-          />
-          <Figure label="Where the figures come from" value={sourceLabel} />
-          <Figure label="Figures stated in" value={unitLabel} />
-          {provenance.excludedPeriods ? (
-            <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
-              Some periods were set aside as not comparable:{' '}
-              {provenance.excludedPeriods}
-            </div>
-          ) : null}
-        </>
-      ),
+      key: 'income',
+      name: 'Income approach',
+      question: 'what its future cash is worth today',
+      value: incomeValue,
+      absent: 'no cash flow model could be built for this company',
     },
     {
-      n: 2,
-      title: 'Forecast the income statement',
-      theory: (
-        <>
-          <p>
-            To work out what a company is worth, you first have to guess what it
-            will earn in the years ahead. That guess starts with sales.
-          </p>
-          <p className="mt-2">
-            Sales are assumed to grow at one steady rate. Then each cost is set
-            as a share of those sales. If the company has been spending 54 out
-            of every 100 rupees of sales on making its product, it is assumed to
-            keep doing that.
-          </p>
-          <p className="mt-2">
-            Sales minus costs leaves <strong>operating profit</strong>: what the
-            business earns from simply trading, before it pays interest on its
-            loans and before tax. Tax is then taken off at the rate the company
-            actually paid last year, not the official rate, because almost no
-            company pays exactly the official rate.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          <Figure
-            label="Sales growth assumed, each year"
-            value={pct(drivers.revenueGrowthPct)}
-            defaultValue={
-              changed('revenueGrowthPct') ? pct(defaults.revenueGrowthPct) : null
-            }
-          />
-          <Figure
-            label="Operating profit as a share of sales"
-            value={pct(drivers.operatingMarginPct)}
-            defaultValue={
-              changed('operatingMarginPct')
-                ? pct(defaults.operatingMarginPct)
-                : null
-            }
-          />
-          <Figure
-            label="Tax rate applied"
-            value={pct(drivers.taxRatePct)}
-            defaultValue={changed('taxRatePct') ? pct(defaults.taxRatePct) : null}
-          />
-          <Figure
-            label={`Sales, FY${String(first.year).slice(2)}`}
-            value={money(first.revenue)}
-          />
-          <Figure
-            label={`Sales, FY${String(last.year).slice(2)}`}
-            value={money(last.revenue)}
-          />
-          <Figure
-            label={`Operating profit, FY${String(last.year).slice(2)}`}
-            value={money(last.ebit)}
-          />
-          {isDerived && provenance.revenueGrowth ? (
-            <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
-              Where the growth rate came from: {provenance.revenueGrowth}.
-              Margins: {provenance.grossMargin}.
-            </div>
-          ) : null}
-        </>
-      ),
+      key: 'market',
+      name: 'Market approach',
+      question: 'what buyers pay for companies like it',
+      value: marketValue,
+      absent:
+        marketApproach?.message ||
+        'no comparable companies could be identified',
     },
     {
-      n: 3,
-      title: 'Forecast the balance sheet from it',
-      theory: (
-        <>
-          <p>
-            Selling more is not free. A shop that sells twice as much has to
-            keep twice as much stock on its shelves, is waiting on twice as much
-            money from customers who have not paid yet, and owes twice as much
-            to its own suppliers.
-          </p>
-          <p className="mt-2">
-            So each of those moves in step with whatever drives it. Money owed
-            by customers grows in line with sales. Stock and money owed to
-            suppliers grow in line with what it costs to make the goods.
-          </p>
-          <p className="mt-2">
-            Buildings and machinery are tracked year by year in a simple way:
-            take last year's total, add whatever is spent on new equipment, take
-            off a bit for wear and age, and that gives this year's total. The
-            amount taken off for wear is called{' '}
-            <strong>depreciation</strong>.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          <Figure
-            label="Spending on equipment, as a share of sales"
-            value={pct(drivers.capexPctOfRev)}
-            defaultValue={
-              changed('capexPctOfRev') ? pct(defaults.capexPctOfRev) : null
-            }
-          />
-          <Figure
-            label={`Spending on equipment, FY${String(first.year).slice(2)}`}
-            value={money(first.capex)}
-          />
-          <Figure
-            label={`Depreciation, FY${String(first.year).slice(2)}`}
-            value={money(first.da)}
-          />
-          <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
-            Money owed by customers grows with revenue. Stock and money owed to
-            suppliers grow with the cost of sales.
-          </div>
-        </>
-      ),
-    },
-    {
-      n: 4,
-      title: 'Forecast the cash flow statement',
-      theory: (
-        <>
-          <p>
-            This is the step most people find surprising:{' '}
-            <strong>profit is not the same as cash</strong>.
-          </p>
-          <p className="mt-2">
-            A sale counts as profit the moment it is agreed, even if the
-            customer will not pay for another three months. Depreciation is
-            taken off as a cost even though no money actually leaves the
-            building. So a company can report a healthy profit and still have an
-            empty bank account.
-          </p>
-          <p className="mt-2">
-            This step undoes all of that. Depreciation is added back, because it
-            never really left. Money the company has earned but not yet
-            collected is taken off. Money it owes but has not yet paid is added
-            back. What is left is real cash.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          <Figure
-            label={`Operating profit after tax, FY${String(first.year).slice(2)}`}
-            value={money(first.ebiat)}
-          />
-          <Figure label="Add back depreciation (no money left)" value={money(first.da)} />
-          <Figure
-            label="Cash tied up in stock and unpaid bills"
-            value={money(-Math.abs(first.wcChange))}
-          />
-        </>
-      ),
-    },
-    {
-      n: 5,
-      title: 'Work out the cash the business generates',
-      theory: (
-        <>
-          <p>
-            Put those adjustments together and you get the cash the business
-            genuinely produced in the year, before it spends anything on new
-            equipment and before anything goes to banks or shareholders.
-          </p>
-          <p className="mt-2">
-            This is the number the whole valuation is built on. Not the profit
-            the company reported, but the money it actually made.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          {rows.map((r) => (
-            <Figure
-              key={r.year}
-              label={`FY${String(r.year).slice(2)} — cash generated`}
-              value={money(r.ebiat + r.da - Math.abs(r.wcChange))}
-            />
-          ))}
-        </>
-      ),
-    },
-    {
-      n: 6,
-      title: 'Subtract what must be reinvested',
-      theory: (
-        <>
-          <p>
-            A business cannot keep all the cash it makes. Machines wear out,
-            shops need repainting, delivery vans need replacing. That spending
-            is not optional, so it does not belong to the owners and it has to
-            come off.
-          </p>
-          <p className="mt-2">
-            What is left is called <strong>free cash flow</strong>: the money
-            genuinely spare after the company has paid its costs, its taxes and
-            its upkeep. Think of it as what would be left in your account at the
-            end of the year after the rent, the bills and fixing the roof.
-          </p>
-          <p className="mt-2">
-            It is measured before any interest is paid. That is deliberate. It
-            keeps the question about how good the business is, separate from the
-            question of how much it has borrowed.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          {rows.map((r) => (
-            <Figure
-              key={r.year}
-              label={`FY${String(r.year).slice(2)} — free cash flow`}
-              value={money(r.ufcf)}
-            />
-          ))}
-        </>
-      ),
-    },
-    {
-      n: 7,
-      title: 'Convert future cash into what it is worth today',
-      theory: (
-        <>
-          <p>
-            Money you will get in five years is worth less to you than the same
-            money today. You could have invested today's money in the meantime,
-            and the future money might never turn up at all.
-          </p>
-          <p className="mt-2">
-            So every future year's cash is shrunk to what it is worth right now.
-            How much it shrinks depends on the <strong>discount rate</strong>: a
-            single percentage that stands for both the waiting and the risk. A
-            riskier company gets a higher rate, so its future cash is worth less
-            today.
-          </p>
-          <p className="mt-2">
-            But a business does not stop after five years. What happens
-            afterwards is handled two different ways. One assumes the company
-            keeps growing slowly forever. The other assumes it is sold at the
-            end, at a price based on what similar companies sell for. Neither is
-            more right than the other, which is exactly why this site shows both
-            instead of picking one.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          <Figure
-            label="Discount rate (waiting plus risk)"
-            value={pct(drivers.waccPct)}
-            defaultValue={changed('waccPct') ? pct(defaults.waccPct) : null}
-          />
-          <Figure
-            label="Growth assumed after year five, forever"
-            value={pct(drivers.terminalGrowthPct)}
-            defaultValue={
-              changed('terminalGrowthPct')
-                ? pct(defaults.terminalGrowthPct)
-                : null
-            }
-          />
-          <Figure
-            label="What the next five years are worth today"
-            value={money(totalPvExplicit)}
-          />
-          <Figure
-            label="What everything after that is worth today"
-            value={`${currencySymbol}${(dcfResult.pvTerminalValue * 1000).toLocaleString(
-              undefined,
-              { maximumFractionDigits: 0 }
-            )}`}
-          />
-          {isDerived && provenance.wacc ? (
-            <div className="pt-2 text-[14px] leading-relaxed text-[#8A8A8F]">
-              {provenance.wacc}. {provenance.terminalGrowth}.
-            </div>
-          ) : null}
-        </>
-      ),
-    },
-    {
-      n: 8,
-      title: 'Turn the whole business into a value per share',
-      theory: (
-        <>
-          <p>
-            Adding it all up gives the value of the whole company. But if you
-            buy a share, you do not get the whole company. The banks have to be
-            paid first.
-          </p>
-          <p className="mt-2">
-            It is like buying a house with a loan on it. The house may be worth
-            one crore, but if eighty lakh is still owed to the bank, what you
-            actually own is twenty lakh. So the company's debts are taken off,
-            and the cash sitting in its bank account is added on.
-          </p>
-          <p className="mt-2">
-            Divide what is left by the number of shares and you have what one
-            share is worth. But this happens twice, because the previous step
-            produced two answers.
-          </p>
-          <p className="mt-2">
-            The <strong>first method</strong> assumes the company keeps trading
-            forever, growing slowly. The <strong>second</strong> assumes it is
-            sold at the end of the forecast, at a price based on what similar
-            companies fetch. They rarely agree, and there is no honest way to
-            declare one of them right.
-          </p>
-          <p className="mt-2">
-            So the two are <strong>averaged, half and half</strong>. That
-            average is the number at the top of this page. Both of the figures
-            behind it are shown there too, because how far apart they sit tells
-            you how much the answer depends on which view of the future you
-            take.
-          </p>
-        </>
-      ),
-      figures: (
-        <>
-          <Figure
-            label="Value of the whole company"
-            value={`${currencySymbol}${(
-              dcfResult.enterpriseValueBillion * 1000
-            ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-          />
-          <Figure
-            label="Left for shareholders, after debts"
-            value={`${currencySymbol}${(
-              dcfResult.impliedEquityValueBillion * 1000
-            ).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-          />
-          {methods && methods.length > 1 ? (
-            <>
-              {methods.map((method) => (
-                <Figure
-                  key={method.label}
-                  label={`One share, ${method.label}`}
-                  value={`${currencySymbol}${method.value.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}`}
-                />
-              ))}
-              <Figure
-                label="The two, weighted equally"
-                value={`${currencySymbol}${(blendedValue ?? 0).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}`}
-              />
-            </>
-          ) : (
-            <Figure
-              label="Value of one share"
-              value={`${currencySymbol}${dcfResult.targetPrice.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}`}
-            />
-          )}
-        </>
-      ),
+      key: 'asset',
+      name: 'Asset approach',
+      question: 'what it owns, less what it owes',
+      value: assetValue,
+      absent:
+        assetApproach?.message ||
+        'the balance sheet gives no positive figure for this company',
     },
   ];
 
-  const anyChanged = (Object.keys(defaults) as (keyof ValuationDrivers)[]).some(
-    (key) => changed(key)
-  );
+  const shown = cards.filter((c) => isNum(c.value));
+  const spread =
+    shown.length > 1
+      ? {
+          low: Math.min(...shown.map((c) => c.value as number)),
+          high: Math.max(...shown.map((c) => c.value as number)),
+        }
+      : null;
+
+  // -------------------------------------------------------------------------
+  // THE GROUPS
+  // -------------------------------------------------------------------------
+
+  type Step = { title: string; body: React.ReactNode; figures?: React.ReactNode };
+  type Group = { key: string; title: string; standfirst: string; steps: Step[] };
+
+  const groups: Group[] = [];
+
+  groups.push({
+    key: 'source',
+    title: 'Where these numbers come from',
+    standfirst: 'Before any of the three approaches, the raw material.',
+    steps: [
+      {
+        title: 'Everything starts in the company’s own filings',
+        body: (
+          <>
+            <p>
+              No estimate, no broker note, no opinion. Every figure this page
+              rests on was published by {companyName} itself and filed with the
+              authority that regulates it. For this company the source is{' '}
+              {sourceLabel}.
+            </p>
+            <p>
+              That is the reason the site can show you its working. A number you
+              can trace back to a filing is a number you can argue with.
+            </p>
+          </>
+        ),
+        figures: (
+          <>
+            <Figure
+              label="Years of reported accounts used"
+              value={
+                historicalYears.length
+                  ? `${historicalYears.length} (FY${historicalYears[0]} to FY${
+                      historicalYears[historicalYears.length - 1]
+                    })`
+                  : '—'
+              }
+            />
+            <Figure label="Source" value={sourceLabel} />
+          </>
+        ),
+      },
+      {
+        title: 'Reported is fact. Forecast is not.',
+        body: (
+          <>
+            <p>
+              The past years on this page happened. The future years did not.
+              They are produced by rules stated openly: revenue grows at the
+              rate it has grown at, margins hold at the last reported year,
+              tax stays at the rate actually paid.
+            </p>
+            <p>
+              This is why the site keeps the two visibly apart everywhere, and
+              why you can move every one of those rules yourself. A forecast is
+              an argument, not a measurement, and you are allowed to disagree
+              with it.
+            </p>
+          </>
+        ),
+        figures: (
+          <Figure
+            label="Years forecast"
+            value={
+              forecastYears.length
+                ? `${forecastYears.length} (FY${forecastYears[0]} to FY${
+                    forecastYears[forecastYears.length - 1]
+                  })`
+                : '—'
+            }
+          />
+        ),
+      },
+    ],
+  });
+
+  if (dcfResult?.applicable !== false) {
+    const lastRow = rows[rows.length - 1];
+    groups.push({
+      key: 'income',
+      title: 'The income approach, in four steps',
+      standfirst: 'What the cash this business will produce is worth today.',
+      steps: [
+        {
+          title: 'The idea',
+          body: (
+            <>
+              <p>
+                A hundred rupees in your hand today is worth more than a hundred
+                rupees in five years, because today’s hundred can be earning
+                something in the meantime. Everyone understands this without
+                being taught it.
+              </p>
+              <p>
+                Valuing a company on its income means estimating the cash it
+                will produce in each future year, then asking what all of that is
+                worth today. Converting future money into today’s money is
+                called discounting, and the rate used is the return an investor
+                could get elsewhere for taking the same risk.
+              </p>
+            </>
+          ),
+        },
+        {
+          title: 'Working out the cash',
+          body: (
+            <>
+              <p>
+                Not profit. Cash. A shop can report a profit and still have
+                nothing in the till, because the money went into stock it has not
+                sold and a delivery van it had to buy.
+              </p>
+              <p>
+                So the model starts from what the company earns from trading,
+                takes off the tax it actually pays, adds back the accounting
+                charges that never left the bank, and then takes off what must be
+                spent to keep the business standing. What is left is the cash
+                genuinely available to whoever owns and lends to the company.
+              </p>
+            </>
+          ),
+          figures: lastRow ? (
+            <>
+              <Figure
+                label={`Cash available in FY${lastRow.year}`}
+                value={money(lastRow.ufcf)}
+                note="the last forecast year, in millions"
+              />
+              <Figure
+                label="Worth today, after discounting"
+                value={money(lastRow.pvUfcf)}
+                note="the same figure, translated into today's money"
+              />
+            </>
+          ) : undefined,
+        },
+        {
+          title: 'The part most people do not expect',
+          body: (
+            <>
+              <p>
+                The model forecasts five years in detail. But the company does
+                not close in year five. So one further figure stands in for
+                everything that happens afterwards, for ever.
+              </p>
+              <p>
+                For most companies that single figure is the larger half of the
+                answer
+                {isNum(terminalShare)
+                  ? `, and for ${companyName} it is ${terminalShare.toFixed(
+                      0
+                    )}% of it`
+                  : ''}
+                . It is worth sitting with that. It means an assumption about
+                the distant future carries more weight than everything you can
+                actually forecast, which is the honest weakness of this method
+                and the reason the site lets you move that assumption and watch
+                the answer move.
+              </p>
+            </>
+          ),
+          figures: (
+            <>
+              <Figure
+                label="From the five forecast years"
+                value={money((pvExplicit ?? 0) * 1000)}
+              />
+              <Figure
+                label="From everything after them"
+                value={money((pvTerminal ?? 0) * 1000)}
+                note={
+                  isNum(terminalShare)
+                    ? `${terminalShare.toFixed(0)}% of the total`
+                    : undefined
+                }
+              />
+            </>
+          ),
+        },
+        {
+          title: 'Turning it into one share',
+          body: (
+            <>
+              <p>
+                Adding those together gives what the whole business is worth.
+                But some of that belongs to the banks and bondholders, so their
+                debt comes off, and the cash in the company goes back on. What
+                remains belongs to shareholders. Divide by the number of shares
+                and you have a value per share.
+              </p>
+              <p>
+                There are two accepted ways to work out that “everything
+                afterwards” figure, and they rarely agree. Rather than pick a
+                winner, this page shows both and weights them equally.
+              </p>
+            </>
+          ),
+          figures: (
+            <>
+              <Figure
+                label="The whole business is worth"
+                value={money((dcfResult.enterpriseValueBillion ?? 0) * 1000)}
+              />
+              <Figure
+                label="Left for shareholders after debts"
+                value={money((dcfResult.impliedEquityValueBillion ?? 0) * 1000)}
+              />
+              {methods && methods.length > 1 ? (
+                methods.map((m) => (
+                  <Figure
+                    key={m.label}
+                    label={`One share, ${m.label}`}
+                    value={perShare(m.value)}
+                  />
+                ))
+              ) : (
+                <Figure label="One share" value={perShare(dcfResult.targetPrice)} />
+              )}
+              {isNum(blendedValue) && (
+                <Figure label="The two, weighted equally" value={perShare(blendedValue)} />
+              )}
+            </>
+          ),
+        },
+      ],
+    });
+  }
+
+  groups.push({
+    key: 'market',
+    title: 'The market approach, in three steps',
+    standfirst: 'What buyers are paying today for businesses like this one.',
+    steps: [
+      {
+        title: 'The idea',
+        body: (
+          <>
+            <p>
+              You price a flat by looking at what similar flats in the same
+              building recently sold for, per square foot. Nobody builds a cash
+              flow forecast for a flat. They look at the neighbours.
+            </p>
+            <p>
+              This does the same thing with companies. Find businesses that are
+              genuinely alike, see what buyers are paying for each rupee of their
+              profit, and apply that to this company’s own profit.
+            </p>
+          </>
+        ),
+      },
+      {
+        title: 'Choosing which companies to compare with',
+        body: (
+          <>
+            <p>
+              This is the part that decides whether the answer means anything. A
+              peer has to be in the same business, not merely the same
+              stock market. Companies in the same industry are used first, the
+              same sector only if there are not enough, and a lender is never
+              compared with a manufacturer.
+            </p>
+            <p>
+              When nothing suitable is found, the site shows nothing rather than
+              a set that would mislead you. That is a deliberate refusal, not a
+              failure.
+            </p>
+          </>
+        ),
+        figures: marketApproach?.available ? (
+          <>
+            <Figure
+              label="Comparable companies used"
+              value={String(marketApproach.peerCount)}
+              note={marketApproach.basis ? `matched on ${marketApproach.basis}` : undefined}
+            />
+          </>
+        ) : (
+          <Figure label="Comparable companies used" value="none" />
+        ),
+      },
+      {
+        title: 'Applying what they trade at',
+        body: (
+          <>
+            <p>
+              Take the middle of what those companies trade at, and apply it to
+              this company’s own reported figure. The middle rather than the
+              average, because one peer on an extreme number would drag an
+              average somewhere no company in the set actually sits.
+            </p>
+            <p>
+              One rule matters here. Those multiples are based on profit the
+              peers have already reported, so they are applied to profit this
+              company has already reported, never to the forecast. Doing
+              otherwise counts the same growth twice.
+            </p>
+          </>
+        ),
+        figures: marketApproach?.available ? (
+          <>
+            {marketApproach.usable.slice(0, 2).map((m) => (
+              <Figure
+                key={m.key}
+                label={`${m.label} suggests`}
+                value={perShare(m.perShare)}
+                note={`peer median ${
+                  isNum(m.median) ? m.median.toFixed(1) + 'x' : '—'
+                }`}
+              />
+            ))}
+            <Figure
+              label="Middle of the market approach"
+              value={perShare(marketApproach.mid)}
+            />
+          </>
+        ) : undefined,
+      },
+    ],
+  });
+
+  groups.push({
+    key: 'asset',
+    title: 'The asset approach, in three steps',
+    standfirst: 'What the company owns, once everything it owes is paid.',
+    steps: [
+      {
+        title: 'The idea',
+        body: (
+          <>
+            <p>
+              Forget what the business earns. Ask a blunter question: if it
+              stopped trading tomorrow, sold everything it owns and paid everyone
+              it owes, what would be left for the owners?
+            </p>
+            <p>
+              This is the oldest of the three approaches and the least
+              flattering. It is why it is useful. It gives a floor, and a floor
+              matters most exactly when the other two methods are struggling,
+              which is to say when a company is losing money.
+            </p>
+          </>
+        ),
+      },
+      {
+        title: 'Four ways to read the same balance sheet',
+        body: (
+          <>
+            <p>
+              <strong className="text-[#F2F0EA]">Book value</strong> is what the
+              accounts say the owners’ share is worth. Everything owned, less
+              everything owed.
+            </p>
+            <p>
+              <strong className="text-[#F2F0EA]">Tangible book value</strong> is
+              the same with goodwill removed. Goodwill is the premium somebody
+              once paid over the value of what they actually bought. In a
+              break-up it fetches nothing.
+            </p>
+            <p>
+              <strong className="text-[#F2F0EA]">Net current asset value</strong>{' '}
+              is harsher still: only the cash, the debts owed to the company and
+              the stock on the shelves count, and every liability comes off. The
+              factories are treated as worth zero.
+            </p>
+            <p>
+              <strong className="text-[#F2F0EA]">Liquidation value</strong> puts
+              a recovery rate on each kind of asset. Cash fetches all of itself.
+              Stock in a hurry fetches perhaps half. You can set those rates
+              yourself, and the answer changes enormously depending on whether
+              the company is being closed in a panic or wound down in an orderly
+              way.
+            </p>
+          </>
+        ),
+        figures: assetApproach ? (
+          <>
+            {assetApproach.measures.map((m) => (
+              <Figure
+                key={m.key}
+                label={m.label}
+                value={isNum(m.perShare) ? perShare(m.perShare) : 'not shown'}
+                note={m.absentBecause}
+              />
+            ))}
+
+            {/* The single most useful thing a reader can do in this section:
+                flip between the two and watch the last figure change, or
+                disappear. It teaches that the answer depends on the question
+                far better than a paragraph does. */}
+            {onRecoveryKey && (
+              <div className="mt-4 pt-3 border-t border-[#222228]">
+                <div className="font-mono text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase mb-2">
+                  Liquidation assumes
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {RECOVERY_PRESETS.map((preset) => (
+                    <button
+                      key={preset.key}
+                      type="button"
+                      onClick={() => onRecoveryKey(preset.key)}
+                      className={`font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors ${
+                        recoveryKey === preset.key
+                          ? 'border-[#8B1E1E] bg-[#8B1E1E]/15 text-[#F2F0EA]'
+                          : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8A8A8F]'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[12px] leading-snug text-[#8A8A8F] mt-2">
+                  {RECOVERY_PRESETS.find((p) => p.key === recoveryKey)?.description}
+                </div>
+              </div>
+            )}
+          </>
+        ) : undefined,
+      },
+      {
+        title: 'When this tells you something, and when it does not',
+        body: (
+          <>
+            <p>
+              {assetApproach?.suitability ||
+                'The balance sheet holds part of what makes some companies valuable and almost none of what makes others valuable, so this approach is worth more for some companies than for others.'}
+            </p>
+            <p>
+              A software company’s value is in its people and its code, and
+              neither appears on a balance sheet. A steel plant’s value is
+              largely the plant. The same four measures are honest for both, and
+              informative for only one of them.
+            </p>
+          </>
+        ),
+      },
+    ],
+  });
+
+  if (!dcfResult) return null;
 
   return (
     <section className="border border-[#222228] bg-[#111114] p-5 sm:p-7">
@@ -531,43 +613,79 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
           How this was calculated
         </h2>
         <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
-          03 — the working
+          04 — the working
         </span>
       </div>
 
-      <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-2">
-        Eight steps from {companyName}'s published accounts to the value at the
-        top of this page. Each step explains the idea in plain words first, then
-        shows the figures it produced for this company. You do not need to know
-        anything about finance to follow it.
+      <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-7">
+        Valuing a company means estimating what it is worth, which is a
+        different question from what it costs on the exchange today. There are
+        three accepted ways to answer it, and an analyst uses all three rather
+        than choosing one. Here is each of them, in plain words, using{' '}
+        {companyName}’s own figures. You do not need to know anything about
+        finance to follow it.
       </p>
 
-      {anyChanged ? (
-        <p className="font-mono text-[13px] text-[#8B1E1E] mb-6">
-          Showing your adjustments. The model's own figure is in grey beside
-          anything you have changed.
-        </p>
-      ) : (
-        <p className="font-mono text-[13px] text-[#8A8A8F] mb-6">
-          Showing the model's own assumptions. Nothing has been adjusted.
-        </p>
-      )}
+      {/* The three answers, before a word of theory. Seeing them disagree is
+          the single most useful thing a first-time reader can learn. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-[#222228] border border-[#222228] mb-4">
+        {cards.map((card) => (
+          <div key={card.key} className="bg-[#0B0B0D] p-4 sm:p-5">
+            <div className="font-mono text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase">
+              {card.name}
+            </div>
+            <div className="text-[13px] leading-snug text-[#8A8A8F] mt-1.5 mb-3 min-h-[2.4em]">
+              {card.question}
+            </div>
+            {isNum(card.value) ? (
+              <div className="font-mono text-[24px] text-[#F2F0EA] tabular-nums leading-none">
+                {perShare(card.value)}
+              </div>
+            ) : (
+              <div className="text-[13px] leading-snug text-[#8A8A8F]">
+                not shown, because {card.absent}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-7">
+        {spread ? (
+          <>
+            They do not agree, and they are not supposed to. Each answers a
+            different question, so the gap between {perShare(spread.low)} and{' '}
+            {perShare(spread.high)} is not an error to be averaged away. It is
+            the honest range, and it tells you how much of this company’s value
+            rests on belief about the future rather than on what is already
+            there.
+          </>
+        ) : (
+          <>
+            Where an approach cannot be applied to a company it is left out
+            rather than filled in. A figure that means nothing is worse than no
+            figure.
+          </>
+        )}
+      </p>
 
       <div className="border-t border-[#222228]">
-        {steps.map((step) => {
-          const open = isOpen(step.n);
+        {groups.map((group) => {
+          const open = openGroups.includes(group.key);
           return (
-            <div key={step.n} className="border-b border-[#222228]">
+            <div key={group.key} className="border-b border-[#222228]">
               <button
                 type="button"
-                onClick={() => toggleStep(step.n)}
+                onClick={() => toggle(group.key)}
                 className="w-full flex items-baseline gap-4 py-4 text-left group"
               >
-                <span className="font-mono text-[13px] text-[#8B1E1E] shrink-0 pt-0.5">
-                  {String(step.n).padStart(2, '0')}
-                </span>
-                <span className="flex-1 text-[15px] text-[#F2F0EA] group-hover:text-[#8B1E1E] transition-colors">
-                  {step.title}
+                <span className="flex-1">
+                  <span className="block text-[16px] text-[#F2F0EA] group-hover:text-[#8B1E1E] transition-colors">
+                    {group.title}
+                  </span>
+                  <span className="block text-[13px] text-[#8A8A8F] mt-0.5">
+                    {group.standfirst}
+                  </span>
                 </span>
                 <span className="text-[#8A8A8F] shrink-0 pt-1">
                   {open ? (
@@ -579,22 +697,44 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
               </button>
 
               {open && (
-                <div className="pb-6 pl-0 sm:pl-10 grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
-                  <div className="text-[15px] leading-relaxed text-[#A1A1AA] max-w-prose">
-                    {step.theory}
-                  </div>
-                  <div className="border border-[#222228] bg-[#0B0B0D] p-4">
-                    <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
-                      {companyName}
+                <div className="pb-7 space-y-7">
+                  {group.steps.map((step) => (
+                    <div
+                      key={step.title}
+                      className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-10"
+                    >
+                      <div>
+                        <h4 className="text-[15px] text-[#F2F0EA] mb-2">
+                          {step.title}
+                        </h4>
+                        <div className="text-[15px] leading-relaxed text-[#A1A1AA] max-w-prose space-y-3">
+                          {step.body}
+                        </div>
+                      </div>
+                      {step.figures ? (
+                        <div className="border border-[#222228] bg-[#0B0B0D] p-4 self-start">
+                          <div className="font-mono text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase mb-2">
+                            {companyName}
+                          </div>
+                          {step.figures}
+                        </div>
+                      ) : (
+                        <div />
+                      )}
                     </div>
-                    {step.figures}
-                  </div>
+                  ))}
                 </div>
               )}
             </div>
           );
         })}
       </div>
+
+      <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mt-6">
+        Every figure behind all three approaches, and the ability to change any
+        assumption and watch the answer move, is in the four models under “For
+        the nerds” at the foot of this page.
+      </p>
     </section>
   );
 };

@@ -27,7 +27,7 @@ import { RATIO_DEFINITIONS } from '../data/ratios.js';
 // market's. Oxblood is reserved for the income approach; the market approach
 // gets the paper colour; anything that is only there for reference stays grey.
 export interface FieldBand extends ValuationBand {
-  variant?: 'income' | 'market' | 'reference';
+  variant?: 'income' | 'market' | 'asset' | 'reference';
 }
 
 interface FootballFieldProps {
@@ -107,9 +107,10 @@ export const FootballField: React.FC<FootballFieldProps> = ({
         The standard way an analyst lays out every value a company could be
         worth, side by side, against what it actually trades at. The oxblood
         bars are the income approach, this model's own discounted cash flow.
-        The pale bar is the market approach, taken from what buyers pay for
-        comparable companies. The grey bar is not a valuation at all, only the
-        range the shares have traded in. There is no confidence interval here
+        The pale solid bar is the market approach, taken from what buyers pay
+        for comparable companies. The dashed bar is the asset approach, a floor
+        rather than an estimate. The grey bar is not a valuation at all, only
+        the range the shares have traded in. There is no confidence interval here
         and no forecast of the share price: the width of a bar is the range its
         own method gives when its main assumption is moved, nothing more.
       </p>
@@ -132,11 +133,22 @@ export const FootballField: React.FC<FootballFieldProps> = ({
             const pointPos = pos(row.point);
             const containsPrice = marketPrice >= row.low && marketPrice <= row.high;
             const isReference = row.variant === 'reference';
+            // A method can produce one figure rather than a range: the asset
+            // approach often has a single surviving measure. Drawing that as a
+            // rectangle 0.6% wide looks like a rendering fault, so a single
+            // value is drawn as a tick. The shape carries the meaning: a bar is
+            // a range, a tick is one number.
+            const isPoint = right - left < 0.9;
             const barTone =
               row.variant === 'reference'
                 ? 'bg-[#8A8A8F]/8 border-[#8A8A8F]/30'
                 : row.variant === 'market'
                 ? 'bg-[#F2F0EA]/14 border-[#F2F0EA]/75'
+                : row.variant === 'asset'
+                // Dashed, because this bar is a floor rather than an estimate.
+                // The broken edge says "boundary" where a solid one would say
+                // "answer", and that is exactly the difference.
+                ? 'bg-[#F2F0EA]/5 border-[#F2F0EA]/45 border-dashed'
                 : 'bg-[#8B1E1E]/25 border-[#8B1E1E]/60';
 
             return (
@@ -146,7 +158,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                     {row.label}
                   </span>
                   <span className="font-mono text-[13px] text-[#8A8A8F]">
-                    {fmt(row.low)} – {fmt(row.high)}
+                    {isPoint ? fmt(row.point) : `${fmt(row.low)} – ${fmt(row.high)}`}
                   </span>
                 </div>
 
@@ -155,12 +167,25 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                     <div className="h-px w-full bg-[#222228]" />
                   </div>
 
-                  <div
-                    className={`absolute inset-y-1 border ${barTone}`}
-                    style={{ left: `${left}%`, width: `${width}%` }}
-                  />
+                  {isPoint ? (
+                    <div
+                      className={`absolute inset-y-0 w-[3px] ${
+                        row.variant === 'asset'
+                          ? 'bg-[#F2F0EA]/70'
+                          : row.variant === 'market'
+                          ? 'bg-[#F2F0EA]/85'
+                          : 'bg-[#8B1E1E]'
+                      }`}
+                      style={{ left: `${left}%` }}
+                    />
+                  ) : (
+                    <div
+                      className={`absolute inset-y-1 border ${barTone}`}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                    />
+                  )}
 
-                  {!isReference && (
+                  {!isReference && !isPoint && (
                     <div
                       className="absolute inset-y-0 w-px bg-[#F2F0EA]/40"
                       style={{ left: `${pointPos}%` }}
@@ -171,7 +196,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
 
                 <div className="font-mono text-[12px] text-[#8A8A8F] mt-1.5 tracking-wide">
                   {row.detail}
-                  {!isReference && ` · base case ${fmt(row.point)}`}
+                  {!isReference && !isPoint && ` · base case ${fmt(row.point)}`}
                   <span className="ml-2 text-[#8A8A8F]">
                     · market price sits {containsPrice ? 'inside' : marketPrice > row.high ? 'above' : 'below'} this range
                   </span>
