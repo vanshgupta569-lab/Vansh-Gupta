@@ -42,11 +42,24 @@ interface Props {
   ticker: string;
   companyName: string;
   currencySymbol: string;
-  /** This company's own last forecast-year EBITDA, from the model. */
+  /**
+   * This company's LAST REPORTED EBITDA, not the forecast.
+   *
+   * This used to be the final forecast year, which was wrong. The peer
+   * multiples below are trailing — what each peer trades at on profit it has
+   * already reported. Putting a trailing multiple on a forecast EBITDA counts
+   * the same growth twice, once in the forecast and once in the multiple, and
+   * for a company growing at 10% a year it overstated the implied value by
+   * roughly 60%.
+   */
   ebitda: number | null;
+  fiscalYear?: number | null;
   netDebt: number | null;
   dilutedShares: number | null;
   dcfValuePerShare: number | null;
+  /** The peer set, already fetched by the dashboard. Avoids a second request. */
+  preloaded?: CompsResponse | null;
+  preloadedLoading?: boolean;
 }
 
 export const CompsPanel: React.FC<Props> = ({
@@ -54,14 +67,29 @@ export const CompsPanel: React.FC<Props> = ({
   companyName,
   currencySymbol,
   ebitda,
+  fiscalYear,
   netDebt,
   dilutedShares,
   dcfValuePerShare,
+  preloaded,
+  preloadedLoading,
 }) => {
-  const [data, setData] = useState<CompsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<CompsResponse | null>(preloaded ?? null);
+  const [loading, setLoading] = useState(preloaded ? false : true);
 
   useEffect(() => {
+    // The dashboard already has the peer set, because the market approach on
+    // the front page needs it. Reuse it rather than asking again.
+    if (preloaded) {
+      setData(preloaded);
+      setLoading(false);
+      return;
+    }
+    if (preloadedLoading) {
+      setLoading(true);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setData(null);
@@ -79,7 +107,7 @@ export const CompsPanel: React.FC<Props> = ({
     return () => {
       cancelled = true;
     };
-  }, [ticker]);
+  }, [ticker, preloaded, preloadedLoading]);
 
   const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
   const money = (v: any, dp = 0) =>
@@ -177,7 +205,12 @@ export const CompsPanel: React.FC<Props> = ({
               </div>
               {[
                 ['Peer median EV / EBITDA', mult(medianEbitdaMultiple)],
-                ['This company\u2019s final forecast year EBITDA', money(ebitda)],
+                [
+                  `This company\u2019s reported EBITDA${
+                    isNum(fiscalYear) ? ` (FY${fiscalYear})` : ''
+                  }`,
+                  money(ebitda),
+                ],
                 ['Implied enterprise value', money((medianEbitdaMultiple as number) * (ebitda as number))],
                 [isNum(netDebt) && netDebt < 0 ? 'Plus net cash' : 'Less net debt', money(Math.abs(netDebt as number))],
                 ['Implied value per share', money(impliedPerShare, 2)],
@@ -212,10 +245,11 @@ export const CompsPanel: React.FC<Props> = ({
               argued for company by company.
             </p>
             <p>
-              The multiples are trailing, not forward. Analysts usually compare
-              on forward estimates; those are not available from a free source,
-              and a trailing multiple flatters a company whose earnings are about
-              to fall.
+              The multiples are trailing, not forward, so they are applied to
+              the last reported year rather than to the forecast. Analysts
+              usually compare on forward estimates; those are not available from
+              a free source, and a trailing multiple flatters a company whose
+              earnings are about to fall.
             </p>
             <p>
               Median rather than average, because one peer on an extreme multiple

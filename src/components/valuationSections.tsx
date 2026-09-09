@@ -21,8 +21,17 @@ import { RATIO_DEFINITIONS } from '../data/ratios.js';
 // FOOTBALL FIELD
 // ---------------------------------------------------------------------------
 
+// A bar can come from any of the three approaches to value, plus one bar that
+// is not a valuation at all. The variant decides how it is drawn, so a reader
+// can tell at a glance which bars are this model's own work and which are the
+// market's. Oxblood is reserved for the income approach; the market approach
+// gets the paper colour; anything that is only there for reference stays grey.
+export interface FieldBand extends ValuationBand {
+  variant?: 'income' | 'market' | 'reference';
+}
+
 interface FootballFieldProps {
-  bands: ValuationBand[];
+  bands: FieldBand[];
   marketPrice: number;
   fiftyTwoWeekHigh?: number | null;
   fiftyTwoWeekLow?: number | null;
@@ -40,8 +49,8 @@ export const FootballField: React.FC<FootballFieldProps> = ({
   // so it is drawn in a different colour and labelled as such. It is included
   // because a valuation that sits far outside the range the shares have
   // actually traded in is worth noticing.
-  const rows: (ValuationBand & { market?: boolean })[] = useMemo(() => {
-    const out: (ValuationBand & { market?: boolean })[] = [...bands];
+  const rows: FieldBand[] = useMemo(() => {
+    const out: FieldBand[] = [...bands];
     if (
       typeof fiftyTwoWeekLow === 'number' &&
       typeof fiftyTwoWeekHigh === 'number' &&
@@ -53,7 +62,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
         high: fiftyTwoWeekHigh,
         point: marketPrice,
         detail: 'where the shares have actually traded',
-        market: true,
+        variant: 'reference',
       });
     }
     return out;
@@ -96,11 +105,13 @@ export const FootballField: React.FC<FootballFieldProps> = ({
 
       <p className="text-[15px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-7">
         The standard way an analyst lays out every value a company could be
-        worth, side by side, against what it actually trades at. Each bar is a
-        value this model produces under the inputs named beside it. There is no
-        confidence interval here and no forecast of the share price: the width
-        of a bar is the range the model gives when the terminal assumption is
-        moved, nothing more.
+        worth, side by side, against what it actually trades at. The oxblood
+        bars are the income approach, this model's own discounted cash flow.
+        The pale bar is the market approach, taken from what buyers pay for
+        comparable companies. The grey bar is not a valuation at all, only the
+        range the shares have traded in. There is no confidence interval here
+        and no forecast of the share price: the width of a bar is the range its
+        own method gives when its main assumption is moved, nothing more.
       </p>
 
       {/* One vertical line for the market price, drawn across every bar. It has
@@ -120,6 +131,13 @@ export const FootballField: React.FC<FootballFieldProps> = ({
             const width = Math.max(right - left, 0.6);
             const pointPos = pos(row.point);
             const containsPrice = marketPrice >= row.low && marketPrice <= row.high;
+            const isReference = row.variant === 'reference';
+            const barTone =
+              row.variant === 'reference'
+                ? 'bg-[#8A8A8F]/8 border-[#8A8A8F]/30'
+                : row.variant === 'market'
+                ? 'bg-[#F2F0EA]/14 border-[#F2F0EA]/75'
+                : 'bg-[#8B1E1E]/25 border-[#8B1E1E]/60';
 
             return (
               <div key={row.label}>
@@ -138,15 +156,11 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                   </div>
 
                   <div
-                    className={`absolute inset-y-1 border ${
-                      row.market
-                        ? 'bg-[#8A8A8F]/10 border-[#8A8A8F]/40'
-                        : 'bg-[#8B1E1E]/25 border-[#8B1E1E]/60'
-                    }`}
+                    className={`absolute inset-y-1 border ${barTone}`}
                     style={{ left: `${left}%`, width: `${width}%` }}
                   />
 
-                  {!row.market && (
+                  {!isReference && (
                     <div
                       className="absolute inset-y-0 w-px bg-[#F2F0EA]/40"
                       style={{ left: `${pointPos}%` }}
@@ -157,7 +171,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
 
                 <div className="font-mono text-[12px] text-[#8A8A8F] mt-1.5 tracking-wide">
                   {row.detail}
-                  {!row.market && ` · base case ${fmt(row.point)}`}
+                  {!isReference && ` · base case ${fmt(row.point)}`}
                   <span className="ml-2 text-[#8A8A8F]">
                     · market price sits {containsPrice ? 'inside' : marketPrice > row.high ? 'above' : 'below'} this range
                   </span>

@@ -4,6 +4,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel } from '../data/companies';
 import { FootballField, RatioBand } from './valuationSections';
+import type { FieldBand } from './valuationSections';
+import { MarketApproachPanel, ImpliedByPrice } from './valuationExtras';
+import { buildMarketApproach, trailingFiguresFrom } from '../data/marketApproach';
+import type { MarketApproachResult } from '../data/marketApproach';
+import { reverseDcf } from '../data/reverseDcf';
+import type { ReverseDcfResult } from '../data/reverseDcf';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
 import { SavedModelsPanel } from './savedModelsPanel';
@@ -355,6 +361,63 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return { reported, forecast };
   }, [derivedSource, activeSource, drivers, company.residualIncome]);
 
+  // ---------------------------------------------------------------------
+  // THE MARKET APPROACH
+  //
+  // The peer set used to be fetched only when the Comparable Companies screen
+  // was opened, because it was only a cross-check. It is now one of the three
+  // approaches to value and appears on the front page, so it is fetched once
+  // per company here and handed down to the full screen rather than fetched
+  // twice.
+  // ---------------------------------------------------------------------
+  const [compsData, setCompsData] = useState<any>(null);
+  const [compsLoading, setCompsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCompsLoading(true);
+    setCompsData(null);
+    fetch(`/api/comps?ticker=${encodeURIComponent(company.ticker)}`)
+      .then((res) => res.json())
+      .then((body) => {
+        if (!cancelled) setCompsData(body);
+      })
+      .catch(() => {
+        if (!cancelled) setCompsData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCompsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [company.ticker]);
+
+  // One engine run that both the market approach and the comps screen read
+  // from, so the EBITDA on the front page and the EBITDA on the full screen
+  // can never be two different numbers.
+  const baseBuild = useMemo(() => {
+    if (!activeSource) return null;
+    try {
+      return buildFullModel(activeSource, drivers);
+    } catch {
+      return null;
+    }
+  }, [activeSource, drivers]);
+
+  const subjectTrailing = useMemo(
+    () =>
+      baseBuild
+        ? trailingFiguresFrom(baseBuild.model, baseBuild.dcf, activeSource)
+        : null,
+    [baseBuild, activeSource]
+  );
+
+  const marketApproach: MarketApproachResult | null = useMemo(() => {
+    if (!compsData || !subjectTrailing) return null;
+    return buildMarketApproach(compsData, subjectTrailing);
+  }, [compsData, subjectTrailing]);
+
   // The bars for the football field: the two valuation methods, each widened
   // by the sensitivity steps the grid already uses.
   const valuationBands = useMemo(() => {
@@ -381,6 +444,35 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     const value = parts.reduce((sum, part) => sum + part.value, 0) / parts.length;
     return { value, parts };
   }, [valuationBands]);
+
+  // The chart shows more than the headline does. The market approach is a bar
+  // on the football field but is deliberately NOT folded into the headline
+  // value: a discounted cash flow and a peer multiple answer different
+  // questions, and averaging them would produce a number that means neither.
+  const fieldBands: FieldBand[] = useMemo(() => {
+    const income: FieldBand[] = valuationBands.map((band) => ({
+      ...band,
+      variant: 'income' as const,
+    }));
+    const isNumber = (v: any): v is number => typeof v === 'number' && isFinite(v);
+    if (
+      marketApproach?.available &&
+      isNumber(marketApproach.low) &&
+      isNumber(marketApproach.high) &&
+      isNumber(marketApproach.mid)
+    ) {
+      const used = marketApproach.usable.length;
+      income.push({
+        label: 'Market — peer multiples',
+        low: marketApproach.low,
+        high: marketApproach.high,
+        point: marketApproach.mid,
+        detail: `${used} peer multiple${used === 1 ? '' : 's'} on reported figures`,
+        variant: 'market',
+      });
+    }
+    return income;
+  }, [valuationBands, marketApproach]);
 
   // Premium or discount against that blended value.
   const blendedPremiumPct = useMemo(() => {
@@ -463,6 +555,21 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     dcfResult.applicable === false && company.residualIncome?.applicable
       ? company.residualIncome
       : null;
+
+  // ---------------------------------------------------------------------
+  // THE REVERSE DCF
+  //
+  // Solved on every driver change, because the whole point is that it answers
+  // for the model as it currently stands, not for some earlier version of it.
+  // ---------------------------------------------------------------------
+  const impliedByPrice: ReverseDcfResult | null = useMemo(() => {
+    if (!activeSource || bankModel) return null;
+    try {
+      return reverseDcf(activeSource, drivers, displayPrice);
+    } catch {
+      return null;
+    }
+  }, [activeSource, drivers, displayPrice, bankModel]);
 
   const bankPremiumPct = useMemo(() => {
     if (!bankModel || !(bankModel.valuePerShare > 0)) return null;
@@ -869,6 +976,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             { id: 'working', label: bankModel ? 'How it was valued' : 'How it was calculated' },
             { id: 'ratios', label: 'Ratios' },
             ...(bankModel ? [] : [{ id: 'football', label: 'Valuation range' }]),
+            ...(bankModel ? [] : [{ id: 'implied', label: 'What the price assumes' }]),
             ...(bankModel ? [] : [{ id: 'nerds', label: 'Full working' }]),
           ].map((entry) => (
             <button
@@ -1222,20 +1330,28 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         {dcfResult.applicable !== false && (
           <div id="football" className="scroll-mt-24">
           <FootballField
-            bands={valuationBands}
+            bands={fieldBands}
             marketPrice={displayPrice}
             fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
             fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
             currencySymbol={company.currencySymbol}
           />
-          <div className="border border-t-0 border-[#222228] bg-[#111114] px-5 sm:px-7 py-5">
-            <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-4">
-              A second opinion on the same question: what the market is paying
-              today for companies in the same business.
-            </p>
+          <MarketApproachPanel
+            result={marketApproach}
+            loading={compsLoading}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource?.meta?.unitLabel || `${company.currencySymbol} millions`}
+          >
             <OpenScreen view="COMPS" label="Comparable companies" strong />
+          </MarketApproachPanel>
           </div>
-          </div>
+        )}
+
+        {dcfResult.applicable !== false && impliedByPrice && (
+          <ImpliedByPrice
+            result={impliedByPrice}
+            currencySymbol={company.currencySymbol}
+          />
         )}
         {activeSource && (
           <div id="working" className="scroll-mt-24">
@@ -1361,13 +1477,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             ticker={company.ticker}
             companyName={company.name}
             currencySymbol={company.currencySymbol}
-            ebitda={
-              Array.isArray(nerdDcf?.ebitda)
-                ? nerdDcf.ebitda[nerdDcf.ebitda.length - 1]
-                : null
+            preloaded={compsData}
+            preloadedLoading={compsLoading}
+            ebitda={subjectTrailing?.ebitda ?? null}
+            fiscalYear={subjectTrailing?.fiscalYear ?? null}
+            netDebt={subjectTrailing?.netDebt ?? nerdDcf?.netDebt ?? null}
+            dilutedShares={
+              subjectTrailing?.dilutedShares ?? nerdDcf?.perpetuity?.dilutedShares ?? null
             }
-            netDebt={nerdDcf?.netDebt ?? null}
-            dilutedShares={nerdDcf?.perpetuity?.dilutedShares ?? null}
             dcfValuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
           />
         </FullScreenPanel>
