@@ -24,7 +24,88 @@
 //   - a peer with no EBITDA, or negative EBITDA, is dropped from that column
 //     rather than shown as a meaningless number
 
-import { guardRequest, readTicker, noStore, logAndHide } from './_guard.js';
+// ---------------------------------------------------------------------------
+// REQUEST GUARD
+//
+// This block is deliberately repeated in each of the five API files rather
+// than imported from one shared file. A shared helper is better engineering,
+// but on Vercel each file in /api is packaged as its own small program, and a
+// missing or unbundled helper takes the whole route down with a server error
+// that says nothing useful. Five copies of forty lines cannot fail that way.
+//
+// If any rule here changes, it has to change in all five files: company.js,
+// search.js, news.js, comps.js and verify.js.
+//
+// What this does NOT do: stop someone calling the API from a script. CORS is a
+// browser rule, so it only stops OTHER WEBSITES using this API inside a
+// visitor's browser. Rate limiting is the tool for scripts, and that lives in
+// the Vercel firewall rule.
+// ---------------------------------------------------------------------------
+
+const ALLOWED_EXACT = new Set([
+  'https://marginalia-iota-one.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+]);
+
+function isAllowedOrigin(origin) {
+  if (ALLOWED_EXACT.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'https:' && url.hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
+// Errors must never be cached, or one bad answer is served to everybody.
+function noStore(res) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+}
+
+// Returns true if the request may continue. When it returns false it has
+// already answered, and the route must simply return.
+function guardRequest(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Allow', 'GET, HEAD, OPTIONS');
+    res.status(204).end();
+    return false;
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    noStore(res);
+    res.setHeader('Allow', 'GET, HEAD, OPTIONS');
+    res.status(405).json({ error: 'Method not allowed.' });
+    return false;
+  }
+  // Browsers send an Origin header only when the page making the call sits on
+  // a different address from the one it calls. Our own pages send nothing.
+  const origin = req.headers.origin;
+  if (origin && !isAllowedOrigin(origin)) {
+    noStore(res);
+    res.status(403).json({ error: 'This API is not open to other sites.' });
+    return false;
+  }
+  res.setHeader('Vary', 'Origin');
+  return true;
+}
+
+// The real reason goes to the Vercel log, where only you can read it. Echoing
+// it back to the caller is how a plain error message becomes an attack.
+function logAndHide(scope, error, detail) {
+  const reason = error && error.message ? error.message : String(error);
+  console.error(`[${scope}]${detail ? ' ' + detail : ''} — ${reason}`);
+}
+
+// Tickers use a very small alphabet: letters, digits, and the dot and hyphen
+// that separate exchange suffixes (RELIANCE.NS, BRK-B).
+const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.\-]{0,19}$/;
+
+function readTicker(value) {
+  const raw = String(value == null ? '' : value).trim().toUpperCase();
+  if (!TICKER_PATTERN.test(raw)) return null;
+  if (raw.includes('..') || raw.endsWith('.') || raw.endsWith('-')) return null;
+  return raw;
+}
 
 let yahooAuth = null;
 
@@ -171,8 +252,8 @@ function isFinancial(entry) {
   return FINANCIAL_SECTORS.has(String(entry?.sector || ''));
 }
 
-function selectPeers(subject, candidates) {
-  const usable = candidates.filter(Boolean);
+function selectPeers(subject, suggested) {
+  const usable = suggested.filter(Boolean);
   const subjectFinancial = isFinancial(subject);
 
   const sameKind = usable.filter((c) => isFinancial(c) === subjectFinancial);
@@ -184,33 +265,53 @@ function selectPeers(subject, candidates) {
     (c) => subject?.sector && c.sector && c.sector === subject.sector
   );
 
-  let chosen = sameIndustry.length >= 2 ? sameIndustry : sameSector;
-  let basis =
+  const chosen = sameIndustry.length >= 2 ? sameIndustry : sameSector;
+  const basis =
     sameIndustry.length >= 2
       ? 'same industry'
       : sameSector.length >= 2
       ? 'same sector'
       : 'none';
 
-  if (basis === 'none') return { peers: [], basis };
-
-  // Rank by closeness in size, on a log scale so a peer half the size and one
-  // twice the size are treated as equally close.
-  const subjectCap = subject?.marketCap;
-  if (typeof subjectCap === 'number' && subjectCap > 0) {
-    chosen = chosen
+  // Everything the data source suggested that is at least the same KIND of
+  // business (a financial is never compared with a non-financial) is returned
+  // as a candidate, so the reader can build their own peer set. Only the ones
+  // that clear the industry or sector test are selected by default.
+  //
+  // The rule that a misleading peer set is worse than none still holds: when
+  // nothing clears the test, nothing is selected, the site says so, and the
+  // candidates are offered as a list to choose from rather than presented as
+  // an answer.
+  const rankByCloseness = (list) => {
+    const cap = subject?.marketCap;
+    if (typeof cap !== 'number' || cap <= 0) return list;
+    return list
       .map((c) => ({
         c,
         distance:
           typeof c.marketCap === 'number' && c.marketCap > 0
-            ? Math.abs(Math.log(c.marketCap / subjectCap))
+            ? Math.abs(Math.log(c.marketCap / cap))
             : Number.POSITIVE_INFINITY,
       }))
       .sort((a, b) => a.distance - b.distance)
       .map((x) => x.c);
-  }
+  };
 
-  return { peers: chosen.slice(0, 6), basis };
+  const defaultSet = basis === 'none' ? [] : rankByCloseness(chosen).slice(0, 5);
+  const defaultSymbols = new Set(defaultSet.map((c) => c.symbol));
+
+  const candidates = rankByCloseness(sameKind).slice(0, 15).map((c) => ({
+    ...c,
+    matchesIndustry: Boolean(
+      subject?.industry && c.industry && c.industry === subject.industry
+    ),
+    matchesSector: Boolean(
+      subject?.sector && c.sector && c.sector === subject.sector
+    ),
+    selectedByDefault: defaultSymbols.has(c.symbol),
+  }));
+
+  return { peers: defaultSet, basis, candidates };
 }
 
 function median(values) {
@@ -254,16 +355,18 @@ export default async function handler(req, res) {
     );
 
     const subject = all[0];
-    const { peers, basis } = selectPeers(subject, all.slice(1));
+    const { peers, basis, candidates } = selectPeers(subject, all.slice(1));
 
     if (!peers.length) {
+      res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
       res.status(200).json({
         ticker,
         subject,
         peers: [],
+        candidates: candidates || [],
         medians: {},
         message:
-          'The companies the data source associates with this one are not in the same business, so no comparable set is shown. A misleading peer set is worse than none.',
+          'The companies the data source associates with this one are not in the same business, so none is selected as a comparable. A misleading peer set is worse than none. The candidates are listed so a peer set can be chosen by hand.',
         fetchedAt: new Date().toISOString(),
       });
       return;
@@ -274,13 +377,14 @@ export default async function handler(req, res) {
       ticker,
       subject,
       peers,
+      candidates,
       basis,
       medians: {
         evToEbitda: median(peers.map((p) => p.evToEbitda)),
         evToSales: median(peers.map((p) => p.evToSales)),
         priceToEarnings: median(peers.map((p) => p.priceToEarnings)),
       },
-      note: `Peers matched on ${basis} and ranked by closeness in size. Trailing figures, not forward.`,
+      note: `Peers matched on ${basis} and ranked by closeness in size. Trailing figures, not forward. ${candidates.length} candidates were considered; the peer set can be changed by hand.`,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

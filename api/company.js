@@ -16,7 +16,88 @@
 // The SEC requires every automated request to identify itself with a real
 // contact email. They block requests that don't. Put your own email here.
 
-import { guardRequest, readTicker, noStore, logAndHide } from './_guard.js';
+// ---------------------------------------------------------------------------
+// REQUEST GUARD
+//
+// This block is deliberately repeated in each of the five API files rather
+// than imported from one shared file. A shared helper is better engineering,
+// but on Vercel each file in /api is packaged as its own small program, and a
+// missing or unbundled helper takes the whole route down with a server error
+// that says nothing useful. Five copies of forty lines cannot fail that way.
+//
+// If any rule here changes, it has to change in all five files: company.js,
+// search.js, news.js, comps.js and verify.js.
+//
+// What this does NOT do: stop someone calling the API from a script. CORS is a
+// browser rule, so it only stops OTHER WEBSITES using this API inside a
+// visitor's browser. Rate limiting is the tool for scripts, and that lives in
+// the Vercel firewall rule.
+// ---------------------------------------------------------------------------
+
+const ALLOWED_EXACT = new Set([
+  'https://marginalia-iota-one.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+]);
+
+function isAllowedOrigin(origin) {
+  if (ALLOWED_EXACT.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'https:' && url.hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
+// Errors must never be cached, or one bad answer is served to everybody.
+function noStore(res) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+}
+
+// Returns true if the request may continue. When it returns false it has
+// already answered, and the route must simply return.
+function guardRequest(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Allow', 'GET, HEAD, OPTIONS');
+    res.status(204).end();
+    return false;
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    noStore(res);
+    res.setHeader('Allow', 'GET, HEAD, OPTIONS');
+    res.status(405).json({ error: 'Method not allowed.' });
+    return false;
+  }
+  // Browsers send an Origin header only when the page making the call sits on
+  // a different address from the one it calls. Our own pages send nothing.
+  const origin = req.headers.origin;
+  if (origin && !isAllowedOrigin(origin)) {
+    noStore(res);
+    res.status(403).json({ error: 'This API is not open to other sites.' });
+    return false;
+  }
+  res.setHeader('Vary', 'Origin');
+  return true;
+}
+
+// The real reason goes to the Vercel log, where only you can read it. Echoing
+// it back to the caller is how a plain error message becomes an attack.
+function logAndHide(scope, error, detail) {
+  const reason = error && error.message ? error.message : String(error);
+  console.error(`[${scope}]${detail ? ' ' + detail : ''} — ${reason}`);
+}
+
+// Tickers use a very small alphabet: letters, digits, and the dot and hyphen
+// that separate exchange suffixes (RELIANCE.NS, BRK-B).
+const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.\-]{0,19}$/;
+
+function readTicker(value) {
+  const raw = String(value == null ? '' : value).trim().toUpperCase();
+  if (!TICKER_PATTERN.test(raw)) return null;
+  if (raw.includes('..') || raw.endsWith('.') || raw.endsWith('-')) return null;
+  return raw;
+}
 
 const SEC_CONTACT = 'Marginalia Research vanshgupta569@gmail.com';
 // ---------------------------------------------------------------------------
@@ -100,6 +181,18 @@ const US_TAGS = {
     'LongTermNotesPayable',
   ],
   totalLiabilities: ['Liabilities'],
+
+  // Goodwill and other intangibles. Needed for TANGIBLE book value, which is
+  // book value with the accounting fictions removed: goodwill is the premium
+  // paid over the value of what was actually bought, and it is worth nothing
+  // in a break-up. Many filers do not tag these at all, and an absent figure
+  // must stay absent — treating a missing goodwill line as zero would silently
+  // claim the company has none, which is a different statement.
+  goodwill: ['Goodwill'],
+  intangibles: [
+    'IntangibleAssetsNetExcludingGoodwill',
+    'FiniteLivedIntangibleAssetsNet',
+  ],
   equity: [
     'StockholdersEquity',
     'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
@@ -337,6 +430,8 @@ const YAHOO_FIELDS = {
   longTermDebt: 'annualLongTermDebt',
   totalLiabilities: 'annualTotalLiabilitiesNetMinorityInterest',
   equity: 'annualStockholdersEquity',
+  goodwill: 'annualGoodwill',
+  intangibles: 'annualOtherIntangibleAssets',
 
   depreciation: 'annualDepreciationAndAmortization',
   capex: 'annualCapitalExpenditure',
