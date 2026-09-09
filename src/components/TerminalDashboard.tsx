@@ -28,6 +28,8 @@ import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
+import { applyVerdicts } from '../data/qualitativeFactors';
+import type { Verdict } from '../data/qualitativeFactors';
 import { TweenNumber, FlashOnChange, GrowBar } from './motionPrimitives';
 import {
   TrendingUp,
@@ -52,6 +54,12 @@ interface TerminalDashboardProps {
   selectedTicker: string;
   onSelectTicker: (ticker: string) => void;
   onOpenDirectory: () => void;
+  /**
+   * What the reader answered on the questions screen, before the model was
+   * built. Null when they skipped, which must produce exactly the model the
+   * site would have built on its own.
+   */
+  initialVerdicts?: Record<string, Verdict> | null;
 }
 
 export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
@@ -59,6 +67,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   selectedTicker,
   onSelectTicker,
   onOpenDirectory,
+  initialVerdicts,
 }) => {
   const company = companies[selectedTicker] || companies['AAPL'];
 
@@ -555,9 +564,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // that model's own starting point. Anything the user had moved is cleared,
   // which is correct: a slider position means nothing once the underlying
   // model has changed beneath it.
+  //
+  // The judgements made before the model was built are applied here, on top of
+  // whichever model is active, and re-applied when the model changes beneath
+  // them. They are always computed from that model's own defaults rather than
+  // from the current slider positions, so switching models twice cannot apply
+  // the same view twice.
   useEffect(() => {
-    setDrivers(activeDefaults);
-  }, [viewMode, derivedSource, analystSource]);
+    setDrivers(
+      initialVerdicts ? applyVerdicts(activeDefaults, initialVerdicts) : activeDefaults
+    );
+  }, [viewMode, derivedSource, analystSource, initialVerdicts]);
 
   const runDCF = React.useCallback(
     (d: ValuationDrivers) => calculateDCFFor(activeSource ?? AAPL_SOURCE, d, displayPrice),

@@ -22,68 +22,17 @@
 import React, { useMemo, useState } from 'react';
 import { ValuationDrivers } from '../types';
 
-type Verdict = 'helps' | 'neutral' | 'hurts';
-
-interface Factor {
-  key: string;
-  title: string;
-  question: string;
-  // What a "helps" verdict does to each driver, in percentage points. A
-  // "hurts" verdict applies the same amounts in the opposite direction.
-  effect: Partial<Record<keyof ValuationDrivers, number>>;
-  reasoning: string;
-}
-
-// The sizes below are deliberately modest. A qualitative view is a nudge to an
-// assumption, not a replacement for it: half a point of margin is a real
-// difference to a valuation without pretending anyone can judge it finer.
-const FACTORS: Factor[] = [
-  {
-    key: 'moat',
-    title: 'Competitive position',
-    question:
-      'Can this company keep charging what it charges, or will rivals compete the profit away?',
-    effect: { operatingMarginPct: 0.5, terminalGrowthPct: 0.1 },
-    reasoning:
-      'A company customers cannot easily leave keeps its profit margin for longer, and keeps growing for longer once the forecast runs out.',
-  },
-  {
-    key: 'demand',
-    title: 'Demand for what it sells',
-    question:
-      'Is the market this company sells into growing, shrinking, or holding steady?',
-    effect: { revenueGrowthPct: 1.0 },
-    reasoning:
-      'This moves the sales growth rate directly. It is the assumption a view about demand actually belongs in.',
-  },
-  {
-    key: 'management',
-    title: 'Management and governance',
-    question:
-      'Do you trust the people running it, and the way the company is controlled?',
-    effect: { waccPct: -0.3 },
-    reasoning:
-      'Poor governance does not change the cash the business produces. It changes how confident you can be of receiving it, which is what the discount rate measures.',
-  },
-  {
-    key: 'regulation',
-    title: 'Regulation and policy',
-    question:
-      'Could a change in law, tax or policy meaningfully change what this business earns?',
-    effect: { waccPct: -0.3, operatingMarginPct: 0.25 },
-    reasoning:
-      'Regulatory risk raises the return an investor needs, and often squeezes the margin as well.',
-  },
-  {
-    key: 'capital',
-    title: 'How hard the money works',
-    question:
-      'Does this business have to keep spending heavily just to stand still?',
-    effect: { capexPctOfRev: -0.5 },
-    reasoning:
-      'A business that needs less equipment spending keeps more of the cash it makes.',
-  },
-];
+// The factors, the arithmetic and the caps all live in one module now, shared
+// with the questions screen that runs before the model is built. Two copies of
+// a list like this drift apart within a month, and the two screens would then
+// be asking different questions and moving different assumptions.
+import {
+  FACTORS,
+  FACTOR_GROUPS,
+  applyVerdicts,
+  DRIVER_LABELS,
+} from '../data/qualitativeFactors';
+import type { Verdict } from '../data/qualitativeFactors';
 
 interface QualitativeProps {
   drivers: ValuationDrivers;
@@ -124,19 +73,10 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
   // What the chosen verdicts would do to each driver, starting from the model's
   // own defaults rather than from wherever the sliders happen to be. Otherwise
   // pressing the button twice would apply the same view twice.
-  const proposed = useMemo(() => {
-    const next: any = { ...defaults };
-    for (const factor of FACTORS) {
-      const verdict = verdicts[factor.key];
-      if (!verdict || verdict === 'neutral') continue;
-      const sign = verdict === 'helps' ? 1 : -1;
-      for (const [driver, amount] of Object.entries(factor.effect)) {
-        const key = driver as keyof ValuationDrivers;
-        next[key] = Number((Number(next[key]) + sign * (amount as number)).toFixed(2));
-      }
-    }
-    return next as ValuationDrivers;
-  }, [verdicts, defaults]);
+  const proposed = useMemo(
+    () => applyVerdicts(defaults, verdicts),
+    [verdicts, defaults]
+  );
 
   const changes = useMemo(
     () =>
@@ -152,14 +92,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
 
   const anyVerdict = Object.values(verdicts).some((v) => v && v !== 'neutral');
 
-  const driverLabels: Record<string, string> = {
-    revenueGrowthPct: 'Sales growth',
-    operatingMarginPct: 'Operating margin',
-    taxRatePct: 'Tax rate',
-    capexPctOfRev: 'Equipment spending',
-    waccPct: 'Discount rate',
-    terminalGrowthPct: 'Growth after year five',
-  };
+  const driverLabels = DRIVER_LABELS;
 
   return (
     <div className="max-w-4xl">
@@ -253,8 +186,12 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
         </div>
       ) : null}
 
-      <div className="space-y-6">
-        {FACTORS.map((factor) => {
+      {FACTOR_GROUPS.map((group) => (
+      <div key={group.key} className="mb-8">
+        <h4 className="font-serif text-lg text-[#F2F0EA]">{group.title}</h4>
+        <p className="text-[13px] text-[#8A8A8F] mb-4 mt-1">{group.standfirst}</p>
+        <div className="space-y-6">
+        {FACTORS.filter((f) => f.group === group.key).map((factor) => {
           const verdict = verdicts[factor.key];
           return (
             <div
@@ -295,7 +232,9 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
             </div>
           );
         })}
+        </div>
       </div>
+      ))}
 
       <div className="mt-8 border-t border-[#222228] pt-6">
         <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">

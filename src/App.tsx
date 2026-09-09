@@ -1,3 +1,4 @@
+// FILE: src/App.tsx
 import React, { useState } from 'react';
 import { motion, useScroll } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
@@ -10,6 +11,8 @@ import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
 import { DirectoryScreen } from './components/DirectoryScreen';
 import { TerminalDashboard } from './components/TerminalDashboard';
+import { QualitativeIntro } from './components/qualitativeIntro';
+import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
 import { loadCompany } from './data/autoCompany';
@@ -42,6 +45,28 @@ export default function App() {
     loading: false,
     error: null,
   });
+
+  // What the reader answered before the model was built. Null means they
+  // skipped, and skipping must produce exactly the model the site would have
+  // built on its own.
+  const [initialVerdicts, setInitialVerdicts] = useState<Record<string, Verdict> | null>(null);
+
+  // Every route into a company goes through the questions first: the search
+  // box, the directory grid, and the hand-built model cards. The judgements are
+  // about the company, not about which model was used to value it, so making
+  // one route skip them would be arbitrary.
+  const openQuestionsFor = (ticker: string) => {
+    setSelectedTicker(ticker);
+    setInitialVerdicts(null);
+    setCurrentScreen('QUESTIONS');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const goToAnalysis = (verdicts: Record<string, Verdict> | null) => {
+    setInitialVerdicts(verdicts);
+    setCurrentScreen('ANALYSIS');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const allCompanies = { ...COMPANIES_DATA, ...loadedCompanies };
 
@@ -77,9 +102,7 @@ export default function App() {
       await settle();
       setLoadedCompanies((prev) => ({ ...prev, [ticker]: company }));
       setLookupState({ loading: false, error: null });
-      setSelectedTicker(ticker);
-      setCurrentScreen('ANALYSIS');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      openQuestionsFor(ticker);
     } catch (error: any) {
       await settle();
       setLookupState({ loading: false, error: error.message || 'Could not build a model for that ticker.' });
@@ -101,9 +124,7 @@ export default function App() {
   };
 
   const handleSelectCompanyFromDirectory = (ticker: string) => {
-    setSelectedTicker(ticker);
-    setCurrentScreen('ANALYSIS');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    openQuestionsFor(ticker);
   };
 
   return (
@@ -156,6 +177,18 @@ export default function App() {
           />
         )}
 
+        {/* SCREEN 2b: WHAT THE FILINGS CANNOT SAY — asked before the value
+            appears, because a number on screen becomes an anchor and every
+            judgement made afterwards bends towards it. */}
+        {currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
+          <QualitativeIntro
+            company={allCompanies[selectedTicker]}
+            onContinue={(verdicts) => goToAnalysis(verdicts)}
+            onSkip={() => goToAnalysis(null)}
+            onBack={() => handleNavigateToScreen('DIRECTORY')}
+          />
+        )}
+
         {/* SCREEN 3: FINANCIAL ANALYSIS & DYNAMIC DCF TERMINAL */}
         {currentScreen === 'ANALYSIS' && (
           <TerminalDashboard
@@ -163,6 +196,7 @@ export default function App() {
             selectedTicker={selectedTicker}
             onSelectTicker={(ticker) => setSelectedTicker(ticker)}
             onOpenDirectory={() => handleNavigateToScreen('DIRECTORY')}
+            initialVerdicts={initialVerdicts}
           />
         )}
       </main>

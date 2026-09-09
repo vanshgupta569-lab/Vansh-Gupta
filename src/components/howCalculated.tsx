@@ -701,7 +701,13 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                   {group.steps.map((step) => (
                     <div
                       key={step.title}
-                      className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-10"
+                      className={
+                        step.figures
+                          ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-10'
+                          : // Nothing to put beside it, so it uses the whole
+                            // width rather than leaving half the row empty.
+                            'block'
+                      }
                     >
                       <div>
                         <h4 className="text-[15px] text-[#F2F0EA] mb-2">
@@ -718,9 +724,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                           </div>
                           {step.figures}
                         </div>
-                      ) : (
-                        <div />
-                      )}
+                      ) : null}
                     </div>
                   ))}
                 </div>
