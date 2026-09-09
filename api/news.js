@@ -1,3 +1,4 @@
+// FILE: api/news.js
 // Marginalia — news proxy
 //
 // Why this file exists: a browser cannot fetch Google News RSS directly,
@@ -15,6 +16,9 @@
 
 // Exchange suffix -> which Google News edition to search. An Indian company is
 // covered by the Indian press, so asking the US edition returns very little.
+
+import { guardRequest, readTicker, readName, noStore, logAndHide } from './_guard.js';
+
 const REGION_BY_SUFFIX = {
   NS: { hl: 'en-IN', gl: 'IN', ceid: 'IN:en' },   // NSE India
   BO: { hl: 'en-IN', gl: 'IN', ceid: 'IN:en' },   // BSE India
@@ -84,11 +88,14 @@ function formatTime(pubDate) {
 }
 
 export default async function handler(req, res) {
-  const ticker = String(req.query.ticker || '').trim().toUpperCase();
-  const name = String(req.query.name || '').trim();
+  if (!guardRequest(req, res)) return;
+
+  const ticker = readTicker(req.query.ticker);
+  const name = readName(req.query.name);
 
   if (!ticker) {
-    res.status(400).json({ items: [], error: 'No ticker given' });
+    noStore(res);
+    res.status(400).json({ items: [], error: 'A valid ticker is required.' });
     return;
   }
 
@@ -137,7 +144,10 @@ export default async function handler(req, res) {
     res.status(200).json({ items });
   } catch (error) {
     // Never break the dashboard over a news failure — return an empty list and
-    // let the front end fall back to whatever it already has.
-    res.status(200).json({ items: [], error: String(error.message || error) });
+    // let the front end fall back to whatever it already has. The reason is
+    // logged rather than returned.
+    logAndHide('news', error, ticker);
+    noStore(res);
+    res.status(200).json({ items: [] });
   }
 }

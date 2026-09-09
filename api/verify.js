@@ -1,3 +1,4 @@
+// FILE: api/verify.js
 // Marginalia — data verification check
 //
 // Open /api/verify in a browser. It fetches Apple live from the same route the
@@ -27,6 +28,9 @@
 // stores costs as negatives and the fetcher does not. The Excel covers FY2023
 // to FY2025 only; earlier years the fetcher now returns are displayed but not
 // graded.
+
+import { guardRequest, noStore, logAndHide } from './_guard.js';
+
 const EXPECTED = {
   revenue: { 2023: 383285, 2024: 391035, 2025: 416161 },
   cogs: { 2023: 214137, 2024: 210352, 2025: 220960 },
@@ -61,28 +65,59 @@ function withinTolerance(expected, actual) {
   return gap <= Math.max(1, Math.abs(expected) * 0.005); // 0.5%
 }
 
+// Anything that reaches the page goes through here first. Every value below
+// arrives from a network response, and a page that pastes a network response
+// straight into HTML is how a diagnostic screen becomes an attack surface.
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fmt(v) {
   if (v === null || v === undefined) return '—';
-  return typeof v === 'number' ? v.toLocaleString() : String(v);
+  return esc(typeof v === 'number' ? v.toLocaleString() : String(v));
 }
 
 export default async function handler(req, res) {
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
+  if (!guardRequest(req, res)) return;
+
+  // This page calls our own /api/company. The address it calls used to come
+  // from the request's Host header, which the caller controls — meaning a
+  // crafted request could point this fetch at somebody else's server. Vercel
+  // sets VERCEL_URL to the real address of this deployment, so use that and
+  // fall back to the forwarded host only when running locally.
+  const host =
+    process.env.VERCEL_URL ||
+    (process.env.NODE_ENV === 'production' ? null : req.headers.host) ||
+    null;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('X-Robots-Tag', 'noindex');
+  noStore(res);
+
+  if (!host) {
+    res.status(200).send('<p>Could not work out this deployment\'s own address.</p>');
+    return;
+  }
+
+  const protocol = host.startsWith('localhost') ? 'http' : 'https';
 
   let data;
   try {
     const response = await fetch(`${protocol}://${host}/api/company?ticker=AAPL`);
     data = await response.json();
   } catch (error) {
-    res.setHeader('Content-Type', 'text/html');
-    res.status(200).send(`<p>Could not reach the fetcher: ${error.message}</p>`);
+    logAndHide('verify', error, 'fetching AAPL');
+    res.status(200).send('<p>Could not reach the fetcher. See the Vercel log for the reason.</p>');
     return;
   }
 
   if (!data.statements) {
-    res.setHeader('Content-Type', 'text/html');
-    res.status(200).send(`<p>Fetcher returned no statements: ${data.error || 'unknown'}</p>`);
+    res.status(200).send(`<p>Fetcher returned no statements: ${esc(data.error || 'unknown')}</p>`);
     return;
   }
 
@@ -135,7 +170,7 @@ export default async function handler(req, res) {
             max-width:1100px; border-top:1px solid #222228; padding-top:16px; }
   `;
 
-  const header = years.map((year) => `<th>FY${year}</th>`).join('');
+  const header = years.map((year) => `<th>FY${esc(year)}</th>`).join('');
 
   const body = rows
     .map((row) => {
@@ -155,7 +190,7 @@ export default async function handler(req, res) {
           return `<td class="${cls}">${mark} ${detail}</td>`;
         })
         .join('');
-      return `<tr><td>${row.field}</td>${cells}</tr>`;
+      return `<tr><td>${esc(row.field)}</td>${cells}</tr>`;
     })
     .join('');
 
@@ -164,12 +199,10 @@ export default async function handler(req, res) {
       const actuals = data.statements
         .map((s) => `FY${s.fiscalYear}: ${fmt(s[field])}`)
         .join(' · ');
-      return `<p><strong>${field}</strong> — filing gives ${actuals}. ${why}</p>`;
+      return `<p><strong>${esc(field)}</strong> — filing gives ${actuals}. ${esc(why)}</p>`;
     })
     .join('');
 
-  res.setHeader('Content-Type', 'text/html');
-  res.setHeader('Cache-Control', 'no-store');
   res.status(200).send(`<!doctype html><html><head><meta charset="utf-8">
     <title>Marginalia — data verification</title><style>${style}</style></head><body>
     <h1>Data verification — Apple</h1>
@@ -178,8 +211,8 @@ export default async function handler(req, res) {
       <strong>${failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`}</strong><br>
       ${passes} passed · ${failures} failed · ${skipped} not comparable ·
       ${unchecked} outside the Excel's years<br>
-      <span class="skip">source: ${data.source} · years returned: ${years.length}
-      (FY${years[0]} to FY${years[years.length - 1]}) · fetched ${data.fetchedAt}</span>
+      <span class="skip">source: ${esc(data.source)} · years returned: ${years.length}
+      (FY${esc(years[0])} to FY${esc(years[years.length - 1])}) · fetched ${esc(data.fetchedAt)}</span>
     </div>
     <table>
       <tr><th>Line item</th>${header}</tr>

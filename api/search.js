@@ -1,3 +1,4 @@
+// FILE: api/search.js
 // Marginalia — company name search
 //
 // Powers the type-ahead on the directory screen. The user types letters, this
@@ -8,12 +9,19 @@
 //
 // Yahoo's search endpoint covers every exchange globally and needs no key.
 
+import { guardRequest, readSearchQuery, noStore, logAndHide } from './_guard.js';
+
 const MAX_RESULTS = 8;
 
 export default async function handler(req, res) {
-  const query = String(req.query.q || '').trim();
+  if (!guardRequest(req, res)) return;
 
-  if (query.length < 2) {
+  // Anything the box cannot legitimately contain is stripped before the value
+  // is ever put into a URL. Too short after cleaning means no suggestions.
+  const query = readSearchQuery(req.query.q);
+
+  if (!query) {
+    res.setHeader('Cache-Control', 'public, s-maxage=86400');
     res.status(200).json({ results: [] });
     return;
   }
@@ -54,7 +62,10 @@ export default async function handler(req, res) {
     res.status(200).json({ results });
   } catch (error) {
     // A failed lookup must not block the user — they can still type the exact
-    // ticker and press enter.
-    res.status(200).json({ results: [], error: String(error.message || error) });
+    // ticker and press enter. The reason goes to the Vercel log rather than
+    // back to the caller, so a failure never describes our internals.
+    logAndHide('search', error, `q="${query}"`);
+    noStore(res);
+    res.status(200).json({ results: [] });
   }
 }

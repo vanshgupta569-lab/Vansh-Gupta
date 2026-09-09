@@ -24,6 +24,8 @@
 //   - a peer with no EBITDA, or negative EBITDA, is dropped from that column
 //     rather than shown as a meaningless number
 
+import { guardRequest, readTicker, noStore, logAndHide } from './_guard.js';
+
 let yahooAuth = null;
 
 async function getYahooAuth() {
@@ -220,9 +222,12 @@ function median(values) {
 }
 
 export default async function handler(req, res) {
-  const ticker = String(req.query.ticker || '').trim().toUpperCase();
+  if (!guardRequest(req, res)) return;
+
+  const ticker = readTicker(req.query.ticker);
   if (!ticker) {
-    res.status(400).json({ error: 'No ticker supplied.' });
+    noStore(res);
+    res.status(400).json({ error: 'A valid ticker is required.' });
     return;
   }
 
@@ -279,11 +284,16 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
+    // The screen states plainly that nothing could be fetched. The technical
+    // reason belongs in the log, not on a stranger's screen.
+    logAndHide('comps', error, ticker);
+    noStore(res);
     res.status(200).json({
       ticker,
       peers: [],
       medians: {},
-      message: `Comparable companies could not be fetched: ${error.message}`,
+      message:
+        'Comparable companies could not be fetched right now. The free data source did not answer.',
       fetchedAt: new Date().toISOString(),
     });
   }

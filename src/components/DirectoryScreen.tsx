@@ -1,3 +1,4 @@
+// FILE: src/components/DirectoryScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
 import { BuildPipeline } from './motionPrimitives';
@@ -24,10 +25,14 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
   const [suggestions, setSuggestions] = useState<
     { ticker: string; name: string; exchange: string }[]
   >([]);
+  // A note to the user that is not an error: the site is working, they have
+  // simply not told it which listing they meant yet.
+  const [hint, setHint] = useState<string | null>(null);
 
   // Look up matching companies as the user types. Debounced so a fast typist
   // doesn't fire a request per keystroke.
   useEffect(() => {
+    setHint(null);
     const query = searchQuery.trim();
     if (query.length < 2) {
       setSuggestions([]);
@@ -51,6 +56,60 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
       clearTimeout(timer);
     };
   }, [searchQuery]);
+
+  // A ticker is short, carries no spaces, and may end in an exchange suffix
+  // after a dot: RELIANCE.NS, BRK-B, BP.L. A company name is not that shape.
+  const looksLikeTicker = (text: string) =>
+    !text.includes(' ') && /^[A-Za-z0-9][A-Za-z0-9.\-]{0,19}$/.test(text);
+
+  // What happens on Enter, or on the Build model button.
+  //
+  // The trap this closes: typing "Reliance" and pressing the button used to
+  // send RELIANCE straight to the modelling route as though it were a ticker.
+  // It is not — the Indian listing is RELIANCE.NS — so the site answered "no
+  // statements found", which reads as the site being broken rather than as a
+  // step the user missed.
+  //
+  // There was also a race. Suggestions are fetched 220ms after typing stops,
+  // so anyone who typed and clicked quickly hit an empty list and fell into
+  // that same wrong branch. So if nothing is on screen yet, this asks the
+  // search route directly rather than guessing.
+  const submitSearch = async () => {
+    const typed = searchQuery.trim();
+    if (!typed || lookupState.loading) return;
+
+    let match = suggestions[0];
+
+    if (!match) {
+      setHint('Looking that up…');
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(typed)}`);
+        const data = await response.json();
+        match = (data.results || [])[0];
+      } catch {
+        // Fall through to the guidance below.
+      }
+    }
+
+    if (match) {
+      setHint(null);
+      onLookupTicker(match.ticker);
+      return;
+    }
+
+    // Nothing matched, and what was typed is a name rather than a ticker.
+    if (!looksLikeTicker(typed)) {
+      setHint(
+        `"${typed}" is a company name, not a ticker. Type two or more letters and pick the company from the list that appears below the box. The same name is often listed on several exchanges, so the site will not guess which one you meant.`
+      );
+      return;
+    }
+
+    // Shaped like a ticker, just not in the suggestion list. Let it through:
+    // someone who knows the exact symbol should not be stopped.
+    setHint(null);
+    onLookupTicker(typed.toUpperCase());
+  };
 
   const companyList = Object.values(companies) as CompanyData[];
 
@@ -95,11 +154,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const first = suggestions[0];
-                  if (first) onLookupTicker(first.ticker);
-                  else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
-                }
+                if (e.key === 'Enter') submitSearch();
                 if (e.key === 'Escape') setSearchQuery('');
               }}
               placeholder="Search any listed company: Apple, Reliance, Nvidia, Tata Motors..."
@@ -107,11 +162,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               autoFocus
             />
             <button
-              onClick={() => {
-                const first = suggestions[0];
-                if (first) onLookupTicker(first.ticker);
-                else if (searchQuery.trim()) onLookupTicker(searchQuery.trim().toUpperCase());
-              }}
+              onClick={submitSearch}
               disabled={lookupState.loading || !searchQuery.trim()}
               className="absolute right-2 bg-[#8B1E1E] text-[#F2F0EA] font-mono text-[11px] px-5 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
             >
@@ -125,7 +176,10 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               {suggestions.map((sug) => (
                 <button
                   key={sug.ticker}
-                  onClick={() => onLookupTicker(sug.ticker)}
+                  onClick={() => {
+                    setHint(null);
+                    onLookupTicker(sug.ticker);
+                  }}
                   className="w-full text-left px-5 py-3 hover:bg-[#18181c] transition-colors cursor-pointer flex items-center justify-between gap-4 group"
                 >
                   <span className="flex items-center gap-4 min-w-0">
@@ -154,7 +208,16 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           {/* While a model is being built, name the stages instead of spinning */}
           <BuildPipeline active={lookupState.loading} />
 
-          {lookupState.error && (
+          {/* Grey, not oxblood. This is a missed step, not a failure, and a
+              red box would tell the user the site is broken when it is not. */}
+          {hint && (
+            <div className="mt-4 border hairline-border bg-[#0B0B0D] px-4 py-3 font-sans text-[13px] font-light text-[#F2F0EA] leading-relaxed flex items-start gap-3">
+              <span className="w-2 h-2 bg-[#8B1E1E] mt-1.5 shrink-0" />
+              <span>{hint}</span>
+            </div>
+          )}
+
+          {!hint && lookupState.error && (
             <div className="mt-4 border border-[#8B1E1E]/50 bg-[#8B1E1E]/10 px-4 py-3 font-mono text-[11px] text-[#F2F0EA] leading-relaxed">
               {lookupState.error}
             </div>

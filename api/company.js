@@ -15,6 +15,9 @@
 // EDIT THIS BEFORE DEPLOYING
 // The SEC requires every automated request to identify itself with a real
 // contact email. They block requests that don't. Put your own email here.
+
+import { guardRequest, readTicker, noStore, logAndHide } from './_guard.js';
+
 const SEC_CONTACT = 'Marginalia Research vanshgupta569@gmail.com';
 // ---------------------------------------------------------------------------
 
@@ -585,10 +588,13 @@ async function fetchQuote(symbol) {
 // ===========================================================================
 
 export default async function handler(req, res) {
-  const raw = String(req.query.ticker || '').trim().toUpperCase();
+  if (!guardRequest(req, res)) return;
 
-  if (!raw || raw.length > 20 || !/^[A-Z0-9.\-]+$/.test(raw)) {
-    res.status(400).json({ error: 'Provide a valid ticker, e.g. ?ticker=AAPL' });
+  const raw = readTicker(req.query.ticker);
+
+  if (!raw) {
+    noStore(res);
+    res.status(400).json({ error: 'Provide a valid ticker, for example ?ticker=AAPL' });
     return;
   }
 
@@ -609,8 +615,10 @@ export default async function handler(req, res) {
     }
 
     if (!data) {
+      noStore(res);
       res.status(404).json({
-        error: `No financial statements found for "${raw}". Check the ticker — foreign listings need a suffix, for example RELIANCE.NS for India or BP.L for London.`,
+        error:
+          'No financial statements found for that ticker. Check the spelling — foreign listings need a suffix, for example RELIANCE.NS for India or BP.L for London.',
       });
       return;
     }
@@ -637,8 +645,13 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
+    // The upstream reason can name internal hosts and query strings, so it is
+    // logged for you and never returned to the caller.
+    logAndHide('company', error, raw);
+    noStore(res);
     res.status(502).json({
-      error: `Could not retrieve data for "${raw}": ${error.message}`,
+      error:
+        'Could not retrieve data for that ticker right now. The filing source did not answer. Please try again shortly.',
     });
   }
 }
