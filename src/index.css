@@ -116,3 +116,50 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+/* ---------------------------------------------------------------------------
+   BODY PROSE — one rule, applied everywhere
+   ---------------------------------------------------------------------------
+   Every explanatory paragraph on the site was capped at a reading measure and
+   left aligned. Each block was fine on its own, but they sat at three different
+   widths beside full-width tables and charts, so the page read as a stack of
+   ragged columns floating in empty space rather than as a designed layout.
+
+   Two changes, both here rather than in fourteen components, so screens built
+   later inherit them without anyone remembering to:
+
+     1. The width cap is removed. A paragraph now runs the full width of the
+        panel it sits in, which is the same width as the table or chart beneath
+        it. Blocks lining up is most of what makes a page look considered.
+     2. The text is justified with hyphenation on. A flush right edge is what
+        makes a financial page read as typeset rather than typed, and
+        hyphenation is what stops justification opening rivers of white space
+        between words.
+
+   Two exclusions, both deliberate:
+
+     .w-full is excluded because the one element that carries both classes is
+     the feedback modal, which is a container and not prose. Removing its cap
+     would stretch the dialog across the screen.
+
+     Below 640px the justification is switched off. On a phone the column is
+     narrow enough that justifying it forces ugly gaps into every line, and
+     ragged right is the better of the two there.
+   --------------------------------------------------------------------------- */
+
+.max-w-2xl:not(.w-full),
+.max-w-prose {
+  max-width: none;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+@media (max-width: 640px) {
+  .max-w-2xl:not(.w-full),
+  .max-w-prose {
+    text-align: left;
+    hyphens: manual;
+    -webkit-hyphens: manual;
+  }
+}
