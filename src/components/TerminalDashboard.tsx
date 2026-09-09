@@ -11,8 +11,9 @@ import {
   RECOVERY_PRESETS,
   DEFAULT_RECOVERY,
 } from '../data/assetApproach';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AssetApproachResult, RecoveryRates } from '../data/assetApproach';
-import { buildMarketApproach, trailingFiguresFrom } from '../data/marketApproach';
+import { buildMarketApproach, trailingFiguresFrom, defaultSelection } from '../data/marketApproach';
 import type { MarketApproachResult } from '../data/marketApproach';
 import { reverseDcf } from '../data/reverseDcf';
 import type { ReverseDcfResult } from '../data/reverseDcf';
@@ -20,6 +21,7 @@ import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
 import { SavedModelsPanel } from './savedModelsPanel';
 import { CompsPanel } from './compsPanel';
+import { AssetPanel } from './assetPanel';
 import { ResidualIncomePanel } from './residualIncomePanel';
 import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
@@ -67,7 +69,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
   const [nerdView, setNerdView] = useState<
-    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'BATCH'
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'ASSET' | 'BATCH'
   >(null);
 
 
@@ -76,7 +78,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Each deep screen is opened from beside the content it relates to, so the
   // reader meets it where the question arises rather than hunting a menu.
   const OpenScreen: React.FC<{
-    view: 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS';
+    view: 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'ASSET';
     label: string;
     strong?: boolean;
   }> = ({ view, label, strong }) => (
@@ -419,10 +421,23 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     [baseBuild, activeSource]
   );
 
+  // Which companies are in the peer set. Null means "whatever the site chose";
+  // an array means the reader has taken over. Cleared when the company changes,
+  // because a peer set chosen for one company means nothing for another.
+  const [selectedPeers, setSelectedPeers] = useState<string[] | null>(null);
+  useEffect(() => {
+    setSelectedPeers(null);
+  }, [company.ticker]);
+
   const marketApproach: MarketApproachResult | null = useMemo(() => {
     if (!compsData || !subjectTrailing) return null;
-    return buildMarketApproach(compsData, subjectTrailing);
-  }, [compsData, subjectTrailing]);
+    return buildMarketApproach(compsData, subjectTrailing, selectedPeers);
+  }, [compsData, subjectTrailing, selectedPeers]);
+
+  const peerSelection = useMemo(
+    () => selectedPeers ?? defaultSelection(compsData),
+    [selectedPeers, compsData]
+  );
 
   // ---------------------------------------------------------------------
   // THE ASSET APPROACH
@@ -436,11 +451,24 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // honest answer depends entirely on whether the company is being closed in a
   // panic or wound down in an orderly way, and a single default hides that.
   // ---------------------------------------------------------------------
-  const [recoveryKey, setRecoveryKey] = useState<'forcedSale' | 'orderly'>('forcedSale');
-  const recoveryRates: RecoveryRates = useMemo(
-    () => RECOVERY_PRESETS.find((p) => p.key === recoveryKey)?.rates ?? DEFAULT_RECOVERY,
-    [recoveryKey]
+  const [recoveryKey, setRecoveryKey] = useState<'forcedSale' | 'orderly' | 'custom'>(
+    'forcedSale'
   );
+  const [recoveryRates, setRecoveryRates] = useState<RecoveryRates>(DEFAULT_RECOVERY);
+
+  const applyRecoveryPreset = (key: 'forcedSale' | 'orderly') => {
+    const preset = RECOVERY_PRESETS.find((p) => p.key === key);
+    if (!preset) return;
+    setRecoveryKey(key);
+    setRecoveryRates(preset.rates);
+  };
+
+  // Moving any single rate means the reader is no longer following either
+  // convention, so the screen stops claiming one.
+  const setRecoveryRate = (key: keyof RecoveryRates, value: number) => {
+    setRecoveryRates((prev) => ({ ...prev, [key]: value }));
+    setRecoveryKey('custom');
+  };
 
 
   // The bars for the football field: the two valuation methods, each widened
@@ -462,7 +490,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     const parts = valuationBands
       .filter((band) => typeof band.point === 'number' && isFinite(band.point) && band.point > 0)
       .map((band) => ({
-        label: band.label.replace('DCF — ', ''),
+        // The header names each method in a couple of words. The band labels
+        // now carry the approach as well, which belongs on the chart but not in
+        // the header, so it is stripped here.
+        label: band.label.replace('Income — DCF, ', ''),
         value: band.point,
       }));
     if (parts.length < 2) return null;
@@ -495,6 +526,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       nerdView === 'QUALITATIVE' ||
       nerdView === 'SAVED' ||
       nerdView === 'COMPS' ||
+      nerdView === 'ASSET' ||
       nerdView === 'BATCH' ||
       !activeSource
     )
@@ -1494,7 +1526,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             marketApproach={marketApproach}
             assetApproach={assetApproach}
             recoveryKey={recoveryKey}
-            onRecoveryKey={setRecoveryKey}
+            onRecoveryKey={applyRecoveryPreset}
           />
           </div>
         )}
@@ -1524,6 +1556,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <OpenScreen view="THREE_STATEMENT" label="3-Statement Model" strong />
           <OpenScreen view="DCF" label="DCF Model" strong />
           <OpenScreen view="COMPS" label="Market approach" strong />
+          <OpenScreen view="ASSET" label="Asset approach" strong />
         </div>
 
         {/* Judgement lives here now rather than in the body of the page. It is
@@ -1561,6 +1594,26 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             onChange={setDrivers}
             currencySymbol={company.currencySymbol}
             unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
+
+      {nerdView === 'ASSET' && (
+        <FullScreenPanel
+          title={`${company.name} — Asset Approach`}
+          subtitle="what it owns, once everything it owes is paid"
+          onClose={() => setNerdView(null)}
+        >
+          <AssetPanel
+            companyName={company.name}
+            currencySymbol={company.currencySymbol}
+            unitLabel={activeSource?.meta?.unitLabel || `${company.currencySymbol} millions`}
+            result={assetApproach}
+            rates={recoveryRates}
+            presetKey={recoveryKey}
+            onPreset={applyRecoveryPreset}
+            onRate={setRecoveryRate}
+            dcfValuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
           />
         </FullScreenPanel>
       )}
@@ -1603,17 +1656,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           onClose={() => setNerdView(null)}
         >
           <CompsPanel
-            ticker={company.ticker}
             companyName={company.name}
             currencySymbol={company.currencySymbol}
-            preloaded={compsData}
-            preloadedLoading={compsLoading}
-            ebitda={subjectTrailing?.ebitda ?? null}
+            unitLabel={activeSource?.meta?.unitLabel || `${company.currencySymbol} millions`}
+            result={marketApproach}
+            loading={compsLoading}
+            selected={peerSelection}
+            onSelected={setSelectedPeers}
+            onReset={() => setSelectedPeers(null)}
             fiscalYear={subjectTrailing?.fiscalYear ?? null}
-            netDebt={subjectTrailing?.netDebt ?? nerdDcf?.netDebt ?? null}
-            dilutedShares={
-              subjectTrailing?.dilutedShares ?? nerdDcf?.perpetuity?.dilutedShares ?? null
-            }
             dcfValuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
           />
         </FullScreenPanel>

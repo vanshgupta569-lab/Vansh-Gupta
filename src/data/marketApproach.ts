@@ -61,9 +61,53 @@ export interface MarketApproachResult {
   low: number | null;
   high: number | null;
   mid: number | null;
+  /** Every company the data source suggested, whether selected or not. */
+  candidates: any[];
+  /** The symbols currently in the peer set. */
+  selected: string[];
+  /** True when the reader has changed the peer set from the default. */
+  edited: boolean;
 }
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+
+/**
+ * The middle of a set of multiples, not the average.
+ *
+ * One peer on an extreme number would drag an average somewhere no company in
+ * the set actually trades. Computed here rather than on the server because the
+ * reader can change which companies are in the set, and a median that came from
+ * the server would quietly stop matching the list on screen.
+ */
+export function medianOf(values: any[]): number | null {
+  const clean = values
+    .filter((v): v is number => isNum(v) && v > 0)
+    .sort((a, b) => a - b);
+  if (!clean.length) return null;
+  const mid = Math.floor(clean.length / 2);
+  const value =
+    clean.length % 2 ? clean[mid] : (clean[mid - 1] + clean[mid]) / 2;
+  return Number(value.toFixed(2));
+}
+
+export function mediansOf(peers: any[]) {
+  return {
+    evToEbitda: medianOf(peers.map((p) => p?.evToEbitda)),
+    evToSales: medianOf(peers.map((p) => p?.evToSales)),
+    priceToEarnings: medianOf(peers.map((p) => p?.priceToEarnings)),
+  };
+}
+
+/** The peer set the server chose, used when the reader has not chosen one. */
+export function defaultSelection(comps: any): string[] {
+  const candidates = Array.isArray(comps?.candidates) ? comps.candidates : [];
+  if (candidates.length) {
+    return candidates
+      .filter((c: any) => c?.selectedByDefault)
+      .map((c: any) => c.symbol);
+  }
+  return (Array.isArray(comps?.peers) ? comps.peers : []).map((p: any) => p.symbol);
+}
 
 /** Pull the trailing figures the market approach needs out of an engine run. */
 export function trailingFiguresFrom(model: any, dcf: any, source?: any): SubjectFigures {
@@ -87,7 +131,22 @@ export function trailingFiguresFrom(model: any, dcf: any, source?: any): Subject
   };
 }
 
-export function buildMarketApproach(comps: any, subject: SubjectFigures): MarketApproachResult {
+export function buildMarketApproach(
+  comps: any,
+  subject: SubjectFigures,
+  selectedSymbols?: string[] | null
+): MarketApproachResult {
+  const candidates = Array.isArray(comps?.candidates) ? comps.candidates : [];
+  const serverPeers = Array.isArray(comps?.peers) ? comps.peers : [];
+  const pool = candidates.length ? candidates : serverPeers;
+
+  const fallbackSelection = defaultSelection(comps);
+  const selected = Array.isArray(selectedSymbols) ? selectedSymbols : fallbackSelection;
+  const edited =
+    Array.isArray(selectedSymbols) &&
+    (selectedSymbols.length !== fallbackSelection.length ||
+      selectedSymbols.some((s) => !fallbackSelection.includes(s)));
+
   const empty: MarketApproachResult = {
     available: false,
     peerCount: 0,
@@ -96,19 +155,25 @@ export function buildMarketApproach(comps: any, subject: SubjectFigures): Market
     low: null,
     high: null,
     mid: null,
+    candidates: pool,
+    selected,
+    edited,
   };
 
-  const peers = Array.isArray(comps?.peers) ? comps.peers : [];
+  const peers = pool.filter((p: any) => selected.includes(p?.symbol));
   if (!peers.length) {
     return {
       ...empty,
-      message:
-        comps?.message ||
-        'No comparable companies could be identified for this ticker from the free sources available.',
+      message: pool.length
+        ? 'No companies are selected as comparables, so no value is shown. Choose the ones you consider genuinely alike.'
+        : comps?.message ||
+          'No comparable companies could be identified for this ticker from the free sources available.',
     };
   }
 
-  const medians = comps.medians || {};
+  // Recomputed from whatever is selected, never taken from the server, so the
+  // figure can never disagree with the list on screen.
+  const medians = mediansOf(peers);
   const shares = subject.dilutedShares;
   const netDebt = subject.netDebt;
 
@@ -183,6 +248,9 @@ export function buildMarketApproach(comps: any, subject: SubjectFigures): Market
       peerCount: peers.length,
       basis: comps.basis,
       multiples,
+      candidates: pool,
+      selected,
+      edited,
       message:
         'Peers were found, but none of the three multiples could be applied to this company’s own reported figures.',
     };
@@ -197,6 +265,9 @@ export function buildMarketApproach(comps: any, subject: SubjectFigures): Market
     available: true,
     peerCount: peers.length,
     basis: comps.basis,
+    candidates: pool,
+    selected,
+    edited,
     fiscalYear: subject.fiscalYear ?? null,
     multiples,
     usable,
@@ -206,4 +277,4 @@ export function buildMarketApproach(comps: any, subject: SubjectFigures): Market
   };
 }
 
-export default { buildMarketApproach, trailingFiguresFrom };
+export default { buildMarketApproach, trailingFiguresFrom, mediansOf, medianOf, defaultSelection };

@@ -461,7 +461,7 @@ export function valuationBandsFor(
       const growthPct = (d.dcf.longTermGrowthRate ?? 0) * 100;
       const step = (d.dcf.sensitivity.growthSteps.slice(-1)[0] ?? 0.01) * 100;
       bands.push({
-        label: 'DCF — perpetuity growth',
+        label: 'Income — DCF, perpetuity growth',
         low: Math.min(...growthValues),
         high: Math.max(...growthValues),
         point: r(D.perpetuity.valuePerShare, 2),
@@ -476,13 +476,17 @@ export function valuationBandsFor(
       const multiple = d.dcf.exitEbitdaMultiple ?? 0;
       const step = d.dcf.sensitivity.multipleSteps.slice(-1)[0] ?? 1;
       bands.push({
-        label: 'DCF — EV / EBITDA exit',
+        label: 'Income — DCF, EV / EBITDA exit',
         low: Math.min(...multipleValues),
         high: Math.max(...multipleValues),
         point: r(D.exitMultipleValuation.valuePerShare, 2),
+        // Worth naming plainly: the exit multiple is observed in the market,
+        // so this bar is an income approach carrying a market assumption. The
+        // five forecast years are discounted cash flow; only the terminal value
+        // is a multiple. Calling it purely one or the other would be wrong.
         detail: `exit multiple ${(multiple - step).toFixed(1)}x to ${(
           multiple + step
-        ).toFixed(1)}x`,
+        ).toFixed(1)}x, taken from the market`,
       });
     }
 

@@ -1,129 +1,79 @@
 // FILE: src/components/compsPanel.tsx
 //
-// Marginalia — comparable companies
+// Marginalia — the market approach, in full
 //
-// The cross-check on the discounted cash flow. The DCF says what the business
-// is worth on its own cash; the peer set says what the market is paying for
-// businesses like it right now. Both are shown, and where they disagree that is
-// left visible rather than reconciled away.
+// The peer set is the entire argument. Every figure this screen produces rests
+// on one judgement: which companies are genuinely comparable to this one? That
+// judgement used to be made for the reader and shown as a finished answer. It
+// is now made as a starting point, and handed over.
 //
-// The implied value is worked out the same way an analyst would: take the peer
-// median EV/EBITDA, apply it to this company's own EBITDA, subtract net debt,
-// divide by the share count. Every step is printed so it can be followed.
+// So the screen has three parts:
+//
+//   1. THE PEER SET, which the reader can change. The site proposes up to five
+//      from the companies the data source suggests, chosen by industry then
+//      sector and ranked by closeness in size. Everything else it considered is
+//      listed underneath, unticked, with the reason it was not chosen.
+//   2. THE MULTIPLES, recomputed from whatever is ticked. The median moves as
+//      the reader ticks, so the number on screen can never disagree with the
+//      list above it.
+//   3. THE WORKING, printed step by step, so the implied value can be followed
+//      rather than taken on trust.
+//
+// The rule that a misleading peer set is worse than none survives all of this.
+// When nothing clears the industry or sector test, nothing is ticked and the
+// screen says so. What has changed is that the reader may now disagree, which
+// is different from the site pretending it had an answer.
 
-import React, { useEffect, useState } from 'react';
-
-interface Peer {
-  symbol: string;
-  name: string;
-  sector?: string | null;
-  industry?: string | null;
-  marketCap: number | null;
-  enterpriseValue: number | null;
-  evToEbitda: number | null;
-  evToSales: number | null;
-  priceToEarnings: number | null;
-}
-
-interface CompsResponse {
-  peers: Peer[];
-  basis?: string;
-  subject?: Peer | null;
-  medians: {
-    evToEbitda?: number | null;
-    evToSales?: number | null;
-    priceToEarnings?: number | null;
-  };
-  message?: string;
-  note?: string;
-}
+import React from 'react';
+import type { MarketApproachResult } from '../data/marketApproach';
 
 interface Props {
-  ticker: string;
   companyName: string;
   currencySymbol: string;
-  /**
-   * This company's LAST REPORTED EBITDA, not the forecast.
-   *
-   * This used to be the final forecast year, which was wrong. The peer
-   * multiples below are trailing — what each peer trades at on profit it has
-   * already reported. Putting a trailing multiple on a forecast EBITDA counts
-   * the same growth twice, once in the forecast and once in the multiple, and
-   * for a company growing at 10% a year it overstated the implied value by
-   * roughly 60%.
-   */
-  ebitda: number | null;
-  fiscalYear?: number | null;
-  netDebt: number | null;
-  dilutedShares: number | null;
+  unitLabel: string;
+  result: MarketApproachResult | null;
+  loading: boolean;
+  /** The symbols currently ticked. */
+  selected: string[];
+  onSelected: (next: string[]) => void;
+  onReset: () => void;
+  /** For comparison only: what the income approach says. */
   dcfValuePerShare: number | null;
-  /** The peer set, already fetched by the dashboard. Avoids a second request. */
-  preloaded?: CompsResponse | null;
-  preloadedLoading?: boolean;
+  fiscalYear?: number | null;
 }
 
+const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+
 export const CompsPanel: React.FC<Props> = ({
-  ticker,
   companyName,
   currencySymbol,
-  ebitda,
-  fiscalYear,
-  netDebt,
-  dilutedShares,
+  unitLabel,
+  result,
+  loading,
+  selected,
+  onSelected,
+  onReset,
   dcfValuePerShare,
-  preloaded,
-  preloadedLoading,
+  fiscalYear,
 }) => {
-  const [data, setData] = useState<CompsResponse | null>(preloaded ?? null);
-  const [loading, setLoading] = useState(preloaded ? false : true);
-
-  useEffect(() => {
-    // The dashboard already has the peer set, because the market approach on
-    // the front page needs it. Reuse it rather than asking again.
-    if (preloaded) {
-      setData(preloaded);
-      setLoading(false);
-      return;
-    }
-    if (preloadedLoading) {
-      setLoading(true);
-      return;
-    }
-
-    let cancelled = false;
-    setLoading(true);
-    setData(null);
-    fetch(`/api/comps?ticker=${encodeURIComponent(ticker)}`)
-      .then((r) => r.json())
-      .then((body) => {
-        if (!cancelled) setData(body);
-      })
-      .catch(() => {
-        if (!cancelled) setData({ peers: [], medians: {}, message: 'Comparable companies could not be fetched.' });
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ticker, preloaded, preloadedLoading]);
-
-  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
-  const money = (v: any, dp = 0) =>
+  const money = (v: any, dp = 2) =>
     isNum(v)
       ? `${currencySymbol}${v.toLocaleString(undefined, {
           minimumFractionDigits: dp,
           maximumFractionDigits: dp,
         })}`
       : '—';
+  const bulk = (v: any) =>
+    isNum(v) ? v.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
   const mult = (v: any) => (isNum(v) ? `${v.toFixed(1)}x` : '—');
 
-  const medianEbitdaMultiple = data?.medians?.evToEbitda ?? null;
-  const impliedPerShare =
-    isNum(medianEbitdaMultiple) && isNum(ebitda) && isNum(netDebt) && isNum(dilutedShares) && dilutedShares > 0
-      ? (medianEbitdaMultiple * ebitda - netDebt) / dilutedShares
-      : null;
+  const candidates = result?.candidates ?? [];
+  const toggle = (symbol: string) =>
+    onSelected(
+      selected.includes(symbol)
+        ? selected.filter((s) => s !== symbol)
+        : [...selected, symbol]
+    );
 
   return (
     <div className="max-w-5xl">
@@ -141,120 +91,225 @@ export const CompsPanel: React.FC<Props> = ({
         <p className="font-mono text-[13px] text-[#8A8A8F]">Loading the peer set…</p>
       )}
 
-      {!loading && data && data.peers.length === 0 && (
-        <p className="text-[14px] text-[#8A8A8F]">
-          {data.message || 'No comparable companies could be identified for this ticker.'}
+      {!loading && !candidates.length && (
+        <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl">
+          {result?.message ||
+            'No comparable companies could be identified for this ticker from the free sources available.'}
         </p>
       )}
 
-      {!loading && data && data.peers.length > 0 && (
+      {!loading && candidates.length > 0 && (
         <>
-          <div className="overflow-x-auto mb-6">
-            <table className="w-full min-w-[640px] border-collapse">
+          {/* ---------------- 1. THE PEER SET ---------------- */}
+          <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+            <h4 className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+              The peer set — tick the companies you consider comparable
+            </h4>
+            {result?.edited && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A8F] hover:text-[#F2F0EA] border border-[#222228] hover:border-[#8A8A8F] px-3 py-1.5 transition-colors"
+              >
+                Reset to the site’s choice
+              </button>
+            )}
+          </div>
+
+          <div className="overflow-x-auto mb-2">
+            <table className="w-full min-w-[720px] border-collapse tabular-nums">
               <thead>
                 <tr className="border-b border-[#222228]">
-                  {['Company', 'EV / EBITDA', 'EV / Sales', 'P / E'].map((h, i) => (
-                    <th
-                      key={h}
-                      className={`font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3 ${
-                        i === 0 ? 'text-left' : 'text-right'
-                      }`}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  <th className="text-left font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 pr-3 w-10" />
+                  <th className="text-left font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                    Company
+                  </th>
+                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                    EV / EBITDA
+                  </th>
+                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                    EV / Sales
+                  </th>
+                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                    P / E
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.subject && (
-                  <tr className="border-b border-[#222228] bg-[#8B1E1E]/10">
-                    <td className="py-2.5 px-3 text-[14px] text-[#F2F0EA]">
-                      {companyName}
-                      <span className="ml-2 font-mono text-[12px] text-[#8A8A8F]">this company</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[14px] text-[#F2F0EA]">{mult(data.subject.evToEbitda)}</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[14px] text-[#F2F0EA]">{mult(data.subject.evToSales)}</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[14px] text-[#F2F0EA]">{mult(data.subject.priceToEarnings)}</td>
-                  </tr>
-                )}
-                {data.peers.map((peer) => (
-                  <tr key={peer.symbol} className="border-b border-[#222228]/60">
-                    <td className="py-2.5 px-3 text-[14px] text-[#A1A1AA]">
-                      {peer.name}
-                      <span className="ml-2 font-mono text-[12px] text-[#8A8A8F]">{peer.symbol}</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[14px] text-[#A1A1AA]">{mult(peer.evToEbitda)}</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[14px] text-[#A1A1AA]">{mult(peer.evToSales)}</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-[14px] text-[#A1A1AA]">{mult(peer.priceToEarnings)}</td>
-                  </tr>
-                ))}
+                {candidates.map((peer: any) => {
+                  const on = selected.includes(peer.symbol);
+                  return (
+                    <tr
+                      key={peer.symbol}
+                      className={`border-b border-[#222228]/60 cursor-pointer transition-colors ${
+                        on ? 'bg-[#8B1E1E]/10' : 'hover:bg-[#18181c]'
+                      }`}
+                      onClick={() => toggle(peer.symbol)}
+                    >
+                      <td className="py-2.5 pr-3 align-top">
+                        <span
+                          className={`inline-block w-3.5 h-3.5 border ${
+                            on
+                              ? 'bg-[#8B1E1E] border-[#8B1E1E]'
+                              : 'border-[#8A8A8F]'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => toggle(peer.symbol)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="sr-only"
+                          aria-label={`Include ${peer.name || peer.symbol} in the peer set`}
+                        />
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#A1A1AA]'}`}>
+                          {peer.name || peer.symbol}
+                        </span>
+                        <span className="ml-2 font-mono text-[12px] text-[#8A8A8F]">
+                          {peer.symbol}
+                        </span>
+                        <span className="block font-mono text-[11px] text-[#8A8A8F] mt-0.5">
+                          {peer.matchesIndustry
+                            ? `same industry · ${peer.industry}`
+                            : peer.matchesSector
+                            ? `same sector only · ${peer.industry || peer.sector}`
+                            : `different business · ${peer.industry || peer.sector || 'not classified'}`}
+                        </span>
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-mono text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
+                        {mult(peer.evToEbitda)}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-mono text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
+                        {mult(peer.evToSales)}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-mono text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
+                        {mult(peer.priceToEarnings)}
+                      </td>
+                    </tr>
+                  );
+                })}
+
                 <tr className="border-t border-[#222228]">
-                  <td className="py-3 px-3 text-[14px] text-[#F2F0EA] font-semibold">Peer median</td>
-                  <td className="py-3 px-3 text-right font-mono text-[14px] text-[#8B1E1E] font-semibold">{mult(data.medians.evToEbitda)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-[14px] text-[#8B1E1E] font-semibold">{mult(data.medians.evToSales)}</td>
-                  <td className="py-3 px-3 text-right font-mono text-[14px] text-[#8B1E1E] font-semibold">{mult(data.medians.priceToEarnings)}</td>
+                  <td />
+                  <td className="py-3 px-3 text-[14px] text-[#F2F0EA] font-semibold">
+                    Median of the {selected.length} selected
+                  </td>
+                  {(['evToEbitda', 'evToSales', 'priceToEarnings'] as const).map((k) => {
+                    const m = result?.multiples.find((x) => x.key === k);
+                    return (
+                      <td
+                        key={k}
+                        className="py-3 px-3 text-right font-mono text-[14px] text-[#8B1E1E] font-semibold"
+                      >
+                        {mult(m?.median)}
+                      </td>
+                    );
+                  })}
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {impliedPerShare !== null && (
-            <div className="border border-[#222228] bg-[#0B0B0D] p-5 mb-6">
-              <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
-                What the peer multiple implies for {companyName}
+          <p className="text-[13px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-8">
+            The site ticks the companies in the same industry, or the same
+            sector where an industry match is not available, ranked by closeness
+            in size. A lender is never offered as a peer for a manufacturer.
+            Everything else the data source suggested is listed so you can
+            disagree. The median moves as you tick.
+          </p>
+
+          {/* ---------------- 2. THE WORKING ---------------- */}
+          {result?.available ? (
+            <>
+              <h4 className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+                What that implies for {companyName}
+              </h4>
+
+              <div className="border border-[#222228] bg-[#0B0B0D] mb-6">
+                {result.multiples.map((m) => (
+                  <div key={m.key} className="border-b border-[#222228] last:border-0 p-5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-3 mb-2">
+                      <span className="text-[15px] text-[#F2F0EA]">{m.label}</span>
+                      <span className="font-mono text-[17px] text-[#F2F0EA] tabular-nums">
+                        {isNum(m.perShare) ? money(m.perShare) : '—'}
+                      </span>
+                    </div>
+                    {isNum(m.perShare) ? (
+                      <div className="font-mono text-[13px] text-[#8A8A8F] leading-relaxed">
+                        {mult(m.median)} ×{' '}
+                        {m.key === 'priceToEarnings' ? money(m.metric) : bulk(m.metric)}{' '}
+                        {m.metricLabel}
+                        {m.key === 'priceToEarnings' ? '' : ', less net debt, ÷ diluted shares'}
+                      </div>
+                    ) : (
+                      <div className="text-[13px] text-[#8A8A8F] leading-relaxed">
+                        not used: {m.absentBecause}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              {[
-                ['Peer median EV / EBITDA', mult(medianEbitdaMultiple)],
-                [
-                  `This company\u2019s reported EBITDA${
-                    isNum(fiscalYear) ? ` (FY${fiscalYear})` : ''
-                  }`,
-                  money(ebitda),
-                ],
-                ['Implied enterprise value', money((medianEbitdaMultiple as number) * (ebitda as number))],
-                [isNum(netDebt) && netDebt < 0 ? 'Plus net cash' : 'Less net debt', money(Math.abs(netDebt as number))],
-                ['Implied value per share', money(impliedPerShare, 2)],
-                ['For comparison, the discounted cash flow', money(dcfValuePerShare, 2)],
-              ].map(([k, v], i, arr) => (
-                <div
-                  key={String(k)}
-                  className={`flex flex-wrap items-baseline justify-between gap-4 py-2 ${
-                    i < arr.length - 1 ? 'border-b border-[#222228]/60' : ''
-                  }`}
-                >
-                  <span className={`text-[14px] ${i >= arr.length - 2 ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>{k}</span>
-                  <span
-                    className={`font-mono text-[14px] ${
-                      i === arr.length - 2 ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
-                    }`}
-                  >
-                    {v}
-                  </span>
+
+              <div className="flex flex-wrap items-baseline gap-x-10 gap-y-3 border-t border-[#222228] pt-5 mb-6">
+                <div>
+                  <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+                    Market approach range
+                  </div>
+                  <div className="font-mono text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
+                    {money(result.low)} – {money(result.high)}
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div>
+                  <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+                    Midpoint
+                  </div>
+                  <div className="font-mono text-[18px] text-[#8B1E1E] tabular-nums mt-0.5">
+                    {money(result.mid)}
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+                    For comparison, the income approach
+                  </div>
+                  <div className="font-mono text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
+                    {money(dcfValuePerShare)}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-[14px] leading-relaxed text-[#8A8A8F] max-w-2xl mb-6">
+              {result?.message}
+            </p>
           )}
 
-          <div className="text-[13px] leading-relaxed text-[#8A8A8F] space-y-2 max-w-2xl">
+          {/* ---------------- 3. THE LIMITS ---------------- */}
+          <div className="text-[13px] leading-relaxed text-[#8A8A8F] space-y-2 max-w-2xl border-t border-[#222228] pt-5">
             <p>
-              <span className="text-[#F2F0EA]">Read this carefully.</span>{' '}
-              {data.basis === 'same industry'
-                ? 'These companies were matched on the same industry as this one and ranked by how close they are in size.'
-                : 'No close industry match was available, so these were matched on the same sector and ranked by size.'}{' '}
-              That is a reasonable starting point, not a comp set an analyst has
-              argued for company by company.
+              <span className="text-[#F2F0EA]">Read this carefully.</span> These
+              companies were suggested by the data source and filtered by
+              industry and size. That is a reasonable starting point, not a peer
+              set an analyst has argued for company by company. You are better
+              placed than the filter to judge which of them really competes
+              with {companyName}
             </p>
             <p>
               The multiples are trailing, not forward, so they are applied to
-              the last reported year rather than to the forecast. Analysts
-              usually compare on forward estimates; those are not available from
-              a free source, and a trailing multiple flatters a company whose
-              earnings are about to fall.
+              the last reported year
+              {isNum(fiscalYear) ? ` (FY${fiscalYear})` : ''} rather than to the
+              forecast. Applying a trailing multiple to a forecast figure counts
+              the same growth twice. Analysts usually compare on forward
+              estimates; those are not available from a free source, and a
+              trailing multiple flatters a company whose earnings are about to
+              fall.
             </p>
             <p>
-              Median rather than average, because one peer on an extreme multiple
-              would drag an average somewhere no company in the set actually
-              trades.
+              Median rather than average, because one peer on an extreme
+              multiple would drag an average somewhere no company in the set
+              actually trades. Money figures in {unitLabel}.
             </p>
           </div>
         </>
