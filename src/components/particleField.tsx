@@ -73,7 +73,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     camera.position.set(0, 0, DIST);
 
     const MOBILE = window.innerWidth < 900;
-    const COUNT = MOBILE ? 20000 : 90000;
+    const COUNT = MOBILE ? 26000 : 130000;
 
     const forms: Float32Array[] = [];
     const scatterDir = new Float32Array(COUNT * 3);
@@ -366,11 +366,11 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     for (let i = 0; i < COUNT; i++) {
       seeds[i] = seeded(i + 91);
       const g = seeded(i + 601);
-      const isStar = g > 0.978;
+      const isStar = g > 0.948;
       bright[i] = isStar ? 1 : 0;
       sizes[i] =
-        0.014 + Math.pow(seeded(i + 81), 1.8) * 0.018 +
-        (isStar ? 0.06 + Math.pow((g - 0.978) / 0.022, 1.5) * 0.24 : 0);
+        0.020 + Math.pow(seeded(i + 81), 1.6) * 0.026 +
+        (isStar ? 0.055 + Math.pow((g - 0.948) / 0.052, 1.5) * 0.26 : 0);
       const u = seeded(i + 51) * Math.PI * 2, v = Math.acos(2 * seeded(i + 61) - 1);
       scatterDir[i * 3]     = Math.sin(v) * Math.cos(u);
       scatterDir[i * 3 + 1] = Math.sin(v) * Math.sin(u);
@@ -424,9 +424,9 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
         float sy = exp(-abs(q.y) * 30.0) * exp(-abs(q.x) * 1.5);
         float spikes = (sx + sy) * vBright * f;
 
-        float a = (halo * 0.30 + core * 0.88 + spikes * 0.60)
-                * vFade * uOpacity * mix(0.80, 1.0, vBright);
-        vec3 c = vColor * (0.60 + core * 1.55 + spikes * 1.10);
+        float a = (halo * 0.36 + core * 1.00 + spikes * 0.72)
+                * vFade * uOpacity * mix(0.94, 1.0, vBright);
+        vec3 c = vColor * (0.76 + core * 1.70 + spikes * 1.25);
         gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
       }
     `;
@@ -478,10 +478,10 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
 
           /* Stars do not all pulse together, and the faint ones barely
              pulse at all. */
-          float tw = 0.58 + 0.42 * sin(uTime * (0.7 + seed * 2.1) + seed * 61.0);
+          float tw = 0.76 + 0.24 * sin(uTime * (0.7 + seed * 2.1) + seed * 61.0);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vFade = clamp((mv.z + 21.0) / 16.0, 0.42, 1.0)
-                * mix(0.93, tw, 0.22 + bright * 0.68);
+          vFade = clamp((mv.z + 21.0) / 16.0, 0.64, 1.0)
+                * mix(0.96, tw, 0.18 + bright * 0.62);
           gl_PointSize = psize * uScale / max(-mv.z, 0.1);
           gl_Position = projectionMatrix * mv;
         }
@@ -505,7 +505,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     /* which is felt rather than seen — and it takes a quarter of the drag */
     /* the object takes, which is what gives the screen its depth.         */
     /* ---------------------------------------------------------------- */
-    const SKY = MOBILE ? 900 : 2800;
+    const SKY = MOBILE ? 1400 : 4400;
     const skyPos = new Float32Array(SKY * 3);
     const skySize = new Float32Array(SKY);
     const skySeed = new Float32Array(SKY);
@@ -555,7 +555,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
           vBright = bright;
           float tw = 0.50 + 0.50 * sin(uTime * (0.45 + seed * 1.6) + seed * 53.0);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vFade = mix(0.52, 1.0, tw) * (0.44 + bright * 0.56);
+          vFade = mix(0.58, 1.0, tw) * (0.54 + bright * 0.46);
           gl_PointSize = psize * uScale / max(-mv.z, 0.1);
           gl_Position = projectionMatrix * mv;
         }

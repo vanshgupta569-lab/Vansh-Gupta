@@ -78,12 +78,28 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
 const Square: React.FC = () => (
   <>
     {'⁠'}
+    {/* Zero advance width, on purpose. Given real width, a heading that
+        exactly fills its measure pushes the full stop onto a line of its
+        own — which looks like a bug and loses the mark. With the negative
+        margin it hangs into the gutter instead, which is what optical
+        margin alignment does anyway. */}
     <span
-      className="inline-block align-baseline ml-[0.08em]"
-      style={{ width: '0.13em', height: '0.13em', background: RED }}
+      className="inline-block align-baseline"
+      style={{
+        width: '0.13em',
+        height: '0.13em',
+        background: RED,
+        marginLeft: '0.08em',
+        marginRight: '-0.21em',
+      }}
     />
   </>
 );
+
+/* The vertical mask every scrim wears, so no scrim ever ends on a hard edge.
+   Transparent at both extremes, solid across the middle three fifths. */
+const FADE_ENDS =
+  'linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%)';
 
 /* One block of words, on one side, over a scrim. */
 const Block: React.FC<{
@@ -114,15 +130,34 @@ const Block: React.FC<{
         id === 'hero' ? 'items-end pb-16' : ''
       }`}
     >
+      {/* THE SEAM.
+          Each section used to paint its scrim across exactly its own box, so
+          where two sections met one gradient stopped dead and the next
+          started — and because they take opposite sides, the left half of
+          the screen went from covered to clear in a single pixel. That is
+          the line. Each scrim now runs well past its own section at both
+          ends and is masked so it fades away there, which means neighbours
+          overlap and cross-fade instead of butting. Full strength is held
+          across the middle, where the words are. */}
       <div
-        className="absolute inset-0 -z-10 pointer-events-none hidden lg:block"
-        style={{ background: scrim }}
+        className="absolute inset-x-0 -z-10 pointer-events-none hidden lg:block"
+        style={{
+          top: '-16%',
+          bottom: '-16%',
+          background: scrim,
+          maskImage: FADE_ENDS,
+          WebkitMaskImage: FADE_ENDS,
+        }}
       />
       <div
-        className="absolute inset-0 -z-10 pointer-events-none lg:hidden"
+        className="absolute inset-x-0 -z-10 pointer-events-none lg:hidden"
         style={{
+          top: '-16%',
+          bottom: '-16%',
           background:
             'linear-gradient(to top, rgba(9,9,11,.985) 16%, rgba(9,9,11,.90) 44%, rgba(9,9,11,.50) 62%, rgba(9,9,11,0) 84%)',
+          maskImage: FADE_ENDS,
+          WebkitMaskImage: FADE_ENDS,
         }}
       />
       <div
@@ -656,10 +691,10 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               is the one thing this section exists to show. The only shading
               is a soft pool behind the quote, and it travels with it. */}
           <div
-            className="absolute inset-x-0 bottom-0 h-[46vh] -z-10 pointer-events-none"
+            className="absolute inset-x-0 bottom-0 h-[58vh] -z-10 pointer-events-none"
             style={{
               background:
-                'linear-gradient(to top, rgba(11,11,13,.96) 0%, rgba(11,11,13,.55) 34%, rgba(11,11,13,0) 100%)',
+                'linear-gradient(to top, rgba(9,9,11,.96) 0%, rgba(9,9,11,.52) 42%, rgba(9,9,11,0) 100%)',
             }}
           />
           <div className="sticky top-0 h-screen flex items-center justify-center">
