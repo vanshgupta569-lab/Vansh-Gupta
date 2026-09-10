@@ -696,7 +696,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             boxShadow: '0 -50px 110px rgba(0,0,0,0.78)',
           }}
         >
-          <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-20 lg:pb-24">
+          <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-10 lg:pb-12">
             <p
               className="font-mono text-[12px] tracking-[0.22em] uppercase mb-12 flex items-center gap-3"
               style={{ color: RED_TEXT }}
@@ -733,8 +733,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           className="relative w-full"
           style={{ background: '#F2F0EA', height: `calc(100vh + ${MARGIN_LINES.length * 62}vh)` }}
         >
-          <div className="sticky top-0 h-screen flex items-center overflow-hidden">
-            <div className="w-full max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-16">
+          {/* Top-aligned, not centred. Centred in a full screen it left a
+              blank run of cream between the coverage figures and this
+              heading that read as the page having stopped. The padding is
+              only what it takes to clear the fixed header. */}
+          <div className="sticky top-0 h-screen flex items-start overflow-hidden">
+            <div className="w-full max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-24">
               <p
                 className="font-mono text-[12px] tracking-[0.22em] uppercase mb-5 flex items-center gap-3"
                 style={{ color: RED_TEXT }}

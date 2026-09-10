@@ -1,8 +1,66 @@
 // FILE: src/components/DirectoryScreen.tsx
+//
+// The search screen, set in the same hand as the landing page.
+//
+// What was taken out and why:
+//
+//  · The COVERAGE: ANY LISTED COMPANY plate beside the title. It was a badge
+//    saying what the sentence underneath it already said, with an icon on it
+//    for decoration.
+//  · SCREEN 02 — INSTITUTIONAL COVERAGE DIRECTORY. Nobody arriving here
+//    thinks of themselves as being on screen 02 of anything.
+//  · The red bar down the side of the opening paragraph, the crosshair
+//    corners on every card, the shadows, the inner shadows, and the
+//    MARGINALIA SEARCH ENGINE V4.2 line in the footer. None of them carried
+//    information; together they were most of the noise.
+//
+// Nothing that works was touched: the debounced lookup, the suggestion list,
+// the name-is-not-a-ticker guidance, the build pipeline, the hand-built model
+// grid and its workbook links all behave exactly as they did.
+//
+// The type is the landing page's type: Inter set very tight for headings, a
+// mono eyebrow with a short red rule, and the red full stop at the end of a
+// heading. The point is that a reader who has just come through the front
+// door should not feel they have arrived somewhere else.
+
 import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
 import { BuildPipeline } from './motionPrimitives';
-import { Search, ArrowRight, Building2, TrendingUp, Sparkles, Mail, FileSpreadsheet } from 'lucide-react';
+import { Search, ArrowRight, FileSpreadsheet } from 'lucide-react';
+
+const RED = '#8B1E1E';
+const RED_TEXT = '#C0453E';
+const INK = '#F2F0EA';
+const READ = '#C6C1B7';
+const MUTED = '#A8A29A';
+const LINE = '#262521';
+
+const DISPLAY: React.CSSProperties = {
+  fontFamily: "'Inter', sans-serif",
+  fontWeight: 800,
+  letterSpacing: '-0.045em',
+  lineHeight: 0.98,
+};
+
+const Eyebrow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p
+    className="font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
+    style={{ color: RED_TEXT }}
+  >
+    <span className="h-px w-8 shrink-0" style={{ background: RED }} />
+    {children}
+  </p>
+);
+
+const Square: React.FC = () => (
+  <>
+    {'⁠'}
+    <span
+      className="inline-block align-baseline ml-[0.08em]"
+      style={{ width: '0.13em', height: '0.13em', background: RED }}
+    />
+  </>
+);
 
 interface DirectoryScreenProps {
   companies: Record<string, CompanyData>;
@@ -15,7 +73,7 @@ interface DirectoryScreenProps {
 
 export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
   companies,
-  selectedTicker,
+  selectedTicker: _selectedTicker,
   onSelectCompany,
   onBackToHome,
   onLookupTicker,
@@ -113,42 +171,36 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
 
   const companyList = Object.values(companies) as CompanyData[];
 
-
   // The grid below is the analyst-model shelf: only companies with a real,
   // hand-built data file. Everything else is reached through the search box.
   const filteredCompanies = companyList.filter((c) => c.engineBacked);
 
   return (
-    <div className="pt-28 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12 min-h-screen flex flex-col justify-between">
-      <div>
-        {/* Title Banner */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10 border-b hairline-border-b pb-8">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 bg-[#8B1E1E]" />
-              <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] font-semibold uppercase">
-                SCREEN 02 — INSTITUTIONAL COVERAGE DIRECTORY
-              </span>
-            </div>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA]">
-              Search Covered Companies
-            </h1>
-            <p className="font-sans text-sm font-light text-[#A1A1AA] leading-loose tracking-wide mt-4 max-w-2xl border-l-2 border-[#8B1E1E] pl-4">
-              Enter any listed ticker to build a 3-statement model and DCF from its own filings, then move the assumptions and watch the implied value recalculate.
-            </p>
-          </div>
+    <div className="min-h-screen" style={{ background: '#0B0B0D' }}>
+      <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-28 lg:pt-32 pb-20">
+        {/* ---------------------------------------------------------- */}
+        {/* 01 — the search                                             */}
+        {/* ---------------------------------------------------------- */}
+        <Eyebrow>01 &middot; Search</Eyebrow>
+        <h1
+          className="text-[36px] sm:text-[48px] lg:text-[62px] max-w-[16ch]"
+          style={{ ...DISPLAY, color: INK }}
+        >
+          Value any listed company
+          <Square />
+        </h1>
+        <p className="text-[17px] lg:text-[19px] leading-[1.6] mt-6 max-w-[52ch]" style={{ color: READ }}>
+          Type a name or a ticker and pick the listing you meant. Its own filings
+          become a three-statement model and a discounted cash flow, and every
+          assumption in it is yours to move.
+        </p>
 
-          <div className="font-mono text-[11px] text-[#8A8A8F] border border-[#222228] bg-[#111114] px-4 py-3 flex items-center gap-3 uppercase tracking-widest shadow-md">
-            <Building2 className="w-4 h-4 text-[#8B1E1E]" />
-            <span>COVERAGE: <strong className="text-[#F2F0EA]">ANY LISTED COMPANY</strong></span>
-          </div>
-        </div>
-
-        {/* One search box. Type a name or ticker, pick a match, and a model is
-            built from that company's own filings. */}
-        <div className="bg-[#111114] border hairline-border p-6 sm:p-8 mb-10 shadow-lg">
+        {/* The box. One field, one button, and the list of matches under it. */}
+        <div className="mt-10 lg:mt-12 max-w-[54rem]">
+          {/* On a phone the button drops below the field. Held inside it, it
+              covered the half of the placeholder that tells you what to type. */}
           <div className="relative flex items-center w-full">
-            <Search className="w-5 h-5 absolute left-5 text-[#8A8A8F]" />
+            <Search className="w-5 h-5 absolute left-5" style={{ color: MUTED }} />
             <input
               type="text"
               value={searchQuery}
@@ -157,53 +209,70 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                 if (e.key === 'Enter') submitSearch();
                 if (e.key === 'Escape') setSearchQuery('');
               }}
-              placeholder="Search any listed company: Apple, Reliance, Nvidia, Tata Motors..."
-              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-sm pl-14 pr-32 py-5 outline-none placeholder:text-[#52525B] transition-colors rounded-none shadow-inner"
+              placeholder="Apple, Reliance, Nvidia, Tata Motors…"
+              className="w-full font-mono text-[15px] pl-14 pr-4 sm:pr-40 py-5 outline-none border transition-colors focus:border-[#8B1E1E] placeholder:text-[#52525B]"
+              style={{ background: '#111114', borderColor: LINE, color: INK }}
               autoFocus
             />
             <button
               onClick={submitSearch}
               disabled={lookupState.loading || !searchQuery.trim()}
-              className="absolute right-2 bg-[#8B1E1E] text-[#F2F0EA] font-mono text-[11px] px-5 py-3 uppercase tracking-wider hover:bg-[#6a1515] transition-colors cursor-pointer font-semibold disabled:opacity-40 whitespace-nowrap"
+              className="hidden sm:block absolute right-2 font-mono text-[11px] px-5 py-3 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap border"
+              style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
             >
               {lookupState.loading ? 'Building…' : 'Build model'}
             </button>
           </div>
+          <button
+            onClick={submitSearch}
+            disabled={lookupState.loading || !searchQuery.trim()}
+            className="sm:hidden w-full mt-3 font-mono text-[12px] px-5 py-3.5 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 border"
+            style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
+          >
+            {lookupState.loading ? 'Building…' : 'Build model'}
+          </button>
 
           {/* Live suggestions as the user types */}
           {suggestions.length > 0 && (
-            <div className="mt-3 border hairline-border bg-[#0B0B0D] divide-y divide-[#222228]">
-              {suggestions.map((sug) => (
+            <div className="mt-2 border" style={{ borderColor: LINE, background: '#111114' }}>
+              {suggestions.map((sug, i) => (
                 <button
                   key={sug.ticker}
                   onClick={() => {
                     setHint(null);
                     onLookupTicker(sug.ticker);
                   }}
-                  className="w-full text-left px-5 py-3 hover:bg-[#18181c] transition-colors cursor-pointer flex items-center justify-between gap-4 group"
+                  className="w-full text-left px-5 py-3.5 transition-colors cursor-pointer flex items-center justify-between gap-4 group hover:bg-[#18181c]"
+                  style={{ borderTop: i === 0 ? 'none' : `1px solid ${LINE}` }}
                 >
                   <span className="flex items-center gap-4 min-w-0">
-                    <span className="font-mono text-sm text-[#F2F0EA] font-semibold shrink-0">
+                    <span className="font-mono text-[14px] shrink-0" style={{ color: INK, fontWeight: 600 }}>
                       {sug.ticker}
                     </span>
-                    <span className="font-sans text-sm font-light text-[#A1A1AA] truncate">
+                    <span className="text-[15px] truncate" style={{ color: MUTED }}>
                       {sug.name}
                     </span>
                   </span>
-                  <span className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest shrink-0 flex items-center gap-3">
+                  <span
+                    className="font-mono text-[11px] uppercase tracking-[0.16em] shrink-0 flex items-center gap-3"
+                    style={{ color: MUTED }}
+                  >
                     {sug.exchange}
-                    <ArrowRight className="w-3.5 h-3.5 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <ArrowRight
+                      className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ color: RED_TEXT }}
+                    />
                   </span>
                 </button>
               ))}
             </div>
           )}
 
-          <div className="font-mono text-[13px] text-[#8A8A8F] mt-3 leading-relaxed">
-            US filings come from SEC EDGAR; everywhere else from exchange
-            disclosures. Banks, insurers and lenders are shown without a DCF, because
-            discounted cash flow does not apply to them.
-          </div>
+          <p className="font-mono text-[12px] mt-4 leading-[1.6]" style={{ color: MUTED }}>
+            US filings come from SEC EDGAR, everywhere else from exchange
+            disclosures. Banks, insurers and lenders are shown without a
+            discounted cash flow, because it does not apply to them.
+          </p>
 
           {/* While a model is being built, name the stages instead of spinning */}
           <BuildPipeline active={lookupState.loading} />
@@ -211,35 +280,42 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           {/* Grey, not oxblood. This is a missed step, not a failure, and a
               red box would tell the user the site is broken when it is not. */}
           {hint && (
-            <div className="mt-4 border hairline-border bg-[#0B0B0D] px-4 py-3 font-sans text-[13px] font-light text-[#F2F0EA] leading-relaxed flex items-start gap-3">
-              <span className="w-2 h-2 bg-[#8B1E1E] mt-1.5 shrink-0" />
+            <div
+              className="mt-5 border px-5 py-4 text-[15px] leading-[1.6] flex items-start gap-3"
+              style={{ borderColor: LINE, background: '#111114', color: INK }}
+            >
+              <span className="w-2 h-2 mt-2 shrink-0" style={{ background: RED }} />
               <span>{hint}</span>
             </div>
           )}
 
           {!hint && lookupState.error && (
-            <div className="mt-4 border border-[#8B1E1E]/50 bg-[#8B1E1E]/10 px-4 py-3 font-mono text-[11px] text-[#F2F0EA] leading-relaxed">
+            <div
+              className="mt-5 border px-5 py-4 font-mono text-[13px] leading-[1.6]"
+              style={{ borderColor: 'rgba(139,30,30,0.5)', background: 'rgba(139,30,30,0.10)', color: INK }}
+            >
               {lookupState.error}
             </div>
           )}
         </div>
 
-        {/* A clear break: everything above is the automated engine, everything
-            below is hand-built work. The divider and the scale of the heading
-            are what make that switch legible. */}
-        <div className="mt-20 pt-12 border-t hairline-border-t">
-          <div className="flex items-center gap-3 mb-5">
-            <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
-              Built by hand
-            </span>
-          </div>
-
-          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium leading-tight max-w-3xl">
-            The analyst's own models.
+        {/* ---------------------------------------------------------- */}
+        {/* 02 — the hand-built shelf                                   */}
+        {/*                                                             */}
+        {/* Everything above is the engine; everything below is work    */}
+        {/* somebody sat down and did. The rule and the change of scale */}
+        {/* are what make that switch legible without saying it twice.  */}
+        {/* ---------------------------------------------------------- */}
+        <div className="mt-24 lg:mt-28 pt-14 border-t" style={{ borderColor: LINE }}>
+          <Eyebrow>02 &middot; Built by hand</Eyebrow>
+          <h2
+            className="text-[30px] sm:text-[40px] lg:text-[52px] max-w-[18ch]"
+            style={{ ...DISPLAY, color: INK }}
+          >
+            The analyst&rsquo;s own models
+            <Square />
           </h2>
-
-          <p className="font-sans text-base font-light text-[#A1A1AA] leading-relaxed max-w-2xl mt-5">
+          <p className="text-[17px] leading-[1.6] mt-6 max-w-[58ch]" style={{ color: READ }}>
             The workbooks below were prepared by the analyst himself, after a
             detailed study of each company and its filings, with every assumption
             chosen and defended individually. They are not the output of the
@@ -250,134 +326,150 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               link opens whatever desktop mail client the machine happens to
               have, which is useless to anyone on webmail. Selectable text works
               for everyone. */}
-          <div className="mt-7 pb-2">
-            <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed max-w-2xl mb-3">
-              For a model of this depth on a company not listed here, rather than
-              the engine-generated version, write to:
-            </p>
-            <div className="inline-flex items-center gap-3 border hairline-border bg-[#0B0B0D] px-5 py-3">
-              <Mail className="w-4 h-4 text-[#8B1E1E] shrink-0" />
-              <span className="font-mono text-sm text-[#F2F0EA] tracking-wide select-all">
-                vanshgupta569@gmail.com
-              </span>
-            </div>
+          <div className="mt-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+            <span className="text-[15px]" style={{ color: MUTED }}>
+              For a model of this depth on a company not listed here, write to
+            </span>
+            <span
+              className="font-mono text-[15px] select-all border-b pb-0.5"
+              style={{ color: INK, borderColor: RED }}
+            >
+              vanshgupta569@gmail.com
+            </span>
           </div>
-        </div>
 
-        {/* Company Grid Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12 mt-8">
-          {filteredCompanies.map((comp) => {
-            const isSelected = comp.ticker === selectedTicker;
-
-            return (
-              <div
-                key={comp.ticker}
-                onClick={() => onSelectCompany(comp.ticker)}
-                className={`p-8 border hairline-border bg-[#111114] hover:bg-[#18181c] group cursor-pointer transition-all duration-300 relative flex flex-col justify-between min-h-[280px] shadow-lg ${
-                  isSelected ? 'ring-1 ring-[#8B1E1E] border-l-4 border-l-[#8B1E1E]' : 'border-l-4 border-l-transparent hover:border-l-[#222228]'
-                }`}
-              >
-                {/* Crosshair accents */}
-                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-[#222228] opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                <div>
-                  <div className="flex justify-between items-start mb-5">
-                    <div>
-                      <div className="font-mono text-3xl font-bold text-[#F2F0EA] flex items-center gap-3 tracking-tight">
-                        <span>{comp.ticker}</span>
-                        <span className="font-mono text-[9px] text-[#A1A1AA] tracking-widest font-normal border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
-                          {comp.exchange}
-                        </span>
+          {/* The shelf itself */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
+            {filteredCompanies.map((comp) => (
+                <div
+                  key={comp.ticker}
+                  onClick={() => onSelectCompany(comp.ticker)}
+                  className="group cursor-pointer transition-colors p-7 lg:p-8 flex flex-col justify-between border hover:border-[#4A4740]"
+                  style={{ background: '#111114', borderColor: LINE }}
+                >
+                  <div>
+                    <div className="flex justify-between items-start gap-4 mb-5">
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-3">
+                          <span className="font-mono text-[26px] tracking-tight" style={{ color: INK, fontWeight: 700 }}>
+                            {comp.ticker}
+                          </span>
+                          <span
+                            className="font-mono text-[10px] tracking-[0.16em] uppercase"
+                            style={{ color: MUTED }}
+                          >
+                            {comp.exchange}
+                          </span>
+                        </div>
+                        <div className="text-[15px] mt-1 truncate" style={{ color: MUTED }}>
+                          {comp.name}
+                        </div>
                       </div>
-                      <div className="font-sans text-sm font-light text-[#A1A1AA] tracking-wide mt-1">{comp.name}</div>
-                    </div>
 
-                    <div className="text-right">
-                      <div className="font-mono text-xl font-bold text-[#F2F0EA] tracking-tight">
-                        {comp.currencySymbol}{comp.price.toFixed(2)}
-                      </div>
-                      <div
-                        className={`font-mono text-[11px] tracking-wider font-semibold mt-1 ${
-                          comp.priceChangePct >= 0 ? 'text-emerald-500' : 'text-[#8B1E1E]'
-                        }`}
-                      >
-                        {comp.priceChangePct >= 0 ? '+' : ''}{comp.priceChangePct}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="font-sans text-xs font-light text-[#A1A1AA] leading-loose tracking-wide line-clamp-2 mb-6">
-                    {comp.description}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] bg-[#0B0B0D] p-4 border hairline-border">
-                    <div>Cap: <strong className="text-[#F2F0EA] font-semibold">{comp.marketCapStr}</strong></div>
-                    <div>Sector: <strong className="text-[#F2F0EA] font-semibold">{comp.sector}</strong></div>
-                    <div>ROE: <strong className="text-[#F2F0EA] font-semibold">{comp.roePct}%</strong></div>
-                    <div>Op Margin: <strong className="text-[#F2F0EA] font-semibold">{comp.opMarginPct}%</strong></div>
-                  </div>
-                </div>
-
-                {/* Excel workbooks behind this model, where they exist. The
-                    click is stopped so the card underneath doesn't also open. */}
-                {comp.excelModels && comp.excelModels.length > 0 && (
-                  <div className="border-t hairline-border-t pt-4 mt-5">
-                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mb-2.5">
-                      Download the Excel workbooks
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {comp.excelModels.map((model) => (
-                        <a
-                          key={model.label}
-                          href={model.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-2 font-mono text-[10px] text-[#A1A1AA] hover:text-[#F2F0EA] border hairline-border hover:border-[#8B1E1E] px-3 py-2 transition-colors bg-[#0B0B0D]"
+                      <div className="text-right shrink-0">
+                        <div className="font-mono text-[18px] tabular-nums" style={{ color: INK, fontWeight: 600 }}>
+                          {comp.currencySymbol}
+                          {comp.price.toFixed(2)}
+                        </div>
+                        <div
+                          className="font-mono text-[12px] tracking-[0.06em] mt-1"
+                          style={{ color: comp.priceChangePct >= 0 ? '#4E9E7A' : RED_TEXT }}
                         >
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#8B1E1E]" />
-                          {model.label}
-                        </a>
-                      ))}
+                          {comp.priceChangePct >= 0 ? '+' : ''}
+                          {comp.priceChangePct}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[14px] leading-[1.6] line-clamp-2 mb-6" style={{ color: MUTED }}>
+                      {comp.description}
+                    </p>
+
+                    <div
+                      className="font-mono text-[12px] grid grid-cols-2 gap-y-2 gap-x-4 pt-4 border-t"
+                      style={{ borderColor: LINE, color: MUTED }}
+                    >
+                      <div>
+                        Cap&nbsp;&nbsp;<span style={{ color: INK }}>{comp.marketCapStr}</span>
+                      </div>
+                      <div>
+                        ROE&nbsp;&nbsp;<span style={{ color: INK }}>{comp.roePct}%</span>
+                      </div>
+                      <div>
+                        Sector&nbsp;&nbsp;<span style={{ color: INK }}>{comp.sector}</span>
+                      </div>
+                      <div>
+                        Op margin&nbsp;&nbsp;<span style={{ color: INK }}>{comp.opMarginPct}%</span>
+                      </div>
                     </div>
                   </div>
-                )}
 
-                <div className="flex justify-between items-center border-t hairline-border-t pt-5 mt-6">
-                  <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {comp.isin}</span>
-                  <button className="font-mono text-[10px] text-[#8B1E1E] group-hover:text-[#F2F0EA] tracking-widest font-semibold uppercase flex items-center gap-2 transition-colors duration-300">
-                    <span>Open Financial Model</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                  </button>
+                  {/* Excel workbooks behind this model, where they exist. The
+                      click is stopped so the card underneath doesn't also open. */}
+                  {comp.excelModels && comp.excelModels.length > 0 && (
+                    <div className="pt-5 mt-5 border-t" style={{ borderColor: LINE }}>
+                      <div
+                        className="font-mono text-[11px] uppercase tracking-[0.18em] mb-3"
+                        style={{ color: MUTED }}
+                      >
+                        Download the workbooks
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {comp.excelModels.map((model) => (
+                          <a
+                            key={model.label}
+                            href={model.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-2 font-mono text-[11px] border px-3 py-2 transition-colors hover:border-[#8B1E1E]"
+                            style={{ color: READ, borderColor: LINE, background: '#0B0B0D' }}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5" style={{ color: RED_TEXT }} />
+                            {model.label}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-5 mt-6 border-t" style={{ borderColor: LINE }}>
+                    <div className="font-mono text-[10px] tracking-[0.1em] mb-3" style={{ color: '#6B6759' }}>
+                      ISIN {comp.isin}
+                    </div>
+                    <span
+                      className="font-mono text-[11px] tracking-[0.16em] uppercase flex items-center gap-2 whitespace-nowrap"
+                      style={{ color: RED_TEXT }}
+                    >
+                      <span className="group-hover:text-[#F2F0EA] transition-colors">Open the model</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </div>
                 </div>
+            ))}
+          </div>
+
+          {filteredCompanies.length === 0 && (
+            <div className="mt-12 border px-8 py-16 text-center" style={{ borderColor: LINE, background: '#111114' }}>
+              <div className="text-[17px]" style={{ color: READ }}>
+                No hand-built models on the shelf yet.
               </div>
-            );
-          })}
+              <div className="text-[15px] mt-2" style={{ color: MUTED }}>
+                Use the box above to model any listed company automatically.
+              </div>
+            </div>
+          )}
         </div>
 
-        {filteredCompanies.length === 0 && (
-          <div className="text-center py-24 bg-[#111114] border hairline-border p-8 shadow-inner">
-            <div className="font-mono text-sm text-[#A1A1AA] tracking-wide mb-2">
-              No hand-built analyst models yet.
-            </div>
-            <div className="font-sans text-xs font-light text-[#8A8A8F] tracking-wide">
-              Use the search above to model any listed company automatically.
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="pt-8 border-t hairline-border-t flex justify-between items-center font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-12">
-        <button
-          onClick={onBackToHome}
-          className="text-[#8A8A8F] hover:text-[#F2F0EA] flex items-center gap-2 transition-colors cursor-pointer"
-        >
-          <span>←</span> Return to Intro & Philosophy
-        </button>
-        <span>MARGINALIA SEARCH ENGINE V4.2</span>
+        <div className="mt-20 pt-8 border-t" style={{ borderColor: LINE }}>
+          <button
+            onClick={onBackToHome}
+            className="font-mono text-[11px] uppercase tracking-[0.18em] transition-colors cursor-pointer"
+            style={{ color: MUTED }}
+          >
+            &larr;&nbsp;&nbsp;Back to the home page
+          </button>
+        </div>
       </div>
     </div>
   );
