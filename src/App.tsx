@@ -9,10 +9,11 @@ import {
   SeeItWork,
   ByTheNumbers,
   ThreeWays,
-  WorkflowPath,
   InTheMargin,
   MarginNotes,
   FinalCta,
+  StackPair,
+  useEasedScroll,
 } from './components/landingPage';
 import { MethodologyGrid } from './components/MethodologyGrid';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
@@ -131,6 +132,10 @@ export default function App() {
     }
   };
 
+  // Eased wheel scrolling, landing page only. The model screens have their
+  // own scrolling panels and are left entirely alone.
+  useEasedScroll(currentScreen === 'HOME');
+
   const handleSelectCompanyFromDirectory = (ticker: string) => {
     openQuestionsFor(ticker);
   };
@@ -153,11 +158,6 @@ export default function App() {
         {/* SCREEN 1: BASIC INTRO & PHILOSOPHY */}
         {currentScreen === 'HOME' && (
           <div>
-            {/* The four front doors are the page's spine. A button belongs
-                here only if the reader arrives holding something the ticker
-                search cannot accept: a private company has no ticker, and a
-                workbook has no ticker. Everything else acts on a model that
-                already exists, so it lives on that model's own screen. */}
             <LandingHero
               onOpenListed={() => handleNavigateToScreen('DIRECTORY')}
               onOpenPrivate={() => handleNavigateToScreen('DIRECTORY')}
@@ -169,13 +169,19 @@ export default function App() {
 
             <ByTheNumbers />
 
-            <ThreeWays />
-
-            <WorkflowPath />
-
-            {/* Methodology, kept from the original page: it is the section
-                that earns the site the right to make its claims. */}
-            <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
+            {/* The overlap he could not see. A negative margin alone is
+                nearly invisible: the section below simply starts a little
+                higher and nothing appears to move. What reads is the section
+                ABOVE holding still while the next one climbs over it, which
+                needs the one underneath to be sticky. Three ways to value
+                pins; the methodology panel slides up across it with rounded
+                corners and a shadow at its top edge. */}
+            <StackPair
+              under={<ThreeWays />}
+              over={
+                <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
+              }
+            />
 
             <InTheMargin onOpenNotes={() => scrollToSection('margin-notes')} />
 

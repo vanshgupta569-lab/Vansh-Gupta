@@ -59,93 +59,12 @@ export const CoverageStatsSection: React.FC = () => {
 
   return (
     <section id="coverage" className="max-w-[1440px] mx-auto px-6 lg:px-12 py-20 hairline-border-b overflow-hidden space-y-12">
-      <div>
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          className="flex items-center gap-2 mb-10"
-        >
-          <span className="w-2 h-2 bg-[#8B1E1E]" />
-          <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
-            03 - GLOBAL COVERAGE & SCALE
-          </span>
-        </motion.div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border hairline-border bg-[#111114]">
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-center p-8 sm:p-12 border-b md:border-b-0 border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
-          >
-            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              <AnimatedCounter target={10000} />+
-            </div>
-            <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
-              Equities Covered
-            </div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">NYSE · NASDAQ · NSE · BSE · LSE · TSX</div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-center p-8 sm:p-12 border-b md:border-b-0 md:border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
-          >
-            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              5 <span className="text-3xl sm:text-4xl">YRS</span>
-            </div>
-            <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
-              Historical Data
-            </div>
-            {/* "Up to" matters: SEC filers give five, some international sources
-                carry four, and the engine uses whatever exists rather than
-                failing. A flat "5 YRS" would be a claim the site cannot always
-                honour. */}
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
-              Up to five years, as filed
-            </div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="text-center p-8 sm:p-12 border-r hairline-border hover:bg-[#1a1a1f] transition-colors group cursor-default"
-          >
-            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              8
-            </div>
-            <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
-              Integrated Schedules
-            </div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">IS · BS · CF · WC · PP&E · Debt · Equity · DCF</div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="text-center p-8 sm:p-12 hover:bg-[#1a1a1f] transition-colors group cursor-default"
-          >
-            <div className="font-display text-4xl sm:text-5xl lg:text-6xl text-[#8B1E1E] mb-2 font-semibold group-hover:scale-105 transition-transform duration-500">
-              ₹0 / $0
-            </div>
-            <div className="font-mono text-[11px] text-[#F2F0EA] uppercase tracking-wider">
-              Zero Platform Cost
-            </div>
-            <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">No subscription, no paywall</div>
-          </motion.div>
-
-        </div>
-      </div>
+      {/* The four-figure coverage table that used to sit here has been
+          removed. It advertised a count of listed companies, which is a
+          claim about scale rather than about the product, and it was the
+          last thing on the page before the form — so the page ended on a
+          boast instead of on an invitation. The feedback form below is the
+          part worth keeping, and it genuinely submits. */}
 
       {/* Institutional Feedback Dispatch Box */}
       <motion.div 

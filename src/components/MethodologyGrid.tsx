@@ -64,7 +64,16 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
   const lineHeight = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
   return (
-    <section id="methodology" className="w-full" style={{ background: '#0B0B0D' }}>
+    <section
+      id="methodology"
+      className="relative w-full"
+      style={{
+        background: '#0B0B0D',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        boxShadow: '0 -40px 80px rgba(0,0,0,0.45)',
+      }}
+    >
       <div className="max-w-[1440px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
         {/* Chapter mark, set to match the rebuilt sections above and below. */}
         <div className="mb-10 lg:mb-14">
@@ -76,8 +85,14 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
         </div>
 
         <h2
-          className="font-serif leading-[1.05] mb-16 lg:mb-20 max-w-[20ch]"
-          style={{ color: '#F2F0EA', letterSpacing: '-0.02em' }}
+          className="text-[34px] sm:text-[46px] lg:text-[60px] mb-16 lg:mb-20 max-w-[18ch]"
+          style={{
+            color: '#F2F0EA',
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 700,
+            letterSpacing: '-0.04em',
+            lineHeight: 0.98,
+          }}
         >
           From a filing to a value{'\u2060'}
           <span
@@ -133,8 +148,13 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
                         {step.phase}
                       </span>
                       <h3
-                        className="font-serif flex-1 flex items-center justify-between gap-4"
-                        style={{ color: '#F2F0EA', letterSpacing: '-0.018em' }}
+                        className="flex-1 flex items-center justify-between gap-4 text-[22px] lg:text-[26px]"
+                        style={{
+                          color: '#F2F0EA',
+                          fontFamily: "'Inter', sans-serif",
+                          fontWeight: 700,
+                          letterSpacing: '-0.03em',
+                        }}
                       >
                         <span>{step.title}</span>
                         <ArrowRight
