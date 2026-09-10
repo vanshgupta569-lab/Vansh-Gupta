@@ -96,17 +96,16 @@ export const Header: React.FC<HeaderProps> = ({
             // landing page was rebuilt around showing the product rather
             // than explaining it, and a nav link to a section that no
             // longer exists scrolls nowhere and reads as a broken site.
-            // Every id here MUST exist on the home screen. "How It Works"
-            // pointed at 'workflow', a section that was deleted when the
-            // numbered zigzag came out, so the link scrolled nowhere and the
-            // nav read as broken. It now points at the methodology panel,
-            // which is where that story actually lives.
-            { id: 'where-to-start', label: 'Platform' },
-            { id: 'methodology', label: 'How It Works' },
-            { id: 'in-the-margin', label: 'In the Margin' },
-            { id: 'margin-notes', label: 'Margin Notes' },
-            { id: 'coverage', label: 'Coverage' },
-            { id: 'search-company', label: 'Open a Company' },
+            // Plain names for what each section actually is, and every id
+            // checked against the sections the landing page renders. A nav
+            // label that describes a category the reader does not have a word
+            // for is worse than no label.
+            { id: 'routes', label: 'What you can do' },
+            { id: 'model', label: 'How it works' },
+            { id: 'methodology', label: 'Methodology' },
+            { id: 'margin-notes', label: 'Margin notes' },
+            { id: 'numbers', label: 'Coverage' },
+            { id: 'search-company', label: 'Search a company' },
           ].map((item) => (
             <button
               key={item.id}

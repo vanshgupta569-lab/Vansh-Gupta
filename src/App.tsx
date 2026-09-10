@@ -3,18 +3,7 @@ import React, { useState } from 'react';
 import { motion, useScroll } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
-import {
-  LandingHero,
-  WhereToStart,
-  SeeItWork,
-  ByTheNumbers,
-  ThreeWays,
-  InTheMargin,
-  MarginNotes,
-  FinalCta,
-  StackPair,
-  useEasedScroll,
-} from './components/landingPage';
+import { LandingPage } from './components/landingPage';
 import { MethodologyGrid } from './components/MethodologyGrid';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
@@ -132,10 +121,6 @@ export default function App() {
     }
   };
 
-  // Eased wheel scrolling, landing page only. The model screens have their
-  // own scrolling panels and are left entirely alone.
-  useEasedScroll(currentScreen === 'HOME');
-
   const handleSelectCompanyFromDirectory = (ticker: string) => {
     openQuestionsFor(ticker);
   };
@@ -157,45 +142,14 @@ export default function App() {
       <main className="flex-grow">
         {/* SCREEN 1: BASIC INTRO & PHILOSOPHY */}
         {currentScreen === 'HOME' && (
-          <div>
-            <LandingHero
-              onOpenListed={() => handleNavigateToScreen('DIRECTORY')}
-              onOpenPrivate={() => handleNavigateToScreen('DIRECTORY')}
-            />
-
-            <WhereToStart onRoute={() => handleNavigateToScreen('DIRECTORY')} />
-
-            <SeeItWork onOpenListed={() => handleNavigateToScreen('DIRECTORY')} />
-
-            <ByTheNumbers />
-
-            {/* The overlap he could not see. A negative margin alone is
-                nearly invisible: the section below simply starts a little
-                higher and nothing appears to move. What reads is the section
-                ABOVE holding still while the next one climbs over it, which
-                needs the one underneath to be sticky. Three ways to value
-                pins; the methodology panel slides up across it with rounded
-                corners and a shadow at its top edge. */}
-            <StackPair
-              under={<ThreeWays />}
-              over={
-                <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
-              }
-            />
-
-            <InTheMargin onOpenNotes={() => scrollToSection('margin-notes')} />
-
-            <MarginNotes onOpenNotes={() => scrollToSection('margin-notes')} />
-
+          <LandingPage
+            onOpenCompany={() => handleNavigateToScreen('DIRECTORY')}
+            onScrollTo={scrollToSection}
+          >
+            <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
             <CoverageStatsSection />
-
-            <FinalCta
-              onOpenListed={() => handleNavigateToScreen('DIRECTORY')}
-              onOpenPrivate={() => handleNavigateToScreen('DIRECTORY')}
-            />
-
             <FeedbackFormSection />
-          </div>
+          </LandingPage>
         )}
 
         {/* SCREEN 2: COMPANY SEARCH DIRECTORY */}
