@@ -15,7 +15,7 @@
 //     deliberately left.
 
 import React, { useState, useEffect } from 'react';
-import { Home, Building2, Search } from 'lucide-react';
+import { Home, Building2, Search, PencilLine } from 'lucide-react';
 import { ScreenType } from '../types';
 
 /* Four links, not six. A header with six choices is a header nobody reads,
@@ -33,6 +33,14 @@ interface HeaderProps {
   onNavigateToScreen: (screen: ScreenType) => void;
   onScrollToSection: (id: string) => void;
   activeSection: string;
+  /* Set when the model on screen was built on figures the reader replaced.
+     It rides in the header rather than in one panel of the dashboard because
+     the claim it qualifies — that these are the filed numbers — is made by
+     every screen at once, so the correction has to be visible from all of
+     them. Without this a corrected model could pass as a filed one, and that
+     is the one promise the site cannot break. */
+  corrected?: { count: number; fields: string[] };
+  onReviewFigures?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,6 +48,8 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateToScreen,
   onScrollToSection,
   activeSection,
+  corrected,
+  onReviewFigures,
 }) => {
   const [utcTimeStr, setUtcTimeStr] = useState<string>('');
   const [istTimeStr, setIstTimeStr] = useState<string>('');
@@ -124,6 +134,24 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: where you can go from here */}
         <div className="flex items-center gap-3 shrink-0">
+          {corrected && currentScreen !== 'HOME' && currentScreen !== 'DIRECTORY' && (
+            <button
+              onClick={onReviewFigures}
+              disabled={!onReviewFigures}
+              title={`Built on ${corrected.count} figure${
+                corrected.count === 1 ? '' : 's'
+              } you supplied: ${corrected.fields.join(', ')}`}
+              className="border font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap disabled:cursor-default"
+              style={{ borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.16)', color: '#F2F0EA' }}
+            >
+              <PencilLine className="w-3.5 h-3.5" style={{ color: '#C0453E' }} />
+              <span className="hidden sm:inline">
+                {corrected.count} corrected figure{corrected.count === 1 ? '' : 's'}
+              </span>
+              <span className="sm:hidden">{corrected.count}</span>
+            </button>
+          )}
+
           {currentScreen !== 'DIRECTORY' && (
             <button
               onClick={() => onNavigateToScreen('DIRECTORY')}

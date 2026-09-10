@@ -7,12 +7,14 @@ import { LandingPage } from './components/landingPage';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
 import { DirectoryScreen } from './components/DirectoryScreen';
+import { FiguresEditor } from './components/figuresEditor';
 import { TerminalDashboard } from './components/TerminalDashboard';
 import { QualitativeIntro } from './components/qualitativeIntro';
 import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
-import { loadCompany } from './data/autoCompany';
+import { fetchCompanyPayload, buildCompanyFrom } from './data/autoCompany';
+import type { Corrections } from './data/corrections';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
 
@@ -47,6 +49,16 @@ export default function App() {
   // skipped, and skipping must produce exactly the model the site would have
   // built on its own.
   const [initialVerdicts, setInitialVerdicts] = useState<Record<string, Verdict> | null>(null);
+
+  // THE FIGURES STEP (backlog 11a).
+  //
+  // The filings are fetched, shown to the reader, and only then modelled. The
+  // payload and the reader's corrections live here because both outlive the
+  // screen: the badge on the analysis view reads the corrections, and reopening
+  // the figures must not cost another fetch.
+  const [payload, setPayload] = useState<any | null>(null);
+  const [corrections, setCorrections] = useState<Corrections>({});
+  const [building, setBuilding] = useState(false);
 
   // Every route into a company goes through the questions first: the search
   // box, the directory grid, and the hand-built model cards. The judgements are
@@ -95,15 +107,54 @@ export default function App() {
     };
 
     try {
-      const company = await loadCompany(ticker);
+      // Fetch the filings and stop. Nothing is modelled until the reader has
+      // had the chance to look at what it would be modelled from.
+      const fetched = await fetchCompanyPayload(ticker);
       await settle();
-      setLoadedCompanies((prev) => ({ ...prev, [ticker]: company }));
+      setPayload(fetched);
+      setCorrections({});
+      setSelectedTicker(ticker);
       setLookupState({ loading: false, error: null });
-      openQuestionsFor(ticker);
+      setCurrentScreen('FIGURES');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       await settle();
       setLookupState({ loading: false, error: error.message || 'Could not build a model for that ticker.' });
     }
+  };
+
+  // Leaving the figures screen is the moment the model is built. A failure
+  // here is a modelling refusal — a demerger year, too little comparable
+  // history — so it belongs back on the search screen where it can be read.
+  const buildFromFigures = () => {
+    if (!payload) return;
+    setBuilding(true);
+    // Yield a frame so the button can say what it is doing before the engine
+    // takes the thread.
+    window.setTimeout(() => {
+      try {
+        const company = buildCompanyFrom(payload, corrections);
+        setLoadedCompanies((prev) => ({ ...prev, [company.ticker]: company }));
+        setBuilding(false);
+        openQuestionsFor(company.ticker);
+      } catch (error: any) {
+        setBuilding(false);
+        setLookupState({
+          loading: false,
+          error: error.message || 'Could not build a model from those figures.',
+        });
+        setCurrentScreen('DIRECTORY');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 30);
+  };
+
+  // Reopening the figures from the badge. Only possible where the payload is
+  // still in hand, which is every company reached through the search.
+  const reopenFigures = () => {
+    if (!payload) return;
+    setCurrentScreen('FIGURES');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleNavigateToScreen = (screen: ScreenType) => {
@@ -132,6 +183,8 @@ export default function App() {
         onNavigateToScreen={handleNavigateToScreen}
         onScrollToSection={scrollToSection}
         activeSection={activeSection}
+        corrected={allCompanies[selectedTicker]?.correctedInputs}
+        onReviewFigures={payload ? reopenFigures : undefined}
       />
 
       {/* Scroll Progress Indicator Line */}
@@ -159,6 +212,27 @@ export default function App() {
             onBackToHome={() => handleNavigateToScreen('HOME')}
             onLookupTicker={handleLookupTicker}
             lookupState={lookupState}
+          />
+        )}
+
+        {/* SCREEN 2a: THE FIGURES, BEFORE ANYTHING IS MODELLED.
+            Put here rather than inside the dashboard on purpose: once a value
+            is on screen it becomes an anchor, and a reader who has seen a
+            number is far less likely to go back and question the figures it
+            came from. */}
+        {currentScreen === 'FIGURES' && payload && (
+          <FiguresEditor
+            ticker={payload.ticker || selectedTicker}
+            name={payload.name || selectedTicker}
+            source={payload.source || 'the filings'}
+            sourceUrl={payload.sourceUrl}
+            currencySymbol={payload.currencySymbol || '$'}
+            statements={payload.statements || []}
+            corrections={corrections}
+            onChange={setCorrections}
+            onContinue={buildFromFigures}
+            onBack={() => handleNavigateToScreen('DIRECTORY')}
+            building={building}
           />
         )}
 

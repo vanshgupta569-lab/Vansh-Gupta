@@ -1,6 +1,6 @@
 // FILE: src/types.ts
 export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT' | 'QUALITATIVE';
-export type ScreenType = 'HOME' | 'DIRECTORY' | 'QUESTIONS' | 'ANALYSIS';
+export type ScreenType = 'HOME' | 'DIRECTORY' | 'FIGURES' | 'QUESTIONS' | 'ANALYSIS';
 
 // Reported history. null means the filing does not give us that figure for
 // that year — it is NOT zero, and the dashboard renders it as an em dash. The
@@ -136,6 +136,16 @@ export interface CompanyData {
   // For banks and other financial companies, where unlevered free cash flow is
   // not a meaningful concept, a residual income valuation is built instead.
   residualIncome?: any | null;
+
+  // Set only when the reader has replaced one or more filed figures with their
+  // own. Its presence is what every screen reads to say the model is not built
+  // purely on what was filed — a corrected figure must never pass as a filed
+  // one, which is the site's central promise.
+  correctedInputs?: { count: number; fields: string[] };
+
+  // The payload exactly as the fetcher returned it, kept so the figures can be
+  // re-opened and any correction put back without another fetch.
+  rawFetched?: any;
 
   // Descriptive context for the qualitative screen. Never mixed with reported
   // figures: this is what the company says about itself, not what it filed.

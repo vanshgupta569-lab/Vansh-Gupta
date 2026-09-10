@@ -13,6 +13,12 @@ import { buildModel, buildDCF } from '../engine/model.js';
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
 import { financialsFromStatements } from './companies';
+import {
+  applyCorrections,
+  correctionCount,
+  correctedFields,
+  type Corrections,
+} from './corrections';
 import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
 
 const r = (n: number | null | undefined, dp = 0): number => {
@@ -23,9 +29,10 @@ const r = (n: number | null | undefined, dp = 0): number => {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-// Fetch a company and build everything the dashboard needs. Throws with a
-// readable message when the ticker isn't found or has no usable filings.
-export async function loadCompany(ticker: string): Promise<CompanyData> {
+// Fetch the filings for a ticker and nothing more. Split out from loadCompany
+// so the reader can be shown the figures BEFORE a model is built from them:
+// the correction screen needs the payload, not a finished record.
+export async function fetchCompanyPayload(ticker: string): Promise<any> {
   const response = await fetch(`/api/company?ticker=${encodeURIComponent(ticker)}`);
   const fetched = await response.json();
 
@@ -37,12 +44,50 @@ export async function loadCompany(ticker: string): Promise<CompanyData> {
       `${ticker} does not have enough reported history to model. At least two full years are needed.`
     );
   }
+  if (!fetched.ticker) fetched.ticker = ticker;
+  return fetched;
+}
 
-  const modelData: any = deriveModel(fetched);
+/**
+ * Build the record from a payload, with the reader's corrections applied.
+ *
+ * THE WHOLE OF FEATURE 11a IS THESE FOUR LINES. Every number the site shows is
+ * downstream of one array — the statements the fetcher returned — so patching
+ * that array and running exactly the same derivation corrects the forecast, the
+ * discounted cash flow, the health score, the asset approach and the residual
+ * income model together. A correction needing its own path through the engine
+ * would have meant the design was wrong.
+ */
+export function buildCompanyFrom(fetched: any, corrections?: Corrections): CompanyData {
+  const changed = corrections ? correctionCount(corrections) : 0;
+  const source = changed ? applyCorrections(fetched, corrections as Corrections) : fetched;
+
+  const modelData: any = deriveModel(source);
   // The filings themselves travel with the model, so the dashboard can show
   // reported history without going back through the engine.
-  modelData.rawStatements = fetched.statements;
-  return buildCompanyRecord(fetched, modelData);
+  modelData.rawStatements = source.statements;
+
+  const record = buildCompanyRecord(source, modelData);
+
+  // The filed payload is carried untouched so the correction screen can be
+  // reopened, every original is still recoverable, and "reset to as filed" never
+  // needs another fetch.
+  record.rawFetched = fetched;
+
+  // A corrected model must never be able to pass as a filed one. This is what
+  // every screen reads to say so.
+  record.correctedInputs = changed
+    ? { count: changed, fields: correctedFields(corrections as Corrections) }
+    : undefined;
+
+  return record;
+}
+
+// Fetch a company and build everything the dashboard needs, with no
+// corrections. Kept for callers that have no reason to show the figures first.
+export async function loadCompany(ticker: string): Promise<CompanyData> {
+  const fetched = await fetchCompanyPayload(ticker);
+  return buildCompanyFrom(fetched);
 }
 
 // Fetch a company and derive ONLY its model data — used when a curated company
