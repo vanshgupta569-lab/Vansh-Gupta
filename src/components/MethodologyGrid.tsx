@@ -183,17 +183,21 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="border p-8 sm:p-12"
+          className="border py-16 px-8 sm:py-24 sm:px-12 flex flex-col items-center text-center"
           style={{ background: '#111114', borderColor: '#262521' }}
         >
+          {/* Centred. Set flush left inside a full-width panel it sat in the
+              corner of a large empty box, which reads as a layout that ran
+              out rather than a pull quote. */}
           <blockquote
-            className="font-serif text-[26px] sm:text-[34px] lg:text-[40px] italic leading-[1.24] max-w-[24ch]"
+            className="font-serif text-[26px] sm:text-[36px] lg:text-[44px] italic leading-[1.26] max-w-[20ch]"
             style={{ color: '#F2F0EA', letterSpacing: '-0.018em' }}
           >
             &ldquo;I would rather be vaguely right than precisely wrong.&rdquo;
           </blockquote>
+          <span className="block h-px w-12 my-8" style={{ background: '#8B1E1E' }} />
           <p
-            className="font-mono text-[13px] uppercase tracking-[0.18em] mt-6"
+            className="font-mono text-[13px] uppercase tracking-[0.18em]"
             style={{ color: '#A8A29A' }}
           >
             John Maynard Keynes

@@ -174,8 +174,18 @@ export const useEasedScroll = (enabled: boolean) => {
 /* alone is almost invisible: the section below simply starts a little  */
 /* higher. What makes it read on the reference site is that the section */
 /* ABOVE stops moving while the next one climbs over it. That needs the */
-/* previous section to be sticky, so the pair is wrapped together in    */
-/* StackPair below rather than left to a margin.                        */
+/* previous section to be sticky. That was the first attempt and it was  */
+/* WRONG: a sticky section taller than the viewport pins the moment its  */
+/* top reaches zero, and everything below the fold inside it can then    */
+/* never be scrolled to. Three ways to value is 960px in a 900px         */
+/* viewport, so its last bar and its closing line were permanently       */
+/* hidden under the panel arriving over them.                            */
+/*                                                                       */
+/* The replacement keeps the effect and loses the trap: the section       */
+/* underneath scrolls normally but its contents drift upward slightly     */
+/* slower than the page, while the panel above carries rounded corners    */
+/* and a shadow. Relative motion is what the eye reads as one thing       */
+/* sliding over another; pinning was never the necessary part.            */
 /* ------------------------------------------------------------------ */
 
 interface SectionProps {
@@ -219,12 +229,29 @@ export const Section: React.FC<SectionProps> = ({
 export const StackPair: React.FC<{ under: React.ReactNode; over: React.ReactNode }> = ({
   under,
   over,
-}) => (
-  <div className="relative">
-    <div className="lg:sticky lg:top-0">{under}</div>
-    <div className="relative z-10">{over}</div>
-  </div>
-);
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduced = useReduced();
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start start', 'end start'],
+  });
+  const [drift, setDrift] = useState(0);
+
+  useMotionValueEvent(scrollYProgress, 'change', (v) => {
+    if (reduced) return;
+    setDrift(Math.max(0, Math.min(1, v)) * -70);
+  });
+
+  return (
+    <div className="relative">
+      <div ref={ref} style={{ transform: `translateY(${drift}px)`, willChange: 'transform' }}>
+        {under}
+      </div>
+      <div className="relative z-10 -mt-8 lg:-mt-14">{over}</div>
+    </div>
+  );
+};
 
 /* ------------------------------------------------------------------ */
 /* Chapter mark and headline                                           */
@@ -345,7 +372,7 @@ export const CountUp: React.FC<{
 
   return (
     <span ref={ref} className={className}>
-      {Math.round(shown)}
+      {Math.round(shown).toLocaleString('en-IN')}
       {suffix}
     </span>
   );
@@ -829,11 +856,20 @@ export const SeeItWork: React.FC<{ onOpenListed: () => void }> = ({ onOpenListed
 /* say what this site is for.                                          */
 /* ================================================================== */
 
+/* Coverage and cost, which is what a reader actually wants to know before
+   they type anything. The four-figure version he had originally is back,
+   in the page's own type rather than the old one.
+
+   One caution worth keeping in view: "10,000+" is the ONLY number on this
+   page that is a claim rather than a fact about the product. It is
+   defensible — EDGAR alone carries several thousand filers and the
+   international source many times that — but it should stay conservative,
+   because it is the one figure a sceptical reader could go and test. */
 const STATS = [
-  { to: 3, suffix: '', label: 'Linked statements' },
-  { to: 5, suffix: 'Y', label: 'Of filed history' },
-  { to: 3, suffix: '', label: 'Valuation approaches' },
-  { to: 0, suffix: '', label: 'Buy or sell ratings' },
+  { to: 10000, suffix: '+', label: 'Listed companies', detail: 'NYSE · NASDAQ · NSE · BSE · LSE · TSX' },
+  { to: 5, suffix: 'Y', label: 'Of filed history', detail: 'IS · BS · CF · WC · PP&E · Debt · Equity' },
+  { to: 0, suffix: '', label: 'Cost to use', detail: 'No subscription, no paywall' },
+  { to: 3, suffix: '', label: 'Valuation approaches', detail: 'Income · Market · Asset' },
 ];
 
 export const ByTheNumbers: React.FC = () => {
@@ -845,16 +881,22 @@ export const ByTheNumbers: React.FC = () => {
           <Reveal key={stat.label} delay={i * 0.08}>
             <div>
               <div
-                className="text-[58px] lg:text-[80px]"
+                className="text-[46px] lg:text-[64px]"
                 style={{ ...DISPLAY, color: g.text }}
               >
                 <CountUp to={stat.to} suffix={stat.suffix} />
               </div>
               <div
                 className="font-mono text-[12px] tracking-[0.2em] uppercase mt-4"
-                style={{ color: g.label }}
+                style={{ color: g.text }}
               >
                 {stat.label}
+              </div>
+              <div
+                className="font-mono text-[12px] mt-2 leading-[1.5]"
+                style={{ color: g.label }}
+              >
+                {stat.detail}
               </div>
             </div>
           </Reveal>
@@ -978,11 +1020,22 @@ export const InTheMargin: React.FC<{ onOpenNotes: () => void }> = ({ onOpenNotes
   const reduced = useReduced();
   const [active, setActive] = useState(0);
 
+  // The rotation is there so the section explains itself to somebody who
+  // never touches it. The moment a reader picks a line themselves it stops
+  // for good: nothing is more irritating than choosing something and having
+  // the page move on four seconds later while you are still reading it.
+  const [held, setHeld] = useState(false);
+
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || held) return;
     const timer = setInterval(() => setActive((i) => (i + 1) % LINES.length), 4400);
     return () => clearInterval(timer);
-  }, [reduced]);
+  }, [reduced, held]);
+
+  const choose = (i: number) => {
+    setActive(i);
+    setHeld(true);
+  };
 
   const line = LINES[active];
 
@@ -1009,7 +1062,7 @@ export const InTheMargin: React.FC<{ onOpenNotes: () => void }> = ({ onOpenNotes
                 <button
                   key={item.label}
                   type="button"
-                  onClick={() => setActive(i)}
+                  onClick={() => choose(i)}
                   className="w-full text-left flex items-baseline justify-between border-b px-1 transition-colors"
                   style={{
                     borderColor: g.hairline,

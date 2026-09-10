@@ -96,9 +96,14 @@ export const Header: React.FC<HeaderProps> = ({
             // landing page was rebuilt around showing the product rather
             // than explaining it, and a nav link to a section that no
             // longer exists scrolls nowhere and reads as a broken site.
+            // Every id here MUST exist on the home screen. "How It Works"
+            // pointed at 'workflow', a section that was deleted when the
+            // numbered zigzag came out, so the link scrolled nowhere and the
+            // nav read as broken. It now points at the methodology panel,
+            // which is where that story actually lives.
             { id: 'where-to-start', label: 'Platform' },
-            { id: 'workflow', label: 'How It Works' },
-            { id: 'methodology', label: 'Methodology' },
+            { id: 'methodology', label: 'How It Works' },
+            { id: 'in-the-margin', label: 'In the Margin' },
             { id: 'margin-notes', label: 'Margin Notes' },
             { id: 'coverage', label: 'Coverage' },
             { id: 'search-company', label: 'Open a Company' },
