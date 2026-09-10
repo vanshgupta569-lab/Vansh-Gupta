@@ -4,7 +4,6 @@ import { motion, useScroll } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
 import { LandingPage } from './components/landingPage';
-import { MethodologyGrid } from './components/MethodologyGrid';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
 import { DirectoryScreen } from './components/DirectoryScreen';
@@ -113,7 +112,7 @@ export default function App() {
   };
 
   const scrollToSection = (id: string) => {
-    if (id === 'platform') id = 'methodology';
+    if (id === 'platform' || id === 'methodology' || id === 'model') id = 'filings';
     setActiveSection(id);
     const element = document.getElementById(id);
     if (element) {
@@ -146,7 +145,6 @@ export default function App() {
             onOpenCompany={() => handleNavigateToScreen('DIRECTORY')}
             onScrollTo={scrollToSection}
           >
-            <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
             <CoverageStatsSection />
             <FeedbackFormSection />
           </LandingPage>

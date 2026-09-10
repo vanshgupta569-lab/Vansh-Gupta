@@ -480,3 +480,69 @@ header .font-mono {
 #about .font-mono.uppercase.tracking-\[0\.2em\] {
   letter-spacing: 0.22em;
 }
+
+/* ================================================================== */
+/* ONE DISPLAY FACE, EVERY SCREEN                                      */
+/*                                                                     */
+/* The landing page moved its headings from Playfair to Inter set very */
+/* tight, because an editorial serif at display size reads as a         */
+/* magazine and this is meant to read as an institution. If the search  */
+/* screen and the model screens keep the serif, the site changes        */
+/* register the moment somebody opens a company — which is the exact    */
+/* "mixed bag" complaint that started this work.                        */
+/*                                                                     */
+/* So headings everywhere take the display face. Playfair keeps the     */
+/* three places it earns and they are all opt-in: the wordmark, a       */
+/* blockquote, and anything marked .editorial. Because a heading        */
+/* carrying .font-serif needs a class-plus-element selector to beat it, */
+/* those are listed explicitly.                                         */
+/* ================================================================== */
+
+h1, h2, h3, h4, h5, h6,
+h1.font-serif, h2.font-serif, h3.font-serif, h4.font-serif, h5.font-serif, h6.font-serif,
+h1.font-display, h2.font-display, h3.font-display, h4.font-display {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+}
+
+/* Larger headings want the tracking pulled in further; small ones fall
+   apart if it is. */
+h1 { letter-spacing: -0.045em; }
+h4, h5, h6 { letter-spacing: -0.02em; line-height: 1.2; }
+
+/* The serif, where it belongs. */
+blockquote.font-serif,
+p.font-serif,
+span.font-serif,
+.editorial,
+.wordmark-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+  letter-spacing: -0.012em;
+}
+
+/* Anchors on the rebuilt landing page. */
+#hero, #routes, #filings, #forecast, #cash, #discount,
+#answers, #workbench, #beyond, #letgo,
+#numbers, #in-the-margin, #margin-notes, #methodology,
+#coverage, #about, #open {
+  scroll-margin-top: 84px;
+}
+
+/* The particle canvas sits behind everything and must never eat a click
+   meant for a link or a button. Only the object itself is draggable. */
+canvas[aria-hidden="true"] { touch-action: pan-y; }
+
+/* The headline figures on the model screen carried .font-display, which
+   still resolves to Playfair. Every other number on the site is set in
+   JetBrains Mono, and his own convention is that figures are mono — so a
+   serif price sitting above a mono ratio row was the last place the site
+   changed its mind about itself. Only SPANs are caught here; headings keep
+   the display face set above. */
+span.font-display,
+div.font-display {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}

@@ -101,9 +101,9 @@ export const Header: React.FC<HeaderProps> = ({
             // label that describes a category the reader does not have a word
             // for is worse than no label.
             { id: 'routes', label: 'What you can do' },
-            { id: 'model', label: 'How it works' },
-            { id: 'methodology', label: 'Methodology' },
-            { id: 'margin-notes', label: 'Margin notes' },
+            { id: 'filings', label: 'How it works' },
+            { id: 'answers', label: 'Three approaches' },
+            { id: 'in-the-margin', label: 'Every figure sourced' },
             { id: 'numbers', label: 'Coverage' },
             { id: 'search-company', label: 'Search a company' },
           ].map((item) => (

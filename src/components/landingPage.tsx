@@ -2,11 +2,20 @@
 //
 // The landing page.
 //
-// The first six sections are bound to the particle object: the wordmark, then
-// a solid for each step of what the site actually does, then it lets go. The
-// sections after that are ordinary dark bands — methodology, the margin
-// notes, coverage, the analyst, the feedback form — because by then the
-// reader is reading rather than being shown.
+// The first ten sections are bound to the particle object: the wordmark, then
+// the site explained one step at a time, then it lets go. What used to sit in
+// those sections was a list of features — "every line driven by an assumption"
+// — which tells a reader who already understands the product something they
+// already know, and tells everybody else nothing. They now walk through what
+// actually happens: the filings are read, a forecast is built, profit is
+// turned into cash, the cash is discounted, three approaches are run, the
+// model is yours to edit and to download, and here is what is still being
+// built.
+//
+// The sections after the object are ordinary bands — coverage, the sourced
+// figures, the margin notes, the form — because by then the reader is reading
+// rather than being shown. The first of them slides up OVER the object, which
+// is what marks the change of register.
 //
 // Two rules govern the layout. The object and the words never share space:
 // the object takes a side and the words take the other, and a soft scrim sits
@@ -15,11 +24,23 @@
 // magazine, and this is meant to read as an institution. Playfair is kept for
 // the three places it earns: the wordmark, the margin notes, and the quote.
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ParticleField } from './particleField';
 
-/* The sections the object is bound to, in page order. */
-const OBJECT_SECTIONS = ['hero', 'routes', 'model', 'discount', 'answers', 'letgo'];
+/* The sections the object is bound to, in page order. Every id here must be
+   rendered below, and the object holds one formation per entry. */
+const OBJECT_SECTIONS = [
+  'hero',
+  'routes',
+  'filings',
+  'forecast',
+  'cash',
+  'discount',
+  'answers',
+  'workbench',
+  'beyond',
+  'letgo',
+];
 
 const RED = '#8B1E1E';
 const RED_TEXT = '#C0453E';
@@ -130,6 +151,51 @@ const Readout: React.FC<{ rows: [string, string][]; centred?: boolean }> = ({ ro
   </div>
 );
 
+/* A figure that counts up to itself the first time it is seen. It runs once
+   and then stops: a number that re-animates every time it scrolls past reads
+   as a widget rather than as a fact. */
+const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' }) => {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [n, setN] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') { setN(to); return; }
+
+    let raf = 0;
+    let fired = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (fired || !entries[0].isIntersecting) return;
+        fired = true;
+        io.disconnect();
+        const t0 = performance.now();
+        const DURATION = 1900;
+        const step = (now: number) => {
+          /* clamp both ends: the timestamp rAF hands back is the frame's
+             start time and can predate the performance.now() taken a moment
+             earlier, which briefly counted through negative numbers. */
+          const p = Math.min(1, Math.max(0, (now - t0) / DURATION));
+          setN(Math.round(to * (1 - Math.pow(1 - p, 3))));
+          if (p < 1) raf = requestAnimationFrame(step);
+        };
+        raf = requestAnimationFrame(step);
+      },
+      { threshold: 0.35 }
+    );
+    io.observe(el);
+    return () => { io.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [to]);
+
+  return (
+    <span ref={ref} className="tabular-nums">
+      {n.toLocaleString('en-IN')}
+      {suffix}
+    </span>
+  );
+};
+
 /* ------------------------------------------------------------------ */
 /* The four front doors                                                */
 /*                                                                     */
@@ -159,6 +225,26 @@ const ROUTES = [
     n: '04',
     title: 'Reformat your Excel model',
     line: 'Your own workbook set to house convention: blue for inputs, black for formulas. Not one number changes.',
+  },
+];
+
+/* What is not built yet. Every line here is stated as a plan, because a plan
+   described in the present tense is a false claim about a website. */
+const NEXT = [
+  {
+    title: 'A one or two-pager',
+    status: 'In build',
+    line: 'The whole company on a single page: what it does, what it earns, what it is worth, and the figures you would be asked about first.',
+  },
+  {
+    title: 'A leveraged buyout model',
+    status: 'Planned',
+    line: 'The same forecast run for a buyer using debt — the structure it is bought with, the years of repayment, the exit, and the return that falls out of it.',
+  },
+  {
+    title: 'A private company',
+    status: 'In build',
+    line: 'A private company files nothing public, so you supply the accounts. Type in the income statement and balance sheet you already have and the same engine runs on them.',
   },
 ];
 
@@ -212,14 +298,15 @@ const ROADMAP = [
   { title: 'Private company inputs', status: 'In build' },
   { title: 'Things to check in a filing', status: 'In build' },
   { title: 'One-page desk summary', status: 'In build' },
+  { title: 'Leveraged buyout model', status: 'Planned' },
   { title: 'Workbook reformatting', status: 'Planned' },
 ];
 
 const STATS = [
-  { figure: '10,000+', label: 'Listed companies', detail: 'NYSE · NASDAQ · NSE · BSE · LSE · TSX' },
-  { figure: '5Y', label: 'Of filed history', detail: 'IS · BS · CF · WC · PP&E · Debt · Equity' },
-  { figure: '0', label: 'Cost to use', detail: 'No subscription, no paywall' },
-  { figure: '3', label: 'Valuation approaches', detail: 'Income · Market · Asset' },
+  { to: 10000, suffix: '+', label: 'Listed companies', detail: 'NYSE · NASDAQ · NSE · BSE · LSE · TSX' },
+  { to: 5, suffix: 'Y', label: 'Of filed history', detail: 'IS · BS · CF · WC · PP&E · Debt · Equity' },
+  { to: 0, suffix: '', label: 'Cost to use', detail: 'No subscription, no paywall' },
+  { to: 3, suffix: '', label: 'Valuation approaches', detail: 'Income · Market · Asset' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -227,16 +314,16 @@ const STATS = [
 interface LandingProps {
   onOpenCompany: () => void;
   onScrollTo: (id: string) => void;
-  /* Methodology, the feedback form and the analyst card are existing
-     components and are dropped in here, between the margin notes and the
-     closing call to action, so the page still ends on an invitation. */
+  /* The feedback form and the analyst card are existing components and are
+     dropped in here, before the closing call to action, so the page still
+     ends on an invitation. */
   children?: React.ReactNode;
 }
 
 export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo, children }) => {
   const [launching, setLaunching] = useState(false);
   const [activeMargin, setActiveMargin] = useState(0);
-  const [heldMargin, setHeldMargin] = useState(false);
+  const marginRef = useRef<HTMLDivElement>(null);
   const quarters = upcomingQuarters(ROADMAP.length);
 
   /* The fly-through: press the button and the object comes at you and past
@@ -251,18 +338,50 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
     }, 1150);
   };
 
-  React.useEffect(() => {
-    if (heldMargin) return;
-    const timer = window.setInterval(
-      () => setActiveMargin((i) => (i + 1) % MARGIN_LINES.length),
-      4400
-    );
-    return () => window.clearInterval(timer);
-  }, [heldMargin]);
+  /* THE PINNED FIGURES.
+     The section is tall; the panel inside it is exactly one screen and
+     sticks to the top. So the page keeps scrolling, the panel does not move,
+     and only the note beside the figures changes. The sticky child must
+     never be taller than the viewport — a sticky box taller than the screen
+     pins the moment its top hits zero and everything below its fold becomes
+     unreachable. */
+  useEffect(() => {
+    const el = marginRef.current;
+    if (!el) return;
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const r = el.getBoundingClientRect();
+      const span = r.height - window.innerHeight;
+      if (span <= 0) return;
+      const p = Math.min(1, Math.max(0, -r.top / span));
+      const i = Math.min(MARGIN_LINES.length - 1, Math.floor(p * MARGIN_LINES.length));
+      setActiveMargin(i);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    read();
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
+  /* Clicking a row scrolls to the point in the section where that row is the
+     live one, so a click and a scroll cannot disagree about what is showing. */
   const chooseMargin = (i: number) => {
-    setActiveMargin(i);
-    setHeldMargin(true);
+    const el = marginRef.current;
+    if (!el) { setActiveMargin(i); return; }
+    const r = el.getBoundingClientRect();
+    const span = r.height - window.innerHeight;
+    if (span <= 0) { setActiveMargin(i); return; }
+    const top = r.top + window.scrollY;
+    window.scrollTo({
+      top: top + span * ((i + 0.5) / MARGIN_LINES.length),
+      behavior: 'smooth',
+    });
   };
 
   const line = MARGIN_LINES[activeMargin];
@@ -274,7 +393,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
       <div className="relative z-10 pointer-events-none">
         {/* ---------------------------------------------------------- */}
-        {/* 1 — the wordmark, drawn in particles above the words         */}
+        {/* the wordmark, drawn in particles above the words            */}
         {/* ---------------------------------------------------------- */}
         <Block id="hero" side="mid">
           <Eyebrow centred>Filed data, not estimates</Eyebrow>
@@ -311,11 +430,11 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             className="font-mono text-[12px] tracking-[0.16em] uppercase mt-8"
             style={{ color: MUTED }}
           >
-            Drag to turn it &middot; scroll to build the model
+            Drag to turn it &middot; scroll to see how it works
           </p>
         </Block>
 
-        {/* 2 — what you can do */}
+        {/* 01 — what you can do */}
         <Block id="routes" side="right">
           <Eyebrow>01 &middot; What you can do</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
@@ -346,29 +465,75 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           </div>
         </Block>
 
-        {/* 3 — the model */}
-        <Block id="model" side="left">
-          <Eyebrow>02 &middot; The model</Eyebrow>
+        {/* 02 — the filings arrive */}
+        <Block id="filings" side="left">
+          <Eyebrow>02 &middot; Where the numbers come from</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
-            Every line driven by an assumption you can move
+            Five years of accounts, exactly as filed
             <Square />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
-            Growth, margin, tax rate, capital spending. Each one named, each one
-            yours to change, and every figure below it recalculating as you do.
+            Type a ticker and the site reads the company&rsquo;s own annual
+            filings &mdash; income statement, balance sheet, cash flow. Nothing
+            is estimated at this stage and nothing is smoothed. What you see is
+            what the company reported.
           </p>
           <Readout
             rows={[
-              ['What you can move', 'growth, margin, tax, capital spending'],
-              ['What moves with it', 'every figure below it'],
-              ['What stays hidden', 'nothing'],
+              ['What is read', 'the company’s own filings'],
+              ['How far back', 'up to five years'],
+              ['What is adjusted', 'nothing'],
             ]}
           />
         </Block>
 
-        {/* 4 — the discount */}
+        {/* 03 — the forecast is built */}
+        <Block id="forecast" side="right">
+          <Eyebrow>03 &middot; The forecast</Eyebrow>
+          <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
+            Every forecast line is one assumption you can move
+            <Square />
+          </h2>
+          <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
+            Growth, margin, tax rate, capital spending. Each one named on the
+            screen, each one yours to change, and every figure underneath it
+            recalculating while you watch.
+          </p>
+          <Readout
+            rows={[
+              ['What you set', 'growth, margin, tax, capital spending'],
+              ['What follows', 'every projected line'],
+              ['What is hidden', 'nothing'],
+            ]}
+          />
+        </Block>
+
+        {/* 04 — profit becomes cash */}
+        <Block id="cash" side="left">
+          <Eyebrow>04 &middot; Profit becomes cash</Eyebrow>
+          <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
+            Profit and cash are not the same number
+            <Square />
+          </h2>
+          <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
+            Tax comes off, depreciation goes back on, and capital spending and
+            the cash tied up in day-to-day trading come out. It is the step most
+            summaries skip, and it is the one where the balance sheet has to
+            balance in every forecast year. Here it does, and the check is on
+            the page.
+          </p>
+          <Readout
+            rows={[
+              ['Taken off', 'tax'],
+              ['Added back', 'depreciation'],
+              ['Taken out', 'capital spending and working capital'],
+            ]}
+          />
+        </Block>
+
+        {/* 05 — the discount */}
         <Block id="discount" side="right">
-          <Eyebrow>03 &middot; The discount</Eyebrow>
+          <Eyebrow>05 &middot; What it is worth today</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every future year, collapsed into one number
             <Square />
@@ -388,57 +553,162 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           />
         </Block>
 
-        {/* 5 — three answers */}
+        {/* 06 — three approaches */}
         <Block id="answers" side="left">
-          <Eyebrow>04 &middot; Three answers</Eyebrow>
+          <Eyebrow>06 &middot; Three approaches</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             They do not agree, and they are not supposed to
             <Square />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
-            Three rings, three bearings on the same object. What a business
-            earns, what buyers pay for businesses like it, and what it owns
-            outright are three different questions.
+            What a business earns, what buyers pay for businesses like it, and
+            what it owns outright are three different questions. All three are
+            run and all three are shown. They are never averaged into one tidy
+            number, because an average of three different questions answers none
+            of them.
           </p>
           <Readout
             rows={[
-              ['The widest ring', 'what its future cash is worth today'],
-              ['The middle one', 'what buyers pay for companies like it'],
-              ['The smallest', 'what it owns, less what it owes'],
+              ['What it earns', 'its future cash, discounted to today'],
+              ['What it would fetch', 'what buyers pay for companies like it'],
+              ['What it owns', 'its assets, less what it owes'],
             ]}
           />
         </Block>
 
-        {/* 6 — and then it lets go */}
-        <Block id="letgo" side="mid">
-          <Eyebrow centred>05 &middot; And then it lets go</Eyebrow>
-          <p
-            className="font-serif italic text-[24px] sm:text-[30px] lg:text-[38px] leading-[1.32]"
-            style={{ color: INK, letterSpacing: '-0.01em' }}
-          >
-            &ldquo;I would rather be vaguely right than precisely wrong.&rdquo;
+        {/* 07 — edit it, then take it away */}
+        <Block id="workbench" side="right">
+          <Eyebrow>07 &middot; The model is yours</Eyebrow>
+          <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
+            Change anything on the page, then take the model with you
+            <Square />
+          </h2>
+          <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
+            Nothing here is a picture of a model. Every assumption is editable
+            and the model rebuilds as you type. When you are done, download it as
+            an Excel workbook with the formulas still live &mdash; inputs in one
+            colour, formulas in another &mdash; so it opens on somebody
+            else&rsquo;s desk and still works.
           </p>
-          <p
-            className="font-mono text-[12px] tracking-[0.18em] uppercase mt-5"
-            style={{ color: MUTED }}
-          >
-            John Maynard Keynes
-          </p>
+          <Readout
+            rows={[
+              ['What you can edit', 'every assumption on the page'],
+              ['What updates', 'the whole model, as you type'],
+              ['What you download', 'a working Excel file, formulas intact'],
+            ]}
+          />
         </Block>
+
+        {/* 08 — what is being built, said as a plan and not as a claim */}
+        <Block id="beyond" side="left">
+          <Eyebrow>08 &middot; Being built next</Eyebrow>
+          <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
+            Three more things, and where each one has got to
+            <Square />
+          </h2>
+          <div className="grid gap-7">
+            {NEXT.map((item) => (
+              <div key={item.title}>
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
+                    {item.title}
+                  </span>
+                  <span
+                    className="font-mono text-[10px] tracking-[0.18em] uppercase px-2 py-1 border"
+                    style={{
+                      color: item.status === 'In build' ? RED_TEXT : MUTED,
+                      borderColor: item.status === 'In build' ? 'rgba(139,30,30,0.55)' : LINE,
+                    }}
+                  >
+                    {item.status}
+                  </span>
+                </div>
+                <p className="text-[15px] leading-[1.55] mt-2" style={{ color: MUTED }}>
+                  {item.line}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Block>
+
+        {/* and then it lets go.
+            This section is deliberately long and the quote is pinned inside
+            it, so the object has the whole of it to come apart in. Given a
+            single screen the dispersal was over before the reader had
+            finished the first line. */}
+        <section id="letgo" className="relative min-h-[190vh]">
+          {/* A scrim across the whole section would dim the dispersal, which
+              is the one thing this section exists to show. The only shading
+              is a soft pool behind the quote, and it travels with it. */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-[46vh] -z-10 pointer-events-none"
+            style={{
+              background:
+                'linear-gradient(to top, rgba(11,11,13,.96) 0%, rgba(11,11,13,.55) 34%, rgba(11,11,13,0) 100%)',
+            }}
+          />
+          <div className="sticky top-0 h-screen flex items-center justify-center">
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(ellipse 44rem 15rem at 50% 50%, rgba(11,11,13,.88) 0%, rgba(11,11,13,.62) 42%, rgba(11,11,13,0) 78%)',
+              }}
+            />
+            <div className="relative w-full max-w-[42rem] mx-auto px-6 sm:px-10 lg:px-16 text-center pointer-events-auto">
+              <Eyebrow centred>And then it lets go</Eyebrow>
+              <p
+                className="font-serif italic text-[24px] sm:text-[30px] lg:text-[38px] leading-[1.32]"
+                style={{ color: INK, letterSpacing: '-0.01em' }}
+              >
+                &ldquo;I would rather be vaguely right than precisely wrong.&rdquo;
+              </p>
+              <p
+                className="font-mono text-[12px] tracking-[0.18em] uppercase mt-5"
+                style={{ color: MUTED }}
+              >
+                John Maynard Keynes
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
 
       {/* ============================================================ */}
       {/* Below here the object has gone and the page is read normally. */}
+      {/* The panel is pulled up over the last section so that it rises  */}
+      {/* across the object as you scroll rather than following it — the */}
+      {/* moment the page changes register from being shown to reading.  */}
+      {/* No overflow:hidden on this wrapper: it would make itself the   */}
+      {/* scroll container for everything inside and break the pinned    */}
+      {/* section further down.                                          */}
       {/* ============================================================ */}
-      <div className="relative z-10" style={{ background: '#0B0B0D' }}>
-        {/* Coverage figures */}
-        <section id="numbers" className="w-full" style={{ background: '#F2F0EA' }}>
-          <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
+      <div className="relative z-10" style={{ background: '#0B0B0D', marginTop: '-16vh' }}>
+        {/* 09 — coverage, counted up on arrival */}
+        <section
+          id="numbers"
+          className="w-full"
+          style={{
+            background: '#F2F0EA',
+            borderTopLeftRadius: 26,
+            borderTopRightRadius: 26,
+            overflow: 'hidden',
+            boxShadow: '0 -50px 110px rgba(0,0,0,0.78)',
+          }}
+        >
+          <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-20 lg:pb-24">
+            <p
+              className="font-mono text-[12px] tracking-[0.22em] uppercase mb-12 flex items-center gap-3"
+              style={{ color: RED_TEXT }}
+            >
+              <span className="h-px w-8" style={{ background: RED }} />
+              09 &middot; Coverage
+            </p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-14 gap-x-8">
               {STATS.map((s) => (
                 <div key={s.label}>
                   <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: '#16150F' }}>
-                    {s.figure}
+                    <CountUp to={s.to} suffix={s.suffix} />
                   </div>
                   <div
                     className="font-mono text-[12px] tracking-[0.2em] uppercase mt-4"
@@ -455,90 +725,98 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           </div>
         </section>
 
-        {/* In the margin — the centrepiece for a reader who knows nothing */}
-        <section id="in-the-margin" className="w-full" style={{ background: '#F2F0EA' }}>
-          <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
-            <p
-              className="font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
-              style={{ color: RED_TEXT }}
-            >
-              <span className="h-px w-8" style={{ background: RED }} />
-              06 &middot; In the margin
-            </p>
-            <h2
-              className="text-[30px] sm:text-[40px] lg:text-[54px] mb-14 max-w-[18ch]"
-              style={{ ...DISPLAY, color: '#16150F' }}
-            >
-              Every figure has a source
-              <Square />
-            </h2>
+        {/* 10 — every figure has a source. Pinned: the screen holds still
+                and only the note changes. */}
+        <section
+          id="in-the-margin"
+          ref={marginRef}
+          className="relative w-full"
+          style={{ background: '#F2F0EA', height: `calc(100vh + ${MARGIN_LINES.length * 62}vh)` }}
+        >
+          <div className="sticky top-0 h-screen flex items-center overflow-hidden">
+            <div className="w-full max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-16">
+              <p
+                className="font-mono text-[12px] tracking-[0.22em] uppercase mb-5 flex items-center gap-3"
+                style={{ color: RED_TEXT }}
+              >
+                <span className="h-px w-8" style={{ background: RED }} />
+                10 &middot; In the margin
+              </p>
+              <h2
+                className="text-[26px] sm:text-[34px] lg:text-[46px] mb-10 lg:mb-14 max-w-[18ch]"
+                style={{ ...DISPLAY, color: '#16150F' }}
+              >
+                Every figure has a source
+                <Square />
+              </h2>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-0">
-              <div>
-                <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: '#6B6759' }}>
-                  Sample output
-                </div>
-                <div className="relative border-t" style={{ borderColor: '#DAD6CC' }}>
-                  {MARGIN_LINES.map((item, i) => {
-                    const on = i === activeMargin;
-                    return (
-                      <button
-                        key={item.label}
-                        type="button"
-                        onClick={() => chooseMargin(i)}
-                        className="w-full text-left flex items-baseline justify-between border-b px-1 transition-colors"
-                        style={{
-                          borderColor: '#DAD6CC',
-                          height: ROW_H,
-                          background: on ? 'rgba(139,30,30,0.05)' : 'transparent',
-                        }}
-                      >
-                        <span className="font-mono text-[14px]" style={{ color: on ? '#16150F' : '#6B6759' }}>
-                          {item.label}
-                        </span>
-                        <span
-                          className="font-mono text-[19px] lg:text-[22px] tabular-nums"
-                          style={{ color: on ? RED_TEXT : '#16150F' }}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-0">
+                <div>
+                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: '#6B6759' }}>
+                    Sample output
+                  </div>
+                  <div className="relative border-t" style={{ borderColor: '#DAD6CC' }}>
+                    {MARGIN_LINES.map((item, i) => {
+                      const on = i === activeMargin;
+                      return (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => chooseMargin(i)}
+                          className="w-full text-left flex items-baseline justify-between border-b px-1 transition-colors"
+                          style={{
+                            borderColor: '#DAD6CC',
+                            height: ROW_H,
+                            background: on ? 'rgba(139,30,30,0.05)' : 'transparent',
+                          }}
                         >
-                          {item.figure}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  <div
-                    className="hidden lg:block absolute h-px pointer-events-none transition-all duration-500"
-                    style={{
-                      background: RED,
-                      left: '100%',
-                      width: 72,
-                      top: activeMargin * ROW_H + ROW_H / 2,
-                    }}
-                  />
+                          <span className="font-mono text-[14px]" style={{ color: on ? '#16150F' : '#6B6759' }}>
+                            {item.label}
+                          </span>
+                          <span
+                            className="font-mono text-[19px] lg:text-[22px] tabular-nums"
+                            style={{ color: on ? RED_TEXT : '#16150F' }}
+                          >
+                            {item.figure}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <div
+                      className="hidden lg:block absolute h-px pointer-events-none transition-all duration-500"
+                      style={{
+                        background: RED,
+                        left: '100%',
+                        width: 72,
+                        top: activeMargin * ROW_H + ROW_H / 2,
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="lg:pl-28 lg:pt-16">
-                <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: RED_TEXT }}>
-                  {line.label}
-                </div>
-                <p
-                  className="font-serif text-[25px] lg:text-[32px] leading-[1.32] max-w-[22ch]"
-                  style={{ color: '#16150F', letterSpacing: '-0.015em' }}
-                >
-                  {line.note}
-                </p>
-                <div
-                  className="font-mono text-[12px] mt-7 pt-4 border-t inline-block"
-                  style={{ color: '#6B6759', borderColor: '#DAD6CC' }}
-                >
-                  {line.source}
+                <div className="lg:pl-28 lg:pt-16">
+                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: RED_TEXT }}>
+                    {line.label}
+                  </div>
+                  <p
+                    className="font-serif text-[22px] lg:text-[30px] leading-[1.32] max-w-[22ch]"
+                    style={{ color: '#16150F', letterSpacing: '-0.015em' }}
+                  >
+                    {line.note}
+                  </p>
+                  <div
+                    className="font-mono text-[12px] mt-6 pt-4 border-t inline-block"
+                    style={{ color: '#6B6759', borderColor: '#DAD6CC' }}
+                  >
+                    {line.source}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* The Margin Notes and the one place status is stated */}
+        {/* 11 — the margin notes, and the one place status is stated */}
         <section id="margin-notes" className="w-full" style={{ background: '#F2F0EA' }}>
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
             <p
@@ -546,7 +824,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               style={{ color: RED_TEXT }}
             >
               <span className="h-px w-8" style={{ background: RED }} />
-              07 &middot; The margin notes
+              11 &middot; The margin notes
             </p>
             <h2 className="text-[30px] sm:text-[40px] lg:text-[54px] mb-4" style={{ ...DISPLAY, color: '#16150F' }}>
               The Margin Notes
