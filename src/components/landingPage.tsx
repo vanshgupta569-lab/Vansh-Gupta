@@ -91,12 +91,18 @@ const Block: React.FC<{
   side: 'left' | 'right' | 'mid';
   children: React.ReactNode;
 }> = ({ id, side, children }) => {
+  /* THE WORDS COME FIRST.
+     The object is behind the reading, never over it. Now that there are
+     bright stars and a sky back there, a gentle wash is not enough: the
+     scrim is effectively solid across the column the text sits in, holds
+     most of its weight a good way past it, and only lets go once it is
+     clear of the last line. */
   const scrim =
     side === 'left'
-      ? 'linear-gradient(to right, rgba(11,11,13,.94) 0%, rgba(11,11,13,.80) 34%, rgba(11,11,13,0) 62%)'
+      ? 'linear-gradient(to right, rgba(9,9,11,.985) 0%, rgba(9,9,11,.965) 30%, rgba(9,9,11,.80) 46%, rgba(9,9,11,.34) 62%, rgba(9,9,11,0) 76%)'
       : side === 'right'
-      ? 'linear-gradient(to left, rgba(11,11,13,.94) 0%, rgba(11,11,13,.80) 34%, rgba(11,11,13,0) 62%)'
-      : 'linear-gradient(to top, rgba(11,11,13,.95) 6%, rgba(11,11,13,.62) 34%, rgba(11,11,13,0) 66%)';
+      ? 'linear-gradient(to left, rgba(9,9,11,.985) 0%, rgba(9,9,11,.965) 30%, rgba(9,9,11,.80) 46%, rgba(9,9,11,.34) 62%, rgba(9,9,11,0) 76%)'
+      : 'linear-gradient(to top, rgba(9,9,11,.985) 8%, rgba(9,9,11,.90) 30%, rgba(9,9,11,.52) 50%, rgba(9,9,11,0) 74%)';
 
   const justify =
     side === 'left' ? 'justify-start' : side === 'right' ? 'justify-end' : 'justify-center';
@@ -116,7 +122,7 @@ const Block: React.FC<{
         className="absolute inset-0 -z-10 pointer-events-none lg:hidden"
         style={{
           background:
-            'linear-gradient(to top, rgba(11,11,13,.95) 12%, rgba(11,11,13,.7) 46%, rgba(11,11,13,0) 78%)',
+            'linear-gradient(to top, rgba(9,9,11,.985) 16%, rgba(9,9,11,.90) 44%, rgba(9,9,11,.50) 62%, rgba(9,9,11,0) 84%)',
         }}
       />
       <div
@@ -389,6 +395,15 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
   return (
     <div className="relative">
+      {/* The night. It sits behind the canvas, so the sky the object stands
+          in does not stop at the edge of the object. */}
+      <div
+        className="fixed inset-0 z-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 130% 85% at 50% 10%, #14141C 0%, #0E0E13 40%, #08080B 78%, #060608 100%)',
+        }}
+      />
       <ParticleField sectionIds={OBJECT_SECTIONS} launching={launching} />
 
       <div className="relative z-10 pointer-events-none">
@@ -652,7 +667,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               className="absolute inset-0 pointer-events-none"
               style={{
                 background:
-                  'radial-gradient(ellipse 44rem 15rem at 50% 50%, rgba(11,11,13,.88) 0%, rgba(11,11,13,.62) 42%, rgba(11,11,13,0) 78%)',
+                  'radial-gradient(ellipse 46rem 17rem at 50% 50%, rgba(9,9,11,.95) 0%, rgba(9,9,11,.86) 34%, rgba(9,9,11,.48) 60%, rgba(9,9,11,0) 82%)',
               }}
             />
             <div className="relative w-full max-w-[42rem] mx-auto px-6 sm:px-10 lg:px-16 text-center pointer-events-auto">

@@ -81,6 +81,9 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     const accent = new Float32Array(COUNT);
     const sizes = new Float32Array(COUNT);
     const seeds = new Float32Array(COUNT);
+    /* 1 for the handful of points that are STARS rather than dust. Everything
+       about how a point is drawn hangs off this. */
+    const bright = new Float32Array(COUNT);
 
     const seeded = (i: number) => {
       const x = Math.sin(i * 127.1) * 43758.5453;
@@ -350,9 +353,24 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
        purpose: the dispersal is the point, so it gets nearly all the scroll. */
     const HOLDS  = [0.55, 0.58, 0.58,  0.58,  0.58, 0.58,  0.58, 0.58,  0.34, 0.50];
 
+    /* WHY IT LOOKED LIKE PAPER AND NOT LIKE A SKY.
+       Every point was the same size — between one and three pixels — so
+       gl_PointCoord had no room to draw anything, every one rendered as a
+       flat opaque chip, and ninety thousand of them stacked up into a grey
+       slab. A night sky has an enormous dynamic range: a few big bright
+       stars, a haze of faint ones, and nothing in the middle. So two
+       populations now. About one point in fifty is a star, ten to twenty
+       pixels across with a core, a halo and diffraction spikes; the rest is
+       dust, smaller and dimmer than before, and its job is to give the body
+       its shape rather than to be looked at. */
     for (let i = 0; i < COUNT; i++) {
       seeds[i] = seeded(i + 91);
-      sizes[i] = 0.017 + Math.pow(seeded(i + 81), 1.7) * 0.019;
+      const g = seeded(i + 601);
+      const isStar = g > 0.978;
+      bright[i] = isStar ? 1 : 0;
+      sizes[i] =
+        0.014 + Math.pow(seeded(i + 81), 1.8) * 0.018 +
+        (isStar ? 0.06 + Math.pow((g - 0.978) / 0.022, 1.5) * 0.24 : 0);
       const u = seeded(i + 51) * Math.PI * 2, v = Math.acos(2 * seeded(i + 61) - 1);
       scatterDir[i * 3]     = Math.sin(v) * Math.cos(u);
       scatterDir[i * 3 + 1] = Math.sin(v) * Math.sin(u);
@@ -367,6 +385,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     geom.setAttribute('psize', new THREE.BufferAttribute(sizes, 1));
     geom.setAttribute('accent', new THREE.BufferAttribute(accent, 1));
     geom.setAttribute('seed', new THREE.BufferAttribute(seeds, 1));
+    geom.setAttribute('bright', new THREE.BufferAttribute(bright, 1));
 
     /* The wordmark is drawn before the webfont is guaranteed to be there, so
        that the object is never missing on a slow connection. Once Playfair
@@ -378,6 +397,39 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
         geom.attributes.accent.needsUpdate = true;
       }).catch(() => {});
     }
+
+    /* HOW A STAR IS DRAWN.
+       One shader, shared by the object and by the sky behind it. A hard
+       white centre, a long soft halo around it, and — on the bright ones
+       only — the four-point diffraction cross that an eye reads instantly
+       as a star and never reads as a speck. The sprite is allowed to run
+       out past the edge of its own disc so the spikes have somewhere to go.
+       Dust is drawn at a little over half the brightness of a star, which
+       is what stops ninety thousand of them adding up to a grey wall. */
+    const STAR_FRAGMENT = `
+      varying vec3 vColor;
+      varying float vFade;
+      varying float vBright;
+      uniform float uOpacity;
+      void main() {
+        vec2 q = (gl_PointCoord - vec2(0.5)) * 2.0;
+        float d = length(q);
+        if (d > 1.36) discard;
+        float f = clamp(1.0 - d / 1.36, 0.0, 1.0);
+
+        float halo = pow(f, 2.6);
+        float core = pow(f, 16.0);
+
+        float sx = exp(-abs(q.x) * 30.0) * exp(-abs(q.y) * 1.5);
+        float sy = exp(-abs(q.y) * 30.0) * exp(-abs(q.x) * 1.5);
+        float spikes = (sx + sy) * vBright * f;
+
+        float a = (halo * 0.30 + core * 0.88 + spikes * 0.60)
+                * vFade * uOpacity * mix(0.80, 1.0, vBright);
+        vec3 c = vColor * (0.60 + core * 1.55 + spikes * 1.10);
+        gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
+      }
+    `;
 
     /* Additive blending is what turns flakes into sparks. Drawn normally,
        overlapping points cover one another and read as torn paper; added
@@ -397,44 +449,123 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
         attribute float psize;
         attribute float accent;
         attribute float seed;
+        attribute float bright;
         varying vec3 vColor;
         varying float vFade;
+        varying float vBright;
         uniform float uScale;
         uniform float uTime;
         uniform float uAccent;
         void main() {
+          /* The house grading is kept: cool at the base, cream through the
+             body, the red reserved for the very top. */
           vec3 cool = vec3(0.560, 0.545, 0.510);
           vec3 warm = vec3(0.960, 0.945, 0.900);
           vec3 red  = vec3(0.800, 0.290, 0.255);
           float h = clamp((position.y + 3.0) / 6.2, 0.0, 1.0);
           vec3 base = mix(cool, warm, h);
           base = mix(base, red, smoothstep(0.70, 1.0, h) * 0.80);
+
+          /* Real skies are not one colour. Each point is given its own
+             temperature, and the stars carry more of it than the dust. */
+          vec3 blueWhite = vec3(0.760, 0.840, 1.000);
+          vec3 amber     = vec3(1.000, 0.860, 0.680);
+          float t = fract(seed * 7.31);
+          base = mix(base, mix(blueWhite, amber, t), 0.22 + bright * 0.26);
+
           vColor = mix(base, red, accent * uAccent);
-          float twinkle = 0.88 + 0.12 * sin(uTime * 1.5 + seed * 43.0);
+          vBright = bright;
+
+          /* Stars do not all pulse together, and the faint ones barely
+             pulse at all. */
+          float tw = 0.58 + 0.42 * sin(uTime * (0.7 + seed * 2.1) + seed * 61.0);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          vFade = clamp((mv.z + 21.0) / 16.0, 0.46, 1.0) * twinkle;
+          vFade = clamp((mv.z + 21.0) / 16.0, 0.42, 1.0)
+                * mix(0.93, tw, 0.22 + bright * 0.68);
           gl_PointSize = psize * uScale / max(-mv.z, 0.1);
           gl_Position = projectionMatrix * mv;
         }
       `,
-      fragmentShader: `
-        varying vec3 vColor;
-        varying float vFade;
-        uniform float uOpacity;
-        void main() {
-          vec2 d = gl_PointCoord - vec2(0.5);
-          float r2 = dot(d, d);
-          if (r2 > 0.25) discard;
-          float core = smoothstep(0.25, 0.0, r2);
-          float glow = pow(core, 3.0);
-          gl_FragColor = vec4(vColor * (0.72 + glow * 1.05), (core * 0.52 + glow * 0.48) * vFade * uOpacity);
-        }
-      `,
+      fragmentShader: STAR_FRAGMENT,
     });
 
     const group = new THREE.Group();
     group.add(new THREE.Points(geom, material));
     scene.add(group);
+
+    /* ---------------------------------------------------------------- */
+    /* THE SKY BEHIND IT                                                 */
+    /*                                                                   */
+    /* A second layer of points on a shell well outside the object, which */
+    /* never morphs, never disperses and never flies through. It is the   */
+    /* other half of the fix: with nothing behind it, the object read as   */
+    /* a cloud of specks on a blank rectangle. With a sky behind it, the   */
+    /* object reads as made of the same stuff as the night it is standing  */
+    /* in. It drifts, very slowly — about one turn every twenty minutes,   */
+    /* which is felt rather than seen — and it takes a quarter of the drag */
+    /* the object takes, which is what gives the screen its depth.         */
+    /* ---------------------------------------------------------------- */
+    const SKY = MOBILE ? 900 : 2800;
+    const skyPos = new Float32Array(SKY * 3);
+    const skySize = new Float32Array(SKY);
+    const skySeed = new Float32Array(SKY);
+    const skyBright = new Float32Array(SKY);
+    for (let i = 0; i < SKY; i++) {
+      const u = seeded(i * 3.1 + 7) * Math.PI * 2;
+      const v = Math.acos(2 * seeded(i * 3.1 + 17) - 1);
+      const rad = 42 + seeded(i * 3.1 + 27) * 30;
+      skyPos[i * 3]     = rad * Math.sin(v) * Math.cos(u);
+      skyPos[i * 3 + 1] = rad * Math.sin(v) * Math.sin(u);
+      skyPos[i * 3 + 2] = rad * Math.cos(v);
+      const g = seeded(i * 3.1 + 37);
+      skyBright[i] = g > 0.93 ? 1 : 0;
+      skySize[i] = 0.26 + Math.pow(seeded(i * 3.1 + 47), 3.0) * 0.60 + (g > 0.93 ? 0.55 : 0);
+      skySeed[i] = seeded(i * 3.1 + 57);
+    }
+    const skyGeom = new THREE.BufferGeometry();
+    skyGeom.setAttribute('position', new THREE.BufferAttribute(skyPos, 3));
+    skyGeom.setAttribute('psize', new THREE.BufferAttribute(skySize, 1));
+    skyGeom.setAttribute('seed', new THREE.BufferAttribute(skySeed, 1));
+    skyGeom.setAttribute('bright', new THREE.BufferAttribute(skyBright, 1));
+
+    const skyMaterial = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uOpacity: { value: 1.0 },
+        uScale: { value: vh() * 0.5 },
+        uTime: { value: 0 },
+      },
+      vertexShader: `
+        attribute float psize;
+        attribute float seed;
+        attribute float bright;
+        varying vec3 vColor;
+        varying float vFade;
+        varying float vBright;
+        uniform float uScale;
+        uniform float uTime;
+        void main() {
+          vec3 white = vec3(0.930, 0.940, 0.980);
+          vec3 blue  = vec3(0.680, 0.780, 1.000);
+          vec3 amber = vec3(1.000, 0.840, 0.660);
+          float t = fract(seed * 9.17);
+          vColor = mix(mix(blue, white, smoothstep(0.0, 0.55, t)), amber, smoothstep(0.74, 1.0, t));
+          vBright = bright;
+          float tw = 0.50 + 0.50 * sin(uTime * (0.45 + seed * 1.6) + seed * 53.0);
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vFade = mix(0.52, 1.0, tw) * (0.44 + bright * 0.56);
+          gl_PointSize = psize * uScale / max(-mv.z, 0.1);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: STAR_FRAGMENT,
+    });
+
+    const skyGroup = new THREE.Group();
+    skyGroup.add(new THREE.Points(skyGeom, skyMaterial));
+    scene.add(skyGroup);
 
     const sectionPosition = () => {
       const focus = window.scrollY + window.innerHeight / 2;
@@ -461,7 +592,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       return 0;
     };
 
-    let entry = 0, clock = 0, launchT = 0, raf = 0;
+    let entry = 0, clock = 0, launchT = 0, raf = 0, skyDrift = 0;
     let rotX = tiltX[0], rotY = spinY[0], posX = offX[0], posY = offY[0], zoom = zoomAt[0];
     let dragX = 0, dragY = 0, dragging = false, lastX = 0, lastY = 0;
 
@@ -486,6 +617,10 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
 
     const frame = () => {
       clock += 0.016;
+      skyDrift += 0.00008;
+      skyMaterial.uniforms.uTime.value = clock;
+      skyGroup.rotation.y = skyDrift + dragY * 0.22;
+      skyGroup.rotation.x = dragX * 0.14;
       if (entry < 1) entry = Math.min(1, entry + (reduced ? 1 : 0.016));
       const ease = 1 - Math.pow(1 - entry, 3);
 
@@ -597,6 +732,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       camera.updateProjectionMatrix();
       renderer.setSize(vw(), vh(), false);
       material.uniforms.uScale.value = vh() * 0.5;
+      skyMaterial.uniforms.uScale.value = vh() * 0.5;
       forms[0] = buildWordmark();
       geom.attributes.accent.needsUpdate = true;
     };
@@ -613,6 +749,8 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       canvas.removeEventListener('pointercancel', onUp);
       geom.dispose();
       material.dispose();
+      skyGeom.dispose();
+      skyMaterial.dispose();
       renderer.dispose();
     };
   }, [sectionIds]);

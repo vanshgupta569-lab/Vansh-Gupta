@@ -42,9 +42,11 @@ const DISPLAY: React.CSSProperties = {
   lineHeight: 0.98,
 };
 
-const Eyebrow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({ children, centred }) => (
   <p
-    className="font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
+    className={`font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3 ${
+      centred ? 'justify-center' : ''
+    }`}
     style={{ color: RED_TEXT }}
   >
     <span className="h-px w-8 shrink-0" style={{ background: RED }} />
@@ -181,22 +183,31 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
         {/* ---------------------------------------------------------- */}
         {/* 01 — the search                                             */}
         {/* ---------------------------------------------------------- */}
-        <Eyebrow>01 &middot; Search</Eyebrow>
-        <h1
-          className="text-[36px] sm:text-[48px] lg:text-[62px] max-w-[16ch]"
-          style={{ ...DISPLAY, color: INK }}
-        >
-          Value any listed company
-          <Square />
-        </h1>
-        <p className="text-[17px] lg:text-[19px] leading-[1.6] mt-6 max-w-[52ch]" style={{ color: READ }}>
-          Type a name or a ticker and pick the listing you meant. Its own filings
-          become a three-statement model and a discounted cash flow, and every
-          assumption in it is yours to move.
-        </p>
+        {/* Centred. This screen has one job and one control on it, and a
+            single column of words pinned to the left edge left the other
+            half of the screen doing nothing. Centred, the box is where the
+            eye already is. */}
+        <div className="text-center">
+          <Eyebrow centred>01 &middot; Search</Eyebrow>
+          <h1
+            className="text-[36px] sm:text-[48px] lg:text-[62px] mx-auto max-w-[26ch]"
+            style={{ ...DISPLAY, color: INK }}
+          >
+            Value any listed company
+            <Square />
+          </h1>
+          <p
+            className="text-[17px] lg:text-[19px] leading-[1.6] mt-7 mx-auto max-w-[56ch]"
+            style={{ color: READ }}
+          >
+            Type a name or a ticker and pick the listing you meant. Its own
+            filings become a three-statement model and a discounted cash flow,
+            and every assumption in it is yours to move.
+          </p>
+        </div>
 
         {/* The box. One field, one button, and the list of matches under it. */}
-        <div className="mt-10 lg:mt-12 max-w-[54rem]">
+        <div className="mt-11 lg:mt-14 mx-auto max-w-[60rem]">
           {/* On a phone the button drops below the field. Held inside it, it
               covered the half of the placeholder that tells you what to type. */}
           <div className="relative flex items-center w-full">
@@ -268,7 +279,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             </div>
           )}
 
-          <p className="font-mono text-[12px] mt-4 leading-[1.6]" style={{ color: MUTED }}>
+          <p className="font-mono text-[12px] mt-5 leading-[1.6] text-center mx-auto max-w-[84ch]" style={{ color: MUTED }}>
             US filings come from SEC EDGAR, everywhere else from exchange
             disclosures. Banks, insurers and lenders are shown without a
             discounted cash flow, because it does not apply to them.
@@ -307,39 +318,32 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
         {/* are what make that switch legible without saying it twice.  */}
         {/* ---------------------------------------------------------- */}
         <div className="mt-24 lg:mt-28 pt-14 border-t" style={{ borderColor: LINE }}>
-          <Eyebrow>02 &middot; Built by hand</Eyebrow>
-          <h2
-            className="text-[30px] sm:text-[40px] lg:text-[52px] max-w-[18ch]"
-            style={{ ...DISPLAY, color: INK }}
-          >
-            The analyst&rsquo;s own models
-            <Square />
-          </h2>
-          <p className="text-[17px] leading-[1.6] mt-6 max-w-[58ch]" style={{ color: READ }}>
-            The workbooks below were prepared by the analyst himself, after a
-            detailed study of each company and its filings, with every assumption
-            chosen and defended individually. They are not the output of the
-            automated engine.
-          </p>
-
-          {/* The address is shown as text rather than a mailto button: a mailto
-              link opens whatever desktop mail client the machine happens to
-              have, which is useless to anyone on webmail. Selectable text works
-              for everyone. */}
-          <div className="mt-8 flex flex-wrap items-baseline gap-x-4 gap-y-2">
-            <span className="text-[15px]" style={{ color: MUTED }}>
-              For a model of this depth on a company not listed here, write to
-            </span>
-            <span
-              className="font-mono text-[15px] select-all border-b pb-0.5"
-              style={{ color: INK, borderColor: RED }}
+          <div className="text-center">
+            <Eyebrow centred>02 &middot; Built by hand</Eyebrow>
+            <h2
+              className="text-[30px] sm:text-[40px] lg:text-[52px] mx-auto max-w-[28ch]"
+              style={{ ...DISPLAY, color: INK }}
             >
-              vanshgupta569@gmail.com
-            </span>
+              The analyst&rsquo;s own models
+              <Square />
+            </h2>
+            <p className="text-[17px] leading-[1.6] mt-7 mx-auto max-w-[62ch]" style={{ color: READ }}>
+              The workbooks below were prepared by the analyst himself, after a
+              detailed study of each company and its filings, with every
+              assumption chosen and defended individually. They are not the
+              output of the automated engine.
+            </p>
           </div>
 
           {/* The shelf itself */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12">
+          {/* Three across only once there are three things to put across.
+              With two tiles a three-wide grid leaves a third of the row
+              empty; two tiles in a centred pair sit under a centred page. */}
+          <div
+            className={`grid grid-cols-1 md:grid-cols-2 gap-6 mt-12 ${
+              filteredCompanies.length + 1 >= 3 ? 'lg:grid-cols-3' : 'max-w-[62rem] mx-auto'
+            }`}
+          >
             {filteredCompanies.map((comp) => (
                 <div
                   key={comp.ticker}
@@ -447,6 +451,31 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                   </div>
                 </div>
             ))}
+
+            {/* The invitation sits IN the shelf rather than above it. With one
+                hand-built model on a three-wide grid, two thirds of the row
+                was empty; this is real content and it fills one of them. The
+                address is text, not a mailto button — a mailto opens whatever
+                desktop client the machine happens to have, which is useless to
+                anyone on webmail. */}
+            <div
+              className="p-7 lg:p-8 border flex flex-col justify-center"
+              style={{ borderColor: LINE, background: '#0E0E11' }}
+            >
+              <div className="font-mono text-[11px] uppercase tracking-[0.18em] mb-4" style={{ color: RED_TEXT }}>
+                Not on the shelf
+              </div>
+              <p className="text-[16px] leading-[1.6]" style={{ color: READ }}>
+                For a model of this depth on a company that is not here, rather
+                than the engine-generated version, write to:
+              </p>
+              <span
+                className="font-mono text-[15px] select-all border-b pb-0.5 mt-6 self-start"
+                style={{ color: INK, borderColor: RED }}
+              >
+                vanshgupta569@gmail.com
+              </span>
+            </div>
           </div>
 
           {filteredCompanies.length === 0 && (
@@ -461,7 +490,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           )}
         </div>
 
-        <div className="mt-20 pt-8 border-t" style={{ borderColor: LINE }}>
+        <div className="mt-20 pt-8 border-t text-center" style={{ borderColor: LINE }}>
           <button
             onClick={onBackToHome}
             className="font-mono text-[11px] uppercase tracking-[0.18em] transition-colors cursor-pointer"
