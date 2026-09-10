@@ -570,11 +570,32 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // them. They are always computed from that model's own defaults rather than
   // from the current slider positions, so switching models twice cannot apply
   // the same view twice.
+  //
+  // Two pieces of state, deliberately separate. `verdicts` is what the reader
+  // has ticked — it is seeded from the questions screen so that reopening the
+  // panel shows the answers already given, rather than a blank sheet. It moves
+  // as soon as a button is pressed and moves nothing else. `appliedVerdicts` is
+  // what is actually baked into the model, and only changes when the reader
+  // presses "Apply to the model". Keeping them apart is what lets the panel
+  // show a pending change before it happens.
+  const [verdicts, setVerdicts] = useState<Record<string, Verdict>>(
+    initialVerdicts ?? {}
+  );
+  const [appliedVerdicts, setAppliedVerdicts] = useState<Record<string, Verdict> | null>(
+    initialVerdicts ?? null
+  );
+
+  // A new company (or a fresh run through the questions screen) replaces both.
+  useEffect(() => {
+    setVerdicts(initialVerdicts ?? {});
+    setAppliedVerdicts(initialVerdicts ?? null);
+  }, [initialVerdicts]);
+
   useEffect(() => {
     setDrivers(
-      initialVerdicts ? applyVerdicts(activeDefaults, initialVerdicts) : activeDefaults
+      appliedVerdicts ? applyVerdicts(activeDefaults, appliedVerdicts) : activeDefaults
     );
-  }, [viewMode, derivedSource, analystSource, initialVerdicts]);
+  }, [viewMode, derivedSource, analystSource, appliedVerdicts]);
 
   const runDCF = React.useCallback(
     (d: ValuationDrivers) => calculateDCFFor(activeSource ?? AAPL_SOURCE, d, displayPrice),
@@ -819,7 +840,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
 
   return (
-    <section id="terminal" className="pt-16 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12">
+    <section id="terminal" className="pt-24 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12">
       {/* Condensed header, shown once the full one has scrolled out of view */}
       <AnimatePresence>
         {headerCondensed && (
@@ -1143,7 +1164,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           header that appears on scroll, and the translucent background made
           the overlap look like a rendering fault.
           ------------------------------------------------------------------ */}
-      <div className="sticky top-[56px] z-40 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D] border-y border-[#222228]">
+      <div className="sticky top-[65px] z-40 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D] border-y border-[#222228]">
         <div className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2.5">
           {[
             { id: 'working', label: bankModel ? 'How it was valued' : 'How it was calculated' },
@@ -1721,8 +1742,18 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <QualitativeAdjustments
             drivers={drivers}
             defaults={activeDefaults}
-            onApply={(next) => setDrivers(next)}
-            onReset={() => setDrivers(activeDefaults)}
+            verdicts={verdicts}
+            onVerdictsChange={setVerdicts}
+            appliedVerdicts={appliedVerdicts}
+            onApply={(next, chosen) => {
+              setAppliedVerdicts(chosen);
+              setDrivers(next);
+            }}
+            onReset={() => {
+              setVerdicts({});
+              setAppliedVerdicts(null);
+              setDrivers(activeDefaults);
+            }}
             onClose={() => setNerdView(null)}
             currencySymbol={company.currencySymbol}
             currentValue={blendedValue ? blendedValue.value : dcfResult.targetPrice}

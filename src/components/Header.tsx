@@ -1,3 +1,4 @@
+// FILE: src/components/Header.tsx
 import React, { useState, useEffect } from 'react';
 import { Search, ArrowUpRight, Home, Building2, LineChart } from 'lucide-react';
 import { ScreenType } from '../types';
@@ -58,7 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="fixed top-0 w-full z-50 flex justify-between items-center px-6 lg:px-12 py-4 bg-[#111114]/95 backdrop-blur-md hairline-border-b max-w-[1440px] mx-auto left-0 right-0">
+    <header className="fixed top-0 w-full z-50 flex justify-between items-center gap-5 lg:gap-8 px-6 lg:px-12 py-4 bg-[#111114]/95 backdrop-blur-md hairline-border-b max-w-[1440px] mx-auto left-0 right-0">
       <div className="flex items-center gap-6">
         <button
           onClick={() => {
@@ -88,14 +89,19 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Screen / Section Navigation - Hidden on ANALYSIS screen */}
       {currentScreen !== 'ANALYSIS' && (
-        <nav className="hidden md:flex gap-6 lg:gap-8 items-center">
+        <nav className="hidden md:flex gap-5 lg:gap-7 items-center">
           {[
-            { id: 'etymology', label: 'Etymology' },
+            // These must match the section ids actually rendered on the
+            // home screen. Etymology and Mechanism were removed when the
+            // landing page was rebuilt around showing the product rather
+            // than explaining it, and a nav link to a section that no
+            // longer exists scrolls nowhere and reads as a broken site.
+            { id: 'where-to-start', label: 'Platform' },
+            { id: 'workflow', label: 'How It Works' },
             { id: 'methodology', label: 'Methodology' },
-            { id: 'mechanism', label: 'How It Works' },
-            { id: 'coverage', label: 'Coverage Stats' },
-            { id: 'about', label: 'About' },
-            { id: 'search-company', label: 'Search Company' },
+            { id: 'margin-notes', label: 'Margin Notes' },
+            { id: 'coverage', label: 'Coverage' },
+            { id: 'search-company', label: 'Open a Company' },
           ].map((item) => (
             <button
               key={item.id}

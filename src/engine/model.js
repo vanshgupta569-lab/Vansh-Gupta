@@ -1,3 +1,4 @@
+// FILE: src/engine/model.js
 // ===========================================================================
 // MARGINALIA — SHARED CALCULATION ENGINE
 // ===========================================================================
@@ -231,13 +232,24 @@ export function buildModel(data) {
     ? avg(S.depreciationPercentOfCapex.slice(firstPpeYear, nH))
     : a.depreciationAsPercentOfCapex;
 
+  // capexScale lifts or lowers the whole forecast capex line without changing
+  // its shape. It exists for the capital-spending slider and for the
+  // qualitative questions behind it: a model whose capex is a rising line
+  // should stay a rising line when someone says the company spends heavily,
+  // rather than being flattened to a single percentage of revenue. It is
+  // applied to the finished figure and never fed back into the growth method,
+  // so a scale of 1.1 raises every year by a tenth and does not compound.
+  const capexScale = a.capexScale ?? 1;
+  let capexRaw = S.ppe.capex[nH - 1];
+
   for (let t = nH; t < nH + nF; t++) {
     S.ppe.beginning[t] = S.ppe.ending[t - 1];
-    S.ppe.capex[t] = a.capexMethod === 'percentOfRnD'
+    capexRaw = a.capexMethod === 'percentOfRnD'
       ? -S.rnd[t] * a.capexRatio                    // capex = R&D spend × ratio
       : a.capexMethod === 'percentOfRevenue'
         ? -(S.revenue[t] * a.capexRatio)             // capex = revenue × ratio
-        : S.ppe.capex[t - 1] * (1 + a.capexRatio);  // capex grows at the ratio
+        : capexRaw * (1 + a.capexRatio);            // capex grows at the ratio
+    S.ppe.capex[t] = capexRaw * capexScale;
     S.depreciationPercentOfCapex[t] = depPct;
     S.ppe.depreciation[t] = -(S.ppe.capex[t] * depPct);
     S.ppe.ending[t] = S.ppe.beginning[t] + S.ppe.capex[t] + S.ppe.depreciation[t];

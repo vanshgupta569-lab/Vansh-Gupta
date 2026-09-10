@@ -1,4 +1,23 @@
 // FILE: src/components/MethodologyGrid.tsx
+//
+// How a filing becomes a value, in four steps.
+//
+// This section used to carry four dense paragraphs — NOPAT/EBIAT, "pristine
+// Unlevered Free Cash Flows across a 5-year explicit horizon", and a footnote
+// under each one set in UPPERCASE MONOSPACE, which is the hardest thing to
+// read on any screen. The claims were all true and all correct; nobody was
+// going to read them.
+//
+// The substance is kept and every sentence is rewritten in the language a
+// reader actually uses. Nothing that was promised has been dropped: the
+// filings are still unaltered, the assumptions are still named and movable,
+// the balance sheet still balances, and there is still no verdict at the end.
+// Those facts are what earns the site its claims, so they stay — they are
+// simply said once each, plainly.
+//
+// The Keynes line closes the section, which is where it belongs: it is the
+// argument for the whole method, not a decoration halfway down a page.
+
 import React, { useRef } from 'react';
 import { Database, Sliders, Cpu, Calculator, ArrowRight } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
@@ -7,38 +26,30 @@ interface MethodologyGridProps {
   onSelectStep: (stepNumber: number) => void;
 }
 
-const PIPELINE_STEPS = [
+const STEPS = [
   {
-    phase: 'PHASE 01',
-    title: 'Ticker Lookup & Data Ingestion',
-    subtitle: 'User Selection & SEC/Exchange Record Retrieval',
-    description: 'When a user selects an equity ticker from the directory, the platform instantly queries structured financial databases to pull up to five years of the exact filed financial statements. SEC filers normally provide five; some international sources carry four, and whatever exists is used rather than failing. US companies come from SEC EDGAR, while international listings use exchange suffixes (.NS for India, .L for London, .TO for Toronto). No estimates or approximations are introduced at this ingestion stage.',
+    phase: '01',
+    title: 'The filings arrive',
+    line: 'Up to five years of statements, read from the company’s own filings. Nothing is estimated at this stage, and nothing is adjusted.',
     icon: Database,
-    detail: 'Pulls raw Balance Sheets, Income Statements, and Cash Flow schedules directly from primary regulatory filings as reported.',
   },
   {
-    phase: 'PHASE 02',
-    title: 'Uniform Assumption Architecture',
-    subtitle: 'Normalized Modeling Framework',
-    description: 'The fetched history feeds into a standardized 3-statement projection engine. Every forecast line item is driven by transparent, named assumptions, including revenue growth, operating margins, effective tax rates, and CapEx intensity.',
+    phase: '02',
+    title: 'The forecast is built',
+    line: 'Every projected line is driven by one named assumption — growth, margin, tax rate, capital spending — and you can see and move all of them.',
     icon: Sliders,
-    detail: 'Users retain full interactive control to override default parameters via live terminal sliders in real time.',
   },
   {
-    phase: 'PHASE 03',
-    title: 'Free Cash Flow & Working Capital Mechanics',
-    subtitle: 'Unlevered Free Cash Flow (UFCF) Derivation',
-    description: 'The engine computes Net Operating Profit After Tax (NOPAT/EBIAT), adds back Depreciation & Amortization, and subtracts capital expenditures and net working capital changes to arrive at pristine Unlevered Free Cash Flows across a 5-year explicit horizon.',
+    phase: '03',
+    title: 'Profit becomes cash',
+    line: 'Tax is taken off, depreciation is added back, and capital spending and working capital are subtracted. The balance sheet balances in every forecast year.',
     icon: Cpu,
-    detail: 'Balance sheet schedules balance programmatically in every single projected forecast year without exceptions.',
   },
   {
-    phase: 'PHASE 04',
-    title: 'Dual-Method Intrinsic Valuation',
-    subtitle: 'Perpetuity Growth & EV/EBITDA Exit Multiples',
-    description: 'To calculate terminal value and final intrinsic equity value, the engine employs two institutional standards: (1) The Gordon Growth Perpetuity Method based on long-term macroeconomic benchmarks, and (2) The EV/EBITDA Exit Multiple Method. Both discount future cash flows back using the Weighted Average Cost of Capital (WACC).',
+    phase: '04',
+    title: 'The value is worked out',
+    line: 'Future cash is discounted back to today, two ways, and both are shown. What you get is a premium or a discount to the model — never a verdict.',
     icon: Calculator,
-    detail: 'Outputs a dynamic 5×5 sensitivity matrix demonstrating valuation variations across WACC and growth bands with zero buy/sell verdicts attached.',
   },
 ];
 
@@ -47,118 +58,128 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
-    offset: ["start center", "end center"]
+    offset: ['start center', 'end center'],
   });
-  
-  const lineHeight = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
+
+  const lineHeight = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
 
   return (
-    <section id="methodology" className="max-w-[1440px] mx-auto px-6 lg:px-12 py-24 hairline-border-b">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 gap-6">
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#A1A1AA] tracking-[0.2em] uppercase">
-              02 — ENGINE MECHANICS & METHODOLOGY
-            </span>
+    <section id="methodology" className="w-full" style={{ background: '#0B0B0D' }}>
+      <div className="max-w-[1440px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
+        {/* Chapter mark, set to match the rebuilt sections above and below. */}
+        <div className="mb-10 lg:mb-14">
+          <div className="h-px w-14 mb-4" style={{ background: '#8B1E1E' }} />
+          <div className="flex items-baseline gap-4 font-mono text-[13px] tracking-[0.22em] uppercase">
+            <span style={{ color: '#C0453E' }}>04</span>
+            <span style={{ color: '#A8A29A' }}>Methodology</span>
           </div>
-          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl text-[#F2F0EA] font-medium tracking-tight">
-            From Raw Filing to Intrinsic Value
-          </h2>
         </div>
-        <p className="font-mono text-xs text-[#8A8A8F] max-w-md uppercase tracking-wider leading-relaxed">
-          An end-to-end breakdown of how Marginalia transforms public disclosures into a live, institutional-grade discounted cash flow model.
-        </p>
-      </div>
 
-      <div ref={containerRef} className="relative space-y-8 mb-16">
-        
-        {/* Animated Connecting Vertical Line */}
-        <div className="hidden lg:block absolute top-8 bottom-8 left-[39px] w-[1px] bg-[#222228] z-0">
-          <motion.div 
-            style={{ height: lineHeight }} 
-            className="w-full bg-[#8B1E1E] shadow-[0_0_15px_rgba(139,30,30,0.8)]" 
+        <h2
+          className="font-serif leading-[1.05] mb-16 lg:mb-20 max-w-[20ch]"
+          style={{ color: '#F2F0EA', letterSpacing: '-0.02em' }}
+        >
+          From a filing to a value{'\u2060'}
+          <span
+            className="inline-block align-baseline ml-[0.12em]"
+            style={{ width: '0.16em', height: '0.16em', background: '#8B1E1E' }}
           />
-        </div>
+        </h2>
 
-        {PIPELINE_STEPS.map((step, index) => {
-          const IconComponent = step.icon;
-
-          return (
-            <motion.div
-              key={step.phase}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.6, ease: "easeOut", delay: index * 0.1 }}
-              onClick={() => onSelectStep(index + 1)}
-              className="relative z-15 bg-[#111114] border hairline-border p-8 sm:p-12 hover:bg-[#16161a] transition-all group shadow-lg cursor-pointer"
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
-                {/* Phase Number & Icon Column */}
-                <div className="lg:col-span-3 flex items-center lg:items-start gap-4">
-                  <div className="w-14 h-14 bg-[#0B0B0D] border hairline-border flex items-center justify-center shrink-0 group-hover:border-[#8B1E1E] transition-colors shadow-inner">
-                    <IconComponent className="w-6 h-6 text-[#8B1E1E]" />
-                  </div>
-                  <div>
-                    <span className="font-mono text-[11px] text-[#8B1E1E] tracking-[0.2em] font-semibold uppercase block mb-1">
-                      {step.phase}
-                    </span>
-                    <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-wider block">
-                      {step.subtitle}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content Column */}
-                <div className="lg:col-span-9 flex flex-col justify-between space-y-4">
-                  <h3 className="font-display text-2xl sm:text-3xl text-[#F2F0EA] tracking-tight group-hover:text-[#ffb3ad] transition-colors flex items-center justify-between">
-                    <span>{step.title}</span>
-                    <ArrowRight className="w-4 h-4 text-[#8B1E1E] opacity-0 group-hover:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0" />
-                  </h3>
-
-                  <p className="font-sans text-sm sm:text-base font-light text-[#A1A1AA] leading-loose tracking-wide">
-                    {step.description}
-                  </p>
-
-                  <div className="font-mono text-[10px] text-[#8A8A8F] pt-4 hairline-border-t border-dashed flex items-start gap-3 uppercase tracking-wider leading-relaxed">
-                    <span className="w-1.5 h-1.5 bg-[#8B1E1E] shrink-0 mt-1.5" />
-                    <span>{step.detail}</span>
-                  </div>
-                </div>
-
-              </div>
+        <div ref={containerRef} className="relative space-y-px mb-16">
+          {/* The rule that fills as the reader moves down the four steps. */}
+          <div
+            className="hidden lg:block absolute top-10 bottom-10 left-[47px] w-px z-0"
+            style={{ background: '#262521' }}
+          >
+            <motion.div style={{ height: lineHeight }} className="w-full" >
+              <div className="w-full h-full" style={{ background: '#8B1E1E' }} />
             </motion.div>
-          );
-        })}
-
-      </div>
-
-      {/* Famous Quote Banner (Text-Only Editorial Style) */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        className="bg-[#111114] border hairline-border p-8 sm:p-12 relative overflow-hidden shadow-xl"
-      >
-        <div className="absolute top-0 right-0 w-48 h-48 bg-[#8B1E1E]/5 rounded-bl-full pointer-events-none" />
-
-        <div className="max-w-3xl space-y-4">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#8B1E1E] tracking-[0.25em] uppercase font-semibold">
-              PHILOSOPHICAL BENCHMARK
-            </span>
           </div>
-          <blockquote className="font-display text-2xl sm:text-3xl italic text-[#F2F0EA] leading-snug">
-            “I would rather be vaguely right than precisely wrong.”
-          </blockquote>
-          <p className="font-mono text-xs text-[#8A8A8F] uppercase tracking-wider">
-            — John Maynard Keynes <span className="text-[#6E6E73]">(Foundational Economist)</span>
-          </p>
+
+          {STEPS.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <motion.button
+                key={step.phase}
+                type="button"
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-80px' }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: index * 0.08 }}
+                onClick={() => onSelectStep(index + 1)}
+                className="group relative z-10 w-full text-left p-7 lg:p-9 border transition-colors"
+                style={{ background: '#111114', borderColor: '#262521' }}
+              >
+                <span
+                  className="absolute inset-0 border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ borderColor: '#8B1E1E' }}
+                />
+
+                <div className="grid grid-cols-1 lg:grid-cols-[64px_1fr] gap-6 lg:gap-10 items-start">
+                  <div
+                    className="w-14 h-14 flex items-center justify-center shrink-0 border transition-colors group-hover:border-[#8B1E1E]"
+                    style={{ background: '#0B0B0D', borderColor: '#262521' }}
+                  >
+                    <Icon className="w-5 h-5" style={{ color: '#8B1E1E' }} strokeWidth={1.5} />
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline gap-4 mb-3">
+                      <span
+                        className="font-mono text-[13px] tracking-[0.2em]"
+                        style={{ color: '#C0453E' }}
+                      >
+                        {step.phase}
+                      </span>
+                      <h3
+                        className="font-serif flex-1 flex items-center justify-between gap-4"
+                        style={{ color: '#F2F0EA', letterSpacing: '-0.018em' }}
+                      >
+                        <span>{step.title}</span>
+                        <ArrowRight
+                          className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-all -translate-x-3 group-hover:translate-x-0 shrink-0"
+                          style={{ color: '#8B1E1E' }}
+                        />
+                      </h3>
+                    </div>
+
+                    <p
+                      className="text-[16px] lg:text-[17px] leading-[1.6] max-w-[62ch]"
+                      style={{ color: '#C6C1B7' }}
+                    >
+                      {step.line}
+                    </p>
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
-      </motion.div>
+
+        {/* The line that argues for the whole method, given the last word. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="border p-8 sm:p-12"
+          style={{ background: '#111114', borderColor: '#262521' }}
+        >
+          <blockquote
+            className="font-serif text-[26px] sm:text-[34px] lg:text-[40px] italic leading-[1.24] max-w-[24ch]"
+            style={{ color: '#F2F0EA', letterSpacing: '-0.018em' }}
+          >
+            &ldquo;I would rather be vaguely right than precisely wrong.&rdquo;
+          </blockquote>
+          <p
+            className="font-mono text-[13px] uppercase tracking-[0.18em] mt-6"
+            style={{ color: '#A8A29A' }}
+          >
+            John Maynard Keynes
+          </p>
+        </motion.div>
+      </div>
     </section>
   );
 };

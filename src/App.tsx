@@ -3,10 +3,18 @@ import React, { useState } from 'react';
 import { motion, useScroll } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
-import { HeroSection } from './components/HeroSection';
-import { EtymologySection } from './components/EtymologySection';
+import {
+  LandingHero,
+  WhereToStart,
+  SeeItWork,
+  ByTheNumbers,
+  ThreeWays,
+  WorkflowPath,
+  InTheMargin,
+  MarginNotes,
+  FinalCta,
+} from './components/landingPage';
 import { MethodologyGrid } from './components/MethodologyGrid';
-import { MechanismSection } from './components/MechanismSection';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
 import { DirectoryScreen } from './components/DirectoryScreen';
@@ -145,22 +153,41 @@ export default function App() {
         {/* SCREEN 1: BASIC INTRO & PHILOSOPHY */}
         {currentScreen === 'HOME' && (
           <div>
-            {/* Hero Section */}
-            <HeroSection onSearchCompany={() => handleNavigateToScreen('DIRECTORY')} />
+            {/* The four front doors are the page's spine. A button belongs
+                here only if the reader arrives holding something the ticker
+                search cannot accept: a private company has no ticker, and a
+                workbook has no ticker. Everything else acts on a model that
+                already exists, so it lives on that model's own screen. */}
+            <LandingHero
+              onOpenListed={() => handleNavigateToScreen('DIRECTORY')}
+              onOpenPrivate={() => handleNavigateToScreen('DIRECTORY')}
+            />
 
-            {/* Etymology Section */}
-            <EtymologySection />
+            <WhereToStart onRoute={() => handleNavigateToScreen('DIRECTORY')} />
 
-            {/* Process Flowchart / Methodology */}
+            <SeeItWork onOpenListed={() => handleNavigateToScreen('DIRECTORY')} />
+
+            <ByTheNumbers />
+
+            <ThreeWays />
+
+            <WorkflowPath />
+
+            {/* Methodology, kept from the original page: it is the section
+                that earns the site the right to make its claims. */}
             <MethodologyGrid onSelectStep={() => handleNavigateToScreen('DIRECTORY')} />
 
-            {/* How a valuation is built — mechanics only, no company data */}
-            <MechanismSection />
+            <InTheMargin onOpenNotes={() => scrollToSection('margin-notes')} />
 
-            {/* Coverage Stats */}
+            <MarginNotes onOpenNotes={() => scrollToSection('margin-notes')} />
+
             <CoverageStatsSection />
 
-            {/* Access Request Form & Analyst Profile */}
+            <FinalCta
+              onOpenListed={() => handleNavigateToScreen('DIRECTORY')}
+              onOpenPrivate={() => handleNavigateToScreen('DIRECTORY')}
+            />
+
             <FeedbackFormSection />
           </div>
         )}

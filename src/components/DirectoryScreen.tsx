@@ -199,7 +199,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             </div>
           )}
 
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed uppercase tracking-wider">
+          <div className="font-mono text-[13px] text-[#8A8A8F] mt-3 leading-relaxed">
             US filings come from SEC EDGAR; everywhere else from exchange
             disclosures. Banks, insurers and lenders are shown without a DCF, because
             discounted cash flow does not apply to them.

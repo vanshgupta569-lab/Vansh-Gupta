@@ -174,16 +174,16 @@ export function reverseDcf(
 
   const figures: ImpliedFigure[] = [];
 
-  // 1. Revenue growth, held flat across every forecast year. This is the
-  //    headline reverse-DCF number: the growth the buyer at today's price is
-  //    paying for.
+  // 1. Revenue growth. This is the headline reverse-DCF number: the growth the
+  //    buyer at today's price is paying for.
   //
-  //    The base figure here needs care. The model's own forecast does not have
-  //    to grow at one rate every year, and the slider's starting value is only
-  //    the FIRST year's growth. Printing that beside a flat implied rate would
-  //    compare two different things, and could show a gap where the model and
-  //    the price actually agree. So the base shown is the flat rate that
-  //    reproduces the model's own value — the like-for-like figure.
+  //    Moving the growth driver shifts the model's whole forecast path up or
+  //    down by the same amount rather than flattening it to one rate, so the
+  //    figure printed on both sides is the first forecast year and every later
+  //    year moves with it. The base is therefore the model's own starting
+  //    value, and it is still solved for rather than assumed: if the override
+  //    ever stops being an exact shift, this keeps the two columns comparing
+  //    like with like instead of silently showing a gap that is not there.
   const growth = bisect(-30, 40, gap('revenueGrowthPct', 'blend'));
   const baseFlatGrowth =
     modelValue === null
@@ -199,7 +199,8 @@ export function reverseDcf(
     implied: snapToBase(growth, baseFlatGrowth),
     unit: 'pct',
     method: 'solved against the blended value',
-    question: 'held flat across every forecast year, with margins unchanged',
+    question:
+      "the model's own growth path moved up or down as a whole, margins unchanged — the figure shown is the first forecast year",
     outOfRange: growth === null,
   });
 

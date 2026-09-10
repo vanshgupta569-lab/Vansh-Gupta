@@ -169,24 +169,74 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
     return r(Number(drivers[key]), 1) !== r(Number(fallback), 1);
   };
 
-  // 1. Revenue growth — apply as a uniform blended rate across all segments
+  // ---------------------------------------------------------------------------
+  // WHY THESE ARE SHIFTS AND NOT REPLACEMENTS
+  //
+  // These three overrides used to replace the model's own forecast path with a
+  // single flat number: one growth rate for all five years, one gross margin
+  // for all five years, capex at one percentage of revenue. For a company whose
+  // forecast is already flat — which is every model the site derives from
+  // filings — that is the same thing, and nothing was wrong.
+  //
+  // For a hand-built model it was badly wrong. Apple's workbook forecasts
+  // decaying growth and a margin that falls from 28.9% to 24.4%, and its capex
+  // is a rising line. The slider's default is the FIRST forecast year, so the
+  // moment anything was touched, years two to five jumped up to the first
+  // year's level. Marking the competitive position a WEAKNESS raised the value
+  // from $186.69 to $190.70, because the half point of margin taken off was
+  // swamped by four years of margin being flattened back up.
+  //
+  // A qualitative view that moves the answer the wrong way is worse than no
+  // feature at all, so each of these now moves the model's own path rather than
+  // discarding it. Setting a driver back to its default is exactly a no-op, and
+  // moving it half a point moves every forecast year by half a point while the
+  // shape the analyst chose survives.
+  // ---------------------------------------------------------------------------
+
+  // 1. Revenue growth — shift every segment's growth path by the same amount
   if (touched('revenueGrowthPct')) {
-    const rg = drivers.revenueGrowthPct / 100;
+    const delta =
+      (drivers.revenueGrowthPct - Number(defaults.revenueGrowthPct ?? 0)) / 100;
+
+    // A segment can be set to a rule ('trailingTwoYearAverage') rather than a
+    // list of rates. There is nothing to shift in a rule, so the rule is run
+    // once on the untouched model and the rates it produces are shifted.
+    const needsPath = Object.values(d.assumptions.segmentGrowth).some(
+      (rule) => !Array.isArray(rule)
+    );
+    const baseline: any = needsPath ? buildModel(source) : null;
+    // forecastYears is the list of years being forecast, so its length is the
+    // count. Written out because reading it as a number is an easy mistake.
+    const nF: number = Array.isArray(d.assumptions.forecastYears)
+      ? d.assumptions.forecastYears.length
+      : Number(d.assumptions.forecastYears ?? 5);
+
     for (const seg of Object.keys(d.assumptions.segmentGrowth)) {
-      d.assumptions.segmentGrowth[seg] = [rg, rg, rg, rg, rg];
+      const rule = d.assumptions.segmentGrowth[seg];
+      const path: number[] = Array.isArray(rule)
+        ? rule
+        : (baseline.segmentGrowth?.[seg] ?? []).slice(
+            baseline.nH,
+            baseline.nH + nF
+          );
+      d.assumptions.segmentGrowth[seg] = path.map((g: number) => g + delta);
     }
   }
 
-  // 2. Operating margin — keep R&D and SG&A, adjust gross margin to hit target
-  //    Target operating margin = gross margin - R&D margin - SG&A margin
+  // 2. Operating margin — shift the gross margin path by the same amount.
+  //    Operating margin is gross margin less R&D and SG&A, both of which are
+  //    percentages of revenue and neither of which is being changed here, so a
+  //    point on the gross line is a point on the operating line. That is also
+  //    why the old arithmetic is gone: it rebuilt a gross margin target out of
+  //    the R&D margin and an average of historical SG&A, and where that average
+  //    differed from the forecast SG&A margin, setting the slider back to its
+  //    own default did not reproduce the model it started from.
   if (touched('operatingMarginPct')) {
-    const rndBase: number = d.assumptions.researchDevelopmentMargin[0];
-    const histRev: number[] = d.historical.incomeStatement.revenue;
-    const histSga: number[] = d.historical.incomeStatement.sellingGeneralAdmin;
-    const sgaAvg = histRev.reduce((sum: number, rev: number, i: number) =>
-      sum + (-histSga[i] / rev), 0) / histRev.length;
-    const targetGross = drivers.operatingMarginPct / 100 + rndBase + sgaAvg;
-    d.assumptions.grossMargin = [targetGross, targetGross, targetGross, targetGross, targetGross];
+    const delta =
+      (drivers.operatingMarginPct - Number(defaults.operatingMarginPct ?? 0)) / 100;
+    d.assumptions.grossMargin = d.assumptions.grossMargin.map(
+      (g: number) => g + delta
+    );
   }
 
   // 3. Tax rate override
@@ -194,10 +244,22 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
     d.assumptions.taxRate = drivers.taxRatePct / 100;
   }
 
-  // 4. Capex as % of revenue
+  // 4. Capital spending — scale the whole capex line rather than flattening it
+  //    to one percentage of revenue. The slider reads as the first forecast
+  //    year's capex as a share of revenue, so the scale is simply the ratio of
+  //    where it has been moved to where it started, and the method the model
+  //    uses to project capex (a percentage of revenue, a percentage of R&D, or
+  //    a growth rate) is left alone.
   if (touched('capexPctOfRev')) {
-    d.assumptions.capexMethod = 'percentOfRevenue';
-    d.assumptions.capexRatio = drivers.capexPctOfRev / 100;
+    const base = Number(defaults.capexPctOfRev ?? 0);
+    if (base > 0) {
+      d.assumptions.capexScale = drivers.capexPctOfRev / base;
+    } else {
+      // No sensible baseline to scale from — fall back to reading the slider
+      // as a flat percentage of revenue, which is what it says on the label.
+      d.assumptions.capexMethod = 'percentOfRevenue';
+      d.assumptions.capexRatio = drivers.capexPctOfRev / 100;
+    }
   }
 
   // 5. WACC direct override (bypasses CAPM). Left alone when untouched, so the

@@ -19,7 +19,7 @@
 // Every nudge here is small and stated in full. Nothing is hidden, and nothing
 // happens until the reader presses the button.
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { ValuationDrivers } from '../types';
 
 // The factors, the arithmetic and the caps all live in one module now, shared
@@ -37,7 +37,15 @@ import type { Verdict } from '../data/qualitativeFactors';
 interface QualitativeProps {
   drivers: ValuationDrivers;
   defaults: ValuationDrivers;
-  onApply: (next: ValuationDrivers) => void;
+  // The answers live one level up, in the dashboard. They have to: the reader
+  // gives them on the questions screen before the model is built, and this
+  // panel is opened afterwards. Owning them here would mean opening the panel
+  // to a blank sheet and no way to see, let alone revise, a view already in
+  // the numbers.
+  verdicts: Record<string, Verdict>;
+  onVerdictsChange: (next: Record<string, Verdict>) => void;
+  appliedVerdicts?: Record<string, Verdict> | null;
+  onApply: (next: ValuationDrivers, chosen: Record<string, Verdict>) => void;
   onReset: () => void;
   onClose: () => void;
   currencySymbol: string;
@@ -57,6 +65,9 @@ interface QualitativeProps {
 export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
   drivers,
   defaults,
+  verdicts,
+  onVerdictsChange,
+  appliedVerdicts,
   onApply,
   onReset,
   onClose,
@@ -65,10 +76,24 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
   companyName,
   profile,
 }) => {
-  const [verdicts, setVerdicts] = useState<Record<string, Verdict>>({});
-
   const setVerdict = (key: string, verdict: Verdict) =>
-    setVerdicts((prev) => ({ ...prev, [key]: verdict }));
+    onVerdictsChange({ ...verdicts, [key]: verdict });
+
+  // Whether what is ticked on screen is already the view the model is running
+  // on. If it is not, the reader has changed something and has not applied it
+  // yet, and the panel says so rather than leaving them to guess.
+  const appliedCount = Object.values(appliedVerdicts ?? {}).filter(
+    (v) => v && v !== 'neutral'
+  ).length;
+  const pending = useMemo(() => {
+    const keys = new Set([
+      ...Object.keys(verdicts),
+      ...Object.keys(appliedVerdicts ?? {}),
+    ]);
+    return Array.from(keys).some(
+      (k) => (verdicts[k] ?? 'neutral') !== ((appliedVerdicts ?? {})[k] ?? 'neutral')
+    );
+  }, [verdicts, appliedVerdicts]);
 
   // What the chosen verdicts would do to each driver, starting from the model's
   // own defaults rather than from wherever the sliders happen to be. Otherwise
@@ -78,16 +103,25 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
     [verdicts, defaults]
   );
 
+  // What the model is running on right now, as far as judgement goes. The list
+  // below is measured against this rather than against the raw defaults: if a
+  // view was already applied before the model was built, it is not a pending
+  // change and should not be listed as one.
+  const appliedBaseline = useMemo(
+    () => applyVerdicts(defaults, appliedVerdicts ?? {}),
+    [defaults, appliedVerdicts]
+  );
+
   const changes = useMemo(
     () =>
       (Object.keys(defaults) as (keyof ValuationDrivers)[])
-        .filter((key) => Number(proposed[key]) !== Number(defaults[key]))
+        .filter((key) => Number(proposed[key]) !== Number(appliedBaseline[key]))
         .map((key) => ({
           key,
-          from: Number(defaults[key]),
+          from: Number(appliedBaseline[key]),
           to: Number(proposed[key]),
         })),
-    [proposed, defaults]
+    [proposed, appliedBaseline, defaults]
   );
 
   const anyVerdict = Object.values(verdicts).some((v) => v && v !== 'neutral');
@@ -95,7 +129,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
   const driverLabels = DRIVER_LABELS;
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <h3 className="font-serif text-xl text-[#F2F0EA] mb-2">
         Your judgement, put through the model
       </h3>
@@ -118,6 +152,30 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           steps above.
         </p>
       </div>
+
+      {appliedCount > 0 && (
+        <div className="border border-[#222228] bg-[#0B0B0D] p-4 mb-8">
+          <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
+            Carried over from your answers
+          </div>
+          <p className="text-[14px] leading-relaxed text-[#8A8A8F]">
+            {appliedCount === 1
+              ? 'One view you gave before the model was built is already in these numbers. It is ticked below and marked "in the model".'
+              : `${appliedCount} of the views you gave before the model was built are already in these numbers. They are ticked below and marked "in the model".`}{' '}
+            Change any of them and press apply again to rebuild on the new view.
+          </p>
+        </div>
+      )}
+
+      {pending && (
+        <div className="border border-[#8B1E1E] bg-[#8B1E1E]/10 p-4 mb-8">
+          <p className="text-[14px] leading-relaxed text-[#F2F0EA]">
+            You have changed a view since the model was last built. Nothing has
+            moved yet — press <span className="font-mono">apply to the model</span>{' '}
+            below to put it through.
+          </p>
+        </div>
+      )}
 
       {/* What the company says about itself. Descriptive context only: none of
           it is a reported figure and none of it feeds the model. It is here
@@ -193,13 +251,22 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
         <div className="space-y-6">
         {FACTORS.filter((f) => f.group === group.key).map((factor) => {
           const verdict = verdicts[factor.key];
+          const inModel =
+            verdict &&
+            verdict !== 'neutral' &&
+            (appliedVerdicts ?? {})[factor.key] === verdict;
           return (
             <div
               key={factor.key}
               className="border border-[#222228] bg-[#0B0B0D] p-4"
             >
-              <div className="text-[14px] text-[#F2F0EA] mb-1">
-                {factor.title}
+              <div className="flex items-baseline justify-between gap-4 mb-1">
+                <div className="text-[14px] text-[#F2F0EA]">{factor.title}</div>
+                {inModel ? (
+                  <span className="font-mono text-[12px] uppercase tracking-widest text-[#8B1E1E] shrink-0">
+                    in the model
+                  </span>
+                ) : null}
               </div>
               <div className="text-[15px] text-[#8A8A8F] mb-3 max-w-2xl">
                 {factor.question}
@@ -243,8 +310,9 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
 
         {changes.length === 0 ? (
           <p className="text-[15px] text-[#8A8A8F]">
-            Nothing yet. Mark a factor as a strength or a weakness and the
-            assumptions it moves will be listed here before anything is applied.
+            {appliedCount > 0
+              ? 'Nothing further. The views ticked above are already in the model. Change one and what it would move will be listed here.'
+              : 'Nothing yet. Mark a factor as a strength or a weakness and the assumptions it moves will be listed here before anything is applied.'}
           </p>
         ) : (
           <div className="space-y-1.5 mb-5">
@@ -269,7 +337,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
             type="button"
             disabled={!anyVerdict || changes.length === 0}
             onClick={() => {
-              onApply(proposed);
+              onApply(proposed, verdicts);
               onClose();
             }}
             className="font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#8B1E1E]/35 transition-colors"
@@ -279,7 +347,6 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           <button
             type="button"
             onClick={() => {
-              setVerdicts({});
               onReset();
               // "Back to the model" has to actually go back to it. This closes
               // the full screen as well as clearing the views.
