@@ -119,6 +119,8 @@ interface Props {
   onChange: (next: Corrections) => void;
   onContinue: () => void;
   onBack: () => void;
+  /** True when the reader came back here from a model that is already built. */
+  returning?: boolean;
   building?: boolean;
 }
 
@@ -133,6 +135,7 @@ export const FiguresEditor: React.FC<Props> = ({
   onChange,
   onContinue,
   onBack,
+  returning,
   building,
 }) => {
   const [openGroup, setOpenGroup] = useState<string>('income');
@@ -216,6 +219,13 @@ export const FiguresEditor: React.FC<Props> = ({
             what the whole model is built on, so anything wrong here is wrong
             everywhere. Change any of them to what the annual report says, or
             leave every one alone and carry on.
+            {returning && (
+              <>
+                {' '}
+                Anything you changed before is still marked, with the filed figure
+                beside it — put one back, change it again, or reset the lot.
+              </>
+            )}
           </p>
           <p
             className="font-mono text-[12px] leading-[1.6] mt-5 mx-auto max-w-[74ch]"
@@ -496,7 +506,7 @@ export const FiguresEditor: React.FC<Props> = ({
             className="font-mono text-[11px] uppercase tracking-[0.18em] transition-colors cursor-pointer"
             style={{ color: MUTED }}
           >
-            &larr;&nbsp;&nbsp;Back to the search
+            &larr;&nbsp;&nbsp;{returning ? 'Back to the model, leaving these figures alone' : 'Back to the search'}
           </button>
         </div>
       </div>
@@ -532,7 +542,15 @@ export const FiguresEditor: React.FC<Props> = ({
               className="font-mono text-[11px] uppercase tracking-[0.16em] px-6 py-3 border flex items-center gap-2 disabled:opacity-50"
               style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
             >
-              {building ? 'Building the model…' : changed ? 'Build with these figures' : 'Build the model'}
+              {building
+                ? 'Building the model…'
+                : returning
+                ? changed
+                  ? 'Rebuild with these figures'
+                  : 'Rebuild as filed'
+                : changed
+                ? 'Build with these figures'
+                : 'Build the model'}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

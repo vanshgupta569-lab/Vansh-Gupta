@@ -59,6 +59,11 @@ export default function App() {
   const [payload, setPayload] = useState<any | null>(null);
   const [corrections, setCorrections] = useState<Corrections>({});
   const [building, setBuilding] = useState(false);
+  // True when the figures were opened from a finished model rather than on the
+  // way to one. It decides where "back" goes, and it is why re-answering the
+  // qualitative questions is not demanded a second time: those questions are
+  // about the company, and correcting a figure does not change the company.
+  const [figuresFromModel, setFiguresFromModel] = useState(false);
 
   // Every route into a company goes through the questions first: the search
   // box, the directory grid, and the hand-built model cards. The judgements are
@@ -113,6 +118,7 @@ export default function App() {
       await settle();
       setPayload(fetched);
       setCorrections({});
+      setFiguresFromModel(false);
       setSelectedTicker(ticker);
       setLookupState({ loading: false, error: null });
       setCurrentScreen('FIGURES');
@@ -136,7 +142,17 @@ export default function App() {
         const company = buildCompanyFrom(payload, corrections);
         setLoadedCompanies((prev) => ({ ...prev, [company.ticker]: company }));
         setBuilding(false);
-        openQuestionsFor(company.ticker);
+        if (figuresFromModel) {
+          // Straight back to the model that was already open, with the answers
+          // given earlier left alone. Sending a reader back through ten
+          // questions because they fixed one number is a punishment for
+          // checking, which is the opposite of what this screen is for.
+          setSelectedTicker(company.ticker);
+          setCurrentScreen('ANALYSIS');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          openQuestionsFor(company.ticker);
+        }
       } catch (error: any) {
         setBuilding(false);
         setLookupState({
@@ -149,12 +165,31 @@ export default function App() {
     }, 30);
   };
 
-  // Reopening the figures from the badge. Only possible where the payload is
-  // still in hand, which is every company reached through the search.
+  // The payload in hand belongs to ONE company. Searching a second company
+  // replaces it, so the figures may only be reopened for the company the
+  // payload is actually about — otherwise the button would offer to edit
+  // Reliance's figures while Apple is on screen.
+  const figuresAvailable =
+    !!payload &&
+    String(payload.ticker || '').toUpperCase() === String(selectedTicker || '').toUpperCase();
+
+  // Reopening the figures from the header control.
   const reopenFigures = () => {
-    if (!payload) return;
+    if (!figuresAvailable) return;
+    setFiguresFromModel(currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS');
     setCurrentScreen('FIGURES');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Leaving the figures without rebuilding. The model on screen is unchanged,
+  // so this goes back to it rather than throwing the reader out to the search.
+  const leaveFigures = () => {
+    if (figuresFromModel) {
+      setCurrentScreen('ANALYSIS');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    handleNavigateToScreen('DIRECTORY');
   };
 
   const handleNavigateToScreen = (screen: ScreenType) => {
@@ -184,7 +219,7 @@ export default function App() {
         onScrollToSection={scrollToSection}
         activeSection={activeSection}
         corrected={allCompanies[selectedTicker]?.correctedInputs}
-        onReviewFigures={payload ? reopenFigures : undefined}
+        onReviewFigures={figuresAvailable ? reopenFigures : undefined}
       />
 
       {/* Scroll Progress Indicator Line */}
@@ -231,7 +266,8 @@ export default function App() {
             corrections={corrections}
             onChange={setCorrections}
             onContinue={buildFromFigures}
-            onBack={() => handleNavigateToScreen('DIRECTORY')}
+            onBack={leaveFigures}
+            returning={figuresFromModel}
             building={building}
           />
         )}

@@ -15,7 +15,7 @@
 //     deliberately left.
 
 import React, { useState, useEffect } from 'react';
-import { Home, Building2, Search, PencilLine } from 'lucide-react';
+import { Home, Building2, Search, PencilLine, Table2 } from 'lucide-react';
 import { ScreenType } from '../types';
 
 /* Four links, not six. A header with six choices is a header nobody reads,
@@ -134,21 +134,42 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: where you can go from here */}
         <div className="flex items-center gap-3 shrink-0">
-          {corrected && currentScreen !== 'HOME' && currentScreen !== 'DIRECTORY' && (
+          {/* ONE CONTROL, TWO STATES, ALWAYS THERE.
+              Quiet when every figure is as filed, oxblood when some are not,
+              and in both cases the way back to the figures. Shown even with
+              nothing corrected on purpose: the reader who most needs this
+              screen is the one looking at a valuation that seems wrong and
+              wondering where the numbers came from, and that reader has
+              corrected nothing at all. A badge that only appears after a
+              correction is invisible to exactly the person it is for. */}
+          {onReviewFigures && (currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS') && (
             <button
               onClick={onReviewFigures}
-              disabled={!onReviewFigures}
-              title={`Built on ${corrected.count} figure${
-                corrected.count === 1 ? '' : 's'
-              } you supplied: ${corrected.fields.join(', ')}`}
-              className="border font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap disabled:cursor-default"
-              style={{ borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.16)', color: '#F2F0EA' }}
+              title={
+                corrected
+                  ? `Built on ${corrected.count} figure${
+                      corrected.count === 1 ? '' : 's'
+                    } you supplied: ${corrected.fields.join(', ')}. Click to change them or put them back.`
+                  : 'See the reported figures this model was built from, and correct any of them'
+              }
+              className="border font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
+              style={
+                corrected
+                  ? { borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.20)', color: '#F2F0EA' }
+                  : { borderColor: '#262521', background: 'transparent', color: '#dfbfbc' }
+              }
             >
-              <PencilLine className="w-3.5 h-3.5" style={{ color: '#C0453E' }} />
-              <span className="hidden sm:inline">
-                {corrected.count} corrected figure{corrected.count === 1 ? '' : 's'}
+              {corrected ? (
+                <PencilLine className="w-3.5 h-3.5" style={{ color: '#C0453E' }} />
+              ) : (
+                <Table2 className="w-3.5 h-3.5" style={{ color: '#8A8A8F' }} />
+              )}
+              <span className="hidden md:inline">
+                {corrected
+                  ? `${corrected.count} corrected figure${corrected.count === 1 ? '' : 's'}`
+                  : 'Check the figures'}
               </span>
-              <span className="sm:hidden">{corrected.count}</span>
+              <span className="md:hidden">{corrected ? corrected.count : 'Figures'}</span>
             </button>
           )}
 
