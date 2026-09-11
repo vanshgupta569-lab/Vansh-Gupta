@@ -262,6 +262,7 @@ export default function App() {
             source={payload.source || 'the filings'}
             sourceUrl={payload.sourceUrl}
             currencySymbol={payload.currencySymbol || '$'}
+            currency={payload.currency}
             statements={payload.statements || []}
             corrections={corrections}
             onChange={setCorrections}

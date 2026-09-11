@@ -33,7 +33,7 @@
 // reader's call, which is the same rule the rest of the site follows.
 
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, RotateCcw } from 'lucide-react';
+import { ArrowRight, RotateCcw, Pencil } from 'lucide-react';
 import {
   Corrections,
   FIELDS,
@@ -93,17 +93,19 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
    counts. Both are printed the way a person writes them, and an absent figure
    prints as an em dash rather than as a zero — the filing not saying something
    and the filing saying nothing are different facts. */
-const show = (v: any, count?: boolean): string => {
+const show = (v: any, count?: boolean, locale = 'en-US'): string => {
   if (typeof v !== 'number' || !isFinite(v)) return '—';
-  if (count) return Math.round(v).toLocaleString('en-IN');
+  if (count) return Math.round(v).toLocaleString(locale);
   // A balance check that comes out at floating-point noise is zero. Printing
   // it as "-0.0" makes arithmetic that worked look like arithmetic that did
   // not.
   if (Math.abs(v) < 0.05) return '0';
   const abs = Math.abs(v);
-  return v.toLocaleString('en-IN', {
-    minimumFractionDigits: abs < 100 ? 1 : 0,
-    maximumFractionDigits: abs < 100 ? 1 : 0,
+  // Big figures read better whole; small ones lose their meaning rounded.
+  const dp = abs >= 10000 ? 0 : abs >= 100 ? 1 : 2;
+  return v.toLocaleString(locale, {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
   });
 };
 
@@ -113,6 +115,8 @@ interface Props {
   source: string;
   sourceUrl?: string | null;
   currencySymbol: string;
+  /** ISO code from the filing, e.g. INR or USD. Decides the digit grouping. */
+  currency?: string;
   /** The payload exactly as the fetcher returned it. Never mutated. */
   statements: any[];
   corrections: Corrections;
@@ -130,6 +134,7 @@ export const FiguresEditor: React.FC<Props> = ({
   source,
   sourceUrl,
   currencySymbol,
+  currency,
   statements,
   corrections,
   onChange,
@@ -139,6 +144,18 @@ export const FiguresEditor: React.FC<Props> = ({
   building,
 }) => {
   const [openGroup, setOpenGroup] = useState<string>('income');
+  /* Which cell the cursor is in. A figure is grouped and rounded while it is
+     being read and shown raw the moment it is being edited: 988107.1270000001
+     is the truth, but it is not a number anybody can read down a column, and
+     rounding what somebody is halfway through typing is worse. */
+  const [editing, setEditing] = useState<string>('');
+
+  /* Digit grouping belongs to the company, not to the reader. An Indian filing
+     reads in lakh and crore; a dollar filing does not, and printing 3,91,035
+     for a US figure is simply wrong. */
+  const locale =
+    currency === 'INR' || currencySymbol === '\u20b9' ? 'en-IN' : 'en-US';
+  const fmt = (v: any, count?: boolean) => show(v, count, locale);
 
   const years = useMemo(() => statements.map((s) => String(s.fiscalYear)), [statements]);
   const changed = correctionCount(corrections);
@@ -201,6 +218,39 @@ export const FiguresEditor: React.FC<Props> = ({
 
   return (
     <div className="min-h-screen" style={{ background: '#0B0B0D' }}>
+      {/* A FIELD HAS TO LOOK LIKE A FIELD.
+          The first version drew every cell with a transparent border on a
+          transparent ground, which is honest to the page and useless to the
+          reader: a text input that looks exactly like printed text tells
+          nobody they may type in it. Every figure now sits on a hairline, the
+          way an entry line does on a paper form, lifts under the cursor, and
+          turns oxblood while it is being edited. Written as real CSS because
+          an inline style cannot carry a hover or a focus state. */}
+      <style>{`
+        .mg-cell {
+          background: transparent;
+          border: 1px solid transparent;
+          border-bottom-color: #38352E;
+          color: #C6C1B7;
+          cursor: text;
+        }
+        .mg-cell::placeholder { color: #4A4740; }
+        .mg-cell:hover {
+          background: #17171B;
+          border-bottom-color: #7A756A;
+          color: #F2F0EA;
+        }
+        .mg-cell:focus {
+          background: #131316;
+          border-color: #8B1E1E;
+          color: #F2F0EA;
+        }
+        .mg-cell.mg-dirty {
+          background: rgba(139,30,30,0.13);
+          border-color: #8B1E1E;
+          color: #F2F0EA;
+        }
+      `}</style>
       <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-28 lg:pt-32 pb-40">
         <div className="text-center">
           <Eyebrow centred>Before the model is built</Eyebrow>
@@ -281,9 +331,24 @@ export const FiguresEditor: React.FC<Props> = ({
               {ticker} as filed
               <Square />
             </h2>
-            <div className="font-mono text-[12px]" style={{ color: MUTED }}>
+            <div className="font-mono text-[12px] text-right" style={{ color: MUTED }}>
               Figures in millions of {currencySymbol} unless the row says otherwise
             </div>
+          </div>
+
+          {/* Said plainly, immediately above the first figure. A reader who has
+              to guess whether a table is editable will assume it is not. */}
+          <div
+            className="flex items-start gap-3 border px-5 py-4 mb-8"
+            style={{ borderColor: 'rgba(139,30,30,0.45)', background: 'rgba(139,30,30,0.07)' }}
+          >
+            <Pencil className="w-4 h-4 mt-0.5 shrink-0" style={{ color: RED_TEXT }} />
+            <p className="text-[15px] leading-[1.6]" style={{ color: READ }}>
+              <span style={{ color: INK, fontWeight: 600 }}>Every figure below can be changed.</span>{' '}
+              Click one and type over it. Anything you change turns red and keeps
+              the filed figure beside it, and an empty box puts the original
+              straight back.
+            </p>
           </div>
 
           {GROUPS.map((group) => {
@@ -323,7 +388,7 @@ export const FiguresEditor: React.FC<Props> = ({
                             className="text-left font-mono text-[11px] uppercase tracking-[0.18em] pb-3 pr-6 align-bottom"
                             style={{ color: DIM, minWidth: 240 }}
                           >
-                            Line
+                            Line &mdash; click a figure to change it
                           </th>
                           {years.map((y) => (
                             <th
@@ -357,24 +422,29 @@ export const FiguresEditor: React.FC<Props> = ({
                                 <td key={y} className="py-3 pl-6 text-right">
                                   <input
                                     inputMode="decimal"
+                                    title={`${f.label}, FY${y} — click and type to change it`}
                                     value={
-                                      typeof value === 'number' && isFinite(value)
+                                      typeof value !== 'number' || !isFinite(value)
+                                        ? ''
+                                        : editing === `${y}:${f.key}`
                                         ? String(value)
-                                        : ''
+                                        : fmt(value, f.count)
                                     }
                                     placeholder="—"
-                                    onChange={(e) => setCell(y, f.key, e.target.value)}
-                                    className="w-full font-mono text-[14px] text-right px-2 py-1.5 outline-none border transition-colors focus:border-[#8B1E1E]"
-                                    style={{
-                                      background: dirty ? 'rgba(139,30,30,0.10)' : 'transparent',
-                                      borderColor: dirty ? RED : 'transparent',
-                                      color: dirty ? INK : READ,
+                                    onFocus={(e) => {
+                                      setEditing(`${y}:${f.key}`);
+                                      e.currentTarget.select();
                                     }}
+                                    onBlur={() => setEditing('')}
+                                    onChange={(e) => setCell(y, f.key, e.target.value)}
+                                    className={`mg-cell w-full font-mono text-[14px] text-right px-2 py-1.5 outline-none transition-colors ${
+                                      dirty ? 'mg-dirty' : ''
+                                    }`}
                                   />
                                   {dirty && (
                                     <div className="flex items-center justify-end gap-2 mt-1.5">
                                       <span className="font-mono text-[11px]" style={{ color: DIM }}>
-                                        filed {show(original, f.count)}
+                                        filed {fmt(original, f.count)}
                                       </span>
                                       <button
                                         type="button"
@@ -454,7 +524,7 @@ export const FiguresEditor: React.FC<Props> = ({
                     return (
                       <td key={c.year} className="py-4 pl-6 text-right">
                         <div className="font-mono text-[14px]" style={{ color: big ? RED_TEXT : READ }}>
-                          {show(c.operatingGap)}
+                          {fmt(c.operatingGap)}
                         </div>
                         {big && (
                           <div className="font-mono text-[11px] mt-1" style={{ color: DIM }}>
@@ -489,7 +559,7 @@ export const FiguresEditor: React.FC<Props> = ({
                     return (
                       <td key={c.year} className="py-4 pl-6 text-right">
                         <div className="font-mono text-[14px]" style={{ color: big ? RED_TEXT : READ }}>
-                          {show(c.balanceGap)}
+                          {fmt(c.balanceGap)}
                         </div>
                       </td>
                     );
