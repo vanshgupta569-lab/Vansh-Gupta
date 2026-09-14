@@ -97,10 +97,26 @@ export const Header: React.FC<HeaderProps> = ({
               onNavigateToScreen('HOME');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="font-display text-2xl lg:text-3xl font-bold tracking-tighter text-[#F2F0EA] hover:text-[#ffb3ad] transition-colors flex items-center gap-2.5 group cursor-pointer shrink-0 whitespace-nowrap"
+            className="text-[26px] lg:text-[30px] text-[#F2F0EA] hover:text-[#ffb3ad] transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
           >
-            <span className="inline-block w-3 h-3 bg-[#8B1E1E] group-hover:scale-110 transition-transform" />
-            <span>MARGINALIA</span>
+            {/* THE MARK, NOT A LABEL.
+                The hero draws the wordmark in particles: lowercase, Playfair,
+                with the red square standing in for the full stop after it. The
+                header was setting the same brand as tracked-out uppercase sans
+                with the square in FRONT — a different mark in a different voice
+                on the same page. It now matches the thing it is the mark for. */}
+            <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
+              marginalia
+            </span>
+            <span
+              className="inline-block group-hover:scale-125 transition-transform"
+              style={{
+                width: '0.13em',
+                height: '0.13em',
+                background: '#8B1E1E',
+                marginLeft: '0.09em',
+              }}
+            />
           </button>
 
           {/* The clocks are the first thing to go when the bar gets tight.

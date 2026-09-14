@@ -451,7 +451,9 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             className="text-[34px] sm:text-[46px] lg:text-[58px] mb-6"
             style={{ ...DISPLAY, color: INK }}
           >
-            Real financials. Live models.
+            {/* No full stop here: the red square is the full stop. Written
+                out, the line ended on two of them. */}
+            Real financials. Live models
             <Square />
           </h1>
           <p className="text-[18px] leading-[1.6] mx-auto max-w-[38rem]" style={{ color: READ }}>
@@ -480,7 +482,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             className="font-mono text-[12px] tracking-[0.16em] uppercase mt-8"
             style={{ color: MUTED }}
           >
-            Drag to turn it &middot; scroll to see how it works
+            Scroll to see how it works
           </p>
         </Block>
 
