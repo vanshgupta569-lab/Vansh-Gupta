@@ -1,6 +1,6 @@
 // FILE: src/types.ts
 export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT' | 'QUALITATIVE';
-export type ScreenType = 'HOME' | 'DIRECTORY' | 'FIGURES' | 'QUESTIONS' | 'ANALYSIS';
+export type ScreenType = 'HOME' | 'DIRECTORY' | 'FIGURES' | 'QUESTIONS' | 'ANALYSIS' | 'NOTES';
 
 // Reported history. null means the filing does not give us that figure for
 // that year — it is NOT zero, and the dashboard renders it as an em dash. The

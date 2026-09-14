@@ -10,6 +10,7 @@ import { DirectoryScreen } from './components/DirectoryScreen';
 import { FiguresEditor } from './components/figuresEditor';
 import { TerminalDashboard } from './components/TerminalDashboard';
 import { QualitativeIntro } from './components/qualitativeIntro';
+import { MarginNotesScreen } from './components/marginNotes';
 import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
@@ -36,6 +37,8 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('HOME');
   const [selectedTicker, setSelectedTicker] = useState<string>('AAPL');
   const [activeSection, setActiveSection] = useState<string>('hero');
+  // Which margin note the reader clicked into. Null simply opens the first.
+  const [noteKey, setNoteKey] = useState<string | null>(null);
 
   // Companies fetched and modelled on demand this session. They sit alongside
   // the curated ones and are discarded on refresh — nothing is stored.
@@ -192,6 +195,14 @@ export default function App() {
     handleNavigateToScreen('DIRECTORY');
   };
 
+  // Opening the notes. A key sends the reader to the note they clicked; no
+  // key opens the screen at the top of the list.
+  const openNotes = (key?: string) => {
+    setNoteKey(key ?? null);
+    setCurrentScreen('NOTES');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleNavigateToScreen = (screen: ScreenType) => {
     setCurrentScreen(screen);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -232,10 +243,21 @@ export default function App() {
           <LandingPage
             onOpenCompany={() => handleNavigateToScreen('DIRECTORY')}
             onScrollTo={scrollToSection}
+            onOpenNotes={openNotes}
           >
             <CoverageStatsSection />
             <FeedbackFormSection />
           </LandingPage>
+        )}
+
+        {/* THE MARGIN NOTES.
+            A reading screen rather than an instrument one, which is why it is
+            paper rather than the dark ground the model screens use. */}
+        {currentScreen === 'NOTES' && (
+          <MarginNotesScreen
+            initialKey={noteKey}
+            onBack={() => handleNavigateToScreen('HOME')}
+          />
         )}
 
         {/* SCREEN 2: COMPANY SEARCH DIRECTORY */}

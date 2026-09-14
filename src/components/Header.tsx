@@ -135,7 +135,13 @@ export const Header: React.FC<HeaderProps> = ({
             {SECTIONS.map((item) => (
               <button
                 key={item.id}
-                onClick={() => goHomeAnd(item.id)}
+                onClick={() =>
+                  /* The margin notes are a screen now, not an anchor. The
+                     other three links are still sections of this page. */
+                  item.id === 'margin-notes'
+                    ? onNavigateToScreen('NOTES')
+                    : goHomeAnd(item.id)
+                }
                 className={`font-mono text-[11px] tracking-wider uppercase transition-colors relative py-1 cursor-pointer whitespace-nowrap ${
                   activeSection === item.id
                     ? 'text-[#8B1E1E] font-semibold border-b-2 border-[#8B1E1E]'

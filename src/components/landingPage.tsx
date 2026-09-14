@@ -26,6 +26,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ParticleField } from './particleField';
+import { MarginNotesSection } from './marginNotesSection';
 
 /* The sections the object is bound to, in page order. Every id here must be
    rendered below, and the object holds one formation per entry. */
@@ -289,11 +290,6 @@ const NEXT = [
   },
 ];
 
-const NOTES = [
-  { title: 'What is a DCF', line: 'Future cash, brought back to what it is worth today.' },
-  { title: 'What operating margin tells you', line: 'How much of each rupee of sales survives the cost of trading.' },
-  { title: 'Why profit and cash are not the same', line: 'Profit follows the accounting rules. Cash follows the bank account.' },
-];
 
 const MARGIN_LINES = [
   {
@@ -322,27 +318,6 @@ const MARGIN_LINES = [
   },
 ];
 
-const upcomingQuarters = (count: number) => {
-  const now = new Date();
-  let q = Math.floor(now.getMonth() / 3) + 1;
-  let y = now.getFullYear();
-  const out: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    q += 1;
-    if (q > 4) { q = 1; y += 1; }
-    out.push(`Q${q} ${y}`);
-  }
-  return out;
-};
-
-const ROADMAP = [
-  { title: 'Private company inputs', status: 'In build' },
-  { title: 'Things to check in a filing', status: 'In build' },
-  { title: 'One-page desk summary', status: 'In build' },
-  { title: 'Leveraged buyout model', status: 'Planned' },
-  { title: 'Workbook reformatting', status: 'Planned' },
-];
-
 const STATS = [
   { to: 10000, suffix: '+', label: 'Listed companies', detail: 'NYSE · NASDAQ · NSE · BSE · LSE · TSX' },
   { to: 5, suffix: 'Y', label: 'Of filed history', detail: 'IS · BS · CF · WC · PP&E · Debt · Equity' },
@@ -355,17 +330,20 @@ const STATS = [
 interface LandingProps {
   onOpenCompany: () => void;
   onScrollTo: (id: string) => void;
+  /* Opens the Margin Notes screen. The three cards on the band below and
+     the closing button both use it, so a reader who wants to read a note
+     lands on the note rather than on a card that does nothing. */
+  onOpenNotes: (key?: string) => void;
   /* The feedback form and the analyst card are existing components and are
      dropped in here, before the closing call to action, so the page still
      ends on an invitation. */
   children?: React.ReactNode;
 }
 
-export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo, children }) => {
+export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo, onOpenNotes, children }) => {
   const [launching, setLaunching] = useState(false);
   const [activeMargin, setActiveMargin] = useState(0);
   const marginRef = useRef<HTMLDivElement>(null);
-  const quarters = upcomingQuarters(ROADMAP.length);
 
   /* The fly-through: press the button and the object comes at you and past
      you, and the search screen is what is behind it. The navigation waits
@@ -872,68 +850,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           </div>
         </section>
 
-        {/* 11 — the margin notes, and the one place status is stated */}
-        <section id="margin-notes" className="w-full" style={{ background: '#F2F0EA' }}>
-          <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
-            <p
-              className="font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
-              style={{ color: RED_TEXT }}
-            >
-              <span className="h-px w-8" style={{ background: RED }} />
-              11 &middot; The margin notes
-            </p>
-            <h2 className="text-[30px] sm:text-[40px] lg:text-[54px] mb-4" style={{ ...DISPLAY, color: '#16150F' }}>
-              The Margin Notes
-            </h2>
-            <p className="text-[17px] lg:text-[19px] mb-14 max-w-[44ch]" style={{ color: '#3A382F' }}>
-              Read any company&rsquo;s accounts without a finance degree.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-px mb-16" style={{ background: '#DAD6CC' }}>
-              {NOTES.map((note) => (
-                <div key={note.title} className="p-8" style={{ background: '#F2F0EA' }}>
-                  <div className="text-[20px] leading-[1.2] mb-3" style={{ ...DISPLAY, color: '#16150F' }}>
-                    {note.title}
-                  </div>
-                  <div className="text-[15px] leading-[1.55]" style={{ color: '#6B6759' }}>
-                    {note.line}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div
-              className="font-mono text-[12px] tracking-[0.2em] uppercase mb-6 pt-8 border-t"
-              style={{ color: '#6B6759', borderColor: '#DAD6CC' }}
-            >
-              What is being built next
-            </div>
-            <div>
-              {ROADMAP.map((item, i) => (
-                <div
-                  key={item.title}
-                  className="flex items-center justify-between gap-6 py-4 border-b"
-                  style={{ borderColor: '#DAD6CC' }}
-                >
-                  <div className="flex items-baseline gap-6 lg:gap-12 min-w-0">
-                    <span className="font-mono text-[12px] tracking-[0.16em] shrink-0" style={{ color: '#6B6759' }}>
-                      {quarters[i]}
-                    </span>
-                    <span className="text-[16px] lg:text-[18px] truncate" style={{ color: '#16150F' }}>
-                      {item.title}
-                    </span>
-                  </div>
-                  <span
-                    className="font-mono text-[12px] tracking-[0.16em] uppercase shrink-0"
-                    style={{ color: item.status === 'In build' ? RED_TEXT : '#6B6759' }}
-                  >
-                    {item.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <MarginNotesSection onOpenNotes={onOpenNotes} />
 
         {children}
 
@@ -964,7 +881,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               </button>
               <button
                 type="button"
-                onClick={() => onScrollTo('margin-notes')}
+                onClick={onOpenNotes}
                 className="font-mono text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent hover:border-[#8B1E1E] transition-colors"
                 style={{ borderColor: LINE, color: MUTED }}
               >
