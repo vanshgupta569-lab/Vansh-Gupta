@@ -49,6 +49,7 @@
 // down; without this, that reference would be impossible.
 
 import ExcelJS from 'exceljs';
+import { addSupportingSheets } from './excelSheets';
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 
@@ -927,9 +928,37 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     V.getCell(58 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
   });
 
+  // =========================================================================
+  // RATIOS, CHECKS & SOURCES
+  // =========================================================================
+  // Built in their own file, reading this sheet's row registry rather than
+  // rebuilding the model. See src/data/excelSheets.ts.
+  addSupportingSheets({
+    R,
+    modelSheetName: '3-StatementModel',
+    years,
+    nH,
+    nT,
+    FIRST,
+    cOf,
+    L,
+    lastCol,
+    companyName,
+    source,
+    newSheet,
+    title,
+    band,
+    label,
+    styleHard,
+    styleCalc,
+    fmt: { PCT1, MULT },
+    colors: { OXBLOOD, WHITE, BLACK, BLUE, GREY },
+    FONT,
+  });
+
   // Tab order. ExcelJS ignores a sort of the worksheets array, so each sheet is
   // given an explicit position instead.
-  const order = ['Cover', '3-StatementModel', 'DCFModel'];
+  const order = ['Cover', '3-StatementModel', 'DCFModel', 'Ratios', 'Checks', 'Sources'];
   wb.eachSheet((sheet) => {
     const position = order.indexOf(sheet.name);
     if (position >= 0) (sheet as any).orderNo = position;
