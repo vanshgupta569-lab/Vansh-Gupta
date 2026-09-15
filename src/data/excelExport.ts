@@ -23,16 +23,20 @@
 // and the balance check COMPUTES to zero rather than being asserted, so a
 // broken edit announces itself.
 //
-// TWO DELIBERATE SIMPLIFICATIONS BY DEFAULT, both governed by one cell
+// ONE DELIBERATE SIMPLIFICATION BY DEFAULT, governed by one cell
 //
-//   Interest is charged on OPENING balances, not average balances, and the
-//   revolver is held at zero rather than sized to the cash shortfall.
-//   Average balances and a self-sizing revolver are both circular in Excel:
-//   interest changes profit, which changes cash, which changes the revolver
-//   draw, which changes interest. The "Circularity switch" in the model
-//   settings section (top of the model sheet) turns both of those on at
-//   once; left at its default of off, every number here computes exactly as
-//   described above, with no divergence and no error.
+//   Interest on cash, term debt and the revolver is charged on OPENING
+//   balances, not average balances. Average balances are circular in Excel:
+//   interest changes profit, which changes cash, the revolver draw and the
+//   closing balances, which change interest. The "Circularity switch" in the
+//   model settings section (top of the model sheet) turns average balances
+//   on; left at its default of off, nothing computes circularly.
+//
+//   The revolver is a roll-forward in both states, as in the engine
+//   (src/engine/model.js): it draws when cash would fall below the minimum
+//   cash balance, repays from any cash above it, and its closing balance
+//   carries into next year's opening. On opening-balance interest that is not
+//   circular, because this year's draw never feeds this year's interest.
 //
 //   Excel's circular-reference detection is structural, not value-based: it
 //   is built from every cell a formula's text mentions, including inside an
@@ -517,13 +521,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
   note(['CIRCULARITY SWITCH — 1 = ON, 0 = OFF (DEFAULT)'], OXBLOOD, true);
   note([
-    'Off (0): interest is charged on the OPENING balance of cash and debt, and the revolver is held at zero — the two',
-    'simplifications described at the top of this file. Every figure downstream computes exactly as it would if this',
-    'switch did not exist at all.',
+    'Off (0): interest is charged on the OPENING balance of cash, term debt and the revolver. Nothing in the workbook',
+    'then depends on a figure it helps produce.',
     '',
-    'On (1): interest is charged on the AVERAGE of the opening and closing balance of cash and debt, and the revolver',
-    'draws exactly enough each forecast year to keep cash from going negative. Both of those depend on a figure they',
-    'help produce, so the workbook becomes genuinely circular.',
+    'On (1): interest is charged on the AVERAGE of the opening and closing balance of cash, term debt and the revolver.',
+    'Closing balances depend on profit, which depends on that interest, so the workbook becomes genuinely circular.',
+    '',
+    'The revolver draws and repays in BOTH states; see the note under the revolver schedule below.',
     '',
     'This file has iterative calculation turned on already, and needs it regardless of which way the switch is set:',
     'Excel treats a cell as circular if a formula NAMES it anywhere, even inside the untaken half of an IF(), so the',
@@ -597,20 +601,29 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     indent: 0,
   });
 
+  // The balance interest is charged on: opening with the switch off, the
+  // average of opening and closing with it on. Every interest line uses this,
+  // so cash, term debt and the revolver can never follow different rules.
+  const interestBasis = (key: string, c: string, p: string) =>
+    `IF(${breakerRef}=1,(${p}${R[key]}+${c}${R[key]})/2,${p}${R[key]})`;
+
   driver('cashRate', 'Return earned on cash', null, () => 0, PCT2);
   line(
     'intInc',
     'Interest income',
     M.interestIncome,
-    (c, p) => `IF(${breakerRef}=1,(${p}${R.cashEnd}+${c}${R.cashEnd})/2,${p}${R.cashEnd})*${c}${R.cashRate}`,
+    (c, p) => `${interestBasis('cashEnd', c, p)}*${c}${R.cashRate}`,
     money()
   );
   driver('debtRate', 'Interest rate on debt', null, (i) => at(M.debt?.weightedAverageRate, i) ?? 0.045, PCT2);
+  // Seeded at the term debt rate: the engine carries no separate revolver rate.
+  driver('revRate', 'Interest rate on revolver', null, (i) => at(M.debt?.weightedAverageRate, i) ?? 0.045, PCT2);
   line(
     'intExp',
     'Interest expense',
     M.interestExpense,
-    (c, p) => `-IF(${breakerRef}=1,(${p}${R.debtEnd}+${c}${R.debtEnd})/2,${p}${R.debtEnd})*${c}${R.debtRate}`,
+    (c, p) =>
+      `-(${interestBasis('debtEnd', c, p)}*${c}${R.debtRate}+${interestBasis('revEnd', c, p)}*${c}${R.revRate})`,
     money()
   );
   driver('other', 'Other income / (expense), net', null, (i) => at(M.otherIncomeExpense, i) ?? 0, money(), {
@@ -730,6 +743,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
 
   // ---- DEBT AND REVOLVER --------------------------------------------------
   header('Debt & revolver');
+  sub('Long term debt');
   driver('debtBorrow', 'Additional borrowing / (pay down)', null, (i) => at(M.debt?.borrowing, i) ?? 0, money(), {
     unit: UNIT,
   });
@@ -738,33 +752,62 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
   bopRow('debtBop', 'Beginning of period', at(M.debt?.beginning, 0), 'debtEnd');
   eopRow('debtEnd', 'End of period', M.debt?.ending, (c) => `${c}${R.debtBop}+${c}${R.debtBorrow}+${c}${R.debtPik}`);
-  // Zero unless the circularity switch in Model settings is on, in which
-  // case this draws exactly enough to keep cash (below) from going negative.
-  // Left at zero, cff below is unaffected and nothing here is circular.
-  line(
-    'revolver',
-    'Revolver',
-    new Array(nH).fill(0),
-    (c) =>
-      `IF(${breakerRef}=1,MAX(0,-(${c}${R.cashBop}+${c}${R.cfo}+${c}${R.cfi}+${c}${R.debtBorrow}+${c}${R.csIssue}+${c}${R.reDiv}+${c}${R.buyback}+${c}${R.ociChg})),0)`,
-    money(),
-    { unit: UNIT, indent: 1 }
-  );
+  blank();
 
-  note(['REVOLVER: ZERO UNLESS THE CIRCULARITY SWITCH ABOVE IS ON'], OXBLOOD, true);
+  // The revolver is a BALANCE with its own roll-forward, like term debt and
+  // PP&E. An earlier version held only the year's draw in a single row and
+  // fed that row to both cash from financing and the balance sheet, so each
+  // draw fell off the balance sheet the following year without ever being
+  // repaid, and the balance check failed from the second year of borrowing.
+  sub('Revolver');
+  // The engine sizes its revolver against a minimum cash balance; recover it
+  // from the engine's own excess-cash line (opening cash less excess cash).
+  driver(
+    'minCash',
+    'Minimum cash balance',
+    null,
+    (i) => {
+      if (i < nH) return null;
+      const bop = at(M.cash?.beginning, i);
+      const excess = at(M.revolverAnalysis?.excessCash, i);
+      return isNum(bop) && isNum(excess) ? bop - excess : 0;
+    },
+    money(),
+    { unit: UNIT }
+  );
+  bopRow('revBop', 'Revolver, beginning of period', at(M.revolver?.beginning, 0) ?? at(M.balanceSheet?.revolver, 0) ?? 0, 'revEnd');
+
+  // Every financing flow except the revolver, in one place: the revolver sizes
+  // itself against these and cash from financing adds the draw to them, so the
+  // two can never disagree about what financing contains.
+  const financingExRevolver = (c: string) =>
+    ['debtBorrow', 'csIssue', 'reDiv', 'buyback', 'ociChg'].map((k) => `${c}${R[k]}`).join('+');
+
+  // Reported years: the movement between the filed balances. Forecast years,
+  // as in the engine: cash available before the revolver is opening cash less
+  // the minimum, plus operating, investing and all other financing flows. A
+  // shortfall is drawn in full; a surplus repays at most the opening balance.
+  calc(
+    'revDraw',
+    'Revolver draw / (repayment)',
+    (c, _p, i) =>
+      i < nH
+        ? `${c}${R.revEnd}-${c}${R.revBop}`
+        : `-MIN(${c}${R.revBop},${c}${R.cashBop}-${c}${R.minCash}+${c}${R.cfo}+${c}${R.cfi}+${financingExRevolver(c)})`,
+    money()
+  );
+  eopRow('revEnd', 'Revolver, end of period', M.balanceSheet?.revolver, (c) => `${c}${R.revBop}+${c}${R.revDraw}`);
+
+  note(['REVOLVER: DRAWS WHEN SHORT OF CASH AND REPAYS FROM SURPLUS, WHICHEVER WAY THE SWITCH IS SET'], OXBLOOD, true);
   note([
-    'With the switch off (0), a company short of cash would normally draw on a revolving credit line, but modelling',
-    'that here would create a circular reference: the draw changes interest, which changes profit, which changes',
-    'cash, which changes the draw. So with the switch off, the revolver stays at zero and the cash line may go',
-    'negative instead.',
+    'Each forecast year the revolver measures the cash available before it: opening cash less the minimum cash balance,',
+    'plus cash from operations, investing and every other financing line. If that is negative it draws the shortfall,',
+    'which holds cash at the minimum. If it is positive it repays as much of the opening balance as the surplus covers.',
+    'The closing balance carries into next year, sits on the balance sheet, and bears interest at the rate above.',
     '',
-    'If the cash balance further down goes negative with the switch off, the model is telling you this company cannot',
-    'fund itself on these assumptions. That is information, not a fault. To resolve it, either raise "Additional',
-    'borrowing" above, or reduce capital expenditure, dividends or buybacks until the cash line stays positive.',
-    '',
-    'With the switch on (1), the revolver draws exactly enough each forecast year to keep cash from going negative,',
-    'and interest above is charged on average balances instead of opening balances. Both changes are deliberately',
-    'circular — see the note beside the switch in Model settings.',
+    'With the circularity switch off that interest is charged on the opening balance, so this year\'s draw never affects',
+    'this year\'s profit and nothing is circular. With it on, interest is charged on the average balance, which is',
+    'circular by construction; see the note beside the switch in Model settings.',
   ]);
   blank();
 
@@ -829,7 +872,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   calc(
     'cff',
     'Cash from financing activities',
-    (c) => `${c}${R.debtBorrow}+${c}${R.csIssue}+${c}${R.reDiv}+${c}${R.buyback}+${c}${R.ociChg}+${c}${R.revolver}`,
+    (c) => `${financingExRevolver(c)}+${c}${R.revDraw}`,
     money(),
     { bold: true, indent: 0 }
   );
@@ -857,7 +900,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   blank();
   calc('bsAp', 'Accounts payable', (c) => `${c}${R.apEnd}`, money(currencySymbol));
   calc('bsAcc', 'Accrued expenses & deferred revenue', (c) => `${c}${R.accEnd}`, money());
-  calc('bsRevolver', 'Revolver', (c) => `${c}${R.revolver}`, money());
+  calc('bsRevolver', 'Revolver', (c) => `${c}${R.revEnd}`, money());
   calc('bsDebt', 'Long term debt', (c) => `${c}${R.debtEnd}`, money());
   calc('bsOncl', 'Other non-current liabilities', (c) => `${c}${R.onclEnd}`, money());
   calc('bsTl', 'Total liabilities', (c) => `SUM(${c}${R.bsAp}:${c}${R.bsOncl})`, money(), { bold: true, indent: 0 });
@@ -988,7 +1031,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   vOne(44, 'Enterprise value', `${F}30+${F}43`, money(currencySymbol), { bold: true, indent: 0 });
 
   band(V, 46, 'From enterprise value to one share', OXBLOOD, WHITE, fLast);
-  vOne(47, 'Debt at the last reported date', `'3-StatementModel'!${L(cOf(nH - 1))}${R.debtEnd}`, money(), { cross: true });
+  vOne(
+    47,
+    'Debt and revolver at the last reported date',
+    `'3-StatementModel'!${L(cOf(nH - 1))}${R.debtEnd}+'3-StatementModel'!${L(cOf(nH - 1))}${R.revEnd}`,
+    money(),
+    { cross: true }
+  );
   vOne(48, 'Cash at the last reported date', `'3-StatementModel'!${L(cOf(nH - 1))}${R.cashEnd}`, money(), { cross: true });
   vOne(49, 'Net debt', `${F}47-${F}48`, money(), { bold: true, indent: 0 });
   vInput(50, 'Net diluted shares outstanding', D.perpetuity?.dilutedShares ?? D.dilutedShares ?? 1, money(), {
@@ -1016,8 +1065,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   vOne(56, 'Premium / (discount) to the model', `${F}55/${F}53-1`, PCT1, { bold: true, indent: 0, unit: '%' });
 
   [
-    'Interest is charged on opening balances rather than average balances, so this workbook contains no circular',
-    'references. The difference to the answer is small; the difference to whether the file opens cleanly is not.',
+    'With the circularity switch off, interest is charged on opening balances rather than average balances, so nothing',
+    'computes circularly. The difference to the answer is small. See Model settings on the 3-statement model sheet.',
   ].forEach((text, i) => {
     V.getCell(58 + i, 3).value = text;
     V.getCell(58 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };

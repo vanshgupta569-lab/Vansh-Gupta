@@ -342,6 +342,12 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
     nH
   );
   check(
+    'Revolver: end = beginning + draw / (repayment)',
+    (i) => `${ref('revEnd', i)}-${ref('revBop', i)}-${ref('revDraw', i)}`,
+    nH
+  );
+  check('Revolver: balance is never negative', (i) => `MIN(0,${ref('revEnd', i)})`, nH);
+  check(
     'Common stock & APIC: end = beginning + issuance + stock compensation',
     (i) => `${ref('csEnd', i)}-${ref('csBop', i)}-${ref('csIssue', i)}-${ref('sbc', i)}`,
     nH
@@ -656,7 +662,7 @@ function buildCashFlowSheet(ctx: SupportingSheetsContext) {
 
   b.group('Financing activities');
   const borrow = b.link('Proceeds from / (repayment of) term debt', 'debtBorrow');
-  const revolver = b.link('Revolver', 'revolver');
+  const revolver = b.link('Revolver draw / (repayment)', 'revDraw');
   const issue = b.link('Proceeds from issuance of common stock', 'csIssue');
   const div = b.link('Payments for dividends', 'reDiv');
   const buyback = b.link('Repurchases of common stock', 'buyback');
@@ -734,7 +740,10 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   end('End of period', 'debtEnd');
   b.blank();
   b.sub('Revolver');
-  end('Revolver', 'revolver');
+  bal('Minimum cash balance', 'minCash');
+  bal('Beginning of period', 'revBop');
+  bal('Plus: draw / (less: repayment)', 'revDraw');
+  end('End of period', 'revEnd');
   b.blank();
 
   b.group("Annexure D - shareholders' equity");
