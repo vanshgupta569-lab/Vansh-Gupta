@@ -1024,7 +1024,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
 
   // =========================================================================
-  // RATIOS, CHECKS & SOURCES
+  // STATEMENTS, ANNEXURES, RATIOS, CHECKS & SOURCES
   // =========================================================================
   // Built in their own file, reading this sheet's row registry rather than
   // rebuilding the model. See src/data/excelSheets.ts.
@@ -1040,6 +1040,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     lastCol,
     companyName,
     source,
+    currencySymbol,
+    UNIT,
     newSheet,
     title,
     band,
@@ -1047,13 +1049,24 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     styleHard,
     styleCalc,
     fmt: { PCT1, MULT, money, money2 },
-    colors: { OXBLOOD, WHITE, BLACK, BLUE, GREY },
+    colors: { OXBLOOD, SUBHEAD, WHITE, BLACK, BLUE, GREY },
     FONT,
   });
 
   // Tab order. ExcelJS ignores a sort of the worksheets array, so each sheet is
   // given an explicit position instead.
-  const order = ['Cover', '3-StatementModel', 'DCFModel', 'Ratios', 'Checks', 'Sources'];
+  const order = [
+    'Cover',
+    '3-StatementModel',
+    'Income Statement',
+    'Balance Sheet',
+    'Cash Flow',
+    'Annexures',
+    'DCFModel',
+    'Ratios',
+    'Checks',
+    'Sources',
+  ];
   wb.eachSheet((sheet) => {
     const position = order.indexOf(sheet.name);
     if (position >= 0) (sheet as any).orderNo = position;

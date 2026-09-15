@@ -1,9 +1,10 @@
 // FILE: src/data/excelSheets.ts
 //
-// Marginalia — Excel export: Ratios, Checks and Sources sheets
+// Marginalia — Excel export: statement, annexure, Ratios, Checks and Sources sheets
 //
-// These three sheets READ the model built in excelExport.ts; nothing here
-// rebuilds it. Every figure on Ratios and Checks is a live cross-sheet
+// These sheets READ the model built in excelExport.ts; nothing here
+// rebuilds it. Every figure on the income statement, balance sheet, cash
+// flow, annexures, Ratios and Checks is a live cross-sheet
 // formula pointing at '3-StatementModel' (row numbers come from the row
 // registry `R` that sheet already built), so moving an assumption there
 // moves these sheets too. The Sources sheet is the one exception, by
@@ -59,8 +60,10 @@ export interface SupportingSheetsContext {
   label: (ws: Sheet, row: number, name: string, unit: string, o?: any) => void;
   styleHard: (cell: ExcelJS.Cell, fmt: string, o?: any) => void;
   styleCalc: (cell: ExcelJS.Cell, fmt: string, o?: any) => void;
+  currencySymbol: string;
+  UNIT: string;
   fmt: { PCT1: string; MULT: string; money: (symbol?: string) => string; money2: (symbol?: string) => string };
-  colors: { OXBLOOD: string; WHITE: string; BLACK: string; BLUE: string; GREY: string };
+  colors: { OXBLOOD: string; SUBHEAD: string; WHITE: string; BLACK: string; BLUE: string; GREY: string };
   FONT: { name: string; size: number };
 }
 
@@ -382,6 +385,385 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
 }
 
 // =============================================================================
+// STATEMENTS & ANNEXURES — shared builder
+// =============================================================================
+//
+// Presentation sheets: every figure is a live link to '3-StatementModel' or a
+// subtotal of those links on the same sheet. Nothing is copied as a value.
+//
+// Two signs travel with every line, and they are deliberately separate:
+//
+//  - flip: how the linked figure is DISPLAYED. The model stores costs as
+//    negatives; a published income statement shows them as positives, so a
+//    cost line links as -model.
+//  - sign: how the displayed line ENTERS a subtotal, +1 added or -1
+//    subtracted. A cost shown positive enters with -1.
+//
+// Subtotal formulas are generated from those signs rather than written as
+// "revenue minus costs", so a tax benefit (a positive tax figure on the
+// model, shown negative here) still adds to net income, and a line whose
+// display is flipped for a reason other than being a cost (capex on the
+// cash flow, shown as the negative cash effect it is) is not subtracted twice.
+
+interface Line {
+  row: number;
+  sign: 1 | -1;
+}
+
+interface LineOpts {
+  flip?: 1 | -1;
+  sign?: 1 | -1;
+  fmt?: string;
+  unit?: string;
+  bold?: boolean;
+  italic?: boolean;
+  indent?: number;
+  /** Show a blank model cell as blank rather than 0. Only for lines no subtotal reads. */
+  blankAsEmpty?: boolean;
+}
+
+function presentationBuilder(ctx: SupportingSheetsContext, ws: Sheet) {
+  const { R, nH, nT, cOf, L, lastCol, band, label, styleCalc, fmt, colors, UNIT, FONT } = ctx;
+  const MS = `'${ctx.modelSheetName}'`;
+  let r = 8;
+
+  const group = (text: string) => {
+    band(ws, r, text, colors.OXBLOOD, colors.WHITE, lastCol);
+    r++;
+  };
+  const sub = (text: string) => {
+    band(ws, r, text, colors.SUBHEAD, colors.BLACK, lastCol);
+    r++;
+  };
+  const blank = () => {
+    r++;
+  };
+  const heading = (text: string) => {
+    label(ws, r, text, '', { indent: 1, italic: true });
+    r++;
+  };
+  const note = (lines: string[]) => {
+    lines.forEach((text) => {
+      const cell = ws.getCell(r, 3);
+      cell.value = text;
+      cell.font = { ...FONT, size: 10, italic: true, color: { argb: colors.GREY } };
+      r++;
+    });
+  };
+
+  /** A line linked to a model row, in every year. */
+  const link = (name: string, key: string, o: LineOpts = {}): Line => {
+    const modelRow = R[key];
+    if (!modelRow) throw new Error(`Excel export: no model row registered as "${key}"`);
+    const row = r++;
+    label(ws, row, name, o.unit ?? UNIT, { indent: o.indent ?? 1, bold: o.bold, italic: o.italic });
+    for (let i = 0; i < nT; i++) {
+      const ref = `${MS}!${L(cOf(i))}${modelRow}`;
+      const shown = o.flip === -1 ? `-${ref}` : ref;
+      const cell = ws.getCell(row, cOf(i));
+      cell.value = { formula: o.blankAsEmpty ? `IF(${ref}="","",${shown})` : shown } as any;
+      styleCalc(cell, o.fmt ?? fmt.money(), { cross: true, bold: o.bold, italic: o.italic });
+    }
+    return { row, sign: o.sign ?? 1 };
+  };
+
+  /**
+   * A subtotal of lines on this sheet. Its displayed value is
+   * sign × Σ(part.sign × part), so each term's operator comes from the signs.
+   */
+  const total = (name: string, parts: Line[], o: LineOpts = {}): Line => {
+    const row = r++;
+    const sign = o.sign ?? 1;
+    const bold = o.bold ?? true;
+    label(ws, row, name, o.unit ?? UNIT, { indent: o.indent ?? 0, bold });
+    for (let i = 0; i < nT; i++) {
+      const c = L(cOf(i));
+      const formula = parts
+        .map((p, idx) => {
+          const op = sign * p.sign < 0 ? '-' : idx === 0 ? '' : '+';
+          return `${op}${c}${p.row}`;
+        })
+        .join('');
+      const cell = ws.getCell(row, cOf(i));
+      cell.value = { formula } as any;
+      styleCalc(cell, o.fmt ?? fmt.money(), { bold });
+    }
+    return { row, sign };
+  };
+
+  /** A thin rule down the left edge of the first forecast year. */
+  const finish = () => {
+    if (nH <= 0 || nH >= nT) return;
+    for (let row = 5; row < r; row++) {
+      const cell = ws.getCell(row, cOf(nH));
+      cell.border = { ...(cell.border || {}), left: { style: 'thin', color: { argb: colors.GREY } } };
+    }
+  };
+
+  return { group, sub, blank, heading, note, link, total, finish };
+}
+
+// =============================================================================
+// INCOME STATEMENT
+// =============================================================================
+
+function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
+  const { companyName, newSheet, title, fmt, colors, currencySymbol } = ctx;
+  const ws = newSheet('Income Statement', colors.OXBLOOD);
+  title(
+    ws,
+    `${companyName} - income statement`,
+    'Every figure links to the 3-statement model. Costs are shown as positive figures and subtracted, as in a published statement.'
+  );
+  yearHeader(ctx, ws);
+  const b = presentationBuilder(ctx, ws);
+  const sym = fmt.money(currencySymbol);
+  // Stored negative on the model, shown positive here, subtracted in totals.
+  const cost = (name: string, key: string) => b.link(name, key, { flip: -1, sign: -1 });
+
+  b.group('Revenue & gross profit');
+  const rev = b.link('Revenue', 'rev', { fmt: sym, bold: true, indent: 0 });
+  const cogs = cost('Cost of sales', 'cogs');
+  const gp = b.total('Gross profit', [rev, cogs]);
+  b.blank();
+
+  b.group('Operating expenses');
+  const rnd = cost('Research & development', 'rnd');
+  const sga = cost('Selling, general & administrative', 'sga');
+  const opex = b.total('Total operating expenses', [rnd, sga], { sign: -1 });
+  b.blank();
+  const ebit = b.total('Operating income', [gp, opex]);
+  b.blank();
+
+  b.group('Non-operating items & taxes');
+  const intInc = b.link('Interest income', 'intInc');
+  const intExp = cost('Interest expense', 'intExp');
+  const other = b.link('Other income / (expense), net', 'other');
+  const pbt = b.total('Income before provision for income taxes', [ebit, intInc, intExp, other]);
+  const tax = cost('Provision for income taxes', 'tax');
+  b.total('Net income', [pbt, tax], { fmt: sym });
+  b.blank();
+
+  b.group('Supplementary');
+  const da = b.link('Depreciation & amortization', 'da');
+  const sbc = b.link('Stock based compensation', 'sbc');
+  b.total('EBITDA', [ebit, da, sbc], { fmt: sym });
+  b.blank();
+  b.note(['A negative provision for income taxes is a tax benefit, and adds to net income.']);
+  b.finish();
+}
+
+// =============================================================================
+// BALANCE SHEET
+// =============================================================================
+
+function buildBalanceSheetSheet(ctx: SupportingSheetsContext) {
+  const { companyName, newSheet, title, fmt, colors, currencySymbol } = ctx;
+  const ws = newSheet('Balance Sheet', colors.OXBLOOD);
+  title(
+    ws,
+    `${companyName} - balance sheet`,
+    'Every figure links to the 3-statement model. Treasury stock and accumulated losses carry their own negative sign.'
+  );
+  yearHeader(ctx, ws);
+  const b = presentationBuilder(ctx, ws);
+  const sym = fmt.money(currencySymbol);
+
+  b.group('Assets');
+  b.sub('Current assets');
+  const cash = b.link('Cash & equivalents', 'bsCash', { fmt: sym });
+  const ar = b.link('Accounts receivable', 'bsAr');
+  const inv = b.link('Inventory', 'bsInv');
+  const dta = b.link('Deferred tax assets', 'bsDta');
+  const oca = b.link('Other current assets', 'bsOca');
+  const tca = b.total('Total current assets', [cash, ar, inv, dta, oca]);
+  b.sub('Non-current assets');
+  const ppe = b.link('Property, plant & equipment, net', 'bsPpe');
+  const oa = b.link('Other non-current assets', 'bsOa');
+  const tnca = b.total('Total non-current assets', [ppe, oa]);
+  b.blank();
+  b.total('Total assets', [tca, tnca], { fmt: sym });
+  b.blank();
+
+  b.group('Liabilities');
+  b.sub('Current liabilities');
+  const ap = b.link('Accounts payable', 'bsAp', { fmt: sym });
+  const acc = b.link('Accrued expenses & deferred revenue', 'bsAcc');
+  const rev = b.link('Revolver', 'bsRevolver');
+  const tcl = b.total('Total current liabilities', [ap, acc, rev]);
+  b.sub('Non-current liabilities');
+  const debt = b.link('Long term debt', 'bsDebt');
+  const oncl = b.link('Other non-current liabilities', 'bsOncl');
+  const tncl = b.total('Total non-current liabilities', [debt, oncl]);
+  b.blank();
+  const tl = b.total('Total liabilities', [tcl, tncl]);
+  b.blank();
+
+  b.group("Shareholders' equity");
+  const cs = b.link('Common stock & additional paid in capital', 'bsCs');
+  const ts = b.link('Treasury stock', 'bsTs');
+  const re = b.link('Retained earnings / (accumulated deficit)', 'bsRe');
+  const oci = b.link('Accumulated other comprehensive income / (loss)', 'bsOci');
+  const te = b.total("Total shareholders' equity", [cs, ts, re, oci]);
+  b.blank();
+  b.total("Total liabilities & shareholders' equity", [tl, te], { fmt: sym });
+  b.finish();
+}
+
+// =============================================================================
+// CASH FLOW
+// =============================================================================
+
+function buildCashFlowSheet(ctx: SupportingSheetsContext) {
+  const { companyName, newSheet, title, fmt, colors, currencySymbol } = ctx;
+  const ws = newSheet('Cash Flow', colors.OXBLOOD);
+  title(
+    ws,
+    `${companyName} - cash flow statement`,
+    'Every figure links to the 3-statement model. Inflows are positive, outflows in brackets.'
+  );
+  yearHeader(ctx, ws);
+  const b = presentationBuilder(ctx, ws);
+  const sym = fmt.money(currencySymbol);
+  // Every line here is already a cash effect, so every line adds. An increase
+  // in an asset balance uses cash, hence the flipped display on those.
+  const assetMove = (name: string, key: string) => b.link(name, key, { flip: -1 });
+
+  b.group('Operating activities');
+  const ni = b.link('Net income', 'cfNi', { fmt: sym });
+  b.heading('Adjustments to reconcile net income to cash from operations:');
+  const da = b.link('Depreciation & amortization', 'cfDa');
+  const sbc = b.link('Stock based compensation', 'cfSbc');
+  const pik = b.link('Non-cash PIK interest', 'cfPik');
+  b.heading('Changes in operating assets and liabilities:');
+  const ar = assetMove('Accounts receivable', 'arChg');
+  const inv = assetMove('Inventory', 'invChg');
+  const dta = assetMove('Deferred tax assets', 'dtaChg');
+  const oca = assetMove('Other current assets', 'ocaChg');
+  const oa = assetMove('Other non-current assets', 'oaChg');
+  const ap = b.link('Accounts payable', 'apChg');
+  const acc = b.link('Accrued expenses & deferred revenue', 'accChg');
+  const oncl = b.link('Other non-current liabilities', 'onclChg');
+  const cfo = b.total('Cash generated by / (used in) operating activities', [ni, da, sbc, pik, ar, inv, dta, oca, oa, ap, acc, oncl], {
+    fmt: sym,
+  });
+  b.blank();
+
+  b.group('Investing activities');
+  const capex = b.link('Payments for acquisition of property, plant & equipment', 'ppeCapex', { flip: -1 });
+  const cfi = b.total('Cash generated by / (used in) investing activities', [capex]);
+  b.blank();
+
+  b.group('Financing activities');
+  const borrow = b.link('Proceeds from / (repayment of) term debt', 'debtBorrow');
+  const revolver = b.link('Revolver', 'revolver');
+  const issue = b.link('Proceeds from issuance of common stock', 'csIssue');
+  const div = b.link('Payments for dividends', 'reDiv');
+  const buyback = b.link('Repurchases of common stock', 'buyback');
+  const oci = b.link('Other comprehensive income / (loss)', 'ociChg');
+  const cff = b.total('Cash generated by / (used in) financing activities', [borrow, revolver, issue, div, buyback, oci]);
+  b.blank();
+
+  b.group('Cash');
+  b.total('Increase / (decrease) in cash', [cfo, cfi, cff]);
+  b.link('Cash, beginning of period', 'cashBop');
+  b.link('Cash, end of period', 'cashEnd', { fmt: sym, bold: true, indent: 0 });
+  b.blank();
+  b.note([
+    'In reported years cash at the end of the period is the filed figure, while the flows above are derived from the',
+    'filed balance sheets, so the two need not reconcile before the first forecast year. From then on they do exactly.',
+  ]);
+  b.finish();
+}
+
+// =============================================================================
+// ANNEXURES
+// =============================================================================
+
+function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
+  const { companyName, newSheet, title, fmt, colors } = ctx;
+  const ws = newSheet('Annexures', colors.OXBLOOD);
+  title(
+    ws,
+    `${companyName} - annexures`,
+    'The supporting schedules from the 3-statement model, linked live. Change assumptions on the model sheet, not here.'
+  );
+  yearHeader(ctx, ws);
+  const b = presentationBuilder(ctx, ws);
+  // No subtotal reads these lines, so a blank model cell stays blank here.
+  const pct = (name: string, key: string) =>
+    b.link(name, key, { blankAsEmpty: true, fmt: fmt.PCT1, unit: '%', italic: true, indent: 2 });
+  const bal = (name: string, key: string, o: LineOpts = {}) => b.link(name, key, { blankAsEmpty: true, ...o });
+  const end = (name: string, key: string) => bal(name, key, { bold: true });
+
+  b.group('Annexure A - working capital & other balance sheet schedules');
+  (
+    [
+      ['ar', 'Accounts receivable', 'Receivables as % of revenue'],
+      ['inv', 'Inventory', 'Inventory as % of cost of sales'],
+      ['ap', 'Accounts payable', 'Payables as % of revenue'],
+      ['acc', 'Accrued expenses & deferred revenue', 'Accrued expenses as % of revenue'],
+      ['oca', 'Other current assets', 'Other current assets as % of revenue'],
+      ['dta', 'Deferred tax assets', 'Deferred tax assets as % of revenue'],
+      ['oa', 'Other assets', 'Other assets as % of revenue'],
+      ['oncl', 'Other non-current liabilities', 'Other non-current liabilities as % of revenue'],
+    ] as [string, string, string][]
+  ).forEach(([k, name, driverName]) => {
+    b.sub(name);
+    pct(driverName, `${k}Pct`);
+    bal('Beginning of period', `${k}Bop`);
+    bal('Increase / (decrease)', `${k}Chg`);
+    end('End of period', `${k}End`);
+    b.blank();
+  });
+
+  b.group('Annexure B - property, plant & equipment');
+  pct('Capital expenditure as % of revenue', 'capexPct');
+  pct('Depreciation as % of capital expenditure', 'depPct');
+  bal('Beginning of period', 'ppeBop');
+  bal('Plus: capital expenditures', 'ppeCapex');
+  bal('Less: depreciation', 'ppeDep');
+  end('End of period', 'ppeEnd');
+  b.blank();
+
+  b.group('Annexure C - debt & revolver');
+  b.sub('Long term debt');
+  bal('Beginning of period', 'debtBop');
+  bal('Plus: additional borrowing / (pay down)', 'debtBorrow');
+  bal('Plus: PIK interest accrued to the balance', 'debtPik');
+  end('End of period', 'debtEnd');
+  b.blank();
+  b.sub('Revolver');
+  end('Revolver', 'revolver');
+  b.blank();
+
+  b.group("Annexure D - shareholders' equity");
+  b.sub('Common stock & additional paid in capital');
+  bal('Beginning of period', 'csBop');
+  bal('Plus: new share issuances', 'csIssue');
+  bal('Plus: stock based compensation', 'sbc');
+  end('End of period', 'csEnd');
+  b.blank();
+  b.sub('Retained earnings');
+  pct('Dividend payout ratio', 'payout');
+  bal('Beginning of period', 'reBop');
+  bal('Plus: net income', 'ni');
+  bal('Less: common dividends', 'reDiv');
+  end('End of period', 'reEnd');
+  b.blank();
+  b.sub('Treasury stock');
+  bal('Beginning of period', 'tsBop');
+  bal('Less: share repurchases', 'buyback');
+  end('End of period', 'tsEnd');
+  b.blank();
+  b.sub('Other comprehensive income');
+  bal('Beginning of period', 'ociBop');
+  bal('Income / (loss) in the period', 'ociChg');
+  end('End of period', 'ociEnd');
+  b.finish();
+}
+
+// =============================================================================
 // SOURCES
 // =============================================================================
 
@@ -478,6 +860,10 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
 // =============================================================================
 
 export function addSupportingSheets(ctx: SupportingSheetsContext) {
+  buildIncomeStatementSheet(ctx);
+  buildBalanceSheetSheet(ctx);
+  buildCashFlowSheet(ctx);
+  buildAnnexuresSheet(ctx);
   buildRatiosSheet(ctx);
   buildChecksSheet(ctx);
   buildSourcesSheet(ctx);
