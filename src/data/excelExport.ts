@@ -521,11 +521,11 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
   note(['CIRCULARITY SWITCH — 1 = ON, 0 = OFF (DEFAULT)'], OXBLOOD, true);
   note([
-    'Off (0): interest is charged on the OPENING balance of cash, term debt and the revolver. Nothing in the workbook',
-    'then depends on a figure it helps produce.',
+    'Off (0): interest is charged on the OPENING balance of cash, term debt (cash and PIK interest alike) and the',
+    'revolver. Nothing in the workbook then depends on a figure it helps produce.',
     '',
-    'On (1): interest is charged on the AVERAGE of the opening and closing balance of cash, term debt and the revolver.',
-    'Closing balances depend on profit, which depends on that interest, so the workbook becomes genuinely circular.',
+    'On (1): interest is charged on the AVERAGE of the opening and closing balance of cash, term debt (cash and PIK) and',
+    'the revolver. Closing balances depend on those charges, so the workbook becomes genuinely circular.',
     '',
     'The revolver draws and repays in BOTH states; see the note under the revolver schedule below.',
     '',
@@ -615,15 +615,43 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     (c, p) => `${interestBasis('cashEnd', c, p)}*${c}${R.cashRate}`,
     money()
   );
-  driver('debtRate', 'Interest rate on debt', null, (i) => at(M.debt?.weightedAverageRate, i) ?? 0.045, PCT2);
-  // Seeded at the term debt rate: the engine carries no separate revolver rate.
+  // Term debt interest is split into the part paid in cash and the part paid
+  // in kind (PIK), which accrues to the debt balance instead. The engine
+  // forecasts one all-in figure and treats a fixed share of it as PIK, so the
+  // two rates are seeded to add back up to its all-in rate: total interest
+  // opens unchanged, and with the switch off the PIK rate reproduces the
+  // engine's own PIK accrual year by year.
+  const pikRateSeed = (i: number) => {
+    const pik = at(M.debt?.pikAccrual, i);
+    const opening = at(M.debt?.ending, i - 1);
+    return isNum(pik) && isNum(opening) && opening !== 0 ? pik / opening : 0;
+  };
+  driver(
+    'debtRate',
+    'Cash interest rate on debt',
+    null,
+    (i) => Math.max(0, (at(M.debt?.weightedAverageRate, i) ?? 0.045) - pikRateSeed(i)),
+    PCT2
+  );
+  driver(
+    'pikRate',
+    'PIK interest rate on debt',
+    (c, p, i) =>
+      i > 0 && has(M.debt?.ending, i - 1) && has(M.debt?.pikAccrual, i) ? `${c}${R.debtPik}/${p}${R.debtEnd}` : null,
+    pikRateSeed,
+    PCT2
+  );
+  // Seeded at the all-in term debt rate: the engine carries no separate revolver rate.
   driver('revRate', 'Interest rate on revolver', null, (i) => at(M.debt?.weightedAverageRate, i) ?? 0.045, PCT2);
+  // Cash interest on term debt, plus the PIK interest computed in the debt
+  // schedule, plus revolver interest. PIK is charged here so that the add-back
+  // in operating cash flow reverses a charge that was actually made.
   line(
     'intExp',
     'Interest expense',
     M.interestExpense,
     (c, p) =>
-      `-(${interestBasis('debtEnd', c, p)}*${c}${R.debtRate}+${interestBasis('revEnd', c, p)}*${c}${R.revRate})`,
+      `-(${interestBasis('debtEnd', c, p)}*${c}${R.debtRate}+${c}${R.debtPik}+${interestBasis('revEnd', c, p)}*${c}${R.revRate})`,
     money()
   );
   driver('other', 'Other income / (expense), net', null, (i) => at(M.otherIncomeExpense, i) ?? 0, money(), {
@@ -747,9 +775,21 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver('debtBorrow', 'Additional borrowing / (pay down)', null, (i) => at(M.debt?.borrowing, i) ?? 0, money(), {
     unit: UNIT,
   });
-  driver('debtPik', 'PIK interest accrued to the balance', null, (i) => at(M.debt?.pikAccrual, i) ?? 0, money(), {
-    unit: UNIT,
-  });
+  // PIK interest: charged in interest expense, added to the debt balance here
+  // rather than paid, and added back in operating cash flow as the non-cash
+  // charge it is. An earlier version took it as a separate input amount that
+  // grew debt and cash flow but was never tied to the interest charge, so
+  // changing it moved operating cash flow with no effect on profit. It is now
+  // the PIK rate on the same basis as cash interest: opening balance with the
+  // switch off, average balance with it on.
+  line(
+    'debtPik',
+    'PIK interest accrued to the balance',
+    M.debt?.pikAccrual,
+    (c, p) => `${interestBasis('debtEnd', c, p)}*${c}${R.pikRate}`,
+    money(),
+    { unit: UNIT }
+  );
   bopRow('debtBop', 'Beginning of period', at(M.debt?.beginning, 0), 'debtEnd');
   eopRow('debtEnd', 'End of period', M.debt?.ending, (c) => `${c}${R.debtBop}+${c}${R.debtBorrow}+${c}${R.debtPik}`);
   blank();

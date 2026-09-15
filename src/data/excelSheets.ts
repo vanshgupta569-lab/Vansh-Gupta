@@ -555,7 +555,11 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   const sbc = b.link('Stock based compensation', 'sbc');
   b.total('EBITDA', [ebit, da, sbc], { fmt: sym });
   b.blank();
-  b.note(['A negative provision for income taxes is a tax benefit, and adds to net income.']);
+  b.note([
+    'A negative provision for income taxes is a tax benefit, and adds to net income.',
+    'Interest expense includes PIK interest, which accrues to the debt balance rather than being paid in cash and is',
+    'added back in operating cash flow.',
+  ]);
   b.finish();
 }
 
@@ -734,6 +738,8 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
 
   b.group('Annexure C - debt & revolver');
   b.sub('Long term debt');
+  pct('Cash interest rate on debt', 'debtRate');
+  pct('PIK interest rate on debt', 'pikRate');
   bal('Beginning of period', 'debtBop');
   bal('Plus: additional borrowing / (pay down)', 'debtBorrow');
   bal('Plus: PIK interest accrued to the balance', 'debtPik');
