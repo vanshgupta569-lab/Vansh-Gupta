@@ -58,8 +58,14 @@ const Square: React.FC = () => (
   <>
     {'⁠'}
     <span
-      className="inline-block align-baseline ml-[0.08em]"
-      style={{ width: '0.13em', height: '0.13em', background: RED }}
+      className="inline-block align-baseline"
+      style={{
+        width: '0.13em',
+        height: '0.13em',
+        background: RED,
+        marginLeft: '0.08em',
+        marginRight: '-0.21em',
+      }}
     />
   </>
 );
