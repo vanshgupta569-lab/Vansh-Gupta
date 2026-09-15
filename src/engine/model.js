@@ -244,10 +244,17 @@ export function buildModel(data) {
 
   for (let t = nH; t < nH + nF; t++) {
     S.ppe.beginning[t] = S.ppe.ending[t - 1];
+    // Capex is carried as a POSITIVE outflow, the sign the filings, the data
+    // files and the historical years all use: PP&E closes at opening plus
+    // capex less depreciation, investing cash flow is -capex, and D&A is
+    // +capex × depreciation %. Every method below must return that sign. The
+    // percentage-of-revenue method used to negate it, which for every derived
+    // company turned forecast capex into a cash inflow, ran PP&E down towards
+    // a negative balance, made D&A negative and added capex to free cash flow.
     capexRaw = a.capexMethod === 'percentOfRnD'
-      ? -S.rnd[t] * a.capexRatio                    // capex = R&D spend × ratio
+      ? -S.rnd[t] * a.capexRatio                    // capex = R&D spend × ratio (R&D is negative)
       : a.capexMethod === 'percentOfRevenue'
-        ? -(S.revenue[t] * a.capexRatio)             // capex = revenue × ratio
+        ? S.revenue[t] * a.capexRatio                // capex = revenue × ratio
         : capexRaw * (1 + a.capexRatio);            // capex grows at the ratio
     S.ppe.capex[t] = capexRaw * capexScale;
     S.depreciationPercentOfCapex[t] = depPct;

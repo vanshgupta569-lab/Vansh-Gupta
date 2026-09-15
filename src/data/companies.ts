@@ -427,7 +427,7 @@ export function calculateDCFFor(
       taxAmt: r(-(M.taxes[i] ?? 0)),
       ebiat: r(D.ebiat[t]),
       da: r(M.depreciationAmortisation[i] ?? 0),
-      capex: r(-(M.ppe.capex[i] ?? 0)),   // positive = cash outflow
+      capex: r(M.ppe.capex[i] ?? 0),      // positive = cash outflow (the engine carries capex positive)
       wcChange: r(-wcChange),              // positive = cash outflow
       ufcf: r(D.unleveredFCF[t]),
       discountFactor: r(D.discountFactor[t], 4),
