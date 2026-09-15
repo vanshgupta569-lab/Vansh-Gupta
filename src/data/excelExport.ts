@@ -23,17 +23,29 @@
 // and the balance check COMPUTES to zero rather than being asserted, so a
 // broken edit announces itself.
 //
-// TWO DELIBERATE SIMPLIFICATIONS, both stated inside the workbook
+// TWO DELIBERATE SIMPLIFICATIONS BY DEFAULT, both governed by one cell
 //
-//   Interest is charged on OPENING balances, not average balances. Average
-//   balances are circular in Excel: interest changes profit, which changes
-//   cash, which changes debt, which changes interest. The site's engine solves
-//   that with its circuit breaker; the workbook avoids it the standard way.
+//   Interest is charged on OPENING balances, not average balances, and the
+//   revolver is held at zero rather than sized to the cash shortfall.
+//   Average balances and a self-sizing revolver are both circular in Excel:
+//   interest changes profit, which changes cash, which changes the revolver
+//   draw, which changes interest. The "Circularity switch" in the model
+//   settings section (top of the model sheet) turns both of those on at
+//   once; left at its default of off, every number here computes exactly as
+//   described above, with no divergence and no error.
 //
-//   The revolver is held at zero and cash may go negative, with a note beside
-//   the schedule explaining what to do about it. Sweeping cash into a revolver
-//   is circular for the same reason. Negative cash is the model saying the
-//   company cannot fund itself on these assumptions, which is information.
+//   Excel's circular-reference detection is structural, not value-based: it
+//   is built from every cell a formula's text mentions, including inside an
+//   IF() branch that never actually runs. So IF(switch=1, <the circular
+//   formula>, <the safe one>) is still flagged as part of a circular region
+//   whichever way the switch is set — turning it off changes what the
+//   formula computes, not which cells it structurally names. That is the
+//   ordinary shape of every circuit breaker in a real Excel model (Wall
+//   Street Prep, cited on the Cover sheet, teaches this exact pattern), and
+//   why such models keep iterative calculation on permanently rather than
+//   only while the switch is on. This workbook does the same — see
+//   src/data/excelIterativeCalc.ts, which patches the setting into the
+//   serialized file since exceljs itself has no way to write it.
 //
 // Because everything is live, the workbook computes its own answer rather than
 // echoing the site's. Each assumption is seeded from the model's own
@@ -50,6 +62,7 @@
 
 import ExcelJS from 'exceljs';
 import { addSupportingSheets } from './excelSheets';
+import { enableIterativeCalculation } from './excelIterativeCalc';
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 
@@ -123,6 +136,15 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   wb.creator = 'Marginalia';
   wb.created = new Date();
   wb.calcProperties.fullCalcOnLoad = true;
+  // Only fullCalcOnLoad above actually reaches the file — exceljs 4.4.0 has
+  // no way to write iterate/iterateCount/iterateDelta into <calcPr>. Setting
+  // them here anyway keeps the intended values in one place; the values that
+  // actually take effect are patched into the serialized file afterwards by
+  // enableIterativeCalculation (src/data/excelIterativeCalc.ts), which every
+  // caller that turns this workbook into bytes needs to run.
+  (wb.calcProperties as any).iterate = true;
+  (wb.calcProperties as any).iterateCount = 100;
+  (wb.calcProperties as any).iterateDelta = 0.001;
 
   const years: number[] = M.years || [];
   const nH: number = M.nH;
@@ -468,6 +490,35 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     return row;
   };
 
+  // ---- MODEL SETTINGS -------------------------------------------------------
+  header('Model settings');
+  const circRow = r++;
+  R.circBreaker = circRow;
+  const breakerRef = `$${L(FIRST)}$${circRow}`;
+  pending.push(() => {
+    label(S, circRow, 'Circularity switch — see note below', '0 / 1', { indent: 1, bold: true });
+    const cell = S.getCell(circRow, FIRST);
+    cell.value = 0;
+    styleInput(cell, '0');
+  });
+  note(['CIRCULARITY SWITCH — 1 = ON, 0 = OFF (DEFAULT)'], OXBLOOD, true);
+  note([
+    'Off (0): interest is charged on the OPENING balance of cash and debt, and the revolver is held at zero — the two',
+    'simplifications described at the top of this file. Every figure downstream computes exactly as it would if this',
+    'switch did not exist at all.',
+    '',
+    'On (1): interest is charged on the AVERAGE of the opening and closing balance of cash and debt, and the revolver',
+    'draws exactly enough each forecast year to keep cash from going negative. Both of those depend on a figure they',
+    'help produce, so the workbook becomes genuinely circular.',
+    '',
+    'This file has iterative calculation turned on already, and needs it regardless of which way the switch is set:',
+    'Excel treats a cell as circular if a formula NAMES it anywhere, even inside the untaken half of an IF(), so the',
+    'two states share the same dependency chain even though only one of them is actually circular in what it',
+    'computes. A copy of these formulas pasted into a workbook without iterative calculation switched on would show',
+    'a circular reference warning instead of a number, whichever way this switch is set.',
+  ]);
+  blank();
+
   // ---- INCOME STATEMENT ---------------------------------------------------
   header('Income statement');
 
@@ -490,7 +541,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'gm',
     'Gross margin',
-    (c) => `(${c}${R.rev}+${c}${R.rev + 2})/${c}${R.rev}`,
+    (c) => `(${c}${R.rev}+${c}${R.cogs})/${c}${R.rev}`,
     (i) => {
       const rev = at(M.revenue, i);
       const gp = at(M.grossProfit, i);
@@ -531,9 +582,21 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
 
   driver('cashRate', 'Return earned on cash', null, () => 0, PCT2);
-  line('intInc', 'Interest income', M.interestIncome, (c, p) => `${p}${R.cashEnd}*${c}${R.cashRate}`, money());
+  line(
+    'intInc',
+    'Interest income',
+    M.interestIncome,
+    (c, p) => `IF(${breakerRef}=1,(${p}${R.cashEnd}+${c}${R.cashEnd})/2,${p}${R.cashEnd})*${c}${R.cashRate}`,
+    money()
+  );
   driver('debtRate', 'Interest rate on debt', null, (i) => at(M.debt?.weightedAverageRate, i) ?? 0.045, PCT2);
-  line('intExp', 'Interest expense', M.interestExpense, (c, p) => `-${p}${R.debtEnd}*${c}${R.debtRate}`, money());
+  line(
+    'intExp',
+    'Interest expense',
+    M.interestExpense,
+    (c, p) => `-IF(${breakerRef}=1,(${p}${R.debtEnd}+${c}${R.debtEnd})/2,${p}${R.debtEnd})*${c}${R.debtRate}`,
+    money()
+  );
   driver('other', 'Other income / (expense), net', null, (i) => at(M.otherIncomeExpense, i) ?? 0, money(), {
     unit: UNIT,
   });
@@ -659,17 +722,33 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
   bopRow('debtBop', 'Beginning of period', at(M.debt?.beginning, 0), 'debtEnd');
   eopRow('debtEnd', 'End of period', M.debt?.ending, (c) => `${c}${R.debtBop}+${c}${R.debtBorrow}+${c}${R.debtPik}`);
-  driver('revolver', 'Revolver', null, () => 0, money(), { unit: UNIT, indent: 1 });
+  // Zero unless the circularity switch in Model settings is on, in which
+  // case this draws exactly enough to keep cash (below) from going negative.
+  // Left at zero, cff below is unaffected and nothing here is circular.
+  line(
+    'revolver',
+    'Revolver',
+    new Array(nH).fill(0),
+    (c) =>
+      `IF(${breakerRef}=1,MAX(0,-(${c}${R.cashBop}+${c}${R.cfo}+${c}${R.cfi}+${c}${R.debtBorrow}+${c}${R.csIssue}+${c}${R.reDiv}+${c}${R.buyback}+${c}${R.ociChg})),0)`,
+    money(),
+    { unit: UNIT, indent: 1 }
+  );
 
-  note(['REVOLVER HELD AT ZERO'], OXBLOOD, true);
+  note(['REVOLVER: ZERO UNLESS THE CIRCULARITY SWITCH ABOVE IS ON'], OXBLOOD, true);
   note([
-    'A company short of cash would normally draw on a revolving credit line. Modelling that here would create a circular',
-    'reference: the draw changes interest, which changes profit, which changes cash, which changes the draw. So this',
-    'workbook leaves the revolver at zero and lets the cash line go negative instead.',
+    'With the switch off (0), a company short of cash would normally draw on a revolving credit line, but modelling',
+    'that here would create a circular reference: the draw changes interest, which changes profit, which changes',
+    'cash, which changes the draw. So with the switch off, the revolver stays at zero and the cash line may go',
+    'negative instead.',
     '',
-    'If the cash balance further down goes negative, the model is telling you this company cannot fund itself on these',
-    'assumptions. That is information, not a fault. To resolve it, either raise "Additional borrowing" above, or reduce',
-    'capital expenditure, dividends or buybacks until the cash line stays positive.',
+    'If the cash balance further down goes negative with the switch off, the model is telling you this company cannot',
+    'fund itself on these assumptions. That is information, not a fault. To resolve it, either raise "Additional',
+    'borrowing" above, or reduce capital expenditure, dividends or buybacks until the cash line stays positive.',
+    '',
+    'With the switch on (1), the revolver draws exactly enough each forecast year to keep cash from going negative,',
+    'and interest above is charged on average balances instead of opening balances. Both changes are deliberately',
+    'circular — see the note beside the switch in Model settings.',
   ]);
   blank();
 
@@ -734,7 +813,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   calc(
     'cff',
     'Cash from financing activities',
-    (c) => `${c}${R.debtBorrow}+${c}${R.csIssue}+${c}${R.reDiv}+${c}${R.buyback}+${c}${R.ociChg}`,
+    (c) => `${c}${R.debtBorrow}+${c}${R.csIssue}+${c}${R.reDiv}+${c}${R.buyback}+${c}${R.ociChg}+${c}${R.revolver}`,
     money(),
     { bold: true, indent: 0 }
   );
@@ -970,7 +1049,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
 /** Build the workbook and hand it to the browser as a download. */
 export async function downloadWorkbook(input: ExportInput): Promise<void> {
   const wb = await buildWorkbook(input);
-  const buffer = await wb.xlsx.writeBuffer();
+  const rawBuffer = await wb.xlsx.writeBuffer();
+  const buffer = await enableIterativeCalculation(rawBuffer, { iterateCount: 100, iterateDelta: 0.001 });
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
