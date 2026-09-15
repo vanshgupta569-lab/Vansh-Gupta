@@ -396,15 +396,28 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     return row;
   };
 
+  /** A reported figure exists for year i and can be divided by. */
+  const has = (s: any, i: number) => {
+    const v = at(s, i);
+    return v !== null && v !== 0;
+  };
+
   /**
    * An assumption. Reported years show what the figure actually was, so the
    * reader can see the history the forecast was drawn from; forecast years are
    * yellow input cells seeded from the model.
+   *
+   * A history formula returns null for a year it cannot compute, which leaves
+   * that cell empty. The first reported year has no prior year — `prev` there
+   * is column D, the units label — and a reported line may be blank in a year
+   * (Apple's first-year capex, for one), so any history formula that divides by
+   * a reported figure or reaches back a year must return null in those years
+   * rather than produce #VALUE! or #DIV/0!.
    */
   const driver = (
     key: string,
     name: string,
-    histFormula: ((c: string, prev: string, i: number) => string) | null,
+    histFormula: ((c: string, prev: string, i: number) => string | null) | null,
     seed: (i: number) => number | null,
     fmt: string,
     o: any = {}
@@ -417,7 +430,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
         const cell = S.getCell(row, cOf(i));
         if (i < nH) {
           if (histFormula) {
-            cell.value = { formula: histFormula(L(cOf(i)), L(cOf(i) - 1), i) } as any;
+            const f = histFormula(L(cOf(i)), L(cOf(i) - 1), i);
+            if (f !== null) cell.value = { formula: f } as any;
             styleCalc(cell, fmt, { italic: true });
           } else {
             const v = seed(i);
@@ -522,15 +536,17 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // ---- INCOME STATEMENT ---------------------------------------------------
   header('Income statement');
 
-  const rowRev = r;
-  line('rev', 'Revenue', M.revenue, (c, p) => `${p}${rowRev}*(1+${c}${rowRev + 1})`, money(currencySymbol), {
+  // Rows are referenced by key, never by an offset from a neighbouring row:
+  // an offset silently points at the wrong line the moment a row is inserted
+  // between them (see the gross margin fix in the git history).
+  line('rev', 'Revenue', M.revenue, (c, p) => `${p}${R.rev}*(1+${c}${R.revGrowth})`, money(currencySymbol), {
     bold: true,
     indent: 0,
   });
   driver(
     'revGrowth',
     'Revenue growth',
-    (c, p) => `${c}${R.rev}/${p}${R.rev}-1`,
+    (c, p, i) => (i > 0 && has(M.revenue, i - 1) ? `${c}${R.rev}/${p}${R.rev}-1` : null),
     (i) => {
       const now = at(M.revenue, i);
       const prev = at(M.revenue, i - 1);
@@ -541,7 +557,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'gm',
     'Gross margin',
-    (c) => `(${c}${R.rev}+${c}${R.cogs})/${c}${R.rev}`,
+    (c, _p, i) => (has(M.revenue, i) ? `(${c}${R.rev}+${c}${R.cogs})/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
       const gp = at(M.grossProfit, i);
@@ -555,7 +571,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'rndPct',
     'Research & development, % of revenue',
-    (c) => `-${c}${R.rndPct + 1}/${c}${R.rev}`,
+    (c, _p, i) => (has(M.revenue, i) ? `-${c}${R.rnd}/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
       const rnd = at(M.rnd, i);
@@ -567,7 +583,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'sgaPct',
     'Selling, general & administrative, % of revenue',
-    (c) => `-${c}${R.sgaPct + 1}/${c}${R.rev}`,
+    (c, _p, i) => (has(M.revenue, i) ? `-${c}${R.sga}/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
       const sga = at(M.sga, i);
@@ -607,7 +623,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'taxRate',
     'Tax rate',
-    (c) => `-${c}${R.taxRate + 1}/${c}${R.pbt}`,
+    (c, _p, i) => (has(M.pretaxProfit, i) ? `-${c}${R.tax}/${c}${R.pbt}` : null),
     (i) => at(M.taxRate, i) ?? 0.21,
     PCT1
   );
@@ -649,8 +665,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       `${keyBase}Pct`,
       driverName,
       base === 'rev'
-        ? (c) => `${c}${R[`${keyBase}End`]}/${c}${R.rev}`
-        : (c) => `${c}${R[`${keyBase}End`]}/-${c}${R.cogs}`,
+        ? (c, _p, i) => (has(M.revenue, i) ? `${c}${R[`${keyBase}End`]}/${c}${R.rev}` : null)
+        : (c, _p, i) => (has(M.cogs, i) ? `${c}${R[`${keyBase}End`]}/-${c}${R.cogs}` : null),
       (i) => {
         const end = at(hist?.ending, i);
         const b = base === 'rev' ? at(M.revenue, i) : at(M.cogs, i);
@@ -687,7 +703,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'capexPct',
     'Capital expenditure as % of revenue',
-    (c) => `${c}${R.ppeCapex}/${c}${R.rev}`,
+    (c, _p, i) => (has(M.revenue, i) ? `${c}${R.ppeCapex}/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
       const cap = at(M.ppe?.capex, i);
@@ -698,7 +714,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'depPct',
     'Depreciation as % of capital expenditure',
-    (c) => `-${c}${R.ppeDep}/${c}${R.ppeCapex}`,
+    (c, _p, i) => (has(M.ppe?.capex, i) ? `-${c}${R.ppeDep}/${c}${R.ppeCapex}` : null),
     (i) => {
       const cap = at(M.ppe?.capex, i);
       const dep = at(M.ppe?.depreciation, i);
@@ -1030,7 +1046,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     label,
     styleHard,
     styleCalc,
-    fmt: { PCT1, MULT },
+    fmt: { PCT1, MULT, money, money2 },
     colors: { OXBLOOD, WHITE, BLACK, BLUE, GREY },
     FONT,
   });

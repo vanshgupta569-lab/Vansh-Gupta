@@ -59,25 +59,34 @@ export interface SupportingSheetsContext {
   label: (ws: Sheet, row: number, name: string, unit: string, o?: any) => void;
   styleHard: (cell: ExcelJS.Cell, fmt: string, o?: any) => void;
   styleCalc: (cell: ExcelJS.Cell, fmt: string, o?: any) => void;
-  fmt: { PCT1: string; MULT: string };
+  fmt: { PCT1: string; MULT: string; money: (symbol?: string) => string; money2: (symbol?: string) => string };
   colors: { OXBLOOD: string; WHITE: string; BLACK: string; BLUE: string; GREY: string };
   FONT: { name: string; size: number };
 }
 
-/** Standard year header, identical to the one on 3-StatementModel. */
-function yearHeader(ctx: SupportingSheetsContext, ws: Sheet) {
-  const { years, nH, FIRST, cOf, FONT, colors } = ctx;
+/**
+ * Standard year header, identical to the one on 3-StatementModel. Defaults to
+ * the model's own years; Sources passes the filing's years instead.
+ */
+function yearHeader(
+  ctx: SupportingSheetsContext,
+  ws: Sheet,
+  labels: string[] = ctx.years.map((y) => `FY${String(y).slice(2)}`),
+  nReported: number = ctx.nH,
+  rowLabel = 'Year'
+) {
+  const { FIRST, cOf, FONT, colors } = ctx;
   ws.getCell(5, FIRST).value = 'Reported';
   ws.getCell(5, FIRST).font = { ...FONT, italic: true, color: { argb: colors.GREY } };
-  if (nH < years.length) {
-    ws.getCell(5, FIRST + nH).value = 'Forecast';
-    ws.getCell(5, FIRST + nH).font = { ...FONT, italic: true, color: { argb: colors.GREY } };
+  if (nReported < labels.length) {
+    ws.getCell(5, FIRST + nReported).value = 'Forecast';
+    ws.getCell(5, FIRST + nReported).font = { ...FONT, italic: true, color: { argb: colors.GREY } };
   }
-  ws.getCell(6, 3).value = 'Year';
+  ws.getCell(6, 3).value = rowLabel;
   ws.getCell(6, 3).font = { ...FONT, bold: true };
-  years.forEach((y, i) => {
+  labels.forEach((text, i) => {
     const cell = ws.getCell(6, cOf(i));
-    cell.value = `FY${String(y).slice(2)}`;
+    cell.value = text;
     cell.font = { ...FONT, bold: true };
     cell.alignment = { horizontal: 'right' };
     cell.border = { bottom: { style: 'thin', color: { argb: colors.BLACK } } };
@@ -376,8 +385,12 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
 // SOURCES
 // =============================================================================
 
+// Laid out exactly like Ratios and Checks — year header on rows 5-6 under the
+// frozen panes, bands from row 8, labels through label(), figures through
+// styleHard() in the model's own number formats — with the filing's years in
+// place of the model's.
 function buildSourcesSheet(ctx: SupportingSheetsContext) {
-  const { FIRST, companyName, source, newSheet, title, band, label, styleHard, colors, FONT } = ctx;
+  const { FIRST, cOf, lastCol, companyName, source, newSheet, title, band, label, styleHard, fmt, colors, FONT } = ctx;
 
   const ws = newSheet('Sources', colors.OXBLOOD);
   title(
@@ -386,13 +399,30 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
     'What the filing actually said. Every figure below is hard-coded from source.rawStatements, unrenamed and uncomputed.'
   );
 
-  let r = 5;
-  band(ws, r, 'Filing reference', colors.OXBLOOD, colors.WHITE, FIRST + 3);
+  const rows: any[] = Array.isArray(source?.rawStatements) ? source.rawStatements : [];
+  const nS = rows.length;
+  const endCol = Math.max(lastCol, cOf(nS - 1));
+
+  // The filing can carry more years than the model; size any extra year
+  // columns the way newSheet sized the model's.
+  for (let c = lastCol + 2; c <= endCol + 1; c++) ws.getColumn(c).width = ws.getColumn(FIRST).width;
+
+  if (nS > 0) {
+    yearHeader(
+      ctx,
+      ws,
+      rows.map((row, i) => (isNum(row?.fiscalYear) ? `FY${String(row.fiscalYear).slice(2)}` : `Year ${i + 1}`)),
+      nS,
+      'Line (as fetched)'
+    );
+  }
+
+  let r = 8;
+  band(ws, r, 'Filing reference', colors.OXBLOOD, colors.WHITE, endCol);
   r++;
   const meta = source?.meta || {};
   const metaRow = (k: string, v: string) => {
-    ws.getCell(r, 3).value = k;
-    ws.getCell(r, 3).font = FONT;
+    label(ws, r, k, '', { indent: 1 });
     const cell = ws.getCell(r, FIRST);
     cell.value = v;
     cell.font = { ...FONT, color: { argb: colors.BLUE } };
@@ -402,12 +432,9 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
   if (meta.sourceUrl) metaRow('Source URL', meta.sourceUrl);
   r++;
 
-  const rows: any[] = Array.isArray(source?.rawStatements) ? source.rawStatements : [];
-  const nS = rows.length;
-
   if (nS === 0) {
     ws.getCell(r, 3).value = 'No raw filed statements were carried with this model.';
-    ws.getCell(r, 3).font = { ...FONT, italic: true, color: { argb: colors.GREY } };
+    ws.getCell(r, 3).font = { ...FONT, size: 10, italic: true, color: { argb: colors.GREY } };
     return;
   }
 
@@ -423,31 +450,21 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
     }
   }
 
-  const sCol = (i: number) => FIRST + i;
-  const lastSCol = FIRST + nS - 1;
-
-  band(ws, r, 'As filed', colors.OXBLOOD, colors.WHITE, Math.max(lastSCol, FIRST + 3));
-  r++;
-  ws.getCell(r, 3).value = 'Line (as fetched)';
-  ws.getCell(r, 3).font = { ...FONT, bold: true };
-  rows.forEach((row, i) => {
-    const cell = ws.getCell(r, sCol(i));
-    cell.value = isNum(row?.fiscalYear) ? `FY${String(row.fiscalYear).slice(2)}` : `Year ${i + 1}`;
-    cell.font = { ...FONT, bold: true };
-    cell.alignment = { horizontal: 'right' };
-    cell.border = { bottom: { style: 'thin', color: { argb: colors.BLACK } } };
-  });
+  band(ws, r, 'As filed', colors.OXBLOOD, colors.WHITE, endCol);
   r++;
 
-  const fmtRaw = '#,##0.###;(#,##0.###)';
   keys.forEach((key) => {
     label(ws, r, key, '', { indent: 1 });
+    // Whole-number lines in the model's money format; a line carrying any
+    // fraction (per-share figures, share counts) in its two-decimal format.
+    const fractional = rows.some((row) => isNum(row?.[key]) && !Number.isInteger(row[key]));
+    const rowFmt = fractional ? fmt.money2() : fmt.money();
     rows.forEach((row, i) => {
-      const cell = ws.getCell(r, sCol(i));
+      const cell = ws.getCell(r, cOf(i));
       const v = row?.[key];
       if (isNum(v)) {
         cell.value = v;
-        styleHard(cell, fmtRaw);
+        styleHard(cell, rowFmt);
       } else {
         cell.value = 'Not disclosed';
         cell.font = { ...FONT, italic: true, color: { argb: colors.GREY } };
@@ -456,8 +473,6 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
     });
     r++;
   });
-
-  ws.getColumn(3).width = 34;
 }
 
 // =============================================================================
