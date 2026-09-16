@@ -62,6 +62,9 @@ export interface ForecastRow {
 export interface DCFResult {
   applicable: boolean;
   message?: string;
+  // Why the engine refused, when it did. The balance sheet integrity codes
+  // (see isIntegrityRefusal) withhold every valuation, not just this one.
+  refusalCode?: string | null;
   // Valuation outputs
   targetPrice: number;
   pvExplicitFCF: number;          // billions

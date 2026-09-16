@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
-import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel } from '../data/companies';
+import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel, isIntegrityRefusal } from '../data/companies';
 import { FootballField, RatioBand } from './valuationSections';
 import type { FieldBand } from './valuationSections';
 import { ImpliedByPrice } from './valuationExtras';
@@ -422,6 +422,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     }
   }, [activeSource, drivers]);
 
+  // A model whose balance sheet does not balance, or whose filing lacks a line
+  // net debt depends on, gets no valuation of ANY kind: the engine refuses the
+  // discounted cash flow, and every other value on this page (the market and
+  // asset approaches, the reverse DCF, residual income) is withheld with it.
+  // The site must never show a value for a model that does not add up.
+  const integrityRefused = isIntegrityRefusal(baseBuild?.dcf?.code);
+
   const subjectTrailing = useMemo(
     () =>
       baseBuild
@@ -439,9 +446,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   }, [company.ticker]);
 
   const marketApproach: MarketApproachResult | null = useMemo(() => {
-    if (!compsData || !subjectTrailing) return null;
+    if (integrityRefused || !compsData || !subjectTrailing) return null;
     return buildMarketApproach(compsData, subjectTrailing, selectedPeers);
-  }, [compsData, subjectTrailing, selectedPeers]);
+  }, [integrityRefused, compsData, subjectTrailing, selectedPeers]);
 
   const peerSelection = useMemo(
     () => selectedPeers ?? defaultSelection(compsData),
@@ -619,7 +626,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // can value. The two are never blended: they answer different questions and
   // mixing them would hide which one produced the number.
   const bankModel =
-    dcfResult.applicable === false && company.residualIncome?.applicable
+    dcfResult.applicable === false && !integrityRefused && company.residualIncome?.applicable
       ? company.residualIncome
       : null;
 
@@ -630,13 +637,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // for the model as it currently stands, not for some earlier version of it.
   // ---------------------------------------------------------------------
   const impliedByPrice: ReverseDcfResult | null = useMemo(() => {
-    if (!activeSource || bankModel) return null;
+    if (!activeSource || bankModel || integrityRefused) return null;
     try {
       return reverseDcf(activeSource, drivers, displayPrice);
     } catch {
       return null;
     }
-  }, [activeSource, drivers, displayPrice, bankModel]);
+  }, [activeSource, drivers, displayPrice, bankModel, integrityRefused]);
 
   const assetApproach: AssetApproachResult | null = useMemo(() => {
     // Two sources of a reported balance sheet, in order of preference.
@@ -647,6 +654,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     //    has no fetched statements behind it, and its data file does not carry
     //    a goodwill line, so tangible book is reported as not disclosed rather
     //    than guessed. Everything else still works.
+    if (integrityRefused) return null;
     const raw = derivedSource?.rawStatements ?? activeSource?.rawStatements;
     let lastReported: any = null;
 
@@ -706,6 +714,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       return null;
     }
   }, [
+    integrityRefused,
     derivedSource,
     activeSource,
     baseBuild,

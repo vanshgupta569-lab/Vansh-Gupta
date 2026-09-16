@@ -2,7 +2,7 @@
 // @ts-ignore — JS engine and data files have no TS declarations
 import AAPL_DATA from './AAPL.js';
 // @ts-ignore
-import { buildModel, buildDCF } from '../engine/model.js';
+import { buildModel, buildDCF, INTEGRITY_REFUSAL_CODES } from '../engine/model.js';
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 
@@ -347,6 +347,14 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
   return d;
 }
 
+// True when the engine refused because the model's balance sheet does not
+// balance, or the filing lacks a line net debt depends on. Such a model gets
+// no valuation of ANY kind on the site: not the DCF, not the market or asset
+// approach, not residual income, not the reverse DCF.
+export function isIntegrityRefusal(code: string | null | undefined): boolean {
+  return typeof code === 'string' && (INTEGRITY_REFUSAL_CODES as string[]).includes(code);
+}
+
 // ---------------------------------------------------------------------------
 // CALCULATE DCF — called by TerminalDashboard on every slider change
 // ---------------------------------------------------------------------------
@@ -374,6 +382,7 @@ export function calculateDCFFor(
     return {
       applicable: false,
       message: D.message,
+      refusalCode: D.code ?? null,
       targetPrice: 0,
       pvExplicitFCF: 0,
       pvTerminalValue: 0,

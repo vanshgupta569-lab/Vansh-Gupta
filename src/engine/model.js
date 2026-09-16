@@ -379,7 +379,10 @@ export function buildModel(data) {
   for (let t = 0; t < nH; t++) S.debt.ending[t] = h.balanceSheet.longTermDebt[t];
   S.debt.interestExpense[nH - 1] = a.interestExpenseFY2025;
   S.debt.pikAccrual[nH - 1] = a.pikAccrualFY2025;
-  const pikPct = a.pikAccrualFY2025 / a.interestExpenseFY2025;
+  // No interest means no PIK. Dividing anyway made a company that reports no
+  // debt (zero interest over zero interest) carry a not-a-number debt balance
+  // through every forecast year.
+  const pikPct = a.interestExpenseFY2025 ? (a.pikAccrualFY2025 ?? 0) / a.interestExpenseFY2025 : 0;
   S.cashInterestPct = 1 - pikPct;
   S.pikPct = pikPct;
 
@@ -665,10 +668,124 @@ export function buildModel(data) {
 
 const FINANCIAL_SECTOR = /financial|bank|insurance|capital market|asset management|nbfc/i;
 
+// ---------------------------------------------------------------------------
+// BALANCE SHEET INTEGRITY
+// ---------------------------------------------------------------------------
+// Assets less liabilities less equity, in every year that carries a balance
+// sheet at all (a hand-built file may leave an early year blank), reported and
+// forecast, rounded to a thousandth as the balance check is. A model whose
+// balance sheet does not balance has lost money somewhere between its
+// statements, so every figure built on them is suspect: no valuation of any
+// kind may be shown for it. This measures the lines directly rather than
+// reading balanceSheet.balanceCheck, which skips any year with no cash figure.
+const BALANCE_ASSETS = ['cashAndSecurities', 'accountsReceivable', 'inventory', 'deferredTaxAssets',
+  'otherCurrentAssets', 'propertyPlantEquipment', 'otherAssets'];
+const BALANCE_LIABILITIES = ['accountsPayable', 'accruedExpenses', 'revolver', 'longTermDebt',
+  'otherNonCurrentLiabilities'];
+const BALANCE_EQUITY = ['commonStockAPIC', 'treasuryStock', 'retainedEarnings', 'otherComprehensiveIncome'];
+
+export function balanceSheetIntegrity(model) {
+  const B = model.balanceSheet || {};
+  const failures = [];
+  let yearsChecked = 0;
+  for (let t = 0; t < model.years.length; t++) {
+    const keys = [...BALANCE_ASSETS, ...BALANCE_LIABILITIES, ...BALANCE_EQUITY];
+    const values = keys.map((k) => B[k]?.[t]);
+    if (!values.some((v) => typeof v === 'number' && v !== 0)) continue;
+    yearsChecked++;
+    const broken = values.some((v) => typeof v === 'number' && !isFinite(v));
+    const total = (ks) => ks.reduce((s, k) => s + (typeof B[k]?.[t] === 'number' ? B[k][t] : 0), 0);
+    const gap = Math.round((total(BALANCE_ASSETS) - total(BALANCE_LIABILITIES) - total(BALANCE_EQUITY)) * 1000) / 1000;
+    if (broken || !isFinite(gap) || gap !== 0) {
+      failures.push({ year: model.years[t], gap: broken ? NaN : gap, forecast: t >= model.nH });
+    }
+  }
+  return { balances: failures.length === 0, failures, yearsChecked };
+}
+
+const fiscalYearList = (years) => {
+  const runs = [];
+  for (const y of [...years].sort((a, b) => a - b)) {
+    const run = runs[runs.length - 1];
+    if (run && y === run[1] + 1) run[1] = y;
+    else runs.push([y, y]);
+  }
+  return runs.map(([a, b]) => (a === b ? `FY${a}` : `FY${a}–FY${b}`)).join(', ');
+};
+
+// The refusal for a balance sheet that does not balance, or a filing missing a
+// line the valuation itself depends on. Null when neither applies.
+function balanceSheetRefusal(model, data) {
+  const integrity = balanceSheetIntegrity(model);
+  const gaps = Array.isArray(data?.meta?.balanceSheetGaps) ? data.meta.balanceSheetGaps : [];
+  const blocking = gaps.filter((g) => g.blocksValuation);
+  if (integrity.balances && blocking.length === 0) return null;
+
+  const missing = gaps.length
+    ? 'The filing did not report ' +
+      gaps
+        .map((g) => `${g.label} (${fiscalYearList(g.years)}${g.derivedAs ? `, worked out as ${g.derivedAs}` : ''})`)
+        .join(', ') +
+      '. '
+    : 'No balance sheet line is missing from the data, so the difference lies in the reported figures themselves. ';
+
+  if (!integrity.balances) {
+    const measurable = integrity.failures.filter((f) => isFinite(f.gap));
+    const unmeasurable = integrity.failures.filter((f) => !isFinite(f.gap));
+    const worst = measurable.reduce((a, f) => (!a || Math.abs(f.gap) > Math.abs(a.gap) ? f : a), null);
+    const everyYear = integrity.failures.length === integrity.yearsChecked;
+    const inputGaps = Array.isArray(data?.meta?.forecastInputGaps) ? data.meta.forecastInputGaps : [];
+    const inputs = inputGaps.length
+      ? `The filing never reported ${inputGaps.map((g) => `${g.label} (${g.drives})`).join('; ')}. `
+      : '';
+    const parts = [];
+    if (measurable.length) {
+      parts.push(
+        `total assets differ from liabilities plus equity in ${fiscalYearList(measurable.map((f) => f.year))}, ` +
+          `by as much as ${Math.abs(worst.gap).toLocaleString('en-US', { maximumFractionDigits: 0 })} (FY${worst.year})`
+      );
+    }
+    if (unmeasurable.length) {
+      parts.push(`in ${fiscalYearList(unmeasurable.map((f) => f.year))} some of its lines cannot be computed at all and come out as not-a-number`);
+    }
+    return {
+      code: 'balanceSheetDoesNotBalance',
+      integrity,
+      balanceSheetGaps: gaps,
+      message:
+        `The balance sheet this model is built from does not balance${everyYear && !unmeasurable.length ? ' in any year' : ''}: ` +
+        `${parts.join('; and ')}. ${inputs}${missing}` +
+        'A valuation built on a balance sheet that does not add up is a wrong number, so none is ' +
+        'shown. The reported figures below are unaffected.',
+    };
+  }
+
+  const reasons = blocking
+    .map((g) => `${g.label} for ${fiscalYearList(g.years)}${g.reportedIn ? ` (it did for ${fiscalYearList(g.reportedIn)})` : ''}, and ${g.reason}`)
+    .join('; ');
+  return {
+    code: 'filingMissingValuationInput',
+    integrity,
+    balanceSheetGaps: gaps,
+    message:
+      `The filing did not report ${reasons}. The balance sheet can be made to add up without it, ` +
+      'but the valuation cannot, so none is shown. The reported figures below are unaffected.',
+  };
+}
+
+// The codes that mean "no valuation of any kind", not merely "no DCF".
+export const INTEGRITY_REFUSAL_CODES = ['balanceSheetDoesNotBalance', 'filingMissingValuationInput'];
+
 export function checkValuationApplicability(model, data, wacc) {
   const { nH, nF } = model;
   const meta = data.meta;
   const sic = meta.sicCode;
+
+  // 0. The balance sheet must balance in every year, and the filing must carry
+  //    the lines net debt is built from. Checked first, so that when a model is
+  //    broken this is the reason given, whatever else also applies.
+  const brokenBalanceSheet = balanceSheetRefusal(model, data);
+  if (brokenBalanceSheet) return { applicable: false, ...brokenBalanceSheet };
 
   // 1. Financial-sector companies — unlevered FCF is not a meaningful concept
   const sicIsFinancial = sic != null && Number(sic) >= 6000 && Number(sic) <= 6799;
@@ -923,4 +1040,4 @@ export function computeWACC(model, data) {
   };
 }
 
-export default { buildModel, buildDCF, computeWACC, checkValuationApplicability };
+export default { buildModel, buildDCF, computeWACC, checkValuationApplicability, balanceSheetIntegrity };

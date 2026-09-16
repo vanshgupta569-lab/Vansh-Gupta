@@ -42,17 +42,182 @@ function cagr(series) {
   return Math.pow(last / first, 1 / (clean.length - 1)) - 1;
 }
 
-// A balance line the filing does not give us directly, worked out from the
-// totals that it does give. Returns null rather than a guess when the inputs
-// are missing, so a hole stays visible instead of turning into a wrong number.
-function plug(total, ...parts) {
-  if (!isNum(total)) return null;
+// A balance line the filing does not give us directly: a total less the parts
+// of it the filing does report. A part the filing leaves out is absorbed into
+// the remainder and named in `absorbed`, so the total still ties and the gap is
+// recorded rather than hidden. It used to return null instead, which turned one
+// missing component into a whole missing line and a balance sheet that could
+// not balance. A missing TOTAL cannot be split into parts, so the remainder is
+// null; deriveBalanceSheet fills a missing total from the accounting identity
+// first, wherever the other two totals are present.
+function plug(total, parts) {
+  if (!isNum(total)) return { value: null, absorbed: [] };
   let remainder = total;
-  for (const part of parts) {
-    if (!isNum(part)) return null;
-    remainder -= part;
+  const absorbed = [];
+  for (const [label, value] of parts) {
+    if (isNum(value)) remainder -= value;
+    else absorbed.push(label);
   }
-  return remainder;
+  return { value: remainder, absorbed };
+}
+
+// "FY2022–FY2026", or a list where the years are not consecutive.
+function fiscalYears(years) {
+  const sorted = [...years].sort((a, b) => a - b);
+  const runs = [];
+  for (const y of sorted) {
+    const run = runs[runs.length - 1];
+    if (run && y === run[1] + 1) run[1] = y;
+    else runs.push([y, y]);
+  }
+  return runs.map(([a, b]) => (a === b ? `FY${a}` : `FY${a}–FY${b}`)).join(', ');
+}
+
+const BALANCE_SHEET_FIELDS = [
+  ['totalAssets', 'total assets'],
+  ['currentAssets', 'current assets'],
+  ['cash', 'cash'],
+  ['receivables', 'receivables'],
+  ['inventory', 'inventory'],
+  ['ppeNet', 'net property, plant & equipment'],
+  ['totalLiabilities', 'total liabilities'],
+  ['currentLiabilities', 'current liabilities'],
+  ['payables', 'accounts payable'],
+  ['longTermDebt', 'long-term debt'],
+  ['equity', "shareholders' equity"],
+];
+
+// ---------------------------------------------------------------------------
+// THE BALANCE SHEET, FROM WHATEVER THE FILING REPORTS
+// ---------------------------------------------------------------------------
+// Builds the lines the engine needs so that assets equal liabilities plus
+// equity by construction, deriving what can genuinely be derived:
+//
+//  - A missing total from the other two. Coca-Cola and Walmart report assets
+//    and shareholders' equity but not the SEC's total liabilities tag, only
+//    liabilities-and-equity combined. Total liabilities is assets less equity;
+//    any non-controlling interest the filing keeps outside equity is carried
+//    in liabilities, which is where a lender would count it.
+//  - A missing component of a total that is reported: absorbed into that
+//    total's "other" line (other current assets, other assets, accrued and
+//    other current liabilities, other non-current liabilities), and named.
+//  - Missing current assets or current liabilities: everything beyond the
+//    named lines is carried in the non-current "other" line.
+//
+// What cannot be derived stays null, and the engine then refuses the company:
+// its balance check will not be zero. Every missing line is returned in
+// `gaps` so the refusal can name them. Two gaps block a valuation even where
+// the balance sheet can be made to add up, because absorbing them would
+// balance the sheet while corrupting net debt: cash in the last reported year,
+// and long-term debt in the last reported year when earlier years report it.
+function deriveBalanceSheet(rows) {
+  const out = {
+    otherCurrentAssets: [],
+    otherAssets: [],
+    accruedExpenses: [],
+    otherNonCurrentLiabilities: [],
+    equity: [],
+    notes: [],
+    gaps: [],
+  };
+  const noteYears = new Map();
+  const note = (text, year) => {
+    if (!noteYears.has(text)) noteYears.set(text, []);
+    noteYears.get(text).push(year);
+  };
+  const derivedTotals = {};
+  const markDerived = (field, how, year) => {
+    derivedTotals[field] ??= { how, years: [] };
+    derivedTotals[field].years.push(year);
+  };
+  const absorbedInto = (line, absorbed, year) => {
+    if (absorbed.length) note(`${absorbed.join(' and ')} not reported separately: carried in ${line}`, year);
+  };
+
+  for (const r of rows) {
+    const fy = r.fiscalYear;
+    const equity = isNum(r.equity) ? r.equity : null;
+    let totalAssets = isNum(r.totalAssets) ? r.totalAssets : null;
+    let totalLiabilities = isNum(r.totalLiabilities) ? r.totalLiabilities : null;
+    const currentAssets = isNum(r.currentAssets) ? r.currentAssets : null;
+    const currentLiabilities = isNum(r.currentLiabilities) ? r.currentLiabilities : null;
+
+    if (totalLiabilities === null && totalAssets !== null && equity !== null) {
+      totalLiabilities = totalAssets - equity;
+      markDerived('totalLiabilities', "total assets less shareholders' equity", fy);
+      note("total liabilities worked out as total assets less shareholders' equity (any non-controlling interest is carried in liabilities)", fy);
+    } else if (totalAssets === null && totalLiabilities !== null && equity !== null) {
+      totalAssets = totalLiabilities + equity;
+      markDerived('totalAssets', "total liabilities plus shareholders' equity", fy);
+      note("total assets worked out as total liabilities plus shareholders' equity", fy);
+    }
+    if (equity === null && totalAssets !== null && totalLiabilities !== null) {
+      markDerived('equity', 'total assets less total liabilities', fy);
+    }
+
+    // Assets
+    if (currentAssets !== null) {
+      const oca = plug(currentAssets, [['cash', r.cash], ['receivables', r.receivables], ['inventory', r.inventory]]);
+      absorbedInto('other current assets', oca.absorbed, fy);
+      const oa = plug(totalAssets, [['current assets', currentAssets], ['net PP&E', r.ppeNet]]);
+      absorbedInto('other assets', oa.absorbed, fy);
+      out.otherCurrentAssets.push(oca.value);
+      out.otherAssets.push(oa.value);
+    } else if (totalAssets !== null) {
+      const oa = plug(totalAssets, [['cash', r.cash], ['receivables', r.receivables], ['inventory', r.inventory], ['net PP&E', r.ppeNet]]);
+      note('current assets not reported: every asset beyond cash, receivables, inventory and PP&E is carried in other assets', fy);
+      absorbedInto('other assets', oa.absorbed, fy);
+      out.otherCurrentAssets.push(0);
+      out.otherAssets.push(oa.value);
+    } else {
+      out.otherCurrentAssets.push(null);
+      out.otherAssets.push(null);
+    }
+
+    // Liabilities
+    if (currentLiabilities !== null) {
+      const acc = plug(currentLiabilities, [['accounts payable', r.payables]]);
+      absorbedInto('accrued and other current liabilities', acc.absorbed, fy);
+      const oncl = plug(totalLiabilities, [['current liabilities', currentLiabilities], ['long-term debt', r.longTermDebt]]);
+      absorbedInto('other non-current liabilities', oncl.absorbed, fy);
+      out.accruedExpenses.push(acc.value);
+      out.otherNonCurrentLiabilities.push(oncl.value);
+    } else if (totalLiabilities !== null) {
+      const oncl = plug(totalLiabilities, [['accounts payable', r.payables], ['long-term debt', r.longTermDebt]]);
+      note('current liabilities not reported: every liability beyond accounts payable and long-term debt is carried in other non-current liabilities', fy);
+      absorbedInto('other non-current liabilities', oncl.absorbed, fy);
+      out.accruedExpenses.push(0);
+      out.otherNonCurrentLiabilities.push(oncl.value);
+    } else {
+      out.accruedExpenses.push(null);
+      out.otherNonCurrentLiabilities.push(null);
+    }
+
+    out.equity.push(totalAssets !== null && totalLiabilities !== null ? totalAssets - totalLiabilities : null);
+  }
+
+  out.notes = [...noteYears.entries()].map(([text, years]) => `${text} (${fiscalYears(years)})`);
+
+  const last = rows[rows.length - 1] || {};
+  for (const [field, label] of BALANCE_SHEET_FIELDS) {
+    const years = rows.filter((r) => !isNum(r[field])).map((r) => r.fiscalYear);
+    if (!years.length) continue;
+    const gap = { field, label, years, derivedAs: derivedTotals[field]?.how ?? null, blocksValuation: false, reason: null, reportedIn: null };
+    if (field === 'cash' && !isNum(last.cash)) {
+      gap.blocksValuation = true;
+      gap.reason = 'net debt cannot be measured without the cash balance';
+    }
+    if (field === 'longTermDebt' && !isNum(last.longTermDebt)) {
+      const earlier = rows.filter((r) => isNum(r.longTermDebt) && r.longTermDebt > 0).map((r) => r.fiscalYear);
+      if (earlier.length) {
+        gap.blocksValuation = true;
+        gap.reportedIn = earlier;
+        gap.reason = 'carrying it as zero would leave that debt out of net debt and overstate what the shares are worth';
+      }
+    }
+    out.gaps.push(gap);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- main
@@ -227,19 +392,46 @@ export function deriveModel(fetched) {
 
   // ------------------------------------------------------------ historicals
 
-  // Balance sheet lines the filing doesn't break out, derived from totals.
-  // Built this way, assets equal liabilities plus equity by construction —
-  // which is what keeps the engine's balance check passing.
-  const otherCurrentAssets = rows.map((r) =>
-    plug(r.currentAssets, r.cash, r.receivables, r.inventory)
-  );
-  const otherAssets = rows.map((r) =>
-    plug(r.totalAssets, r.currentAssets, r.ppeNet)
-  );
-  const accruedExpenses = rows.map((r) => plug(r.currentLiabilities, r.payables));
-  const otherNonCurrentLiabilities = rows.map((r) =>
-    plug(r.totalLiabilities, r.currentLiabilities, r.longTermDebt)
-  );
+  // Balance sheet lines the filing doesn't break out, derived from what it
+  // does report. See deriveBalanceSheet: whatever cannot be derived stays
+  // null, and the engine refuses a model whose balance sheet does not balance.
+  const {
+    otherCurrentAssets,
+    otherAssets,
+    accruedExpenses,
+    otherNonCurrentLiabilities,
+    equity: equityLine,
+    notes: balanceSheetNotes,
+    gaps: balanceSheetGaps,
+  } = deriveBalanceSheet(rows);
+  if (balanceSheetNotes.length) provenance.balanceSheet = balanceSheetNotes.join('; ');
+
+  // Inputs the forecast is built from that the filing never reports at all.
+  // Without them the forecast balance sheet cannot be computed, so the engine
+  // refuses the model, and names these when it does.
+  const forecastInputGaps = [];
+  const reportedYears = (field) => rows.filter((r) => isNum(r[field])).length;
+  if (reportedYears('cogs') === 0) {
+    forecastInputGaps.push({
+      field: 'cogs',
+      label: 'cost of sales',
+      drives: 'inventory, payables and other current assets are forecast from its growth, and the gross margin is read from it',
+    });
+  }
+  if (reportedYears('capex') === 0) {
+    forecastInputGaps.push({
+      field: 'capex',
+      label: 'capital expenditure',
+      drives: 'the PP&E schedule and depreciation are built from it',
+    });
+  }
+  if (reportedYears('ppeNet') < 2) {
+    forecastInputGaps.push({
+      field: 'ppeNet',
+      label: 'net property, plant & equipment for two or more years',
+      drives: 'the depreciation rate is read from its roll-forward',
+    });
+  }
 
   const historical = {
     incomeStatement: {
@@ -285,7 +477,7 @@ export function deriveModel(fetched) {
       // reported line left the balance sheet out by 1.1 to 1.8 million lakh and
       // the balance check failed every year. For an SEC filer the two are
       // identical: Apple's 359,241 less 285,508 is exactly its reported 73,733.
-      commonStockAPIC: rows.map((row) => plug(row.totalAssets, row.totalLiabilities)),
+      commonStockAPIC: equityLine,
       treasuryStock: rows.map(() => 0),
       retainedEarnings: rows.map(() => 0),
       otherComprehensiveIncome: rows.map(() => 0),
@@ -563,6 +755,10 @@ export function deriveModel(fetched) {
       // Marks this as derived rather than hand-built, so the dashboard can
       // label it honestly against a curated model like Apple's.
       derived: true,
+      // Every balance sheet line the filing did not report, by year, with how
+      // (if at all) it was derived. The engine names these when it refuses.
+      balanceSheetGaps,
+      forecastInputGaps,
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
     },

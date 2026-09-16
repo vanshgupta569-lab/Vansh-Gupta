@@ -12,7 +12,7 @@ import { buildModel, buildDCF } from '../engine/model.js';
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
-import { financialsFromStatements } from './companies';
+import { financialsFromStatements, isIntegrityRefusal } from './companies';
 import {
   applyCorrections,
   correctionCount,
@@ -183,12 +183,17 @@ dataSource: fetched.source,
     // Banks and financials get a residual income valuation instead of a
     // discounted cash flow. The engine refuses them for good reason; this is
     // the different method it refuses in favour of.
+    //
+    // Not when the model's balance sheet does not balance: the same refusal
+    // that withholds the discounted cash flow withholds this value too.
     residualIncome: isFinancialCompany(fetched)
-      ? buildResidualIncome(fetched, {
-          riskFreeRate: modelData?.dcf?.costOfCapital?.riskFreeRate,
-          marketRiskPremium: modelData?.dcf?.costOfCapital?.marketRiskPremium,
-          beta: modelData?.dcf?.costOfCapital?.equityBeta,
-        })
+      ? isIntegrityRefusal(D.code)
+        ? { applicable: false, message: D.message }
+        : buildResidualIncome(fetched, {
+            riskFreeRate: modelData?.dcf?.costOfCapital?.riskFreeRate,
+            marketRiskPremium: modelData?.dcf?.costOfCapital?.marketRiskPremium,
+            beta: modelData?.dcf?.costOfCapital?.equityBeta,
+          })
       : null,
 
     defaultDrivers,
