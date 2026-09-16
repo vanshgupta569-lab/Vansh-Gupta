@@ -145,7 +145,7 @@ function buildRatiosSheet(ctx: SupportingSheetsContext) {
   // ---- growth & margins ----------------------------------------------------
   group('Growth & margins');
   row('Revenue growth', (i) => `${ref('rev', i)}/${prv('rev', i)}-1`, { from: 1 });
-  row('Gross margin', (i) => `${ref('gp', i)}/${ref('rev', i)}`, { bars: true });
+  row('Gross margin before D&A and SBC', (i) => `${ref('gp', i)}/${ref('rev', i)}`, { bars: true });
   row('Operating margin', (i) => `${ref('ebit', i)}/${ref('rev', i)}`, { bars: true });
   row('EBITDA margin', (i) => `${ref('ebitda', i)}/${ref('rev', i)}`, { bars: true });
   row('Net margin', (i) => `${ref('ni', i)}/${ref('rev', i)}`, { bars: true });
@@ -179,7 +179,9 @@ function buildRatiosSheet(ctx: SupportingSheetsContext) {
     fmt: DAYS_FMT,
     unit: 'days',
   });
-  const dioRow = row('Days inventory outstanding', (i) => `${ref('bsInv', i)}/-${ref('cogs', i)}*365`, {
+  // On cost of sales as filed (D&A and SBC included), as the site computes it,
+  // so reported years agree with the filings and forecast years with the site.
+  const dioRow = row('Days inventory outstanding', (i) => `${ref('bsInv', i)}/-${ref('cogsFiledBasis', i)}*365`, {
     fmt: DAYS_FMT,
     unit: 'days',
   });
@@ -275,10 +277,10 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
     r++;
   };
 
-  const check = (name: string, build: (i: number) => string, from = 0) => {
+  const check = (name: string, build: (i: number) => string, from = 0, to = nT) => {
     const thisRow = r++;
     label(ws, thisRow, name, '', { indent: 1 });
-    for (let i = from; i < nT; i++) {
+    for (let i = from; i < to; i++) {
       const cell = ws.getCell(thisRow, cOf(i));
       cell.value = { formula: `ROUND(${build(i)},6)` } as any;
       styleCalc(cell, CHECK_OK_ERROR, { cross: true });
@@ -289,12 +291,26 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
   // ---- income statement arithmetic -----------------------------------------
   group('Income statement arithmetic');
   check(
-    'Revenue, costs and tax sum to net income',
+    'Revenue, costs, D&A, SBC and tax sum to net income',
     (i) =>
-      `(${ref('rev', i)}+${ref('cogs', i)}+${ref('rnd', i)}+${ref('sga', i)}+${ref('intInc', i)}+${ref(
-        'intExp',
+      `(${ref('rev', i)}+${ref('cogs', i)}+${ref('rnd', i)}+${ref('sga', i)}+${ref('daCost', i)}+${ref(
+        'sbcCost',
         i
-      )}+${ref('other', i)}+${ref('tax', i)})-${ref('ni', i)}`
+      )}+${ref('intInc', i)}+${ref('intExp', i)}+${ref('other', i)}+${ref('tax', i)})-${ref('ni', i)}`
+  );
+  blank();
+
+  // ---- reported years reconcile to the filings --------------------------------
+  // The cost lines exclude D&A and SBC, split out of the filed lines. Moving
+  // them must not change what a reported year reports, so operating profit is
+  // checked against revenue less the filed cost lines, reported years only.
+  group('Reported years reconcile to the filings');
+  check(
+    'Operating profit = revenue less the cost lines as filed',
+    (i) =>
+      `${ref('ebit', i)}-(${ref('rev', i)}+${ref('cogsFiled', i)}+${ref('rndFiled', i)}+${ref('sgaFiled', i)})`,
+    0,
+    nH
   );
   blank();
 
@@ -526,17 +542,22 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   const sym = fmt.money(currencySymbol);
   // Stored negative on the model, shown positive here, subtracted in totals.
   const cost = (name: string, key: string) => b.link(name, key, { flip: -1, sign: -1 });
+  // Stored positive on the model (the cash flow adds them back), shown
+  // positive here, subtracted in totals.
+  const nonCashCharge = (name: string, key: string) => b.link(name, key, { sign: -1 });
 
   b.group('Revenue & gross profit');
   const rev = b.link('Revenue', 'rev', { fmt: sym, bold: true, indent: 0 });
-  const cogs = cost('Cost of sales', 'cogs');
-  const gp = b.total('Gross profit', [rev, cogs]);
+  const cogs = cost('Cost of sales, excluding D&A and SBC', 'cogs');
+  const gp = b.total('Gross profit before D&A and SBC', [rev, cogs]);
   b.blank();
 
   b.group('Operating expenses');
-  const rnd = cost('Research & development', 'rnd');
-  const sga = cost('Selling, general & administrative', 'sga');
-  const opex = b.total('Total operating expenses', [rnd, sga], { sign: -1 });
+  const rnd = cost('Research & development, excluding D&A and SBC', 'rnd');
+  const sga = cost('Selling, general & administrative, excluding D&A and SBC', 'sga');
+  const da = nonCashCharge('Depreciation & amortization', 'da');
+  const sbc = nonCashCharge('Stock based compensation', 'sbc');
+  const opex = b.total('Total operating expenses', [rnd, sga, da, sbc], { sign: -1 });
   b.blank();
   const ebit = b.total('Operating income', [gp, opex]);
   b.blank();
@@ -551,11 +572,14 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   b.blank();
 
   b.group('Supplementary');
-  const da = b.link('Depreciation & amortization', 'da');
-  const sbc = b.link('Stock based compensation', 'sbc');
-  b.total('EBITDA', [ebit, da, sbc], { fmt: sym });
+  // EBITDA adds the two non-cash charges back to operating income, so here
+  // the same lines enter with a plus.
+  b.total('EBITDA', [ebit, { ...da, sign: 1 }, { ...sbc, sign: 1 }], { fmt: sym });
   b.blank();
   b.note([
+    'Cost of sales, R&D and SG&A exclude depreciation & amortization and stock based compensation, which are charged',
+    'as their own lines. In reported years each filed cost line gives up its pro-rata share of the filed D&A and SBC, so',
+    'operating income is unchanged from the filing.',
     'A negative provision for income taxes is a tax benefit, and adds to net income.',
     'Interest expense includes PIK interest, which accrues to the debt balance rather than being paid in cash and is',
     'added back in operating cash flow.',

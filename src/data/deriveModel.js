@@ -364,6 +364,9 @@ export function deriveModel(fetched) {
   provenance.operatingCosts = `R&D ${(rndMargin * 100).toFixed(1)}% and SG&A ${(
     sgaMargin * 100
   ).toFixed(1)}% of revenue — the last reported year, held flat`;
+  provenance.nonCashCharges =
+    'the margins above are as filed; depreciation and stock compensation are taken out of them at ' +
+    'the share they took in the last reported year, then charged as their own lines';
 
   // TAXES — the cheat sheet is explicit: apply the last actual year's effective
   // rate. Previously this averaged the first and last years, which let a year

@@ -560,7 +560,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   );
   driver(
     'gm',
-    'Gross margin',
+    'Gross margin before D&A and SBC',
     (c, _p, i) => (has(M.revenue, i) ? `(${c}${R.rev}+${c}${R.cogs})/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
@@ -569,8 +569,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     },
     PCT1
   );
-  line('cogs', 'Cost of sales', M.cogs, (c) => `-${c}${R.rev}*(1-${c}${R.gm})`, money());
-  calc('gp', 'Gross profit', (c) => `${c}${R.rev}+${c}${R.cogs}`, money(), { bold: true, indent: 0 });
+  // Cost of sales, R&D and SG&A exclude D&A and SBC, which are charged as
+  // their own lines just above operating profit, as in the engine. Reported
+  // years carry the engine's split of the filed lines; the filed lines
+  // themselves sit in the "As filed" memo below and the Checks sheet
+  // reconciles the two.
+  line('cogs', 'Cost of sales, excluding D&A and SBC', M.cogs, (c) => `-${c}${R.rev}*(1-${c}${R.gm})`, money());
+  calc('gp', 'Gross profit before D&A and SBC', (c) => `${c}${R.rev}+${c}${R.cogs}`, money(), { bold: true, indent: 0 });
 
   driver(
     'rndPct',
@@ -583,7 +588,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     },
     PCT1
   );
-  line('rnd', 'Research & development', M.rnd, (c) => `-${c}${R.rev}*${c}${R.rndPct}`, money());
+  line('rnd', 'Research & development, excluding D&A and SBC', M.rnd, (c) => `-${c}${R.rev}*${c}${R.rndPct}`, money());
   driver(
     'sgaPct',
     'Selling, general & administrative, % of revenue',
@@ -595,11 +600,25 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     },
     PCT1
   );
-  line('sga', 'Selling, general & administrative', M.sga, (c) => `-${c}${R.rev}*${c}${R.sgaPct}`, money());
-  calc('ebit', 'Operating profit (EBIT)', (c) => `${c}${R.gp}+${c}${R.rnd}+${c}${R.sga}`, money(), {
-    bold: true,
-    indent: 0,
-  });
+  line(
+    'sga',
+    'Selling, general & administrative, excluding D&A and SBC',
+    M.sga,
+    (c) => `-${c}${R.rev}*${c}${R.sgaPct}`,
+    money()
+  );
+  // The two non-cash charges, negative like every other cost here. They link
+  // to the positive D&A and SBC rows below, which the cash flow adds back, so
+  // the add-back always reverses exactly the charge made.
+  calc('daCost', 'Less: depreciation & amortization', (c) => `-${c}${R.da}`, money());
+  calc('sbcCost', 'Less: stock based compensation', (c) => `-${c}${R.sbc}`, money());
+  calc(
+    'ebit',
+    'Operating profit (EBIT)',
+    (c) => `${c}${R.gp}+${c}${R.rnd}+${c}${R.sga}+${c}${R.daCost}+${c}${R.sbcCost}`,
+    money(),
+    { bold: true, indent: 0 }
+  );
 
   // The balance interest is charged on: opening with the switch off, the
   // average of opening and closing with it on. Every interest line uses this,
@@ -684,11 +703,64 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     PCT1
   );
   line('sbc', 'Stock based compensation', M.stockBasedCompensation, (c) => `${c}${R.rev}*${c}${R.sbcPct}`, money());
-  calc('da', 'Depreciation & amortization', (c) => `-${c}${R.ppeDep}`, money());
+  // Reported years: the filed D&A, as the engine uses (it includes
+  // amortisation, which the PP&E schedule's depreciation does not). Forecast
+  // years: the PP&E schedule's depreciation.
+  line('da', 'Depreciation & amortization', M.depreciationAmortisation, (c) => `-${c}${R.ppeDep}`, money());
   calc('ebitda', 'EBITDA', (c) => `${c}${R.ebit}+${c}${R.da}+${c}${R.sbc}`, money(currencySymbol), {
     bold: true,
     indent: 0,
   });
+  blank();
+
+  // The cost lines as the filings report them, D&A and SBC inside, for the
+  // reported years only. Nothing reads these but the reconciliation on the
+  // Checks sheet, which confirms operating profit is still revenue less them.
+  const asFiled = (key: string, name: string, hist: any) => {
+    const row = r++;
+    R[key] = row;
+    pending.push(() => {
+      label(S, row, name, UNIT, { indent: 1 });
+      for (let i = 0; i < nH; i++) {
+        const cell = S.getCell(row, cOf(i));
+        const v = at(hist, i);
+        if (v !== null) cell.value = v;
+        styleHard(cell, money());
+      }
+    });
+  };
+  sub('As filed: reported cost lines, D&A and SBC included');
+  asFiled('cogsFiled', 'Cost of sales, as filed', M.cogsReportedBasis);
+  asFiled('rndFiled', 'Research & development, as filed', M.rndReportedBasis);
+  asFiled('sgaFiled', 'Selling, general & administrative, as filed', M.sgaReportedBasis);
+  // Cost of sales on the filed basis in every year, as the engine carries it,
+  // for ratios compared with the filings (inventory days). Forecast years add
+  // back to cost of sales the share of revenue that D&A and SBC took of it in
+  // the last reported year, measured from that year's cells.
+  const lastRep = L(cOf(nH - 1));
+  const abs = (key: string) => `$${lastRep}$${R[key]}`;
+  const filedTotal = () => `(${abs('cogsFiled')}+${abs('rndFiled')}+${abs('sgaFiled')})`;
+  calc(
+    'cogsEmbedded',
+    'D&A and SBC in cost of sales, % of revenue (last reported year)',
+    () =>
+      `IF(OR(${filedTotal()}=0,${abs('rev')}=0),0,-${abs('cogsFiled')}*((${abs('da')}+${abs('sbc')})/-${filedTotal()})/${abs('rev')})`,
+    PCT2,
+    { unit: '%', italic: true, indent: 2 }
+  );
+  calc(
+    'cogsFiledBasis',
+    'Cost of sales on the filed basis, D&A and SBC included',
+    (c, _p, i) => (i < nH ? `${c}${R.cogsFiled}` : `${c}${R.cogs}-${c}${R.rev}*${c}${R.cogsEmbedded}`),
+    money()
+  );
+  note([
+    'The cost lines in the income statement above exclude depreciation & amortization and stock based compensation,',
+    'which are charged as their own lines so that the add-backs in the cash flow reverse charges actually made. In the',
+    'reported years each filed line gives up its pro-rata share of the filed D&A and SBC, so operating profit is still',
+    'revenue less the filed lines here; the Checks sheet confirms it. Forecast margins give up the share D&A and SBC',
+    'took of each line in the last reported year, and the forecast D&A and SBC are then charged in full.',
+  ]);
   blank();
 
   // ---- WORKING CAPITAL AND OTHER SCHEDULES --------------------------------

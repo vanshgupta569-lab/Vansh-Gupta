@@ -342,17 +342,17 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             muted: true,
             adjuster: A('revenueGrowthPct'),
           },
-          { label: 'Cost of goods sold', values: M.cogs, indent: true },
-          { label: 'Gross profit', values: M.grossProfit, bold: true },
+          { label: 'Cost of goods sold, excluding D&A and SBC', values: M.cogs, indent: true },
+          { label: 'Gross profit before D&A and SBC', values: M.grossProfit, bold: true },
           {
-            label: 'Gross margin',
+            label: 'Gross margin before D&A and SBC',
             values: M.grossMargin,
             format: pct,
             indent: true,
             muted: true,
           },
           { spacer: true, label: '' },
-          { label: 'Research and development', values: M.rnd, indent: true },
+          { label: 'Research and development, excluding D&A and SBC', values: M.rnd, indent: true },
           {
             label: 'R&D as a share of revenue',
             values: ratio(M.rnd, M.revenue),
@@ -361,7 +361,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             muted: true,
             adjuster: A('rndMarginPct'),
           },
-          { label: 'Selling, general and administrative', values: M.sga, indent: true },
+          { label: 'Selling, general and administrative, excluding D&A and SBC', values: M.sga, indent: true },
           {
             label: 'SG&A as a share of revenue',
             values: ratio(M.sga, M.revenue),
@@ -369,6 +369,18 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             indent: true,
             muted: true,
             adjuster: A('sgaMarginPct'),
+          },
+          // Charged as their own lines, shown negative like the other costs, and
+          // added back in the cash flow.
+          {
+            label: 'Depreciation and amortisation',
+            values: M.depreciationAmortisation?.map((v: any) => (num(v) ? -v : v)),
+            indent: true,
+          },
+          {
+            label: 'Stock based compensation',
+            values: M.stockBasedCompensation?.map((v: any) => (num(v) ? -v : v)),
+            indent: true,
           },
           { label: 'Operating profit (EBIT)', values: M.ebit, bold: true },
           {
@@ -397,9 +409,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
           },
           { label: 'Net income', values: M.netIncome, bold: true },
           { spacer: true, label: '' },
-          { label: 'Depreciation and amortisation', values: M.depreciationAmortisation, indent: true, muted: true },
-          { label: 'Stock based compensation', values: M.stockBasedCompensation, indent: true, muted: true },
-          { label: 'EBITDA', values: M.ebitda, bold: true },
+          { label: 'EBITDA (operating profit before D&A and SBC)', values: M.ebitda, bold: true },
           { spacer: true, label: '' },
           { label: 'Basic shares', values: M.basicShares, indent: true, muted: true },
           { label: 'Diluted shares', values: M.dilutedShares, indent: true, muted: true },

@@ -90,70 +90,66 @@ export function buildModel(data) {
     S.revenueGrowth[t] = (S.revenue[t] - S.revenue[t - 1]) / S.revenue[t - 1];
   }
 
-  // Margins: history is derived, forecast comes from the assumptions.
-  S.grossMargin = blank();
-  S.rndMargin = blank();
-  S.sgaMargin = blank();
+  // COST LINES ON THE FILED BASIS
+  //
+  // The model's cost of sales, R&D and SG&A (S.cogs, S.rnd, S.sga, built in
+  // section 4b) EXCLUDE depreciation & amortisation and stock based
+  // compensation, which are charged as their own lines to reach operating
+  // profit. Previously operating profit came from margins that merely
+  // embedded the reported level of both, while the cash flow added back D&A
+  // from the capex schedule and SBC from its own ratio: any growth in either
+  // raised cash from operations one-for-one without touching profit.
+  //
+  // The lines here are the same costs on the basis the filings report them,
+  // D&A and SBC inside. The assumptions are written against this basis, and
+  // it is what capex, SBC and the working capital drivers have always read,
+  // so none of those schedules moves because of the split.
   S.taxRate = blank();
-  S.cogs = blank();
-  S.grossProfit = blank();
-  S.rnd = blank();
-  S.sga = blank();
+  S.cogsReportedBasis = blank();
+  S.rndReportedBasis = blank();
+  S.sgaReportedBasis = blank();
+  S.grossMarginReportedBasis = blank();
+  S.rndMarginReportedBasis = blank();
+  S.sgaMarginReportedBasis = blank();
 
   for (let t = 0; t < nH; t++) {
-    S.cogs[t] = h.incomeStatement.cogs[t];
-    S.rnd[t] = h.incomeStatement.researchDevelopment[t];
-    S.sga[t] = h.incomeStatement.sellingGeneralAdmin[t];
-    S.grossProfit[t] = S.revenue[t] + S.cogs[t];
-    S.grossMargin[t] = S.grossProfit[t] / S.revenue[t];
-    S.rndMargin[t] = -S.rnd[t] / S.revenue[t];
-    S.sgaMargin[t] = -S.sga[t] / S.revenue[t];
+    S.cogsReportedBasis[t] = h.incomeStatement.cogs[t];
+    S.rndReportedBasis[t] = h.incomeStatement.researchDevelopment[t];
+    S.sgaReportedBasis[t] = h.incomeStatement.sellingGeneralAdmin[t];
+    S.grossMarginReportedBasis[t] = (S.revenue[t] + S.cogsReportedBasis[t]) / S.revenue[t];
+    S.rndMarginReportedBasis[t] = -S.rndReportedBasis[t] / S.revenue[t];
+    S.sgaMarginReportedBasis[t] = -S.sgaReportedBasis[t] / S.revenue[t];
   }
 
   const sgaFcst = a.sellingGeneralAdminMargin === 'avgOfHistory'
-    ? avg(S.sgaMargin.slice(0, nH))
+    ? avg(S.sgaMarginReportedBasis.slice(0, nH))
     : a.sellingGeneralAdminMargin;
 
   for (let t = nH; t < nH + nF; t++) {
-    S.grossMargin[t] = a.grossMargin[t - nH];
-    S.rndMargin[t] = a.researchDevelopmentMargin[t - nH];
-    S.sgaMargin[t] = Array.isArray(sgaFcst) ? sgaFcst[t - nH] : sgaFcst;
-    S.grossProfit[t] = S.revenue[t] * S.grossMargin[t];
-    S.cogs[t] = -(S.revenue[t] - S.grossProfit[t]);   // COGS is the balancing line
-    S.rnd[t] = -(S.revenue[t] * S.rndMargin[t]);
-    S.sga[t] = -(S.revenue[t] * S.sgaMargin[t]);
+    S.grossMarginReportedBasis[t] = a.grossMargin[t - nH];
+    S.rndMarginReportedBasis[t] = a.researchDevelopmentMargin[t - nH];
+    S.sgaMarginReportedBasis[t] = Array.isArray(sgaFcst) ? sgaFcst[t - nH] : sgaFcst;
+    // COGS is the balancing line of the gross margin
+    S.cogsReportedBasis[t] = -(S.revenue[t] - S.revenue[t] * S.grossMarginReportedBasis[t]);
+    S.rndReportedBasis[t] = -(S.revenue[t] * S.rndMarginReportedBasis[t]);
+    S.sgaReportedBasis[t] = -(S.revenue[t] * S.sgaMarginReportedBasis[t]);
   }
 
   S.cogsGrowth = blank();
   for (let t = 1; t < nH + nF; t++) {
-    S.cogsGrowth[t] = (S.cogs[t] - S.cogs[t - 1]) / S.cogs[t - 1];
-  }
-
-  S.ebit = blank();
-  for (let t = 0; t < nH + nF; t++) {
-    S.ebit[t] = S.grossProfit[t] + S.rnd[t] + S.sga[t];
+    S.cogsGrowth[t] =
+      (S.cogsReportedBasis[t] - S.cogsReportedBasis[t - 1]) / S.cogsReportedBasis[t - 1];
   }
 
   // Interest and tax need the debt / cash schedules, so they are filled in
-  // later. Placeholders are set up here to keep the line order readable.
+  // later; operating profit needs D&A and SBC, so it is built in section 4b.
+  // Placeholders are set up here to keep the line order readable.
   S.interestIncome = blank();
   S.interestExpense = blank();
   S.otherIncomeExpense = blank();
   S.pretaxProfit = blank();
   S.taxes = blank();
   S.netIncome = blank();
-
-  for (let t = 0; t < nH; t++) {
-    S.otherIncomeExpense[t] = h.incomeStatement.otherIncomeExpense[t];
-    S.taxes[t] = h.incomeStatement.taxes[t];
-    S.pretaxProfit[t] = S.ebit[t] + S.otherIncomeExpense[t];
-    S.netIncome[t] = S.pretaxProfit[t] + S.taxes[t];
-    S.taxRate[t] = -S.taxes[t] / S.pretaxProfit[t];
-  }
-
-  const taxFcst = a.taxRate === 'avgOfFirstAndLast'
-    ? avg([S.taxRate[0], S.taxRate[nH - 1]])
-    : a.taxRate === 'avgOfHistory' ? avg(S.taxRate.slice(0, nH)) : a.taxRate;
 
   // ---------------------------------------------- 3. WORKING CAPITAL SCHEDULE
   const wcLines = [
@@ -191,7 +187,7 @@ export function buildModel(data) {
     const inv = S.wc.inventory.ending[t];
     if (ar != null) S.dso[t] = (ar / S.revenue[t]) * meta.daysInYear;
     if (ap != null) S.dpo[t] = (ap / S.revenue[t]) * meta.daysInYear;
-    if (inv != null) S.inventoryTurnover[t] = -S.cogs[t] / inv;
+    if (inv != null) S.inventoryTurnover[t] = -S.cogsReportedBasis[t] / inv;
   }
 
   // Other assets / other non-current liabilities — held flat by assumption
@@ -252,7 +248,7 @@ export function buildModel(data) {
     // company turned forecast capex into a cash inflow, ran PP&E down towards
     // a negative balance, made D&A negative and added capex to free cash flow.
     capexRaw = a.capexMethod === 'percentOfRnD'
-      ? -S.rnd[t] * a.capexRatio                    // capex = R&D spend × ratio (R&D is negative)
+      ? -S.rndReportedBasis[t] * a.capexRatio       // capex = R&D spend (as filed, negative) × ratio
       : a.capexMethod === 'percentOfRevenue'
         ? S.revenue[t] * a.capexRatio                // capex = revenue × ratio
         : capexRaw * (1 + a.capexRatio);            // capex grows at the ratio
@@ -262,7 +258,8 @@ export function buildModel(data) {
     S.ppe.ending[t] = S.ppe.beginning[t] + S.ppe.capex[t] + S.ppe.depreciation[t];
   }
 
-  // D&A and SBC feed both the income statement (via EBITDA) and the cash flow
+  // D&A and SBC are charged in operating profit (section 4b) and added back in
+  // the cash flow statement
   S.depreciationAmortisation = blank();
   S.stockBasedCompensation = blank();
   for (let t = 0; t < nH; t++) {
@@ -273,9 +270,11 @@ export function buildModel(data) {
     S.depreciationAmortisation[t] = -S.ppe.depreciation[t];
   }
 
+  // SBC as a share of total operating costs on the filed basis, which is the
+  // basis the ratio is observed on.
   S.sbcPercentOfOpex = blank();
   for (let t = 0; t < nH; t++) {
-    const opex = S.cogs[t] + S.rnd[t] + S.sga[t];
+    const opex = S.cogsReportedBasis[t] + S.rndReportedBasis[t] + S.sgaReportedBasis[t];
     S.sbcPercentOfOpex[t] = -S.stockBasedCompensation[t] / opex;
   }
   const sbcPct = a.sbcAsPercentOfOperatingExpenses === 'lastHistoricalYear'
@@ -286,8 +285,91 @@ export function buildModel(data) {
 
   for (let t = nH; t < nH + nF; t++) {
     S.sbcPercentOfOpex[t] = sbcPct;
-    S.stockBasedCompensation[t] = -sbcPct * (S.cogs[t] + S.rnd[t] + S.sga[t]);
+    S.stockBasedCompensation[t] =
+      -sbcPct * (S.cogsReportedBasis[t] + S.rndReportedBasis[t] + S.sgaReportedBasis[t]);
   }
+
+  // ------------------------- 4b. COST LINES EXCLUDING D&A AND SBC, AND EBIT
+  // Reported years: each filed cost line gives up its pro-rata share of the
+  // filed D&A and SBC. The filings do not say which line carries how much;
+  // SBC is already modelled as a share of total operating costs, and D&A is
+  // allocated the same way. The three lines plus D&A plus SBC equal the filed
+  // operating costs exactly, so reported operating profit, and everything
+  // below it, is unchanged.
+  //
+  // Forecast years: the assumptions are margins on the filed basis. Each cost
+  // line gives up the share of revenue that D&A and SBC took of it in the last
+  // reported year, and the forecast D&A and SBC are then charged in full. So
+  // operating profit falls where D&A and SBC outgrow the level the reported
+  // margins embedded, and rises where they shrink below it.
+  const nonCash = (t) =>
+    (S.depreciationAmortisation[t] ?? 0) + (S.stockBasedCompensation[t] ?? 0);
+  const filedCosts = (t) =>
+    (S.cogsReportedBasis[t] ?? 0) + (S.rndReportedBasis[t] ?? 0) + (S.sgaReportedBasis[t] ?? 0);
+  const withoutShare = (line, share) => (line == null ? null : line * (1 - share));
+
+  S.cogs = blank();
+  S.rnd = blank();
+  S.sga = blank();
+  S.grossProfit = blank();
+  S.grossMargin = blank();
+  S.rndMargin = blank();
+  S.sgaMargin = blank();
+  S.nonCashShareOfCosts = blank();
+
+  for (let t = 0; t < nH; t++) {
+    const costs = filedCosts(t);
+    const share = costs !== 0 ? nonCash(t) / -costs : 0;
+    S.nonCashShareOfCosts[t] = share;
+    S.cogs[t] = withoutShare(S.cogsReportedBasis[t], share);
+    S.rnd[t] = withoutShare(S.rndReportedBasis[t], share);
+    S.sga[t] = withoutShare(S.sgaReportedBasis[t], share);
+    // No filed cost lines to take them from: the whole charge leaves SG&A.
+    if (costs === 0 && nonCash(t) !== 0) S.sga[t] = (S.sga[t] ?? 0) + nonCash(t);
+  }
+
+  const lastReported = nH - 1;
+  const lastRevenue = S.revenue[lastReported];
+  const lastShare = S.nonCashShareOfCosts[lastReported] ?? 0;
+  const embeddedIn = (line) =>
+    lastRevenue ? (-(line[lastReported] ?? 0) * lastShare) / lastRevenue : 0;
+  // Share of revenue, per cost line, that D&A and SBC took in the last
+  // reported year. Exported so a margin set on this basis (a slider) can be
+  // turned back into the filed-basis assumption the engine reads.
+  S.embeddedNonCashMargin = {
+    cogs: embeddedIn(S.cogsReportedBasis),
+    rnd: embeddedIn(S.rndReportedBasis),
+    sga:
+      embeddedIn(S.sgaReportedBasis) +
+      (lastRevenue && filedCosts(lastReported) === 0 ? nonCash(lastReported) / lastRevenue : 0),
+  };
+
+  for (let t = nH; t < nH + nF; t++) {
+    S.cogs[t] = S.cogsReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.cogs;
+    S.rnd[t] = S.rndReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.rnd;
+    S.sga[t] = S.sgaReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.sga;
+  }
+
+  S.ebit = blank();
+  for (let t = 0; t < nH + nF; t++) {
+    S.grossProfit[t] = S.revenue[t] + S.cogs[t];
+    S.grossMargin[t] = S.grossProfit[t] / S.revenue[t];
+    S.rndMargin[t] = -S.rnd[t] / S.revenue[t];
+    S.sgaMargin[t] = -S.sga[t] / S.revenue[t];
+    S.ebit[t] = S.grossProfit[t] + S.rnd[t] + S.sga[t] - nonCash(t);
+  }
+
+  for (let t = 0; t < nH; t++) {
+    S.otherIncomeExpense[t] = h.incomeStatement.otherIncomeExpense[t];
+    S.taxes[t] = h.incomeStatement.taxes[t];
+    S.pretaxProfit[t] = S.ebit[t] + S.otherIncomeExpense[t];
+    S.netIncome[t] = S.pretaxProfit[t] + S.taxes[t];
+    S.taxRate[t] = -S.taxes[t] / S.pretaxProfit[t];
+  }
+
+  const taxFcst = a.taxRate === 'avgOfFirstAndLast'
+    ? avg([S.taxRate[0], S.taxRate[nH - 1]])
+    : a.taxRate === 'avgOfHistory' ? avg(S.taxRate.slice(0, nH)) : a.taxRate;
 
   // ------------------------------------------------------- 5. DEBT SCHEDULE
   S.debt = {

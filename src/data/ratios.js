@@ -323,8 +323,11 @@ export function forecastRatios(M, forecastYears) {
       (at(b.otherAssets, i) ?? 0);
 
     // The engine holds costs as negatives; the ratio formulas expect them
-    // positive, matching how the filings arrive.
-    const cogs = at(M.cogs, i) === null ? null : Math.abs(at(M.cogs, i));
+    // positive, matching how the filings arrive. Cost of sales on the filed
+    // basis (D&A and SBC included), so forecast inventory days compare like for
+    // like with the reported years, which are computed from the filings.
+    const cogsSeries = M.cogsReportedBasis ?? M.cogs;
+    const cogs = at(cogsSeries, i) === null ? null : Math.abs(at(cogsSeries, i));
 
     return {
       label: 'FY' + String(year).slice(2),

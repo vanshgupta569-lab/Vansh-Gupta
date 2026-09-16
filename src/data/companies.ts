@@ -231,11 +231,19 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
   //    the R&D margin and an average of historical SG&A, and where that average
   //    differed from the forecast SG&A margin, setting the slider back to its
   //    own default did not reproduce the model it started from.
+  //    Stock based compensation is now charged in operating profit and is
+  //    forecast as a share of total operating costs on the filed basis, so a
+  //    point on gross margin also trims the SBC charge by that share: moving
+  //    gross margin by d moves operating profit by d × (1 + share). The shift
+  //    is scaled down by that factor so the operating margin moves by exactly
+  //    what the slider says. The share depends only on reported history.
   if (touched('operatingMarginPct')) {
     const delta =
       (drivers.operatingMarginPct - Number(defaults.operatingMarginPct ?? 0)) / 100;
+    const baseline: any = buildModel(source);
+    const sbcShare = Number(baseline.sbcPercentOfOpex?.[baseline.nH] ?? 0) || 0;
     d.assumptions.grossMargin = d.assumptions.grossMargin.map(
-      (g: number) => g + delta
+      (g: number) => g + delta / (1 + sbcShare)
     );
   }
 
@@ -308,13 +316,22 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
       d.dcf.exitEbitdaMultiple = Number(drivers.exitMultipleX);
     }
   }
+  // The R&D and SG&A sliders read the model's margins, which exclude D&A and
+  // SBC; the assumptions they write are on the filed basis, which includes
+  // them. Adding back the share D&A and SBC took of each line in the last
+  // reported year makes the two agree, so a slider set to 12.0% gives a
+  // modelled margin of exactly 12.0% rather than 12.0% less the embedded share.
+  // That share depends only on reported history, which no slider changes.
+  let embedded: { rnd: number; sga: number } | null = null;
+  const embeddedMargin = () =>
+    (embedded ??= buildModel(source).embeddedNonCashMargin ?? { rnd: 0, sga: 0 }) as { rnd: number; sga: number };
   if (drivers.rndMarginPct !== undefined && touchedNum('rndMarginPct', 1)) {
     d.assumptions.researchDevelopmentMargin = Array(5).fill(
-      Number(drivers.rndMarginPct) / 100
+      Number(drivers.rndMarginPct) / 100 + embeddedMargin().rnd
     );
   }
   if (drivers.sgaMarginPct !== undefined && touchedNum('sgaMarginPct', 1)) {
-    d.assumptions.sellingGeneralAdminMargin = Number(drivers.sgaMarginPct) / 100;
+    d.assumptions.sellingGeneralAdminMargin = Number(drivers.sgaMarginPct) / 100 + embeddedMargin().sga;
   }
   if (
     drivers.depreciationPctOfCapex !== undefined &&
@@ -668,7 +685,8 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
       years: _M.years.slice(0, _nH).map((y: number) => 'FY' + String(y).slice(2)),
       revenue:           _M.revenue.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
       revenueGrowth:     _M.revenueGrowth.slice(0, _nH).map((v: number | null) => r((v ?? 0) * 100, 1)),
-      grossMargin:       _M.grossMargin.slice(0, _nH).map((v: number | null) => r((v ?? 0) * 100, 1)),
+      // As reported: the filed gross margin, D&A and SBC inside cost of sales.
+      grossMargin:       _M.grossMarginReportedBasis.slice(0, _nH).map((v: number | null) => r((v ?? 0) * 100, 1)),
       ebitdaMargin:      _M.ebitda.slice(0, _nH).map((v: number | null, i: number) =>
         r(((v ?? 0) / (_M.revenue[i] ?? 1)) * 100, 1)),
       netIncome:         _M.netIncome.slice(0, _nH).map((v: number | null) => r(v ?? 0)),
