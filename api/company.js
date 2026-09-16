@@ -160,6 +160,14 @@ const US_TAGS = {
   ],
   taxExpense: ['IncomeTaxExpenseBenefit'],
   netIncome: ['NetIncomeLoss', 'ProfitLoss'],
+  // Interest expense as filed, so the reported income statement can carry it
+  // on its own line between operating income and pretax income.
+  interestExpense: [
+    'InterestExpense',
+    'InterestExpenseNonoperating',
+    'InterestExpenseDebt',
+    'InterestAndDebtExpense',
+  ],
 
   cash: [
     'CashAndCashEquivalentsAtCarryingValue',
@@ -418,6 +426,7 @@ const YAHOO_FIELDS = {
   pretaxIncome: 'annualPretaxIncome',
   taxExpense: 'annualTaxProvision',
   netIncome: 'annualNetIncome',
+  interestExpense: 'annualInterestExpense',
 
   cash: 'annualCashAndCashEquivalents',
   receivables: 'annualAccountsReceivable',

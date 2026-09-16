@@ -688,7 +688,20 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     PCT1
   );
   line('tax', 'Taxes', M.taxes, (c) => `-${c}${R.pbt}*${c}${R.taxRate}`, money());
-  calc('ni', 'Net income', (c) => `${c}${R.pbt}+${c}${R.tax}`, money(currencySymbol), { bold: true, indent: 0 });
+  // Reported years: filed net income less pretax income after tax, so reported
+  // net income is the filed figure. Forecast years: an input, nil by default.
+  driver(
+    'afterTax',
+    'Items after tax: non-controlling interests, discontinued operations',
+    null,
+    (i) => (i < nH ? at(M.otherItemsAfterTax, i) : 0),
+    money(),
+    { unit: UNIT }
+  );
+  calc('ni', 'Net income', (c) => `${c}${R.pbt}+${c}${R.tax}+${c}${R.afterTax}`, money(currencySymbol), {
+    bold: true,
+    indent: 0,
+  });
 
   blank();
   driver(
@@ -734,6 +747,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   asFiled('cogsFiled', 'Cost of sales, as filed', M.cogsReportedBasis);
   asFiled('rndFiled', 'Research & development, as filed', M.rndReportedBasis);
   asFiled('sgaFiled', 'Selling, general & administrative, as filed', M.sgaReportedBasis);
+  asFiled('pretaxFiled', 'Pretax income, as filed', M.pretaxProfitAsFiled);
+  asFiled('niFiled', 'Net income, as filed', M.netIncomeAsFiled);
   // Cost of sales on the filed basis in every year, as the engine carries it,
   // for ratios compared with the filings (inventory days). Forecast years add
   // back to cost of sales the share of revenue that D&A and SBC took of it in

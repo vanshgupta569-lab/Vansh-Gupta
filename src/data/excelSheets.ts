@@ -296,7 +296,10 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
       `(${ref('rev', i)}+${ref('cogs', i)}+${ref('rnd', i)}+${ref('sga', i)}+${ref('daCost', i)}+${ref(
         'sbcCost',
         i
-      )}+${ref('intInc', i)}+${ref('intExp', i)}+${ref('other', i)}+${ref('tax', i)})-${ref('ni', i)}`
+      )}+${ref('intInc', i)}+${ref('intExp', i)}+${ref('other', i)}+${ref('tax', i)}+${ref('afterTax', i)})-${ref(
+        'ni',
+        i
+      )}`
   );
   blank();
 
@@ -309,6 +312,20 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
     'Operating profit = revenue less the cost lines as filed',
     (i) =>
       `${ref('ebit', i)}-(${ref('rev', i)}+${ref('cogsFiled', i)}+${ref('rndFiled', i)}+${ref('sgaFiled', i)})`,
+    0,
+    nH
+  );
+  // A blank filed figure (a hand-built data file carries none) is nothing to
+  // test, not a failure.
+  check(
+    'Pretax income = pretax income as filed',
+    (i) => `IF(${ref('pretaxFiled', i)}="",0,${ref('pbt', i)}-${ref('pretaxFiled', i)})`,
+    0,
+    nH
+  );
+  check(
+    'Net income = net income as filed',
+    (i) => `IF(${ref('niFiled', i)}="",0,${ref('ni', i)}-${ref('niFiled', i)})`,
     0,
     nH
   );
@@ -568,7 +585,8 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   const other = b.link('Other income / (expense), net', 'other');
   const pbt = b.total('Income before provision for income taxes', [ebit, intInc, intExp, other]);
   const tax = cost('Provision for income taxes', 'tax');
-  b.total('Net income', [pbt, tax], { fmt: sym });
+  const afterTax = b.link('Items after tax: non-controlling interests, discontinued operations', 'afterTax');
+  b.total('Net income', [pbt, tax, afterTax], { fmt: sym });
   b.blank();
 
   b.group('Supplementary');

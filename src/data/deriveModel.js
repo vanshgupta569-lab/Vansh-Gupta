@@ -390,6 +390,55 @@ export function deriveModel(fetched) {
       'between the reported operating profit and the cost lines is carried in SG&A';
   }
 
+  // ---- Reported pretax and net income, tied to the filing -----------------
+  //
+  // The reported column is what the company filed. Operating profit already
+  // ties (see above). Below it, the filing's interest expense is carried on
+  // its own line; everything else between operating profit and pretax income
+  // (interest income, investment gains, other items) is pretax income less
+  // operating profit less that interest; and anything between pretax income
+  // after tax and the filed net income (non-controlling interests,
+  // discontinued operations, equity-method results reported after tax) is
+  // carried as items after tax. Previously other income was set to nil and
+  // interest left out, so reported net income was operating profit less tax:
+  // AbbVie showed 12,711 against 4,226 filed.
+  //
+  // Operating profit here is the one the engine builds from the cost lines,
+  // which the SG&A reconciliation above ties to the filed figure, so pretax
+  // income ties exactly. Where the filing does not report operating income,
+  // pretax income, tax or net income in a year, nothing is estimated: the gap
+  // is recorded and the engine refuses the model.
+  const filedInterestExpense = rows.map((r) =>
+    isNum(r.interestExpense) ? -Math.abs(r.interestExpense) : null
+  );
+  const operatingProfitBuilt = rows.map((r, i) =>
+    isNum(r.revenue)
+      ? r.revenue - (isNum(r.cogs) ? r.cogs : 0) - (isNum(r.rnd) ? r.rnd : 0) - (isNum(sgaTotal[i]) ? sgaTotal[i] : 0)
+      : null
+  );
+  const otherNonOperating = rows.map((r, i) =>
+    isNum(r.pretaxIncome) && isNum(operatingProfitBuilt[i])
+      ? r.pretaxIncome - operatingProfitBuilt[i] - (filedInterestExpense[i] ?? 0)
+      : 0
+  );
+  const itemsAfterTax = rows.map((r) =>
+    isNum(r.netIncome) && isNum(r.pretaxIncome) && isNum(r.taxExpense)
+      ? r.netIncome - (r.pretaxIncome - r.taxExpense)
+      : null
+  );
+  const incomeStatementGaps = [
+    ['operatingIncome', 'operating income'],
+    ['pretaxIncome', 'pretax income'],
+    ['taxExpense', 'income tax'],
+    ['netIncome', 'net income'],
+  ]
+    .map(([field, label]) => ({ field, label, years: rows.filter((r) => !isNum(r[field])).map((r) => r.fiscalYear) }))
+    .filter((g) => g.years.length);
+  provenance.incomeStatement =
+    'reported pretax and net income are the filed figures: interest expense as filed, other non-operating ' +
+    'income as pretax income less operating income and interest, and items after tax (non-controlling ' +
+    'interests, discontinued operations) as net income less pretax income after tax';
+
   // ------------------------------------------------------------ historicals
 
   // Balance sheet lines the filing doesn't break out, derived from what it
@@ -441,7 +490,11 @@ export function deriveModel(fetched) {
         v === null && isNum(revenue[i]) ? 0 : v
       ),
       sellingGeneralAdmin: sgaTotal.map((v) => (isNum(v) ? -v : null)),
-      otherIncomeExpense: rows.map(() => 0),
+      interestExpense: filedInterestExpense,
+      otherIncomeExpense: otherNonOperating,
+      otherItemsAfterTax: itemsAfterTax,
+      pretaxIncomeAsFiled: pick('pretaxIncome'),
+      netIncomeAsFiled: pick('netIncome'),
       taxes: pickNeg('taxExpense'),
       basicShares: pick('dilutedShares').map((v) => (isNum(v) ? v / 1e6 : null)),
       dilutedShares: pick('dilutedShares').map((v) => (isNum(v) ? v / 1e6 : null)),
@@ -763,6 +816,9 @@ export function deriveModel(fetched) {
       // (if at all) it was derived. The engine names these when it refuses.
       balanceSheetGaps,
       forecastInputGaps,
+      // Income statement lines the filing does not report, by year. The engine
+      // refuses a model whose reported income statement cannot be the filed one.
+      incomeStatementGaps,
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
     },

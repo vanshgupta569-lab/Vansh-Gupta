@@ -407,6 +407,11 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             muted: true,
             adjuster: A('taxRatePct'),
           },
+          {
+            label: 'Items after tax (non-controlling interests, discontinued operations)',
+            values: M.otherItemsAfterTax,
+            indent: true,
+          },
           { label: 'Net income', values: M.netIncome, bold: true },
           { spacer: true, label: '' },
           { label: 'EBITDA (operating profit before D&A and SBC)', values: M.ebitda, bold: true },

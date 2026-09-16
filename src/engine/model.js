@@ -448,11 +448,30 @@ export function buildModel(data) {
     S.ebit[t] = S.grossProfit[t] + S.rnd[t] + S.sga[t] - nonCash(t);
   }
 
+  // Reported years are what the company filed. Interest expense and items
+  // after tax (non-controlling interests, discontinued operations) are carried
+  // where the data file provides them, so reported pretax profit and net income
+  // are the filed figures rather than operating profit relabelled. Apple's
+  // hand-built file folds interest into other income, as its filing does.
+  // The filed pretax and net income themselves are kept alongside, so anything
+  // that still does not tie is visible (the export's Checks sheet tests it).
+  S.otherItemsAfterTax = blank();
+  S.pretaxProfitAsFiled = blank();
+  S.netIncomeAsFiled = blank();
   for (let t = 0; t < nH; t++) {
-    S.otherIncomeExpense[t] = h.incomeStatement.otherIncomeExpense[t];
+    const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+    const interestIncome = num(h.incomeStatement.interestIncome?.[t]);
+    const interestExpense = num(h.incomeStatement.interestExpense?.[t]);
+    if (interestIncome !== null) S.interestIncome[t] = interestIncome;
+    if (interestExpense !== null) S.interestExpense[t] = interestExpense;
+    S.otherIncomeExpense[t] = num(h.incomeStatement.otherIncomeExpense[t]) ?? 0;
+    S.otherItemsAfterTax[t] = num(h.incomeStatement.otherItemsAfterTax?.[t]);
+    S.pretaxProfitAsFiled[t] = num(h.incomeStatement.pretaxIncomeAsFiled?.[t]);
+    S.netIncomeAsFiled[t] = num(h.incomeStatement.netIncomeAsFiled?.[t]);
     S.taxes[t] = h.incomeStatement.taxes[t];
-    S.pretaxProfit[t] = S.ebit[t] + S.otherIncomeExpense[t];
-    S.netIncome[t] = S.pretaxProfit[t] + S.taxes[t];
+    S.pretaxProfit[t] =
+      S.ebit[t] + (interestIncome ?? 0) + (interestExpense ?? 0) + S.otherIncomeExpense[t];
+    S.netIncome[t] = S.pretaxProfit[t] + S.taxes[t] + (S.otherItemsAfterTax[t] ?? 0);
     S.taxRate[t] = -S.taxes[t] / S.pretaxProfit[t];
   }
 
@@ -912,10 +931,39 @@ export function filedBalanceSheetRefusal(model, data) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// THE REPORTED INCOME STATEMENT MUST BE THE FILED ONE
+// ---------------------------------------------------------------------------
+// Reported operating income, pretax income, tax and net income have to be the
+// filed figures. Where the filing does not report one of them in a reported
+// year, the reported column could only be filled with the model's own
+// estimate. Without filed operating income in particular, whatever the three
+// named cost lines miss would be carried as "other income", below operating
+// profit, where the forecast (which sets other income to nil) drops it and
+// overstates profit. So the model is refused and the missing lines are named.
+function incomeStatementRefusal(data) {
+  const gaps = Array.isArray(data?.meta?.incomeStatementGaps) ? data.meta.incomeStatementGaps : [];
+  if (!gaps.length) return null;
+  const listed = gaps.map((g) => `${g.label} for ${fiscalYearList(g.years)}`).join(', ');
+  return {
+    code: 'filingMissingIncomeStatementLine',
+    incomeStatementGaps: gaps,
+    message:
+      `The filing does not report ${listed}. The reported income statement is meant to be what the ` +
+      `company filed, and without ${gaps.length > 1 ? 'those lines' : 'that line'} it would carry the ` +
+      "model's own estimate instead, with the forecast built on it, so no value is shown. The reported " +
+      'figures below are unaffected.',
+  };
+}
+
 // The codes that mean "no valuation of any kind", not merely "no DCF". A bank's
 // residual income is the one exception, gated instead by
 // filedBalanceSheetRefusal above.
-export const INTEGRITY_REFUSAL_CODES = ['balanceSheetDoesNotBalance', 'filingMissingValuationInput'];
+export const INTEGRITY_REFUSAL_CODES = [
+  'balanceSheetDoesNotBalance',
+  'filingMissingValuationInput',
+  'filingMissingIncomeStatementLine',
+];
 
 export function checkValuationApplicability(model, data, wacc) {
   const { nH, nF } = model;
@@ -927,6 +975,8 @@ export function checkValuationApplicability(model, data, wacc) {
   //    broken this is the reason given, whatever else also applies.
   const brokenBalanceSheet = balanceSheetRefusal(model, data);
   if (brokenBalanceSheet) return { applicable: false, ...brokenBalanceSheet };
+  const incompleteIncomeStatement = incomeStatementRefusal(data);
+  if (incompleteIncomeStatement) return { applicable: false, ...incompleteIncomeStatement };
 
   // 1. Financial-sector companies — unlevered FCF is not a meaningful concept
   const sicIsFinancial = sic != null && Number(sic) >= 6000 && Number(sic) <= 6799;
