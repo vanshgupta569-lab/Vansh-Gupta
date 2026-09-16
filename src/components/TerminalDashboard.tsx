@@ -625,8 +625,13 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // A bank the discounted cash flow refuses, but the residual income model
   // can value. The two are never blended: they answer different questions and
   // mixing them would hide which one produced the number.
+  //
+  // Not gated on integrityRefused: residual income is built on the filed
+  // balance sheet, and the company record already withholds it when that
+  // sheet does not balance (autoCompany.ts). A bank whose forecast cannot be
+  // computed keeps its refused DCF but still shows this value.
   const bankModel =
-    dcfResult.applicable === false && !integrityRefused && company.residualIncome?.applicable
+    dcfResult.applicable === false && company.residualIncome?.applicable
       ? company.residualIncome
       : null;
 

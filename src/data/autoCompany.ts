@@ -8,11 +8,11 @@
 // @ts-ignore — plain JS module, no type declarations
 import { deriveModel } from './deriveModel.js';
 // @ts-ignore
-import { buildModel, buildDCF } from '../engine/model.js';
+import { buildModel, buildDCF, filedBalanceSheetRefusal } from '../engine/model.js';
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
-import { financialsFromStatements, isIntegrityRefusal } from './companies';
+import { financialsFromStatements } from './companies';
 import {
   applyCorrections,
   correctionCount,
@@ -184,11 +184,14 @@ dataSource: fetched.source,
     // discounted cash flow. The engine refuses them for good reason; this is
     // the different method it refuses in favour of.
     //
-    // Not when the model's balance sheet does not balance: the same refusal
-    // that withholds the discounted cash flow withholds this value too.
+    // Gated on the FILED balance sheet, which is what residual income is built
+    // from, and not on the engine's forecast. A bank's forecast usually cannot
+    // be computed (no cost of sales, capex or PP&E), which refuses its DCF, but
+    // that says nothing about the book value this model uses. If the filed
+    // sheet does not balance, no value is shown and the refusal says why.
     residualIncome: isFinancialCompany(fetched)
-      ? isIntegrityRefusal(D.code)
-        ? { applicable: false, message: D.message }
+      ? filedBalanceSheetRefusal(M, modelData)
+        ? { applicable: false, message: filedBalanceSheetRefusal(M, modelData).message }
         : buildResidualIncome(fetched, {
             riskFreeRate: modelData?.dcf?.costOfCapital?.riskFreeRate,
             marketRiskPremium: modelData?.dcf?.costOfCapital?.marketRiskPremium,

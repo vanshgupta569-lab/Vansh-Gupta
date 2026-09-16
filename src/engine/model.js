@@ -688,11 +688,13 @@ export function balanceSheetIntegrity(model) {
   const B = model.balanceSheet || {};
   const failures = [];
   let yearsChecked = 0;
+  let reportedYearsChecked = 0;
   for (let t = 0; t < model.years.length; t++) {
     const keys = [...BALANCE_ASSETS, ...BALANCE_LIABILITIES, ...BALANCE_EQUITY];
     const values = keys.map((k) => B[k]?.[t]);
     if (!values.some((v) => typeof v === 'number' && v !== 0)) continue;
     yearsChecked++;
+    if (t < model.nH) reportedYearsChecked++;
     const broken = values.some((v) => typeof v === 'number' && !isFinite(v));
     const total = (ks) => ks.reduce((s, k) => s + (typeof B[k]?.[t] === 'number' ? B[k][t] : 0), 0);
     const gap = Math.round((total(BALANCE_ASSETS) - total(BALANCE_LIABILITIES) - total(BALANCE_EQUITY)) * 1000) / 1000;
@@ -700,7 +702,7 @@ export function balanceSheetIntegrity(model) {
       failures.push({ year: model.years[t], gap: broken ? NaN : gap, forecast: t >= model.nH });
     }
   }
-  return { balances: failures.length === 0, failures, yearsChecked };
+  return { balances: failures.length === 0, failures, yearsChecked, reportedYearsChecked };
 }
 
 const fiscalYearList = (years) => {
@@ -773,7 +775,57 @@ function balanceSheetRefusal(model, data) {
   };
 }
 
-// The codes that mean "no valuation of any kind", not merely "no DCF".
+// ---------------------------------------------------------------------------
+// THE FILED BALANCE SHEET ALONE
+// ---------------------------------------------------------------------------
+// Residual income values a bank from its filed balance sheet and earnings, not
+// from this engine's forecast. So it is gated on whether the FILED balance
+// sheet balances (the reported years, after the lines the filing omits have
+// been derived), and not on the forecast, which for a bank usually cannot be
+// computed at all: banks do not report cost of sales, capital expenditure or
+// PP&E the way the forecast needs. The discounted cash flow stays refused for
+// such a company; only this value is exempt. Null when the filed sheet
+// balances; otherwise the refusal, naming what failed.
+export function filedBalanceSheetRefusal(model, data) {
+  const integrity = balanceSheetIntegrity(model);
+  const filedFailures = integrity.failures.filter((f) => !f.forecast);
+  if (integrity.reportedYearsChecked > 0 && filedFailures.length === 0) return null;
+
+  const gaps = Array.isArray(data?.meta?.balanceSheetGaps) ? data.meta.balanceSheetGaps : [];
+  const missing = gaps.length
+    ? 'The filing did not report ' +
+      gaps
+        .map((g) => `${g.label} (${fiscalYearList(g.years)}${g.derivedAs ? `, worked out as ${g.derivedAs}` : ''})`)
+        .join(', ') +
+      '. '
+    : '';
+  if (integrity.reportedYearsChecked === 0) {
+    return {
+      code: 'filedBalanceSheetUnavailable',
+      message:
+        'No filed balance sheet is available to check, and residual income is built on one, so no ' +
+        'value is shown. The reported figures below are unaffected.',
+    };
+  }
+  const measurable = filedFailures.filter((f) => isFinite(f.gap));
+  const worst = measurable.reduce((a, f) => (!a || Math.abs(f.gap) > Math.abs(a.gap) ? f : a), null);
+  const size = worst
+    ? `, by as much as ${Math.abs(worst.gap).toLocaleString('en-US', { maximumFractionDigits: 0 })} (FY${worst.year})`
+    : '';
+  return {
+    code: 'filedBalanceSheetDoesNotBalance',
+    message:
+      `The balance sheet this company filed does not balance, even after the lines it omits are ` +
+      `worked out: total assets differ from liabilities plus equity in ` +
+      `${fiscalYearList(filedFailures.map((f) => f.year))}${size}. ${missing}` +
+      'Residual income is built on the filed balance sheet, so no value is shown. The reported ' +
+      'figures below are unaffected.',
+  };
+}
+
+// The codes that mean "no valuation of any kind", not merely "no DCF". A bank's
+// residual income is the one exception, gated instead by
+// filedBalanceSheetRefusal above.
 export const INTEGRITY_REFUSAL_CODES = ['balanceSheetDoesNotBalance', 'filingMissingValuationInput'];
 
 export function checkValuationApplicability(model, data, wacc) {
