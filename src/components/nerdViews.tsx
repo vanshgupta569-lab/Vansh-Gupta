@@ -519,6 +519,12 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             adjuster: A('depreciationPctOfCapex'),
           },
           { label: 'Closing balance', values: M.ppe?.ending, bold: true },
+          { spacer: true, label: '' },
+          // The part of filed D&A the depreciation above does not produce,
+          // charged each year until the intangibles reported in the last year
+          // are used up. Nothing replaces them.
+          { label: 'Amortisation of intangibles', values: M.amortisation, indent: true },
+          { label: 'Intangible assets remaining', values: M.intangibleAssets, indent: true, muted: true },
         ]}
       />
 

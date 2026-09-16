@@ -461,6 +461,10 @@ export function deriveModel(fetched) {
       otherCurrentAssets,
       propertyPlantEquipment: pick('ppeNet'),
       otherAssets,
+      // Intangible assets excluding goodwill, as reported. Not a balance sheet
+      // line of its own here (it sits inside other assets and is not summed);
+      // the engine amortises it down in the forecast.
+      intangibleAssets: pick('intangibles'),
       accountsPayable: pick('payables'),
       accruedExpenses,
       revolver: rows.map(() => 0),

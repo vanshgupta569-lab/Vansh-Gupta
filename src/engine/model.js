@@ -270,6 +270,95 @@ export function buildModel(data) {
     S.depreciationAmortisation[t] = -S.ppe.depreciation[t];
   }
 
+  // --------------------------------- AMORTISATION OF INTANGIBLES (RUNS OFF)
+  // Reported D&A is the filed figure, depreciation of PP&E plus amortisation of
+  // intangibles. Forecast depreciation came from the PP&E roll-forward alone,
+  // so it measured something narrower than the reported years.
+  //
+  // ANCHOR. The amount by which the filed D&A of the last reported year exceeds
+  // that year's capex at the historical depreciation rate: the part of the
+  // filed figure the forecast's own depreciation formula does not produce. Not
+  // the roll-forward's literal depreciation for that year, which the forecast
+  // never charges (Microsoft's is 2.4% of revenue while the forecast charges
+  // 5.4%); subtracting it would count the difference twice. The historical rate
+  // is used rather than the forecast assumption, so the depreciation slider
+  // still moves D&A instead of being cancelled here. No amortisation is charged
+  // when the anchor cannot be measured: when the historical depreciation rate
+  // is not positive (Amazon, where finance-lease additions push its PP&E
+  // roll-forward depreciation below zero), when filed D&A does not exceed
+  // depreciation at that rate (Coca-Cola, whose roll-forward counts disposals
+  // as depreciation), or when the filing reports no intangible assets (Apple).
+  //
+  // IT RUNS OFF. The anchored amount is charged each year, flat rather than
+  // growing with revenue, until the intangibles reported in the last year are
+  // used up, and nothing replaces them. The filings show a finite pool being
+  // consumed at about that rate: Microsoft's reported intangibles fell from
+  // 27,597 to 18,609 over two years against an anchored 3,252 a year,
+  // Caterpillar's from 1,042 to 241 against 193, Amgen's from 32,641 to 22,276
+  // against 4,055. The forecast buys no intangibles, so persisting the charge
+  // would mean reinvesting in an acquisition of that size every year for ever
+  // (which cut Amgen's value by a third when tried). The charge reduces other
+  // assets, where intangibles sit, and the other-assets movement excludes it so
+  // operating cash flow does not add it back twice. The terminal value is
+  // normalised as though the run-off is complete (see buildDCF).
+  S.intangibleAssets = blank();
+  S.amortisation = blank();
+  {
+    const anchorYear = nH - 1;
+    const rates = firstPpeYear >= 0 && firstPpeYear < nH ? S.depreciationPercentOfCapex.slice(firstPpeYear, nH) : [];
+    const historicalDepRate = rates.length ? avg(rates) : NaN;
+    const filedDA = h.cashFlow.depreciationAmortisation?.[anchorYear];
+    const anchorCapex = S.ppe.capex[anchorYear];
+    const reportedPool = h.balanceSheet.intangibleAssets?.[anchorYear];
+    const pool = typeof reportedPool === 'number' && isFinite(reportedPool) && reportedPool > 0 ? reportedPool : null;
+    for (let t = 0; t < nH; t++) {
+      const v = h.balanceSheet.intangibleAssets?.[t];
+      S.intangibleAssets[t] = typeof v === 'number' ? v : null;
+    }
+    const depreciationAtRate =
+      typeof anchorCapex === 'number' && isFinite(historicalDepRate) && historicalDepRate > 0
+        ? anchorCapex * historicalDepRate
+        : null;
+    const gap = typeof filedDA === 'number' && depreciationAtRate !== null ? filedDA - depreciationAtRate : null;
+    const annual = gap !== null && gap > 0 && pool !== null ? gap : 0;
+    S.amortisationAnchor = {
+      year: years[anchorYear],
+      filedDepreciationAmortisation: typeof filedDA === 'number' ? filedDA : null,
+      historicalDepreciationRate: isFinite(historicalDepRate) ? historicalDepRate : null,
+      depreciationAtHistoricalRate: depreciationAtRate,
+      gap,
+      intangiblePool: pool,
+      annual,
+      notChargedBecause:
+        depreciationAtRate === null
+          ? 'the historical depreciation rate is not positive or cannot be measured'
+          : gap === null || gap <= 0
+            ? 'filed D&A does not exceed depreciation at the historical rate'
+            : pool === null
+              ? 'the filing reports no intangible assets to amortise'
+              : null,
+    };
+
+    let remaining = pool ?? 0;
+    let cumulative = 0;
+    const otherAssets = S.wc.otherAssets;
+    otherAssets.amortisation = blank();
+    for (let t = nH; t < nH + nF; t++) {
+      const charge = Math.max(0, Math.min(annual, remaining));
+      remaining -= charge;
+      cumulative += charge;
+      S.amortisation[t] = charge;
+      S.intangibleAssets[t] = pool !== null ? remaining : null;
+      S.depreciationAmortisation[t] += charge;
+      // Other assets hold the intangibles, so they fall by the charge. Their
+      // change line stays the movement EXCLUDING amortisation, which is what
+      // operating cash flow and the DCF deduct.
+      otherAssets.amortisation[t] = charge;
+      if (otherAssets.ending[t] != null) otherAssets.ending[t] -= cumulative;
+      if (otherAssets.ending[t - 1] != null) otherAssets.beginning[t] = otherAssets.ending[t - 1];
+    }
+  }
+
   // SBC as a share of total operating costs on the filed basis, which is the
   // basis the ratio is observed on.
   S.sbcPercentOfOpex = blank();
@@ -954,7 +1043,13 @@ export function buildDCF(model, data) {
 
   // ---- Terminal value: perpetuity ----
   // Terminal capex treatment is a policy choice set in the data file.
-  const terminalDep = M.depreciationAmortisation[last];
+  // The terminal year is normalised as though amortisation of intangibles has
+  // run off, which it does (see the PP&E schedule): its amortisation comes out
+  // of depreciation, so "capex equals depreciation" replaces PP&E only, and its
+  // tax shield, which lasts only as long as the intangibles, is not
+  // capitalised in perpetuity.
+  const terminalAmortisation = M.amortisation?.[last] ?? 0;
+  const terminalDep = M.depreciationAmortisation[last] - terminalAmortisation;
   const terminalCapex =
     d.terminalCapexTreatment === 'excludeCapex' ? 0
       : d.terminalCapexTreatment === 'capexEqualsDepreciation' ? -terminalDep
@@ -964,8 +1059,10 @@ export function buildDCF(model, data) {
   // only. Deferred tax movements, for example, are a timing item with no reason
   // to persist in perpetuity — they stay in the explicit forecast years and come
   // out of the normalised figure.
+  R.terminalAmortisation = terminalAmortisation;
   R.normalisedFCF =
-    R.unleveredCFO[nF - 1] - R.terminalExcludedAmount[nF - 1] + terminalCapex;
+    R.unleveredCFO[nF - 1] - R.terminalExcludedAmount[nF - 1] + terminalCapex
+    - terminalAmortisation * M.taxRate[last];
   R.terminalExclusions = d.terminalExclusions || [];
   R.terminalCapex = terminalCapex;
   R.longTermGrowthRate = d.longTermGrowthRate;

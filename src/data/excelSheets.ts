@@ -674,7 +674,8 @@ function buildCashFlowSheet(ctx: SupportingSheetsContext) {
   const inv = assetMove('Inventory', 'invChg');
   const dta = assetMove('Deferred tax assets', 'dtaChg');
   const oca = assetMove('Other current assets', 'ocaChg');
-  const oa = assetMove('Other non-current assets', 'oaChg');
+  // The movement excluding amortisation of intangibles, which D&A above adds back.
+  const oa = b.link('Other non-current assets, excluding amortisation', 'oaMove', { flip: -1 });
   const ap = b.link('Accounts payable', 'apChg');
   const acc = b.link('Accrued expenses & deferred revenue', 'accChg');
   const oncl = b.link('Other non-current liabilities', 'onclChg');
@@ -739,12 +740,19 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
       ['acc', 'Accrued expenses & deferred revenue', 'Accrued expenses as % of revenue'],
       ['oca', 'Other current assets', 'Other current assets as % of revenue'],
       ['dta', 'Deferred tax assets', 'Deferred tax assets as % of revenue'],
-      ['oa', 'Other assets', 'Other assets as % of revenue'],
+      ['oa', 'Other assets', 'Additions / (disposals), excluding amortisation of intangibles'],
       ['oncl', 'Other non-current liabilities', 'Other non-current liabilities as % of revenue'],
     ] as [string, string, string][]
   ).forEach(([k, name, driverName]) => {
     b.sub(name);
-    pct(driverName, `${k}Pct`);
+    // Other assets are held flat apart from amortisation of intangibles, so
+    // their driver is a movement in money, not a percentage.
+    if (k === 'oa') {
+      bal(driverName, 'oaMove');
+      bal('Less: amortisation of intangibles', 'amort');
+    } else {
+      pct(driverName, `${k}Pct`);
+    }
     bal('Beginning of period', `${k}Bop`);
     bal('Increase / (decrease)', `${k}Chg`);
     end('End of period', `${k}End`);
@@ -758,6 +766,11 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   bal('Plus: capital expenditures', 'ppeCapex');
   bal('Less: depreciation', 'ppeDep');
   end('End of period', 'ppeEnd');
+  b.blank();
+  b.sub('Amortisation of intangibles');
+  bal('Annual amortisation, anchored to the last reported year', 'amortAnnual');
+  bal('Amortisation of intangibles', 'amort');
+  end('Intangible assets excluding goodwill, end of period', 'intangEnd');
   b.blank();
 
   b.group('Annexure C - debt & revolver');

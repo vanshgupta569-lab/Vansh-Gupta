@@ -705,8 +705,9 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   line('sbc', 'Stock based compensation', M.stockBasedCompensation, (c) => `${c}${R.rev}*${c}${R.sbcPct}`, money());
   // Reported years: the filed D&A, as the engine uses (it includes
   // amortisation, which the PP&E schedule's depreciation does not). Forecast
-  // years: the PP&E schedule's depreciation.
-  line('da', 'Depreciation & amortization', M.depreciationAmortisation, (c) => `-${c}${R.ppeDep}`, money());
+  // years: the PP&E schedule's depreciation plus the amortisation and other
+  // D&A outside it (see that schedule).
+  line('da', 'Depreciation & amortization', M.depreciationAmortisation, (c) => `-${c}${R.ppeDep}+${c}${R.amort}`, money());
   calc('ebitda', 'EBITDA', (c) => `${c}${R.ebit}+${c}${R.da}+${c}${R.sbc}`, money(currencySymbol), {
     bold: true,
     indent: 0,
@@ -771,23 +772,38 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     name: string,
     hist: any,
     driverName: string,
-    base: 'rev' | 'cogs'
+    base: 'rev' | 'cogs' | 'flat'
   ) => {
     sub(name);
-    driver(
-      `${keyBase}Pct`,
-      driverName,
-      base === 'rev'
-        ? (c, _p, i) => (has(M.revenue, i) ? `${c}${R[`${keyBase}End`]}/${c}${R.rev}` : null)
-        : (c, _p, i) => (has(M.cogs, i) ? `${c}${R[`${keyBase}End`]}/-${c}${R.cogs}` : null),
-      (i) => {
-        const end = at(hist?.ending, i);
-        const b = base === 'rev' ? at(M.revenue, i) : at(M.cogs, i);
-        if (!isNum(end) || !isNum(b) || b === 0) return 0;
-        return base === 'rev' ? end / b : end / Math.abs(b);
-      },
-      PCT1
-    );
+    if (base === 'flat') {
+      // Held flat, as in the engine, apart from amortisation of intangibles:
+      // end = beginning + additions / (disposals) - amortisation. The input is
+      // the movement EXCLUDING amortisation, which is what operating cash flow
+      // deducts, so amortisation is never added back twice.
+      driver(
+        `${keyBase}Move`,
+        driverName,
+        (c) => `${c}${R[`${keyBase}End`]}-${c}${R[`${keyBase}Bop`]}+${c}${R.amort}`,
+        (i) => (i < nH ? null : 0),
+        money(),
+        { unit: UNIT }
+      );
+    } else {
+      driver(
+        `${keyBase}Pct`,
+        driverName,
+        base === 'rev'
+          ? (c, _p, i) => (has(M.revenue, i) ? `${c}${R[`${keyBase}End`]}/${c}${R.rev}` : null)
+          : (c, _p, i) => (has(M.cogs, i) ? `${c}${R[`${keyBase}End`]}/-${c}${R.cogs}` : null),
+        (i) => {
+          const end = at(hist?.ending, i);
+          const b = base === 'rev' ? at(M.revenue, i) : at(M.cogs, i);
+          if (!isNum(end) || !isNum(b) || b === 0) return 0;
+          return base === 'rev' ? end / b : end / Math.abs(b);
+        },
+        PCT1
+      );
+    }
     bopRow(`${keyBase}Bop`, 'Beginning of period', at(hist?.beginning, 0) ?? at(hist?.ending, 0), `${keyBase}End`);
     calc(
       `${keyBase}Chg`,
@@ -796,7 +812,11 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       money()
     );
     eopRow(`${keyBase}End`, 'End of period', hist?.ending, (c) =>
-      base === 'rev' ? `${c}${R.rev}*${c}${R[`${keyBase}Pct`]}` : `-${c}${R.cogs}*${c}${R[`${keyBase}Pct`]}`
+      base === 'flat'
+        ? `${c}${R[`${keyBase}Bop`]}+${c}${R[`${keyBase}Move`]}-${c}${R.amort}`
+        : base === 'rev'
+          ? `${c}${R.rev}*${c}${R[`${keyBase}Pct`]}`
+          : `-${c}${R.cogs}*${c}${R[`${keyBase}Pct`]}`
     );
     blank();
   };
@@ -808,7 +828,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   schedule('acc', 'Accrued expenses & deferred revenue', wc.accruedExpenses, 'Accrued expenses as % of revenue', 'rev');
   schedule('oca', 'Other current assets', wc.otherCurrentAssets, 'Other current assets as % of revenue', 'rev');
   schedule('dta', 'Deferred tax assets', wc.deferredTaxAssets, 'Deferred tax assets as % of revenue', 'rev');
-  schedule('oa', 'Other assets', wc.otherAssets, 'Other assets as % of revenue', 'rev');
+  schedule('oa', 'Other assets', wc.otherAssets, 'Additions / (disposals), excluding amortisation of intangibles', 'flat');
   schedule('oncl', 'Other non-current liabilities', wc.otherNonCurrentLiabilities, 'Other non-current liabilities as % of revenue', 'rev');
 
   // ---- PP&E ---------------------------------------------------------------
@@ -839,6 +859,38 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
   line('ppeDep', 'Less: depreciation', M.ppe?.depreciation, (c) => `-${c}${R.ppeCapex}*${c}${R.depPct}`, money());
   eopRow('ppeEnd', 'End of period', M.ppe?.ending, (c) => `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}`);
+  blank();
+
+  // As in the engine: the part of filed D&A the depreciation above does not
+  // produce, charged each year until the intangibles reported in the last year
+  // are used up. Nothing replaces them; other assets fall by the charge.
+  sub('Amortisation of intangibles');
+  driver(
+    'amortAnnual',
+    'Annual amortisation of intangibles, anchored to the last reported year',
+    null,
+    (i) => (i < nH ? null : M.amortisationAnchor?.annual ?? 0),
+    money(),
+    { unit: UNIT }
+  );
+  line(
+    'intangEnd',
+    'Intangible assets excluding goodwill, end of period',
+    M.intangibleAssets,
+    (c, p) => `${p}${R.intangEnd}-${c}${R.amort}`,
+    money()
+  );
+  calc('amort', 'Amortisation of intangibles', (c, p) => `MAX(0,MIN(${c}${R.amortAnnual},${p}${R.intangEnd}))`, money(), {
+    from: nH,
+  });
+  note([
+    'The PP&E schedule above depreciates capex at the historical rate. The annual amortisation here is the filed D&A of',
+    'the last reported year less that year\'s capex at the same rate: the part of the filed figure depreciation does not',
+    'produce. It is charged each year until the intangible assets reported that year are used up, and nothing replaces',
+    'them, because the forecast buys no intangibles. It is nil when that year reports no intangibles, or when the',
+    'historical depreciation rate is not positive. Other assets fall by the charge, and the terminal value is taken on',
+    'the business after the run-off.',
+  ]);
   blank();
 
   // ---- DEBT AND REVOLVER --------------------------------------------------
@@ -969,7 +1021,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'cfWc',
     'Movements in working capital and other items',
     (c) =>
-      `-${c}${R.arChg}-${c}${R.invChg}+${c}${R.apChg}+${c}${R.accChg}-${c}${R.ocaChg}-${c}${R.dtaChg}-${c}${R.oaChg}+${c}${R.onclChg}`,
+      // Other assets: the movement excluding amortisation, which D&A adds back.
+      `-${c}${R.arChg}-${c}${R.invChg}+${c}${R.apChg}+${c}${R.accChg}-${c}${R.ocaChg}-${c}${R.dtaChg}-(${c}${R.oaChg}+${c}${R.amort})+${c}${R.onclChg}`,
     money()
   );
   calc('cfPik', 'Non-cash PIK interest added back', (c) => `${c}${R.debtPik}`, money());
@@ -1130,7 +1183,15 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
 
   band(V, 32, 'Perpetuity growth approach', OXBLOOD, WHITE, fLast);
   vInput(33, 'Long term growth rate (g)', D.longTermGrowthRate ?? 0.025, PCT1, { unit: '%' });
-  vOne(34, 'Normalised final year cash flow, terminal capex set equal to depreciation', `${L(fLast)}11+${L(fLast)}13`, money());
+  // After the run-off, as in the engine: terminal capex equals PP&E depreciation,
+  // and the final year's amortisation (and its tax shield) is taken out, which
+  // leaves EBIAT plus SBC plus that amortisation after tax.
+  vOne(
+    34,
+    'Normalised final year cash flow: amortisation run off, terminal capex equal to PP&E depreciation',
+    `${L(fLast)}11+${L(fLast)}13+'3-StatementModel'!${mCol(nF - 1)}${R.amort}*(1-${L(fLast)}10)`,
+    money()
+  );
   vOne(35, 'Terminal value', `${F}34*(1+${F}33)/(${F}26-${F}33)`, money());
   vOne(36, 'Present value of the terminal value', `${F}35*${L(fLast)}28`, money());
   vOne(37, 'Enterprise value', `${F}30+${F}36`, money(currencySymbol), { bold: true, indent: 0 });
