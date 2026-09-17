@@ -293,7 +293,7 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
   check(
     'Revenue, costs, D&A, SBC and tax sum to net income',
     (i) =>
-      `(${ref('rev', i)}+${ref('cogs', i)}+${ref('rnd', i)}+${ref('sga', i)}+${ref('daCost', i)}+${ref(
+      `(${ref('rev', i)}+${ref('cogs', i)}+${ref('rnd', i)}+${ref('sga', i)}+${ref('otherOpex', i)}+${ref('daCost', i)}+${ref(
         'sbcCost',
         i
       )}+${ref('intInc', i)}+${ref('intExp', i)}+${ref('other', i)}+${ref('tax', i)}+${ref('afterTax', i)})-${ref(
@@ -311,7 +311,7 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
   check(
     'Operating profit = revenue less the cost lines as filed',
     (i) =>
-      `${ref('ebit', i)}-(${ref('rev', i)}+${ref('cogsFiled', i)}+${ref('rndFiled', i)}+${ref('sgaFiled', i)})`,
+      `${ref('ebit', i)}-(${ref('rev', i)}+${ref('cogsFiled', i)}+${ref('rndFiled', i)}+${ref('sgaFiled', i)}+${ref('otherFiled', i)})`,
     0,
     nH
   );
@@ -447,6 +447,8 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
 interface Line {
   row: number;
   sign: 1 | -1;
+  /** The cell may hold the text "not reported"; subtotals read it through N(). */
+  text?: boolean;
 }
 
 interface LineOpts {
@@ -459,6 +461,12 @@ interface LineOpts {
   indent?: number;
   /** Show a blank model cell as blank rather than 0. Only for lines no subtotal reads. */
   blankAsEmpty?: boolean;
+  /**
+   * A line the filing may not report: a blank model cell shows as "not
+   * reported" rather than 0, and subtotals count it as nil through N(), which
+   * the sheet's note says.
+   */
+  notReported?: boolean;
 }
 
 function presentationBuilder(ctx: SupportingSheetsContext, ws: Sheet) {
@@ -500,10 +508,17 @@ function presentationBuilder(ctx: SupportingSheetsContext, ws: Sheet) {
       const ref = `${MS}!${L(cOf(i))}${modelRow}`;
       const shown = o.flip === -1 ? `-${ref}` : ref;
       const cell = ws.getCell(row, cOf(i));
-      cell.value = { formula: o.blankAsEmpty ? `IF(${ref}="","",${shown})` : shown } as any;
+      cell.value = {
+        formula: o.notReported
+          ? `IF(${ref}="","not reported",${shown})`
+          : o.blankAsEmpty
+          ? `IF(${ref}="","",${shown})`
+          : shown,
+      } as any;
       styleCalc(cell, o.fmt ?? fmt.money(), { cross: true, bold: o.bold, italic: o.italic });
+      if (o.notReported) cell.alignment = { ...(cell.alignment || {}), horizontal: 'right' };
     }
-    return { row, sign: o.sign ?? 1 };
+    return { row, sign: o.sign ?? 1, text: Boolean(o.notReported) };
   };
 
   /**
@@ -520,7 +535,7 @@ function presentationBuilder(ctx: SupportingSheetsContext, ws: Sheet) {
       const formula = parts
         .map((p, idx) => {
           const op = sign * p.sign < 0 ? '-' : idx === 0 ? '' : '+';
-          return `${op}${c}${p.row}`;
+          return p.text ? `${op}N(${c}${p.row})` : `${op}${c}${p.row}`;
         })
         .join('');
       const cell = ws.getCell(row, cOf(i));
@@ -558,10 +573,10 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   const b = presentationBuilder(ctx, ws);
   const sym = fmt.money(currencySymbol);
   // Stored negative on the model, shown positive here, subtracted in totals.
-  const cost = (name: string, key: string) => b.link(name, key, { flip: -1, sign: -1 });
+  const cost = (name: string, key: string, o: LineOpts = {}) => b.link(name, key, { flip: -1, sign: -1, ...o });
   // Stored positive on the model (the cash flow adds them back), shown
   // positive here, subtracted in totals.
-  const nonCashCharge = (name: string, key: string) => b.link(name, key, { sign: -1 });
+  const nonCashCharge = (name: string, key: string, o: LineOpts = {}) => b.link(name, key, { sign: -1, ...o });
 
   b.group('Revenue & gross profit');
   const rev = b.link('Revenue', 'rev', { fmt: sym, bold: true, indent: 0 });
@@ -570,11 +585,12 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   b.blank();
 
   b.group('Operating expenses');
-  const rnd = cost('Research & development, excluding D&A and SBC', 'rnd');
-  const sga = cost('Selling, general & administrative, excluding D&A and SBC', 'sga');
+  const rnd = cost('Research & development, excluding D&A and SBC', 'rnd', { notReported: true });
+  const sga = cost('Selling, general & administrative, excluding D&A and SBC', 'sga', { notReported: true });
+  const otherOpex = cost('Other operating costs, excluding D&A and SBC', 'otherOpex');
   const da = nonCashCharge('Depreciation & amortization', 'da');
-  const sbc = nonCashCharge('Stock based compensation', 'sbc');
-  const opex = b.total('Total operating expenses', [rnd, sga, da, sbc], { sign: -1 });
+  const sbc = nonCashCharge('Stock based compensation', 'sbc', { notReported: true });
+  const opex = b.total('Total operating expenses', [rnd, sga, otherOpex, da, sbc], { sign: -1 });
   b.blank();
   const ebit = b.total('Operating income', [gp, opex]);
   b.blank();
@@ -598,6 +614,10 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
     'Cost of sales, R&D and SG&A exclude depreciation & amortization and stock based compensation, which are charged',
     'as their own lines. In reported years each filed cost line gives up its pro-rata share of the filed D&A and SBC, so',
     'operating income is unchanged from the filing.',
+    'Other operating costs are the filed operating income less the lines the filing names, so SG&A is the filed SG&A',
+    'and operating income ties. A negative figure is operating income those lines leave out.',
+    '"Not reported" marks a figure the filing does not report. Totals count it as nil: an unreported R&D or SG&A cost is',
+    'inside other operating costs, and unreported stock compensation is neither charged nor added back.',
     'A negative provision for income taxes is a tax benefit, and adds to net income.',
     'Interest expense includes PIK interest, which accrues to the debt balance rather than being paid in cash and is',
     'added back in operating cash flow.',
@@ -685,7 +705,9 @@ function buildCashFlowSheet(ctx: SupportingSheetsContext) {
   const ni = b.link('Net income', 'cfNi', { fmt: sym });
   b.heading('Adjustments to reconcile net income to cash from operations:');
   const da = b.link('Depreciation & amortization', 'cfDa');
-  const sbc = b.link('Stock based compensation', 'cfSbc');
+  // Linked to the stock compensation line itself, not the cash flow's formula
+  // row, which would turn a blank (not reported) into 0.
+  const sbc = b.link('Stock based compensation', 'sbc', { notReported: true });
   const pik = b.link('Non-cash PIK interest', 'cfPik');
   b.heading('Changes in operating assets and liabilities:');
   const ar = assetMove('Accounts receivable', 'arChg');
@@ -711,8 +733,8 @@ function buildCashFlowSheet(ctx: SupportingSheetsContext) {
   const borrow = b.link('Proceeds from / (repayment of) term debt', 'debtBorrow');
   const revolver = b.link('Revolver draw / (repayment)', 'revDraw');
   const issue = b.link('Proceeds from issuance of common stock', 'csIssue');
-  const div = b.link('Payments for dividends', 'reDiv');
-  const buyback = b.link('Repurchases of common stock', 'buyback');
+  const div = b.link('Payments for dividends', 'reDiv', { notReported: true });
+  const buyback = b.link('Repurchases of common stock', 'buyback', { notReported: true });
   const oci = b.link('Other comprehensive income / (loss)', 'ociChg');
   const cff = b.total('Cash generated by / (used in) financing activities', [borrow, revolver, issue, div, buyback, oci]);
   b.blank();
@@ -725,6 +747,7 @@ function buildCashFlowSheet(ctx: SupportingSheetsContext) {
   b.note([
     'In reported years cash at the end of the period is the filed figure, while the flows above are derived from the',
     'filed balance sheets, so the two need not reconcile before the first forecast year. From then on they do exactly.',
+    '"Not reported" marks a figure the filing does not report; totals count it as nil.',
   ]);
   b.finish();
 }
@@ -811,19 +834,19 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   b.sub('Common stock & additional paid in capital');
   bal('Beginning of period', 'csBop');
   bal('Plus: new share issuances', 'csIssue');
-  bal('Plus: stock based compensation', 'sbc');
+  bal('Plus: stock based compensation', 'sbc', { notReported: true });
   end('End of period', 'csEnd');
   b.blank();
   b.sub('Retained earnings');
   pct('Dividend payout ratio', 'payout');
   bal('Beginning of period', 'reBop');
   bal('Plus: net income', 'ni');
-  bal('Less: common dividends', 'reDiv');
+  bal('Less: common dividends', 'reDiv', { notReported: true });
   end('End of period', 'reEnd');
   b.blank();
   b.sub('Treasury stock');
   bal('Beginning of period', 'tsBop');
-  bal('Less: share repurchases', 'buyback');
+  bal('Less: share repurchases', 'buyback', { notReported: true });
   end('End of period', 'tsEnd');
   b.blank();
   b.sub('Other comprehensive income');

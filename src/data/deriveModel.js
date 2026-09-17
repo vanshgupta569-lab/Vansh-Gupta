@@ -513,30 +513,65 @@ export function deriveModel(fetched) {
   // market price came from.
   //
   // So where the filing reports operating income, the gap between it and the
-  // cost lines is treated as an operating cost and added to SG&A. The forecast
+  // cost lines is treated as an operating cost. It is carried on its own line,
+  // other operating costs, and not added to SG&A: SG&A is the filed SG&A, and
+  // no line claims to be something it is not. (It used to be added to SG&A,
+  // which showed Microsoft's SG&A as 34,666 against 7,956 filed.) The forecast
   // is then anchored to a margin the company has actually earned. Where the gap
-  // is nil, as with every SEC filer, nothing changes.
+  // is nil nothing changes.
   const unexplainedOperatingCosts = rows.map((row) => {
     if (!isNum(row.operatingIncome) || !isNum(row.revenue) || !isNum(row.cogs)) return 0;
     const fromCostLines =
       row.revenue - row.cogs - (isNum(row.rnd) ? row.rnd : 0) - (isNum(row.sga) ? row.sga : 0);
     const gap = fromCostLines - row.operatingIncome;
-    // A tiny gap is rounding in the source, not a missing cost line.
-    return Math.abs(gap) > Math.abs(row.revenue) * 0.001 ? gap : 0;
+    // Every gap is carried, however small. A tolerance of 0.1% of revenue used
+    // to leave small gaps out, when the gap went into SG&A and a small one was
+    // not worth distorting it for; on its own line it distorts nothing, and
+    // operating income then ties exactly (Sony was 1,265,919 against 1,273,205).
+    // Only floating-point noise is ignored.
+    return Math.abs(gap) > 1e-6 ? gap : 0;
   });
 
-  // SG&A as the model uses it: the reported figure plus whatever else the
-  // company charged above the operating profit line.
-  const sgaTotal = rows.map((row, i) =>
-    isNum(row.sga) || unexplainedOperatingCosts[i] !== 0
-      ? (isNum(row.sga) ? row.sga : 0) + unexplainedOperatingCosts[i]
-      : null
-  );
   const anyPlugged = unexplainedOperatingCosts.some((v) => v !== 0);
   if (anyPlugged) {
     provenance.operatingCostReconciliation =
-      'the source does not break out every operating cost, so the difference ' +
-      'between the reported operating profit and the cost lines is carried in SG&A';
+      "revenue less the cost lines the filing names (cost of sales, R&D, SG&A) does not come to its " +
+      'operating income, so the difference is carried on its own line, other operating costs, and ' +
+      'operating income ties to the filing. It holds whatever the filing charges above operating ' +
+      'income without tagging it as one of those lines (cost of revenue it does not tag as such, ' +
+      'marketing, restructuring, impairments), including any named line the filing does not report; ' +
+      'a negative figure is operating income the named lines leave out';
+  }
+
+  // ---- Lines the filing does not report ------------------------------------
+  //
+  // A blank in the filing is not a zero. These lines are carried as not
+  // reported (null) in the reported years, never as nil, and each place that
+  // has to do arithmetic with one says here what it does instead.
+  const NOT_REPORTED = [
+    ['rnd', 'research & development',
+      'shown as not reported; any such cost is inside other operating costs, which ties operating income to the filing'],
+    ['sga', 'selling, general & administrative',
+      'shown as not reported; any such cost is inside other operating costs, which ties operating income to the filing'],
+    ['stockComp', 'stock based compensation',
+      'shown as not reported; none is charged as its own line or added back to cash from operations, so any the company paid stays inside its cost lines'],
+    ['dividendsPaid', 'dividends paid',
+      'shown as not reported; the forecast payout ratio is averaged over the years that report dividends only'],
+    ['buybacks', 'share repurchases',
+      'shown as not reported; forecast repurchases are averaged over the years that report them only'],
+  ];
+  const notReported = NOT_REPORTED
+    .map(([field, label, treatment]) => ({
+      field,
+      label,
+      treatment,
+      years: rows.filter((r) => !isNum(r[field])).map((r) => r.fiscalYear),
+    }))
+    .filter((g) => g.years.length);
+  if (notReported.length) {
+    provenance.notReported = notReported
+      .map((g) => `${g.label} not reported for ${g.years.map((y) => `FY${y}`).join(', ')}: ${g.treatment}`)
+      .join('; ');
   }
 
   // ---- Reported pretax and net income, tied to the filing -----------------
@@ -553,7 +588,7 @@ export function deriveModel(fetched) {
   // AbbVie showed 12,711 against 4,226 filed.
   //
   // Operating profit here is the one the engine builds from the cost lines,
-  // which the SG&A reconciliation above ties to the filed figure, so pretax
+  // which other operating costs above tie to the filed figure, so pretax
   // income ties exactly. Where the filing does not report operating income,
   // pretax income, tax or net income in a year, nothing is estimated: the gap
   // is recorded and the engine refuses the model.
@@ -562,7 +597,8 @@ export function deriveModel(fetched) {
   );
   const operatingProfitBuilt = rows.map((r, i) =>
     isNum(r.revenue)
-      ? r.revenue - (isNum(r.cogs) ? r.cogs : 0) - (isNum(r.rnd) ? r.rnd : 0) - (isNum(sgaTotal[i]) ? sgaTotal[i] : 0)
+      ? r.revenue - (isNum(r.cogs) ? r.cogs : 0) - (isNum(r.rnd) ? r.rnd : 0) - (isNum(r.sga) ? r.sga : 0) -
+        unexplainedOperatingCosts[i]
       : null
   );
   const otherNonOperating = rows.map((r, i) =>
@@ -635,10 +671,11 @@ export function deriveModel(fetched) {
     incomeStatement: {
       revenue,
       cogs: pickNeg('cogs'),
-      researchDevelopment: pickNeg('rnd').map((v, i) =>
-        v === null && isNum(revenue[i]) ? 0 : v
-      ),
-      sellingGeneralAdmin: sgaTotal.map((v) => (isNum(v) ? -v : null)),
+      // As filed; null where the filing does not report the line.
+      researchDevelopment: pickNeg('rnd'),
+      sellingGeneralAdmin: pickNeg('sga'),
+      // Filed operating income less the lines above: see unexplainedOperatingCosts.
+      otherOperatingCosts: unexplainedOperatingCosts.map((v) => -v),
       interestExpense: filedInterestExpense,
       otherIncomeExpense: otherNonOperating,
       otherItemsAfterTax: itemsAfterTax,
@@ -691,10 +728,11 @@ export function deriveModel(fetched) {
 
     cashFlow: {
       depreciationAmortisation: pick('depreciation'),
-      stockBasedCompensation: pick('stockComp').map((v) => (isNum(v) ? v : 0)),
+      // As filed; null where the filing does not report the line (see NOT_REPORTED).
+      stockBasedCompensation: pick('stockComp'),
       capex: pick('capex'),
-      dividends: pickNeg('dividendsPaid').map((v) => (v === null ? 0 : v)),
-      shareRepurchases: pickNeg('buybacks').map((v) => (v === null ? 0 : v)),
+      dividends: pickNeg('dividendsPaid'),
+      shareRepurchases: pickNeg('buybacks'),
     },
 
     ppeOpeningBalance: rows[0]?.ppeNet ?? null,
@@ -748,20 +786,65 @@ export function deriveModel(fetched) {
     1
   )}% — the last reported year, held flat`;
 
-  const rndMargins = revenue.map((rev, i) => {
-    const rnd = rows[i]?.rnd;
-    return isNum(rev) && isNum(rnd) && rev !== 0 ? rnd / rev : null;
-  });
-  const rndMargin = clamp(latest(rndMargins), 0, 0.5, 0);
-
-  const sgaMargins = revenue.map((rev, i) => {
-    const sga = sgaTotal[i];
-    return isNum(rev) && isNum(sga) && rev !== 0 ? sga / rev : null;
-  });
-  const sgaMargin = clamp(latest(sgaMargins), 0, 0.6, 0.1);
-  provenance.operatingCosts = `R&D ${(rndMargin * 100).toFixed(1)}% and SG&A ${(
-    sgaMargin * 100
-  ).toFixed(1)}% of revenue — the last reported year, held flat`;
+  // R&D, SG&A and other operating costs are all read from the SAME year, the
+  // last reported one, because other operating costs is defined against that
+  // year's lines: a line the filing leaves out that year is inside it. Taking
+  // R&D from an earlier year that did report it would count that cost twice.
+  // A line not reported in that year is forecast at nil, and said so, because
+  // its cost is already in other operating costs.
+  //
+  // OTHER OPERATING COSTS, where they are a cost, are forecast at their share
+  // of revenue in that year, held flat: the method every other operating cost
+  // line uses (design choice D1). They are costs the company charged above
+  // operating income; nothing in the filing says they will stop, and
+  // forecasting them at nil would add them straight to profit (UnitedHealth's
+  // are its medical costs).
+  //
+  // Where they are INCOME in that year (the named lines come to more than the
+  // filing's operating costs), the smaller of that year's income and the
+  // median across the reported years is forecast. Two causes look alike here.
+  // Usually the filing's named cost tags overlap a little, every year (Procter
+  // & Gamble 2.4% of revenue, Walmart 1.0%, MercadoLibre 11%), and nil would
+  // count that cost twice. Sometimes it is a one-off gain: Boeing's FY2025 is
+  // 10.8% of revenue on a business sale, against at most 0.8% in its other
+  // years, and carried forward it turned a refused company into a value. The
+  // median follows a pattern that recurs and ignores a single year; taking
+  // the smaller of it and the last year never forecasts more income than the
+  // company last reported.
+  //
+  // They are not clamped. The old 0-60% clamp on SG&A applied to SG&A and this residual
+  // together, and silently dropped real cost from the forecast where the two
+  // exceeded 60% of revenue (UnitedHealth 84%, Caterpillar 80%, UBS 66%), and
+  // real income where they fell below nil (Boeing, MercadoLibre). A forecast
+  // that then makes no operating profit is refused by the engine, not capped.
+  const lastRow = rows[rows.length - 1] || {};
+  const shareOfLastRevenue = (v) =>
+    isNum(v) && isNum(lastRow.revenue) && lastRow.revenue !== 0 ? v / lastRow.revenue : null;
+  const rndMargin = clamp(shareOfLastRevenue(lastRow.rnd), 0, 0.5, 0);
+  const sgaMargin = clamp(shareOfLastRevenue(lastRow.sga), 0, 0.6, 0);
+  const otherShares = rows
+    .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 && isNum(r.operatingIncome) ? unexplainedOperatingCosts[i] / r.revenue : null))
+    .filter(isNum);
+  const lastOtherShare = shareOfLastRevenue(unexplainedOperatingCosts[rows.length - 1]) ?? 0;
+  const otherIsIncome = lastOtherShare < 0;
+  const median = (xs) => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const otherOperatingCostsMargin = !otherIsIncome
+    ? lastOtherShare
+    : Math.min(0, Math.max(lastOtherShare, median(otherShares)));
+  const marginText = (label, field, margin) =>
+    isNum(lastRow[field])
+      ? `${label} ${(margin * 100).toFixed(1)}%`
+      : `${label} not reported in FY${lastRow.fiscalYear}, forecast at nil (its cost is inside other operating costs)`;
+  provenance.operatingCosts =
+    `${marginText('R&D', 'rnd', rndMargin)}; ${marginText('SG&A', 'sga', sgaMargin)}; ` +
+    (otherIsIncome
+      ? `all held flat at the last reported year; other operating costs are income in that year (${(-lastOtherShare * 100).toFixed(1)}% of revenue), ` +
+        `so the smaller of that and the median across the reported years is forecast: ${(-otherOperatingCostsMargin * 100).toFixed(1)}% of revenue as income`
+      : `other operating costs ${(otherOperatingCostsMargin * 100).toFixed(1)}% of revenue — the last reported year, held flat`);
   provenance.nonCashCharges =
     'the margins above are as filed; depreciation and stock compensation are taken out of them at ' +
     'the share they took in the last reported year, then charged as their own lines';
@@ -802,9 +885,9 @@ export function deriveModel(fetched) {
       : null
   );
   const payoutRatio = clamp(mean(payoutRatios), 0, 1, 0);
-  provenance.dividends = `${(payoutRatio * 100).toFixed(
-    1
-  )}% of net income — average payout ratio across the reported years`;
+  provenance.dividends = rows.some((r) => isNum(r.dividendsPaid))
+    ? `${(payoutRatio * 100).toFixed(1)}% of net income — average payout ratio across the reported years that report dividends`
+    : 'no dividends are reported in any year, so none are forecast';
 
   // INTEREST — the cheat sheet computes interest as average debt x an interest
   // rate. No free source publishes the coupon on each tranche, so a flat rate
@@ -824,6 +907,7 @@ export function deriveModel(fetched) {
     grossMargin: Array(FORECAST_YEARS).fill(grossMargin),
     researchDevelopmentMargin: Array(FORECAST_YEARS).fill(rndMargin),
     sellingGeneralAdminMargin: sgaMargin,
+    otherOperatingCostsMargin: Array(FORECAST_YEARS).fill(otherOperatingCostsMargin),
     taxRate,
 
     segmentGrowth: { 'Total revenue': Array(FORECAST_YEARS).fill(growth) },
@@ -867,11 +951,13 @@ export function deriveModel(fetched) {
     // SBC as a share of operating expenses. The cheat sheet gives two formulas,
     // SBC/revenue and SBC/operating expense; the engine implements the second,
     // and both are sanctioned.
-    sbcAsPercentOfOperatingExpenses: 'lastHistoricalYear',
+    // Not reported in the last reported year: nil, said so, not a silent zero.
+    sbcAsPercentOfOperatingExpenses: isNum(lastRow.stockComp) ? 'lastHistoricalYear' : 0,
 
     dividendPayoutRatio: payoutRatio,
     authorisedBuybackCeiling: {
-      historical: rows.map((r) => (isNum(r.buybacks) ? r.buybacks : 0)),
+      // Null where not reported; the engine averages the years that report them.
+      historical: rows.map((r) => (isNum(r.buybacks) ? r.buybacks : null)),
       forecast: Array(FORECAST_YEARS).fill('avgOfPriorFour'),
     },
     repurchasePercentOfCeiling: 'avgOfHistory',
@@ -905,8 +991,7 @@ export function deriveModel(fetched) {
     );
   }
 
-  const lastRow = rows[rows.length - 1] || {};
-
+  // lastRow, the last reported year, is declared with the operating cost margins.
   const dcf = {
     sharePrice: price,
     sharePriceDate: (fetched.fetchedAt || new Date().toISOString()).slice(0, 10),
@@ -980,6 +1065,9 @@ export function deriveModel(fetched) {
       // Income statement lines the filing does not report, by year. The engine
       // refuses a model whose reported income statement cannot be the filed one.
       incomeStatementGaps,
+      // Lines shown as not reported rather than nil, by year, with what is done
+      // wherever arithmetic needs them (NOT_REPORTED above).
+      notReported,
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
       // Whether the price, the share count and the statements describe the same

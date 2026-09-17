@@ -110,6 +110,8 @@ interface Row {
   adjuster?: React.ReactNode;
   note?: string;
   spacer?: boolean;
+  /** A reported-year blank is a line the filing does not report: say so, not "—". */
+  notReported?: boolean;
 }
 
 /** One schedule, rendered as a table with a year per column. */
@@ -198,7 +200,13 @@ const Schedule: React.FC<{
                           : 'text-[#F2F0EA]'
                       }`}
                     >
-                      {row.values ? format(row.values[i]) : ''}
+                      {!row.values ? (
+                        ''
+                      ) : row.notReported && i < firstForecast && !num(row.values[i]) ? (
+                        <span className="text-[12px] text-[#8A8A8F]">not reported</span>
+                      ) : (
+                        format(row.values[i])
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -352,7 +360,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             muted: true,
           },
           { spacer: true, label: '' },
-          { label: 'Research and development, excluding D&A and SBC', values: M.rnd, indent: true },
+          { label: 'Research and development, excluding D&A and SBC', values: M.rnd, indent: true, notReported: true },
           {
             label: 'R&D as a share of revenue',
             values: ratio(M.rnd, M.revenue),
@@ -360,8 +368,9 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             indent: true,
             muted: true,
             adjuster: A('rndMarginPct'),
+            notReported: true,
           },
-          { label: 'Selling, general and administrative, excluding D&A and SBC', values: M.sga, indent: true },
+          { label: 'Selling, general and administrative, excluding D&A and SBC', values: M.sga, indent: true, notReported: true },
           {
             label: 'SG&A as a share of revenue',
             values: ratio(M.sga, M.revenue),
@@ -369,6 +378,22 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             indent: true,
             muted: true,
             adjuster: A('sgaMarginPct'),
+            notReported: true,
+          },
+          {
+            label: 'Other operating costs, excluding D&A and SBC',
+            values: M.otherOperatingCosts,
+            indent: true,
+            note:
+              "The filing's operating income less the cost lines it names, so operating profit ties to the filing and SG&A is the filed SG&A. It holds costs the filing does not tag as one of those lines, and any named line it does not report. A positive figure is income those lines leave out.",
+          },
+          {
+            label: 'Other operating costs as a share of revenue',
+            // Signed: a cost reads positive like the lines above, income negative.
+            values: signedRatio(M.otherOperatingCosts?.map((v: any) => (num(v) ? -v : v)), M.revenue),
+            format: pct,
+            indent: true,
+            muted: true,
           },
           // Charged as their own lines, shown negative like the other costs, and
           // added back in the cash flow.
@@ -381,6 +406,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             label: 'Stock based compensation',
             values: M.stockBasedCompensation?.map((v: any) => (num(v) ? -v : v)),
             indent: true,
+            notReported: true,
           },
           { label: 'Operating profit (EBIT)', values: M.ebit, bold: true },
           {
@@ -565,7 +591,8 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
           { spacer: true, label: '' },
           { label: 'Retained earnings opening', values: M.retainedEarnings?.beginning, indent: true },
           { label: 'Net income', values: M.retainedEarnings?.netIncome, indent: true },
-          { label: 'Dividends', values: M.retainedEarnings?.dividends, indent: true },
+          // Filed dividends in the reported years, the forecast after.
+          { label: 'Dividends', values: M.dividends, indent: true, notReported: true },
           {
             label: 'Dividend payout ratio',
             values: M.dividendPayoutRatio,
@@ -573,11 +600,13 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             indent: true,
             muted: true,
             adjuster: A('dividendPayoutPct'),
+            notReported: true,
           },
           { label: 'Retained earnings closing', values: M.retainedEarnings?.ending, bold: true },
           { spacer: true, label: '' },
           { label: 'Treasury stock opening', values: M.treasury?.beginning, indent: true },
-          { label: 'Share repurchases', values: M.treasury?.repurchases, indent: true },
+          // Filed repurchases in the reported years, the forecast after.
+          { label: 'Share repurchases', values: M.shareRepurchases, indent: true, notReported: true },
           { label: 'Treasury stock closing', values: M.treasury?.ending, bold: true },
           { spacer: true, label: '' },
           { label: 'Other comprehensive income opening', values: M.oci?.beginning, indent: true },

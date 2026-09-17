@@ -17,6 +17,14 @@
 
 const sum = (a) => a.reduce((t, x) => t + (x || 0), 0);
 const avg = (a) => sum(a) / a.length;
+const isNum = (v) => typeof v === 'number' && isFinite(v);
+// The mean of the figures that exist. A line the filing does not report is
+// null, not zero, and must not pull an average towards zero; null when there
+// is nothing to average.
+const avgReported = (a) => {
+  const reported = a.filter(isNum);
+  return reported.length ? reported.reduce((t, x) => t + x, 0) / reported.length : null;
+};
 
 /** Least-squares linear regression, evaluated at a given x. */
 function forecastLinear(x, ys, xs) {
@@ -108,21 +116,32 @@ export function buildModel(data) {
   S.cogsReportedBasis = blank();
   S.rndReportedBasis = blank();
   S.sgaReportedBasis = blank();
+  S.otherOperatingCostsReportedBasis = blank();
   S.grossMarginReportedBasis = blank();
   S.rndMarginReportedBasis = blank();
   S.sgaMarginReportedBasis = blank();
+  S.otherOperatingCostsMarginReportedBasis = blank();
 
+  // R&D and SG&A are null in a year the filing does not report them, and
+  // their margins null with them: not reported is not nil. OTHER OPERATING
+  // COSTS is the filing's operating income less the lines it names, so
+  // operating income ties; a line the filing leaves out is inside it. A data
+  // file that carries none (Apple's, whose named lines tie) has nil here,
+  // which for that file is the computed figure, not an assumption.
+  const ratioOrNull = (line, t) => (isNum(line) && S.revenue[t] ? -line / S.revenue[t] : null);
   for (let t = 0; t < nH; t++) {
     S.cogsReportedBasis[t] = h.incomeStatement.cogs[t];
-    S.rndReportedBasis[t] = h.incomeStatement.researchDevelopment[t];
-    S.sgaReportedBasis[t] = h.incomeStatement.sellingGeneralAdmin[t];
+    S.rndReportedBasis[t] = h.incomeStatement.researchDevelopment[t] ?? null;
+    S.sgaReportedBasis[t] = h.incomeStatement.sellingGeneralAdmin[t] ?? null;
+    S.otherOperatingCostsReportedBasis[t] = h.incomeStatement.otherOperatingCosts?.[t] ?? 0;
     S.grossMarginReportedBasis[t] = (S.revenue[t] + S.cogsReportedBasis[t]) / S.revenue[t];
-    S.rndMarginReportedBasis[t] = -S.rndReportedBasis[t] / S.revenue[t];
-    S.sgaMarginReportedBasis[t] = -S.sgaReportedBasis[t] / S.revenue[t];
+    S.rndMarginReportedBasis[t] = ratioOrNull(S.rndReportedBasis[t], t);
+    S.sgaMarginReportedBasis[t] = ratioOrNull(S.sgaReportedBasis[t], t);
+    S.otherOperatingCostsMarginReportedBasis[t] = ratioOrNull(S.otherOperatingCostsReportedBasis[t], t);
   }
 
   const sgaFcst = a.sellingGeneralAdminMargin === 'avgOfHistory'
-    ? avg(S.sgaMarginReportedBasis.slice(0, nH))
+    ? avgReported(S.sgaMarginReportedBasis.slice(0, nH)) ?? 0
     : a.sellingGeneralAdminMargin;
 
   for (let t = nH; t < nH + nF; t++) {
@@ -133,6 +152,10 @@ export function buildModel(data) {
     S.cogsReportedBasis[t] = -(S.revenue[t] - S.revenue[t] * S.grossMarginReportedBasis[t]);
     S.rndReportedBasis[t] = -(S.revenue[t] * S.rndMarginReportedBasis[t]);
     S.sgaReportedBasis[t] = -(S.revenue[t] * S.sgaMarginReportedBasis[t]);
+    // Other operating costs forecast at a share of revenue (deriveModel.js says
+    // why); nil for a data file that sets none.
+    S.otherOperatingCostsMarginReportedBasis[t] = a.otherOperatingCostsMargin?.[t - nH] ?? 0;
+    S.otherOperatingCostsReportedBasis[t] = -(S.revenue[t] * S.otherOperatingCostsMarginReportedBasis[t]);
   }
 
   S.cogsGrowth = blank();
@@ -361,21 +384,30 @@ export function buildModel(data) {
 
   // SBC as a share of total operating costs on the filed basis, which is the
   // basis the ratio is observed on.
+  // Total operating costs on the filed basis: every cost line, other operating
+  // costs included. A named line the filing does not report adds nothing here,
+  // because its cost is already inside other operating costs.
+  const operatingCostsFiled = (t) =>
+    (S.cogsReportedBasis[t] ?? 0) + (S.rndReportedBasis[t] ?? 0) +
+    (S.sgaReportedBasis[t] ?? 0) + (S.otherOperatingCostsReportedBasis[t] ?? 0);
   S.sbcPercentOfOpex = blank();
   for (let t = 0; t < nH; t++) {
-    const opex = S.cogsReportedBasis[t] + S.rndReportedBasis[t] + S.sgaReportedBasis[t];
-    S.sbcPercentOfOpex[t] = -S.stockBasedCompensation[t] / opex;
+    // Null in a year stock compensation is not reported.
+    S.sbcPercentOfOpex[t] = isNum(S.stockBasedCompensation[t])
+      ? -S.stockBasedCompensation[t] / operatingCostsFiled(t)
+      : null;
   }
+  // A rule that finds no reported year gives nil; the derivation already sets
+  // nil explicitly, and says so, where the last reported year has none.
   const sbcPct = a.sbcAsPercentOfOperatingExpenses === 'lastHistoricalYear'
-    ? S.sbcPercentOfOpex[nH - 1]
+    ? S.sbcPercentOfOpex[nH - 1] ?? 0
     : a.sbcAsPercentOfOperatingExpenses === 'avgOfHistory'
-      ? avg(S.sbcPercentOfOpex.slice(0, nH))
+      ? avgReported(S.sbcPercentOfOpex.slice(0, nH)) ?? 0
       : a.sbcAsPercentOfOperatingExpenses;
 
   for (let t = nH; t < nH + nF; t++) {
     S.sbcPercentOfOpex[t] = sbcPct;
-    S.stockBasedCompensation[t] =
-      -sbcPct * (S.cogsReportedBasis[t] + S.rndReportedBasis[t] + S.sgaReportedBasis[t]);
+    S.stockBasedCompensation[t] = -sbcPct * operatingCostsFiled(t);
   }
 
   // ------------------------- 4b. COST LINES EXCLUDING D&A AND SBC, AND EBIT
@@ -391,19 +423,23 @@ export function buildModel(data) {
   // reported year, and the forecast D&A and SBC are then charged in full. So
   // operating profit falls where D&A and SBC outgrow the level the reported
   // margins embedded, and rises where they shrink below it.
+  // Stock compensation the filing does not report is not charged here (nor
+  // added back in cash from operations): any the company paid stays inside
+  // its cost lines, as the derivation records.
   const nonCash = (t) =>
     (S.depreciationAmortisation[t] ?? 0) + (S.stockBasedCompensation[t] ?? 0);
-  const filedCosts = (t) =>
-    (S.cogsReportedBasis[t] ?? 0) + (S.rndReportedBasis[t] ?? 0) + (S.sgaReportedBasis[t] ?? 0);
+  const filedCosts = operatingCostsFiled;
   const withoutShare = (line, share) => (line == null ? null : line * (1 - share));
 
   S.cogs = blank();
   S.rnd = blank();
   S.sga = blank();
+  S.otherOperatingCosts = blank();
   S.grossProfit = blank();
   S.grossMargin = blank();
   S.rndMargin = blank();
   S.sgaMargin = blank();
+  S.otherOperatingCostsMargin = blank();
   S.nonCashShareOfCosts = blank();
 
   for (let t = 0; t < nH; t++) {
@@ -413,6 +449,7 @@ export function buildModel(data) {
     S.cogs[t] = withoutShare(S.cogsReportedBasis[t], share);
     S.rnd[t] = withoutShare(S.rndReportedBasis[t], share);
     S.sga[t] = withoutShare(S.sgaReportedBasis[t], share);
+    S.otherOperatingCosts[t] = withoutShare(S.otherOperatingCostsReportedBasis[t], share);
     // No filed cost lines to take them from: the whole charge leaves SG&A.
     if (costs === 0 && nonCash(t) !== 0) S.sga[t] = (S.sga[t] ?? 0) + nonCash(t);
   }
@@ -428,6 +465,7 @@ export function buildModel(data) {
   S.embeddedNonCashMargin = {
     cogs: embeddedIn(S.cogsReportedBasis),
     rnd: embeddedIn(S.rndReportedBasis),
+    other: embeddedIn(S.otherOperatingCostsReportedBasis),
     sga:
       embeddedIn(S.sgaReportedBasis) +
       (lastRevenue && filedCosts(lastReported) === 0 ? nonCash(lastReported) / lastRevenue : 0),
@@ -437,15 +475,21 @@ export function buildModel(data) {
     S.cogs[t] = S.cogsReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.cogs;
     S.rnd[t] = S.rndReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.rnd;
     S.sga[t] = S.sgaReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.sga;
+    S.otherOperatingCosts[t] =
+      S.otherOperatingCostsReportedBasis[t] + S.revenue[t] * S.embeddedNonCashMargin.other;
   }
 
   S.ebit = blank();
   for (let t = 0; t < nH + nF; t++) {
     S.grossProfit[t] = S.revenue[t] + S.cogs[t];
     S.grossMargin[t] = S.grossProfit[t] / S.revenue[t];
-    S.rndMargin[t] = -S.rnd[t] / S.revenue[t];
-    S.sgaMargin[t] = -S.sga[t] / S.revenue[t];
-    S.ebit[t] = S.grossProfit[t] + S.rnd[t] + S.sga[t] - nonCash(t);
+    S.rndMargin[t] = isNum(S.rnd[t]) ? -S.rnd[t] / S.revenue[t] : null;
+    S.sgaMargin[t] = isNum(S.sga[t]) ? -S.sga[t] / S.revenue[t] : null;
+    S.otherOperatingCostsMargin[t] = isNum(S.otherOperatingCosts[t]) ? -S.otherOperatingCosts[t] / S.revenue[t] : null;
+    // A named line the filing does not report adds nothing: its cost is inside
+    // other operating costs, which is what makes operating income tie.
+    S.ebit[t] =
+      S.grossProfit[t] + (S.rnd[t] ?? 0) + (S.sga[t] ?? 0) + (S.otherOperatingCosts[t] ?? 0) - nonCash(t);
   }
 
   // Reported years are what the company filed. Interest expense and items
@@ -526,7 +570,8 @@ export function buildModel(data) {
 
   S.ebitda = blank();
   for (let t = 0; t < nH + nF; t++) {
-    S.ebitda[t] = S.ebit[t] + S.depreciationAmortisation[t] + S.stockBasedCompensation[t];
+    // Unreported stock compensation was never charged, so there is none to add back.
+    S.ebitda[t] = S.ebit[t] + S.depreciationAmortisation[t] + (S.stockBasedCompensation[t] ?? 0);
   }
 
   // --------------------------------------------- 7. EQUITY & SHARE SCHEDULES
@@ -545,8 +590,9 @@ export function buildModel(data) {
   S.dividendPayoutRatio = blank();
   S.dividends = blank();
   for (let t = 0; t < nH; t++) {
-    S.dividends[t] = h.cashFlow.dividends[t];
-    S.dividendPayoutRatio[t] = -S.dividends[t] / S.netIncome[t];
+    // Null in a year the filing does not report dividends, and the ratio with it.
+    S.dividends[t] = h.cashFlow.dividends[t] ?? null;
+    S.dividendPayoutRatio[t] = isNum(S.dividends[t]) ? -S.dividends[t] / S.netIncome[t] : null;
   }
   const payoutFcst = a.dividendPayoutRatio === 'linearRegression'
     ? forecastLinear(
@@ -573,21 +619,29 @@ export function buildModel(data) {
   S.repurchasePercent = blank();
   S.shareRepurchases = blank();
   for (let t = 0; t < nH; t++) {
-    S.buybackCeiling[t] = a.authorisedBuybackCeiling.historical[t];
-    S.shareRepurchases[t] = h.cashFlow.shareRepurchases[t];
-    S.repurchasePercent[t] = -S.shareRepurchases[t] / S.buybackCeiling[t];
+    // Null in a year the filing does not report repurchases, and the ratio with it.
+    S.buybackCeiling[t] = a.authorisedBuybackCeiling.historical[t] ?? null;
+    S.shareRepurchases[t] = h.cashFlow.shareRepurchases[t] ?? null;
+    S.repurchasePercent[t] =
+      isNum(S.shareRepurchases[t]) && isNum(S.buybackCeiling[t]) && S.buybackCeiling[t] !== 0
+        ? -S.shareRepurchases[t] / S.buybackCeiling[t]
+        : null;
   }
+  // Averaged over the years that report repurchases. None reported: none forecast.
   const repurchasePct = a.repurchasePercentOfCeiling === 'avgOfHistory'
-    ? avg(S.repurchasePercent.slice(0, nH))
+    ? avgReported(S.repurchasePercent.slice(0, nH)) ?? 0
     : a.repurchasePercentOfCeiling;
 
   for (let t = nH; t < nH + nF; t++) {
     const rule = a.authorisedBuybackCeiling.forecast[t - nH];
     // 'avgOfPriorFour' = the average of the three historical ceilings plus the
     // first forecast ceiling, held constant thereafter (a fixed window, not a
-    // rolling one — the Excel uses an absolute range here).
+    // rolling one — the Excel uses an absolute range here). Only ceilings that
+    // exist are averaged: a year that reports none, or a first forecast ceiling
+    // that is itself this rule (a derived model), is left out rather than
+    // counted as nil, which understated a derived model's ceiling by a fifth.
     S.buybackCeiling[t] = rule === 'avgOfPriorFour'
-      ? avg(S.buybackCeiling.slice(0, nH + 1))
+      ? avgReported(S.buybackCeiling.slice(0, nH + 1)) ?? 0
       : rule;
     S.repurchasePercent[t] = repurchasePct;
     S.shareRepurchases[t] = -(S.buybackCeiling[t] * repurchasePct);

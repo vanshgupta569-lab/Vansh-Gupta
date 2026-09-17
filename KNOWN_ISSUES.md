@@ -21,7 +21,7 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
 outputs; no source was changed to measure anything below. Entries 7, 8, 10,
-13 and 20 and design choice D1 come from the conventions audit
+13 and 18 and design choice D1 come from the conventions audit
 (CONVENTIONS_AUDIT.md), measured at `f1d9339` on the same payloads. Entries
 1 and 15 come from the currency sweep: payloads fetched 2026-09-17.
 
@@ -47,11 +47,9 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 | 14 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
 | 15 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
 | 16 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 17 | Reported SG&A is not the filed SG&A | 47 (34 valued) | UnitedHealth 377,948 vs filed 59,592 | none directly; SG&A slider acts on the wrong base |
-| 18 | Nil shown where the filing reports nothing | R&D 43, SBC 22, dividends 17, buybacks 23 | — | small (SBC nil is never charged or added back) |
-| 19 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 20 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 21 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 17 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 18 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 19 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
@@ -363,33 +361,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 17. Reported SG&A is not the filed SG&A
-
-- **What is wrong.** Where the cost lines do not add up to filed operating
-  income, the difference is carried in SG&A so operating income ties. The line
-  is labelled SG&A but includes costs the filing puts elsewhere (acquired R&D,
-  restructuring, cost of revenue not tagged as such).
-- **Where.** `src/data/deriveModel.js` (`unexplainedOperatingCosts`,
-  `sgaTotal`).
-- **How measured.** Reported-line comparison against the filing.
-- **Affects.** 47 companies, 34 of them valued.
-- **Worst example.** UnitedHealth 377,948 against filed 59,592; Microsoft 34,666
-  against 7,956; AbbVie 27,881 against 14,010.
-- **Value moved.** None directly (operating income is right), but the SG&A
-  margin slider moves a base that is not SG&A.
-
-### 18. Nil shown where the filing reports nothing
-
-- **What is wrong.** R&D, stock compensation, dividends and buybacks show 0 when
-  the filing is silent, rather than "not reported".
-- **Where.** `src/data/deriveModel.js` (`researchDevelopment`,
-  `stockBasedCompensation`, `dividends`, `shareRepurchases`).
-- **How measured.** Reported-line comparison against the filing.
-- **Affects.** R&D 43, SBC 22, dividends 17, buybacks 23.
-- **Worst example.** —
-- **Value moved.** Small. A nil SBC is never charged and never added back.
-
-### 19. Reported net income still does not tie for three companies
+### 17. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -400,7 +372,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 20. The 50% minimum cash buffer has no documented basis
+### 18. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -417,7 +389,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 21. Net debt excludes lease liabilities
+### 19. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
@@ -504,6 +476,32 @@ for either.
   up to six hours (a day stale). A cached Yahoo payload has no currency
   evidence and is refused until it refreshes; a cached SEC payload is read as
   US dollars, as it was built.
+
+- **L13. Other operating costs are forecast by a rule, not from a named line.**
+  Where they are a cost, their share of revenue in the last reported year is
+  held flat, like every other cost line (D1). Where they are income (the
+  filing's named cost tags come to more than its operating costs), the smaller
+  of that year's income and the median across the reported years is forecast,
+  so a one-off gain is not carried forward (Boeing's FY2025 business-sale gain,
+  10.8% of revenue) while an overlap that recurs is (Procter & Gamble 2.4%,
+  MercadoLibre 11%). The median test cannot tell a gain that recurs from an
+  overlap. Removing the old 0-60% SG&A clamp, which applied to SG&A and this
+  residual together, moved MercadoLibre from 632.04 to 1,373.31: its forecast
+  operating margin had been held at 5.7% against 15.7% filed. There is no
+  slider for other operating costs; the SG&A slider now moves filed SG&A.
+  `src/data/deriveModel.js` (`otherOperatingCostsMargin`).
+- **L14. A line the filing does not report is not nil, but some arithmetic
+  counts it as nil, and says so.** R&D, SG&A, stock compensation, dividends and
+  buybacks are shown as not reported. Where a sum needs them: an unreported R&D
+  or SG&A cost is inside other operating costs, so operating income still ties;
+  unreported stock compensation is neither charged nor added back, so any the
+  company paid stays inside its cost lines (and cash from operations is not
+  credited with it); a line not reported in the last reported year is forecast
+  at nil. Dividends and buybacks are averaged over the years that report them,
+  and none are forecast where none are. The workbook's statement totals read
+  "not reported" cells through N(), which its notes state; the provenance lists
+  each unreported line and year. `src/data/deriveModel.js` (`NOT_REPORTED`),
+  `src/engine/model.js`, `src/data/excelSheets.ts`.
 
 ## Design choices, with their measured effect
 

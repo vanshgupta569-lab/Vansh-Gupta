@@ -577,10 +577,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   line('cogs', 'Cost of sales, excluding D&A and SBC', M.cogs, (c) => `-${c}${R.rev}*(1-${c}${R.gm})`, money());
   calc('gp', 'Gross profit before D&A and SBC', (c) => `${c}${R.rev}+${c}${R.cogs}`, money(), { bold: true, indent: 0 });
 
+  // A reported year whose filing does not report R&D or SG&A leaves the line
+  // blank, and its ratio blank with it, rather than showing 0%: not reported
+  // is not nil. Its cost is inside other operating costs below.
   driver(
     'rndPct',
     'Research & development, % of revenue',
-    (c, _p, i) => (has(M.revenue, i) ? `-${c}${R.rnd}/${c}${R.rev}` : null),
+    (c, _p, i) => (has(M.revenue, i) && has(M.rnd, i) ? `-${c}${R.rnd}/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
       const rnd = at(M.rnd, i);
@@ -592,7 +595,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'sgaPct',
     'Selling, general & administrative, % of revenue',
-    (c, _p, i) => (has(M.revenue, i) ? `-${c}${R.sga}/${c}${R.rev}` : null),
+    (c, _p, i) => (has(M.revenue, i) && has(M.sga, i) ? `-${c}${R.sga}/${c}${R.rev}` : null),
     (i) => {
       const rev = at(M.revenue, i);
       const sga = at(M.sga, i);
@@ -607,6 +610,28 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     (c) => `-${c}${R.rev}*${c}${R.sgaPct}`,
     money()
   );
+  // Reported years: the filing's operating income less the lines it names
+  // (cost of sales, R&D, SG&A), so operating profit ties to the filing without
+  // any named line carrying costs that are not its own. Forecast years: a share
+  // of revenue (see the note under the as-filed memo).
+  driver(
+    'otherPct',
+    'Other operating costs, % of revenue',
+    (c, _p, i) => (has(M.revenue, i) && has(M.otherOperatingCosts, i) ? `-${c}${R.otherOpex}/${c}${R.rev}` : null),
+    (i) => {
+      const rev = at(M.revenue, i);
+      const other = at(M.otherOperatingCosts, i);
+      return isNum(rev) && isNum(other) && rev !== 0 ? -other / rev : 0;
+    },
+    PCT1
+  );
+  line(
+    'otherOpex',
+    'Other operating costs, excluding D&A and SBC: operating income as filed less the lines above',
+    M.otherOperatingCosts,
+    (c) => `-${c}${R.rev}*${c}${R.otherPct}`,
+    money()
+  );
   // The two non-cash charges, negative like every other cost here. They link
   // to the positive D&A and SBC rows below, which the cash flow adds back, so
   // the add-back always reverses exactly the charge made.
@@ -615,7 +640,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   calc(
     'ebit',
     'Operating profit (EBIT)',
-    (c) => `${c}${R.gp}+${c}${R.rnd}+${c}${R.sga}+${c}${R.daCost}+${c}${R.sbcCost}`,
+    (c) => `${c}${R.gp}+${c}${R.rnd}+${c}${R.sga}+${c}${R.otherOpex}+${c}${R.daCost}+${c}${R.sbcCost}`,
     money(),
     { bold: true, indent: 0 }
   );
@@ -711,6 +736,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     (i) => {
       const rev = at(M.revenue, i);
       const sbc = at(M.stockBasedCompensation, i);
+      // Blank in a reported year that does not report it, not 0%.
+      if (i < nH && !isNum(sbc)) return null;
       return isNum(rev) && isNum(sbc) && rev !== 0 ? Math.abs(sbc) / rev : 0;
     },
     PCT1
@@ -743,10 +770,15 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       }
     });
   };
+  // The lines the filing does not report, by year, as the derivation records them.
+  const notReportedLines: string[] = (Array.isArray(source?.meta?.notReported) ? source.meta.notReported : []).map(
+    (g: any) => `Not reported: ${g.label}, ${g.years.map((y: number) => `FY${String(y).slice(2)}`).join(', ')}.`
+  );
   sub('As filed: reported cost lines, D&A and SBC included');
   asFiled('cogsFiled', 'Cost of sales, as filed', M.cogsReportedBasis);
   asFiled('rndFiled', 'Research & development, as filed', M.rndReportedBasis);
   asFiled('sgaFiled', 'Selling, general & administrative, as filed', M.sgaReportedBasis);
+  asFiled('otherFiled', 'Other operating costs: operating income as filed less the lines above', M.otherOperatingCostsReportedBasis);
   asFiled('pretaxFiled', 'Pretax income, as filed', M.pretaxProfitAsFiled);
   asFiled('niFiled', 'Net income, as filed', M.netIncomeAsFiled);
   // Cost of sales on the filed basis in every year, as the engine carries it,
@@ -755,7 +787,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // the last reported year, measured from that year's cells.
   const lastRep = L(cOf(nH - 1));
   const abs = (key: string) => `$${lastRep}$${R[key]}`;
-  const filedTotal = () => `(${abs('cogsFiled')}+${abs('rndFiled')}+${abs('sgaFiled')})`;
+  const filedTotal = () => `(${abs('cogsFiled')}+${abs('rndFiled')}+${abs('sgaFiled')}+${abs('otherFiled')})`;
   calc(
     'cogsEmbedded',
     'D&A and SBC in cost of sales, % of revenue (last reported year)',
@@ -776,6 +808,17 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'reported years each filed line gives up its pro-rata share of the filed D&A and SBC, so operating profit is still',
     'revenue less the filed lines here; the Checks sheet confirms it. Forecast margins give up the share D&A and SBC',
     'took of each line in the last reported year, and the forecast D&A and SBC are then charged in full.',
+    '',
+    'OTHER OPERATING COSTS are the filing\'s operating income less the lines it names, so operating profit ties to the',
+    'filing and SG&A is the filed SG&A. They hold costs the filing charges above operating income without tagging them as',
+    'one of those lines, and any named line it does not report. Forecast: their share of revenue in the last reported',
+    'year where they are a cost; where they are income (the named lines overlap), the smaller of that year\'s income and',
+    'the median across the reported years, so a one-off gain is not carried forward.',
+    '',
+    'A BLANK reported figure is one the filing does not report. It is not nil, but formulas that add it count it as nil:',
+    'an unreported R&D or SG&A cost is inside other operating costs, and unreported stock compensation is neither charged',
+    'nor added back. The Income Statement and Cash Flow sheets show these cells as "not reported".',
+    ...notReportedLines,
   ]);
   blank();
 
@@ -1004,19 +1047,33 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'Dividend payout ratio',
     null,
     (i) => {
+      // Reported years: the filed dividends over net income, blank where the
+      // filing does not report dividends. They used to read 0% every reported
+      // year, for every company, because only forecast dividends were read.
       const ni = at(M.netIncome, i);
-      const div = at(M.retainedEarnings?.dividends, i);
+      const div = i < nH ? at(M.dividends, i) : at(M.retainedEarnings?.dividends, i);
+      if (i < nH && !isNum(div)) return null;
       return isNum(ni) && isNum(div) && ni > 0 ? Math.abs(div) / ni : 0;
     },
     PCT1
   );
   bopRow('reBop', 'Beginning of period', at(M.retainedEarnings?.beginning, 0), 'reEnd');
-  calc('reDiv', 'Less: common dividends', (c) => `-${c}${R.ni}*${c}${R.payout}`, money());
+  // Reported years: the filed dividends, blank where not reported. Forecast: payout x net income.
+  line('reDiv', 'Less: common dividends', M.dividends, (c) => `-${c}${R.ni}*${c}${R.payout}`, money());
   eopRow('reEnd', 'End of period', M.retainedEarnings?.ending, (c) => `${c}${R.reBop}+${c}${R.ni}+${c}${R.reDiv}`);
   blank();
 
   sub('Treasury stock');
-  driver('buyback', 'Share repurchases', null, (i) => at(M.treasury?.repurchases, i) ?? 0, money(), { unit: UNIT });
+  // Reported years: the filed repurchases, blank where the filing does not
+  // report them (they used to read 0 in every reported year, for every company).
+  driver(
+    'buyback',
+    'Share repurchases',
+    null,
+    (i) => (i < nH ? at(M.shareRepurchases, i) : at(M.treasury?.repurchases, i) ?? 0),
+    money(),
+    { unit: UNIT }
+  );
   bopRow('tsBop', 'Beginning of period', at(M.treasury?.beginning, 0), 'tsEnd');
   eopRow('tsEnd', 'End of period', M.treasury?.ending, (c) => `${c}${R.tsBop}+${c}${R.buyback}`);
   blank();
