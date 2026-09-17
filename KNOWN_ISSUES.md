@@ -23,7 +23,9 @@ figures come from moving existing sliders or recomputing from the engine's own
 outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 13 and 18 and design choice D1 come from the conventions audit
 (CONVENTIONS_AUDIT.md), measured at `f1d9339` on the same payloads. Entries
-1 and 15 come from the currency sweep: payloads fetched 2026-09-17.
+1 and 15 come from the currency sweep, and entry 19 and the first-year
+measurement in entry 2 from the SG&A sweep at `ea2f020`: both on payloads
+fetched 2026-09-17, 172 fetched and 168 modelled.
 
 ---
 
@@ -49,7 +51,8 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 | 16 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
 | 17 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
 | 18 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 19 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 19 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 20 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
@@ -82,24 +85,40 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   depreciation. The forecast depreciation rate is the average of those ratios,
   so it can be negative or several times capex. It also sets the amortisation
   anchor (see limitation L4).
+- **The first year of the roll-forward is not a measurement at all.** A derived
+  model has no PP&E balance from before its first reported year, and
+  `ppeOpeningBalance` is set to that year's own closing balance. Opening equals
+  closing, so depreciation comes out as exactly the year's capex and the rate as
+  exactly 100% of it, for every company whose first year reports capex and
+  PP&E. That fabricated 100% then sits in the average the forecast uses.
 - **Where.** `src/engine/model.js`, PP&E schedule
   (`S.ppe.depreciation` for reported years, `depreciationAsPercentOfCapex`
-  `avgOfHistory`); `src/data/deriveModel.js` (`depreciationAsPercentOfCapex`).
+  `avgOfHistory`, which still averages with `avg` and so counts a year whose
+  rate cannot be computed as nil); `src/data/deriveModel.js`
+  (`depreciationAsPercentOfCapex`, `ppeOpeningBalance`).
 - **How measured.** Roll-forward depreciation against filed D&A in the last
   reported year, across the 76 non-financial companies with both; rate counts;
   and value per share re-run with the depreciation slider set to filed
-  D&A / capex.
+  D&A / capex. The first year separately, at `ea2f020` on the 168 payloads of
+  2026-09-17: the rate recomputed with that year dropped from the average, and
+  value re-run through the same slider.
 - **Affects.** Roll-forward depreciation negative for 4 companies (Boeing,
   Oracle, Lilly, Verizon), above 125% of filed D&A for 15, below 50% for 17.
   Historical rate negative for 3 (AMZN -92%, SHOP -35%, SNDK -41%), above 100%
   of capex for 15 (UNP 419%, HD 236%, IBM 191%). With the filed-basis rate, 12
-  of 41 valued companies move by more than 5% and 5 by more than 20%.
+  of 41 valued companies move by more than 5% and 5 by more than 20%. The
+  fabricated first year affects 155 of 168 modelled companies, 63 of them
+  valued; dropping it moves value by a median 0.9%, and by more than 5% for 13.
 - **Worst example.** Amazon: rate -91.8% (so forecast depreciation is negative);
   on the filed basis (49.9%) its value moves 400.75 to 222.38, -44.5%. Also
   Alibaba +41.7%, Alphabet +27.4% (rate 100.4% against 23.1%), Home Depot
   +21.9%, Amgen -18.5%. (Toyota's New York listing +69.8%; that listing is now refused, L8.)
 - **Value moved.** -44.5% to +41.7% where material. The filed-basis rate is a
-  diagnostic, not a proposed fix: filed D&A includes amortisation.
+  diagnostic, not a proposed fix: filed D&A includes amortisation. Dropping the
+  fabricated first year on its own: Reliance Industries +24.0% (rate 51.8% to
+  35.7%), Toyota's Tokyo listing +19.7%, ExxonMobil +18.7% (2.2% to -30.4%),
+  Enbridge Toronto +16.0%, Samsung +8.1%, Novo Nordisk Copenhagen +7.1%, Home
+  Depot -5.3% (236% to 270%).
 
 ### 3. Two EBITDA definitions
 
@@ -389,7 +408,34 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 19. Net debt excludes lease liabilities
+### 19. Stock compensation the filing does not break out is never added back
+
+- **What is wrong.** Where a filing does not report stock based compensation,
+  the model charges none and adds none back (limitation L14). If the company
+  does pay it, the cost sits inside its cost lines and is treated as though it
+  were cash, so cash from operations and unlevered free cash flow are short by
+  that amount and the value is understated. IFRS filers carry it in a footnote
+  more often than in the cash flow statement, which is why the ones affected
+  are almost all non-US.
+- **Where.** `api/company.js` (`annualStockBasedCompensation` only);
+  `src/data/deriveModel.js` (`stockBasedCompensation`); `src/engine/model.js`
+  (`sbcPercentOfOpex`, the cash flow add-back).
+- **How measured.** At `ea2f020` on the 168 payloads of 2026-09-17: companies
+  whose last reported year does not break SBC out, then, where another year
+  does report it, that year's share of revenue charged and added back through
+  the engine's own SBC assumption.
+- **Affects.** 56 companies, 20 of them valued. For 19 of the 20 no year
+  reports it at all, so the size is unknown: Samsung, Saudi Aramco, Sony,
+  Toyota (Tokyo), AstraZeneca (London), BHP, Enbridge, Equinor, Inditex, LVMH,
+  MercadoLibre, Reliance Industries, Rio Tinto, Shell (London), Siemens, TCS,
+  TotalEnergies (Paris), Volvo, ExxonMobil.
+- **Worst example.** Novo Nordisk's Copenhagen listing, the one case where an
+  earlier year reports it: 0.8% of revenue, value 870.97 against 886.88 with it
+  charged and added back.
+- **Value moved.** +1.8% in the one case that can be estimated; not measurable
+  for the other 19 without the figure the filing does not give.
+
+### 20. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
@@ -496,7 +542,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it); a line not reported in the last reported year is forecast
+  credited with it, which is #19); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists

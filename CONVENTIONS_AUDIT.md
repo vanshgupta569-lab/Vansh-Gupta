@@ -57,7 +57,7 @@ come last, together.
 | 2 | Consistent definition of "core operating" EBITDA across the comp set and the exit multiple (Comps 4; DCF 12) | Hard rule | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value −36.3%; EV/EBITDA method overstated 90.9% (KI #3) |
 | 3 | EV to equity deducts non-controlling interests and preferred securities (DCF 15) | Hard rule | 14 valued with NCI | Reliance Infrastructure | up to 48.1% of value (KI #4) |
 | 4 | Depreciation schedule: existing PP&E vs capex vintages, useful lives, historical plausibility check (Dep 6, 8) | Hard rule / rule of thumb | 12 of 41 move >5% | Amazon; Alibaba | −44.5% to +41.7% (KI #2, #6) |
-| 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound, KI #5); leases and short-term borrowings not measured (KI #19) |
+| 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound, KI #5); leases and short-term borrowings not measured (KI #20) |
 | 6 | A material gap between the exit-multiple and perpetuity values is investigated, not averaged (DCF 14) | Hard rule | 23 of 42 more than 10% apart; 12 more than 25% | TotalEnergies 77.9% apart; Amazon 52.0% | choosing either method alone moves the headline by half the spread: median ±8%, up to ±39% |
 | 7 | WACC weights debt and equity at market value (DCF 7) | Hard rule | 42; 13 have a *negative* debt weight | Alibaba WACC 7.1% → 5.9% on gross debt | median +1.2%; Alibaba +21.2%, Amphenol +9.8% |
 | 8 | Explicit end-of-year or mid-year discounting choice, applied consistently (DCF 1) | Judgment call | every company | first forecast year is a full year's cash flow discounted over 0.29 years | mid-year: median +4.3% (max +5.4%); pro-rating the first year: median −1.5% (max −5.3%) |
@@ -184,7 +184,7 @@ thumb.
 | # | Item | Verdict | Reason |
 |---|---|---|---|
 | Debt 1 | Built last, once the balance sheet balances | Followed | The circularity switch defaults to off, so the model balances without the loop; only switching it on closes the loop (`excelExport.ts:513-536`). The build order is fixed in code, not a manual step. |
-| Debt 2 | Every debt instrument has a section | **Not followed** | Only long-term debt and a revolver are tracked (`model.js:482-508`). Short-term borrowings, the current portion of long-term debt and lease liabilities are not (KI #14, #19). Failures #5. |
+| Debt 2 | Every debt instrument has a section | **Not followed** | Only long-term debt and a revolver are tracked (`model.js:482-508`). Short-term borrowings, the current portion of long-term debt and lease liabilities are not (KI #14, #20). Failures #5. |
 | Debt 3 | Each tranche modelled separately | Not followed | One blended long-term debt balance. The filings the site reads do not tag tranches. Defensible for filed data, but unstated in the workbook. |
 | Debt 4 | Tranche opening balance linked from prior ending | Followed | `debtBop` and `revBop` link the prior ending balance (`excelExport.ts:914-978`; `model.js:500`). |
 | Debt 5 | Mandatory and discretionary lines kept separate | Partly followed | "Additional borrowing / (pay down)" (input) is separate from the automatic revolver draw (`excelExport.ts:914, 970`), so the sweep cannot overwrite it. There is no contractual maturity schedule: derived models hold debt flat (`deriveModel.js:715`) because maturity ladders are not machine-readable. |
