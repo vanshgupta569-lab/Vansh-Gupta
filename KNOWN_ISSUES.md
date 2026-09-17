@@ -20,7 +20,9 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below.
+outputs; no source was changed to measure anything below. Entries 7, 8, 10,
+13 and 19 and design choice D1 come from the conventions audit
+(CONVENTIONS_AUDIT.md), measured at `f1d9339` on the same payloads.
 
 ---
 
@@ -34,15 +36,20 @@ outputs; no source was changed to measure anything below.
 | 4 | Non-controlling interests not deducted from equity value | 14 valued | Reliance Infrastructure 276.16 a share | up to 48.1% of value |
 | 5 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
 | 6 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated; part of #2's range |
-| 7 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 8 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 9 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
-| 10 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
-| 11 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 12 | Reported SG&A is not the filed SG&A | 47 (34 valued) | UnitedHealth 377,948 vs filed 59,592 | none directly; SG&A slider acts on the wrong base |
-| 13 | Nil shown where the filing reports nothing | R&D 43, SBC 22, dividends 17, buybacks 23 | — | small (SBC nil is never charged or added back) |
-| 14 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 15 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 7 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
+| 8 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
+| 9 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 10 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 11 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 12 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
+| 13 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 14 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
+| 15 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 16 | Reported SG&A is not the filed SG&A | 47 (34 valued) | UnitedHealth 377,948 vs filed 59,592 | none directly; SG&A slider acts on the wrong base |
+| 17 | Nil shown where the filing reports nothing | R&D 43, SBC 22, dividends 17, buybacks 23 | — | small (SBC nil is never charged or added back) |
+| 18 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 19 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 20 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
@@ -174,7 +181,53 @@ outputs; no source was changed to measure anything below.
 - **Value moved.** Not isolated. D&A reaches value through the tax shield and
   the terminal year (capex = depreciation); #2's filed-rate re-run includes it.
 
-### 7. Workbook and site DCF disagree
+### 7. The two terminal values are averaged, not investigated
+
+- **What is wrong.** The headline is the mean of the perpetuity-growth and
+  exit-multiple values. The spread between them is shown (workbook DCF row 54,
+  the dashboard's football field) but nothing acts on it: a company whose two
+  methods land 78% apart gets a headline as confident as one where they agree.
+  The convention is to investigate a material divergence, because it says
+  whether the exit multiple or the cash-flow forecast is out of line.
+- **Where.** `src/components/TerminalDashboard.tsx` (`blendedValue`);
+  `src/data/excelExport.ts` (DCF sheet rows 53-54); `src/engine/model.js`
+  (`buildDCF`, both terminal values).
+- **How measured.** Code at `f1d9339`: spread = |exit-multiple value -
+  perpetuity value| / headline, per valued company. Taking either method alone
+  moves the headline by half the spread.
+- **Affects.** 23 of 42 valued companies more than 10% apart, 12 more than 25%;
+  median spread 15.9%.
+- **Worst example.** TotalEnergies perpetuity 33.85 against exit multiple 77.00
+  (77.9% apart); Shell 57.18 / 100.30 (54.8%); Amazon 400.75 / 235.47 (52.0%);
+  Arista 62.25 / 100.36 (46.9%); Palantir 15.76 / 24.62 (43.9%). (Toyota
+  130.6%, but see #1.)
+- **Value moved.** The headline sits half the spread from either method: median
+  about 8%, up to 39% (TotalEnergies). The exit multiple is a flat 12x for every
+  derived company, so part of the spread is the multiple, not the business; see
+  also #3.
+
+### 8. WACC weights capital on net debt
+
+- **What is wrong.** The debt weight is net debt / (market capitalisation + net
+  debt). For a company holding more cash than debt the debt weight is negative
+  and the equity weight above 100%, so WACC comes out above the cost of equity.
+  Market-value weights use gross debt; cash is already counted in the equity
+  bridge. The relevered-beta formula uses net debt the same way (not reached
+  today: no derived model has comparables and Apple uses a stated beta). The
+  workbook hard-codes the engine's weights as inputs rather than computing them.
+- **Where.** `src/engine/model.js` (`computeWACC`: `weightDebt`, `relevered`);
+  `src/data/excelExport.ts` (DCF sheet rows 23-25).
+- **How measured.** Code at `f1d9339`: WACC recomputed with gross long-term debt
+  at book value (market value is not fetched), the same cost of equity and
+  after-tax cost of debt; both terminal values re-discounted; headline compared.
+- **Affects.** All 42 valued companies; 13 carry a negative debt weight; 1 moves
+  by more than 10%.
+- **Worst example.** Alibaba: WACC 7.1% to 5.9%, value +21.2%. Amphenol (debt
+  weight -12.7%): WACC 9.8% to 8.7%, +9.8%. Novo Nordisk +8.1%, TotalEnergies
+  +5.7%, BHP +5.3%. (Toyota +9.3%, but see #1.)
+- **Value moved.** Median +1.2%; up to +21.2%.
+
+### 9. Workbook and site DCF disagree
 
 - **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
   (+ amortisation after tax), leaving out working capital and the terminal
@@ -191,7 +244,29 @@ outputs; no source was changed to measure anything below.
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 8. Forecast tax rate: a filed ratio on a different pretax figure
+### 10. No stated discounting convention; timing runs from the fetch date
+
+- **What is wrong.** Each forecast year's cash flow is discounted from the price
+  date to that fiscal year-end, as though all of it arrives at year-end, and no
+  end-of-year or mid-year choice is stated. The first forecast year's full cash
+  flow is discounted over only the part of the year left, while net debt is
+  taken at the last reported year-end. That is not double counting (cash earned
+  since that year-end is not in net debt), but the balance sheet is dated at one
+  point and the cash flows timed from another, and the whole discounting
+  schedule shifts with the day the price was fetched.
+- **Where.** `src/engine/model.js` (`buildDCF`, `yearFrac(sharePriceDate, ...)`);
+  `src/data/excelExport.ts` (DCF sheet rows 27-28).
+- **How measured.** Code at `f1d9339`, valuation date 2026-09-17 (0.29 years to a
+  December year-end): every discount period shortened by half a year (mid-year
+  convention); separately, the first year's cash flow scaled to the fraction of
+  the year remaining.
+- **Affects.** Every company with a DCF.
+- **Worst example.** Mid-year: AbbVie +5.4%, Home Depot +4.7%. First year
+  pro-rated: Shell -5.3%, AbbVie -5.1%, Gilead -4.6%, Apple -4.1%.
+- **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
+  -1.5% (max -5.3%). Both depend on the fetch date.
+
+### 11. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -209,7 +284,7 @@ outputs; no source was changed to measure anything below.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 9. Forecast interest is 4.5% of average debt
+### 12. Forecast interest is 4.5% of average debt
 
 - **What is wrong.** No coupon is fetched, so forecast interest is average
   reported long-term debt at 4.5%. Filed interest expense is now fetched (since
@@ -225,7 +300,27 @@ outputs; no source was changed to measure anything below.
 - **Value moved.** Small: unlevered cash flow excludes interest; it reaches value
   through the cost of debt in WACC. Not measured.
 
-### 10. Possible false-positive missing-debt refusals
+### 13. Working capital drivers differ between site and workbook
+
+- **What is wrong.** On the site, derived models grow payables and other current
+  assets with cost of sales, and every model holds other non-current liabilities
+  flat. The workbook drives all three as a % of revenue. It seeds each year's %
+  from the engine's balances, so at default assumptions the two agree to the
+  cent; they part as soon as revenue growth or gross margin is changed in the
+  workbook, and the labels ("Payables as % of revenue") describe a driver the
+  site does not use.
+- **Where.** `src/data/deriveModel.js` (`workingCapitalDrivers`);
+  `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
+  (the `ap`, `oca` and `oncl` schedules).
+- **How measured.** Code comparison during the conventions audit; agreement at
+  defaults from the site-vs-workbook run (#9).
+- **Affects.** Every derived company (payables, other current assets); every
+  company (other non-current liabilities).
+- **Worst example.** —
+- **Value moved.** None at default assumptions. After a workbook edit, only the
+  working capital movement differs; not measured.
+
+### 14. Possible false-positive missing-debt refusals
 
 - **What is wrong.** A company is refused when long-term debt is missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -242,7 +337,7 @@ outputs; no source was changed to measure anything below.
   like tag changes the fetcher does not follow.
 - **Value moved.** No value is shown at all for these companies.
 
-### 11. Workbook reported-year operating cash flow is derived, not filed
+### 15. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -258,7 +353,7 @@ outputs; no source was changed to measure anything below.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 12. Reported SG&A is not the filed SG&A
+### 16. Reported SG&A is not the filed SG&A
 
 - **What is wrong.** Where the cost lines do not add up to filed operating
   income, the difference is carried in SG&A so operating income ties. The line
@@ -273,7 +368,7 @@ outputs; no source was changed to measure anything below.
 - **Value moved.** None directly (operating income is right), but the SG&A
   margin slider moves a base that is not SG&A.
 
-### 13. Nil shown where the filing reports nothing
+### 17. Nil shown where the filing reports nothing
 
 - **What is wrong.** R&D, stock compensation, dividends and buybacks show 0 when
   the filing is silent, rather than "not reported".
@@ -284,7 +379,7 @@ outputs; no source was changed to measure anything below.
 - **Worst example.** —
 - **Value moved.** Small. A nil SBC is never charged and never added back.
 
-### 14. Reported net income still does not tie for three companies
+### 18. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -295,7 +390,24 @@ outputs; no source was changed to measure anything below.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 15. Net debt excludes lease liabilities
+### 19. The 50% minimum cash buffer has no documented basis
+
+- **What is wrong.** Derived models set the minimum cash balance at half the
+  last reported cash. Every other derived assumption states its basis in
+  `provenance`, shown on the Sources sheet; this one does not, and the workbook
+  shows the figure without saying where it comes from. (Apple's hand-built
+  100,000 comes from its source workbook.)
+- **Where.** `src/data/deriveModel.js` (`minimumCashDesired`);
+  `src/data/excelExport.ts` (`minCash` driver, recovered from the engine's
+  excess-cash line).
+- **How measured.** Code review during the conventions audit.
+- **Affects.** Every derived company.
+- **Worst example.** —
+- **Value moved.** None. It sizes forecast revolver draws and, with the
+  circularity switch on, revolver interest; neither reaches unlevered free cash
+  flow or the equity bridge.
+
+### 20. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
@@ -346,6 +458,25 @@ for either.
 - **L7. Bank residual income is exempt from the forecast refusal.** It is gated
   on the filed balance sheet balancing, because it is built from the filing,
   not the forecast. BlackRock's is withheld (L3). `src/data/autoCompany.ts`.
+
+## Design choices, with their measured effect
+
+Deliberate choices that differ from a textbook convention. They are not
+defects: do not change them as a fix, only as a decision to change the design.
+
+- **D1. Forecast margins come from the last reported year.** Gross margin, R&D
+  and SG&A are the last reported year's share of revenue, held flat, and each
+  model's provenance says so. The checklist's conservative default (the lowest
+  of recent years) is a rule of thumb in the book, and the last reported year is
+  defensible: an average or a minimum taken across a company that has changed
+  shape describes no year it now operates in (Nvidia is the case the code
+  cites). Measured at `f1d9339` by moving the operating margin by the gap
+  between the lowest of the last three reported years and the last: median
+  value -11.5%; 23 of 42 valued companies fall by more than 10% and 10 by more
+  than 25% (AMD -95.9%, Gilead -85.0%, Seagate -80.3%, AbbVie -42.8%); Arm,
+  Marvell and Palantir would be refused; 11 are unchanged, their last year
+  already the lowest. `src/data/deriveModel.js` (margins). See
+  CONVENTIONS_AUDIT.md, IS 7.
 
 ## Verification limits
 
