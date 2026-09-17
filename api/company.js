@@ -211,6 +211,18 @@ const US_TAGS = {
     'DepreciationAmortizationAndAccretionNet',
     'Depreciation',
   ],
+  // Depreciation of property, plant & equipment on its own, and amortisation of
+  // intangibles on its own, where the filing separates them. The total above
+  // mixes the two, and they behave differently: depreciation follows the assets
+  // capital spending buys, amortisation runs an acquired intangible pool down.
+  // Amazon files 41,860 of depreciation and 817 of amortisation inside 65,756
+  // of total D&A.
+  depreciationOfPpe: ['Depreciation'],
+  amortisationOfIntangibles: [
+    'AmortizationOfIntangibleAssets',
+    'AmortizationOfIntangibleAssetsExcludingGoodwill',
+    'FiniteLivedIntangibleAssetsAmortizationExpense',
+  ],
   capex: [
     'PaymentsToAcquirePropertyPlantAndEquipment',
     'PaymentsToAcquireProductiveAssets',
@@ -464,6 +476,11 @@ const YAHOO_FIELDS = {
   intangibles: 'annualOtherIntangibleAssets',
 
   depreciation: 'annualDepreciationAndAmortization',
+  // Yahoo carries depreciation alone for some listings (Tencent 32,799 of
+  // 66,028) and repeats the total for others; it publishes no amortisation of
+  // intangibles, so that stays null on this path and the model says what it
+  // does without it.
+  depreciationOfPpe: 'annualDepreciation',
   capex: 'annualCapitalExpenditure',
   operatingCashFlow: 'annualOperatingCashFlow',
   dividendsPaid: 'annualCashDividendsPaid',

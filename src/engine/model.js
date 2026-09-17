@@ -231,7 +231,9 @@ export function buildModel(data) {
   }
 
   // ------------------------------------------------------- 4. PP&E SCHEDULE
-  S.ppe = { beginning: blank(), capex: blank(), depreciation: blank(), ending: blank() };
+  S.ppe = {
+    beginning: blank(), capex: blank(), depreciation: blank(), otherMovements: blank(), ending: blank(),
+  };
   S.depreciationPercentOfCapex = blank();
 
   for (let t = 0; t < nH; t++) {
@@ -242,13 +244,39 @@ export function buildModel(data) {
   const firstPpeYear = h.balanceSheet.propertyPlantEquipment.findIndex((v) => v != null);
   S.ppe.beginning[firstPpeYear] = h.ppeOpeningBalance;
   for (let t = firstPpeYear + 1; t < nH; t++) S.ppe.beginning[t] = S.ppe.ending[t - 1];
+  // REPORTED YEARS. Depreciation is the filed figure where the derivation
+  // resolved one (deriveModel.js, filedDepreciation); whatever else moved the
+  // balance — disposals, impairments, finance leases, acquisitions, currency —
+  // is shown on its own line instead of being called depreciation. Where
+  // nothing is filed, the balance movement is all that can be measured, and
+  // then only for a year with an opening balance: a derived model's first
+  // reported year has none.
+  const filedDepreciation = (t) => {
+    const v = h.cashFlow.depreciationOfPpe?.[t];
+    return typeof v === 'number' && isFinite(v) ? v : null;
+  };
   for (let t = firstPpeYear; t < nH; t++) {
-    S.ppe.depreciation[t] = -(S.ppe.beginning[t] + S.ppe.capex[t] - S.ppe.ending[t]);
-    S.depreciationPercentOfCapex[t] = -S.ppe.depreciation[t] / S.ppe.capex[t];
+    const opening = S.ppe.beginning[t];
+    const movement = opening != null && S.ppe.ending[t] != null
+      ? S.ppe.ending[t] - opening - (S.ppe.capex[t] ?? 0)
+      : null;
+    const filed = filedDepreciation(t);
+    if (filed !== null) {
+      S.ppe.depreciation[t] = -filed;
+      S.ppe.otherMovements[t] = movement === null ? null : movement - S.ppe.depreciation[t];
+    } else {
+      S.ppe.depreciation[t] = movement;
+      S.ppe.otherMovements[t] = movement === null ? null : 0;
+    }
+    S.depreciationPercentOfCapex[t] =
+      S.ppe.depreciation[t] != null && S.ppe.capex[t] ? -S.ppe.depreciation[t] / S.ppe.capex[t] : null;
   }
 
+  // The forecast rate: the derivation's figure from filed depreciation, or the
+  // average of whatever the reported years could measure. Years that measured
+  // nothing are left out rather than counted as nil.
   const depPct = a.depreciationAsPercentOfCapex === 'avgOfHistory'
-    ? avg(S.depreciationPercentOfCapex.slice(firstPpeYear, nH))
+    ? avgReported(S.depreciationPercentOfCapex.slice(firstPpeYear, nH))
     : a.depreciationAsPercentOfCapex;
 
   // capexScale lifts or lowers the whole forecast capex line without changing
@@ -262,6 +290,7 @@ export function buildModel(data) {
   let capexRaw = S.ppe.capex[nH - 1];
 
   for (let t = nH; t < nH + nF; t++) {
+    S.ppe.otherMovements[t] = 0;
     S.ppe.beginning[t] = S.ppe.ending[t - 1];
     // Capex is carried as a POSITIVE outflow, the sign the filings, the data
     // files and the historical years all use: PP&E closes at opening plus
@@ -280,6 +309,21 @@ export function buildModel(data) {
     S.ppe.depreciation[t] = -(S.ppe.capex[t] * depPct);
     S.ppe.ending[t] = S.ppe.beginning[t] + S.ppe.capex[t] + S.ppe.depreciation[t];
   }
+
+  // A rate that cannot be forecast from: not a positive number, or one that
+  // depreciates the asset base past nothing inside the forecast. Recorded here
+  // and refused in checkValuationApplicability, because a forecast built on it
+  // is not a valuation (Union Pacific's balance-sheet rate was 419% of capital
+  // spending, Amazon's -92%).
+  S.depreciationRateUsed = typeof depPct === 'number' && isFinite(depPct) ? depPct : null;
+  S.depreciationRateProblem =
+    S.depreciationRateUsed === null
+      ? 'no depreciation rate could be measured from the filing'
+      : S.depreciationRateUsed <= 0
+        ? `the depreciation rate measured from the filing is ${(S.depreciationRateUsed * 100).toFixed(1)}% of capital spending, which is not a rate anything can be depreciated at`
+        : S.ppe.ending.slice(nH, nH + nF).some((v) => typeof v === 'number' && v < 0)
+          ? `a depreciation rate of ${(S.depreciationRateUsed * 100).toFixed(1)}% of capital spending depreciates the property, plant & equipment balance past nothing inside the forecast`
+          : null;
 
   // D&A and SBC are charged in operating profit (section 4b) and added back in
   // the cash flow statement
@@ -328,35 +372,40 @@ export function buildModel(data) {
   S.amortisation = blank();
   {
     const anchorYear = nH - 1;
-    const rates = firstPpeYear >= 0 && firstPpeYear < nH ? S.depreciationPercentOfCapex.slice(firstPpeYear, nH) : [];
-    const historicalDepRate = rates.length ? avg(rates) : NaN;
     const filedDA = h.cashFlow.depreciationAmortisation?.[anchorYear];
-    const anchorCapex = S.ppe.capex[anchorYear];
+    // The filed amortisation of intangibles for that year, where the filing
+    // reports it; failing that, filed D&A less the filed depreciation the
+    // forecast charges against capital spending. It used to be filed D&A less
+    // that year's capex at the historical rate, which inherited every
+    // distortion in that rate (limitation L4).
+    const filedAmortisation = h.cashFlow.amortisationOfIntangibles?.[anchorYear];
+    const filedDep = filedDepreciation(anchorYear);
+    const amortisationFiled =
+      typeof filedAmortisation === 'number' && isFinite(filedAmortisation)
+        ? filedAmortisation
+        : typeof filedDA === 'number' && filedDep !== null
+          ? filedDA - filedDep
+          : null;
     const reportedPool = h.balanceSheet.intangibleAssets?.[anchorYear];
     const pool = typeof reportedPool === 'number' && isFinite(reportedPool) && reportedPool > 0 ? reportedPool : null;
     for (let t = 0; t < nH; t++) {
       const v = h.balanceSheet.intangibleAssets?.[t];
       S.intangibleAssets[t] = typeof v === 'number' ? v : null;
     }
-    const depreciationAtRate =
-      typeof anchorCapex === 'number' && isFinite(historicalDepRate) && historicalDepRate > 0
-        ? anchorCapex * historicalDepRate
-        : null;
-    const gap = typeof filedDA === 'number' && depreciationAtRate !== null ? filedDA - depreciationAtRate : null;
-    const annual = gap !== null && gap > 0 && pool !== null ? gap : 0;
+    const annual = amortisationFiled !== null && amortisationFiled > 0 && pool !== null ? amortisationFiled : 0;
     S.amortisationAnchor = {
       year: years[anchorYear],
       filedDepreciationAmortisation: typeof filedDA === 'number' ? filedDA : null,
-      historicalDepreciationRate: isFinite(historicalDepRate) ? historicalDepRate : null,
-      depreciationAtHistoricalRate: depreciationAtRate,
-      gap,
+      filedDepreciation: filedDep,
+      filedAmortisation: typeof filedAmortisation === 'number' ? filedAmortisation : null,
+      amortisationUsed: amortisationFiled,
       intangiblePool: pool,
       annual,
       notChargedBecause:
-        depreciationAtRate === null
-          ? 'the historical depreciation rate is not positive or cannot be measured'
-          : gap === null || gap <= 0
-            ? 'filed D&A does not exceed depreciation at the historical rate'
+        amortisationFiled === null
+          ? 'the filing does not report amortisation of intangibles, and its D&A cannot be split without the depreciation figure'
+          : amortisationFiled <= 0
+            ? 'the filing reports no amortisation of intangibles'
             : pool === null
               ? 'the filing reports no intangible assets to amortise'
               : null,
@@ -1047,6 +1096,41 @@ export function checkValuationApplicability(model, data, wacc) {
   if (incompleteIncomeStatement) return { applicable: false, ...incompleteIncomeStatement };
   const incomparableListing = listingRefusal(data);
   if (incomparableListing) return { applicable: false, ...incomparableListing };
+
+  // 0a. An input the forecast is built from that the filing never reports:
+  //     cost of sales, capital expenditure, or two years of PP&E. The
+  //     derivation records these (deriveModel.js, forecastInputGaps), and they
+  //     used to refuse a company only by accident, through the not-a-number
+  //     they left in the forecast balance sheet. Reading the depreciation rate
+  //     from filed depreciation removes that accident: Meta, Micron and Philip
+  //     Morris report no net PP&E at all, and their forecast would otherwise
+  //     start from an opening balance of nil and depreciate only what the
+  //     forecast itself spends. Refused explicitly instead, and named.
+  const inputGaps = Array.isArray(meta.forecastInputGaps) ? meta.forecastInputGaps : [];
+  if (inputGaps.length) {
+    return {
+      applicable: false,
+      code: 'filingMissingValuationInput',
+      message:
+        'The filing never reported ' +
+        inputGaps.map((g) => `${g.label} (${g.drives})`).join('; ') +
+        '. The forecast cannot be built without it, so no implied value is shown. The reported ' +
+        'figures below are unaffected.',
+    };
+  }
+
+  // 0b. A depreciation rate that cannot be forecast from (see the PP&E schedule).
+  if (model.depreciationRateProblem) {
+    return {
+      applicable: false,
+      code: 'implausibleDepreciationRate',
+      message:
+        `${model.depreciationRateProblem[0].toUpperCase()}${model.depreciationRateProblem.slice(1)}. ` +
+        'Depreciation drives the tax the forecast pays and the capital spending the terminal value ' +
+        'assumes, so no implied value is shown rather than one built on it. The reported figures ' +
+        'below are unaffected.',
+    };
+  }
 
   // 1. Financial-sector companies — unlevered FCF is not a meaningful concept
   const sicIsFinancial = sic != null && Number(sic) >= 6000 && Number(sic) <= 6799;

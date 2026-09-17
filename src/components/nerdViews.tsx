@@ -526,7 +526,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
 
       <Schedule
         title="Property, plant and equipment"
-        subtitle="opening balance, plus capex, less depreciation, equals closing"
+        subtitle="opening balance, plus capex, less depreciation, plus other movements, equals closing"
         years={years}
         firstForecast={nH}
         rows={[
@@ -540,7 +540,22 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
             muted: true,
             adjuster: A('capexPctOfRev'),
           },
-          { label: 'Depreciation', values: M.ppe?.depreciation, indent: true },
+          {
+            label: 'Depreciation',
+            values: M.ppe?.depreciation,
+            indent: true,
+            notReported: true,
+            note:
+              'The filed depreciation of property, plant and equipment, where the filing reports it, or filed D&A less filed amortisation of intangibles. The forecast depreciates capital spending at the average of these years.',
+          },
+          {
+            label: 'Other movements in the balance',
+            values: M.ppe?.otherMovements,
+            indent: true,
+            notReported: true,
+            note:
+              'Disposals, impairments, finance-lease additions, acquisitions and currency: whatever moved the balance besides capital spending and depreciation. These used to be counted as depreciation, which is what the forecast rate was read from.',
+          },
           {
             label: 'Depreciation as a share of capex',
             values: M.depreciationPercentOfCapex,

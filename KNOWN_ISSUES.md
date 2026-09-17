@@ -20,12 +20,13 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below. Entries 7, 8, 10,
-13 and 18 and design choice D1 come from the conventions audit
-(CONVENTIONS_AUDIT.md), measured at `f1d9339` on the same payloads. Entries
-1 and 15 come from the currency sweep, and entry 19 and the first-year
-measurement in entry 2 from the SG&A sweep at `ea2f020`: both on payloads
-fetched 2026-09-17, 172 fetched and 168 modelled.
+outputs; no source was changed to measure anything below. Entries 6, 7, 9,
+12 and 17 and design choice D1 come from the conventions audit
+(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entries 1 and 14 come from the
+currency sweep and entry 18 from the SG&A sweep, on payloads fetched
+2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
+filed depreciation and amortisation added (176 fetched, 168 modelled, 82
+showing a DCF value), which is the basis for the entries that cite `HEAD`.
 
 ---
 
@@ -34,25 +35,24 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
 | 1 | Reliance Infrastructure values at twelve times its price; likely unfetched short-term debt | 1 | RELINFRA.NS 630.54 vs 50.76 | 12.4x the price |
-| 2 | PP&E depreciation rate derived from the roll-forward counts disposals, leases and acquisitions | 12 of 41 valued move >5% | Amazon rate -91.8% (filed basis 49.9%) | -44.5% to +41.7% |
-| 3 | Two EBITDA definitions: model adds SBC back, peers' multiples do not | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value -36.3%; EV/EBITDA method overstated 90.9% |
-| 4 | Non-controlling interests not deducted from equity value | 14 valued | Reliance Infrastructure 276.16 a share | up to 48.1% of value |
-| 5 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
-| 6 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated; part of #2's range |
-| 7 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
-| 8 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
-| 9 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 10 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 11 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 12 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
-| 13 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 14 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
-| 15 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 16 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 17 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 18 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 19 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
-| 20 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 2 | Two EBITDA definitions: model adds SBC back, peers' multiples do not | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value -36.3%; EV/EBITDA method overstated 90.9% |
+| 3 | Non-controlling interests not deducted from equity value | 14 valued | Reliance Infrastructure 276.16 a share | up to 48.1% of value |
+| 4 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
+| 5 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
+| 6 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
+| 7 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
+| 8 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 9 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 10 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 11 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
+| 12 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 13 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
+| 14 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 15 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 16 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 17 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 18 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 19 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
@@ -65,7 +65,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   debt the model does not see. Net debt counts only the fetched long-term debt,
   while the filing's current liabilities exceed its payables by 148,487, and
   short-term borrowings are not fetched, so how much of that is debt cannot be
-  confirmed. Non-controlling interests (#4) add to it.
+  confirmed. Non-controlling interests (#3) add to it.
 - **Where.** `api/company.js` (no short-term borrowings fetched);
   `src/data/deriveModel.js` (`dcf.netDebt`).
 - **How measured.** Payload fetched 2026-09-17 with the working API: net debt,
@@ -77,50 +77,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   current liabilities 320,810 against payables 172,324.
 - **Value moved.** The headline is 12.4 times the price. Not diagnosed further.
 
-### 2. PP&E depreciation rate derived from the roll-forward
-
-- **What is wrong.** Historical depreciation is worked out as opening PP&E plus
-  capex less closing PP&E. Anything else that moves PP&E (disposals,
-  impairments, finance-lease additions, acquisitions, currency) is counted as
-  depreciation. The forecast depreciation rate is the average of those ratios,
-  so it can be negative or several times capex. It also sets the amortisation
-  anchor (see limitation L4).
-- **The first year of the roll-forward is not a measurement at all.** A derived
-  model has no PP&E balance from before its first reported year, and
-  `ppeOpeningBalance` is set to that year's own closing balance. Opening equals
-  closing, so depreciation comes out as exactly the year's capex and the rate as
-  exactly 100% of it, for every company whose first year reports capex and
-  PP&E. That fabricated 100% then sits in the average the forecast uses.
-- **Where.** `src/engine/model.js`, PP&E schedule
-  (`S.ppe.depreciation` for reported years, `depreciationAsPercentOfCapex`
-  `avgOfHistory`, which still averages with `avg` and so counts a year whose
-  rate cannot be computed as nil); `src/data/deriveModel.js`
-  (`depreciationAsPercentOfCapex`, `ppeOpeningBalance`).
-- **How measured.** Roll-forward depreciation against filed D&A in the last
-  reported year, across the 76 non-financial companies with both; rate counts;
-  and value per share re-run with the depreciation slider set to filed
-  D&A / capex. The first year separately, at `ea2f020` on the 168 payloads of
-  2026-09-17: the rate recomputed with that year dropped from the average, and
-  value re-run through the same slider.
-- **Affects.** Roll-forward depreciation negative for 4 companies (Boeing,
-  Oracle, Lilly, Verizon), above 125% of filed D&A for 15, below 50% for 17.
-  Historical rate negative for 3 (AMZN -92%, SHOP -35%, SNDK -41%), above 100%
-  of capex for 15 (UNP 419%, HD 236%, IBM 191%). With the filed-basis rate, 12
-  of 41 valued companies move by more than 5% and 5 by more than 20%. The
-  fabricated first year affects 155 of 168 modelled companies, 63 of them
-  valued; dropping it moves value by a median 0.9%, and by more than 5% for 13.
-- **Worst example.** Amazon: rate -91.8% (so forecast depreciation is negative);
-  on the filed basis (49.9%) its value moves 400.75 to 222.38, -44.5%. Also
-  Alibaba +41.7%, Alphabet +27.4% (rate 100.4% against 23.1%), Home Depot
-  +21.9%, Amgen -18.5%. (Toyota's New York listing +69.8%; that listing is now refused, L8.)
-- **Value moved.** -44.5% to +41.7% where material. The filed-basis rate is a
-  diagnostic, not a proposed fix: filed D&A includes amortisation. Dropping the
-  fabricated first year on its own: Reliance Industries +24.0% (rate 51.8% to
-  35.7%), Toyota's Tokyo listing +19.7%, ExxonMobil +18.7% (2.2% to -30.4%),
-  Enbridge Toronto +16.0%, Samsung +8.1%, Novo Nordisk Copenhagen +7.1%, Home
-  Depot -5.3% (236% to 270%).
-
-### 3. Two EBITDA definitions
+### 2. Two EBITDA definitions
 
 - **What is wrong.** The engine's EBITDA is operating profit plus D&A plus stock
   compensation. Peers' EV/EBITDA multiples (Yahoo) use EBITDA without the SBC
@@ -143,7 +100,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   approach EV up to +91% overstated. The headline blends both DCF methods, so
   it moves by part of this.
 
-### 4. Non-controlling interests not deducted from equity value
+### 3. Non-controlling interests not deducted from equity value
 
 - **What is wrong.** The equity bridge takes enterprise value less net debt.
   Minority shareholders' claim on consolidated subsidiaries is not deducted, so
@@ -160,7 +117,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   value; Reliance Industries 15.5%; Alibaba 6.1%; ExxonMobil 3.7%.
 - **Value moved.** Overstated by up to 48%; under 4% for most.
 
-### 5. "Cash" excludes marketable securities
+### 4. "Cash" excludes marketable securities
 
 - **What is wrong.** The fetched cash line is cash and cash equivalents only.
   Short-term marketable securities fall into other current assets and never
@@ -178,7 +135,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** Understated by up to ~40% at the upper bound; the true figure
   needs the securities balance.
 
-### 6. Forecast depreciation tracks same-year capex
+### 5. Forecast depreciation tracks same-year capex
 
 - **What is wrong.** Forecast depreciation is that year's capex times a rate,
   so it follows the capex forecast rather than the assets already in service.
@@ -192,9 +149,12 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Worst example.** Microsoft: capex 34.9% of revenue last year, 20.3% in the
   forecast; forecast D&A 6.3% of revenue in year one against 10.3% filed.
 - **Value moved.** Not isolated. D&A reaches value through the tax shield and
-  the terminal year (capex = depreciation); #2's filed-rate re-run includes it.
+  the terminal year (capex = depreciation). The rate itself is now filed
+  depreciation over capital spending (fixed at `HEAD`); what remains is that it
+  is applied to the year's own capital spending rather than to the assets in
+  service.
 
-### 7. The two terminal values are averaged, not investigated
+### 6. The two terminal values are averaged, not investigated
 
 - **What is wrong.** The headline is the mean of the perpetuity-growth and
   exit-multiple values. The spread between them is shown (workbook DCF row 54,
@@ -217,9 +177,9 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** The headline sits half the spread from either method: median
   about 8%, up to 39% (TotalEnergies). The exit multiple is a flat 12x for every
   derived company, so part of the spread is the multiple, not the business; see
-  also #3.
+  also #2.
 
-### 8. WACC weights capital on net debt
+### 7. WACC weights capital on net debt
 
 - **What is wrong.** The debt weight is net debt / (market capitalisation + net
   debt). For a company holding more cash than debt the debt weight is negative
@@ -240,7 +200,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   +5.7%, BHP +5.3%. (Toyota's New York listing +9.3%; now refused, L8.)
 - **Value moved.** Median +1.2%; up to +21.2%.
 
-### 9. Workbook and site DCF disagree
+### 8. Workbook and site DCF disagree
 
 - **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
   (+ amortisation after tax), leaving out working capital and the terminal
@@ -257,7 +217,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 10. No stated discounting convention; timing runs from the fetch date
+### 9. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -279,7 +239,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 11. Forecast tax rate: a filed ratio on a different pretax figure
+### 10. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -297,7 +257,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 12. Forecast interest is 4.5% of average debt
+### 11. Forecast interest is 4.5% of average debt
 
 - **What is wrong.** No coupon is fetched, so forecast interest is average
   reported long-term debt at 4.5%. Filed interest expense is now fetched (since
@@ -313,7 +273,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** Small: unlevered cash flow excludes interest; it reaches value
   through the cost of debt in WACC. Not measured.
 
-### 13. Working capital drivers differ between site and workbook
+### 12. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -326,14 +286,14 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
   (the `ap`, `oca` and `oncl` schedules).
 - **How measured.** Code comparison during the conventions audit; agreement at
-  defaults from the site-vs-workbook run (#9).
+  defaults from the site-vs-workbook run (#8).
 - **Affects.** Every derived company (payables, other current assets); every
   company (other non-current liabilities).
 - **Worst example.** —
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 14. Possible false-positive missing-debt refusals
+### 13. Possible false-positive missing-debt refusals
 
 - **What is wrong.** A company is refused when long-term debt is missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -350,7 +310,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   like tag changes the fetcher does not follow.
 - **Value moved.** No value is shown at all for these companies.
 
-### 15. An SEC lookup that fails stops the company loading at all
+### 14. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -364,7 +324,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 16. Workbook reported-year operating cash flow is derived, not filed
+### 15. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -380,7 +340,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 17. Reported net income still does not tie for three companies
+### 16. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -391,7 +351,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 18. The 50% minimum cash buffer has no documented basis
+### 17. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -408,7 +368,7 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 19. Stock compensation the filing does not break out is never added back
+### 18. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
@@ -435,12 +395,12 @@ fetched 2026-09-17, 172 fetched and 168 modelled.
 - **Value moved.** +1.8% in the one case that can be estimated; not measurable
   for the other 19 without the figure the filing does not give.
 
-### 20. Net debt excludes lease liabilities
+### 19. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
 - **Where.** `api/company.js`; `src/data/deriveModel.js` (`dcf.netDebt`).
-- **How measured.** Not measured; found while diagnosing #2 (Amazon's negative
+- **How measured.** Not measured; found while diagnosing the depreciation rate (Amazon's negative
   roll-forward depreciation is lease-driven).
 - **Affects.** Not measured.
 - **Worst example.** Amazon.
@@ -467,14 +427,15 @@ for either.
 - **L3. One unbalanceable year refuses the company.** A reported year with no
   derivable totals (a spin-off's first year) refuses the whole company:
   BlackRock, GE Vernova, Shopify, SanDisk.
-- **L4. The amortisation anchor inherits #2.** Annual amortisation = filed D&A
-  less capex at the historical depreciation rate, so where that rate is
-  distorted the split between depreciation and amortisation is too (Analog
-  Devices amortises 16 a year against a pool of 8,014; Merck 166 against
-  26,681). No amortisation is charged where intangibles are not tagged (Apple,
-  Costco). The terminal value excludes any remaining amortisation tax shield,
-  which is conservative (AstraZeneca's pool lasts 33.5 years).
-  `src/engine/model.js`.
+- **L4. The amortisation run-off needs the filing to separate amortisation.**
+  The annual charge is the filed amortisation of intangibles, or filed D&A less
+  the filed depreciation the forecast charges. Where a filing gives neither
+  (27 of 168 companies, almost all Yahoo-sourced, which publishes no
+  amortisation line), all of its D&A is treated as depreciation of PP&E and no
+  amortisation is run off. No amortisation is charged where intangibles are not
+  tagged (Apple, Costco). The terminal value excludes any remaining
+  amortisation tax shield, which is conservative (AstraZeneca's pool lasts 33.5
+  years). `src/engine/model.js`, `api/company.js`.
 - **L5. Reported D&A and SBC are allocated pro rata across cost lines.** Filings
   do not say which line carries how much, so the reported cost of sales, R&D and
   SG&A excluding D&A and SBC are allocations; operating profit is exact.
@@ -548,6 +509,31 @@ for either.
   "not reported" cells through N(), which its notes state; the provenance lists
   each unreported line and year. `src/data/deriveModel.js` (`NOT_REPORTED`),
   `src/engine/model.js`, `src/data/excelSheets.ts`.
+
+- **L15. A depreciation rate that cannot be forecast from refuses the company.**
+  The rate is filed depreciation over capital spending. Where it is not a
+  positive number, or where it depreciates the PP&E balance past nothing inside
+  the forecast, there is no value: Sony's Tokyo listing (197% of capital
+  spending), Palantir (114%), ExxonMobil (whose filing carries no D&A tag at
+  all, so the balance movement is all there is, and it is negative). A rate
+  above 100% is kept where the balance survives the forecast, which is the
+  ordinary position of a company spending less than it depreciates: 44 of 158
+  measured rates are above 100%, the highest 243%. `src/engine/model.js`
+  (`depreciationRateProblem`).
+- **L16. Where the filing reports no depreciation at all, the balance movement
+  is still used.** 11 of 168 companies report no D&A in any year. For them the
+  rate comes from the movement in the PP&E balance, which counts disposals,
+  impairments, leases and acquisitions, for the years that have an opening
+  balance — never the first reported year, which has none. Five of the 11 are
+  refused for other reasons; the rest are refused by L15 where the movement is
+  negative. `src/engine/model.js` (`avgOfHistory`).
+- **L17. An input the forecast needs and the filing never reports now refuses
+  explicitly.** Cost of sales, capital expenditure, or two years of PP&E. These
+  used to refuse a company only through the not-a-number they left in the
+  forecast balance sheet, which reading the rate from filed depreciation
+  removed; Meta, Micron and Philip Morris report no net PP&E at all and would
+  have been valued from an opening balance of nil. `src/engine/model.js`
+  (`filingMissingValuationInput`).
 
 ## Design choices, with their measured effect
 

@@ -905,7 +905,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   driver(
     'depPct',
     'Depreciation as % of capital expenditure',
-    (c, _p, i) => (has(M.ppe?.capex, i) ? `-${c}${R.ppeDep}/${c}${R.ppeCapex}` : null),
+    (c, _p, i) => (has(M.ppe?.capex, i) && has(M.ppe?.depreciation, i) ? `-${c}${R.ppeDep}/${c}${R.ppeCapex}` : null),
     (i) => {
       const cap = at(M.ppe?.capex, i);
       const dep = at(M.ppe?.depreciation, i);
@@ -916,7 +916,19 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   bopRow('ppeBop', 'Beginning of period', at(M.ppe?.beginning, 0), 'ppeEnd');
   line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
   line('ppeDep', 'Less: depreciation', M.ppe?.depreciation, (c) => `-${c}${R.ppeCapex}*${c}${R.depPct}`, money());
-  eopRow('ppeEnd', 'End of period', M.ppe?.ending, (c) => `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}`);
+  // Reported years: whatever else moved the balance — disposals, impairments,
+  // finance-lease additions, acquisitions, currency. Depreciation above is the
+  // filed figure, so these are shown for what they are instead of being counted
+  // as depreciation and fed into the forecast rate. Nil in the forecast, which
+  // buys and sells nothing but capital expenditure.
+  line(
+    'ppeOther',
+    'Plus: other movements in the balance (disposals, acquisitions, leases, currency)',
+    M.ppe?.otherMovements,
+    () => '0',
+    money()
+  );
+  eopRow('ppeEnd', 'End of period', M.ppe?.ending, (c) => `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}+${c}${R.ppeOther}`);
   blank();
 
   // As in the engine: the part of filed D&A the depreciation above does not

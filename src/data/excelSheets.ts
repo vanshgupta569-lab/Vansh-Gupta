@@ -365,8 +365,8 @@ function buildChecksSheet(ctx: SupportingSheetsContext) {
   rollSimple('Other assets', 'oa');
   rollSimple('Other non-current liabilities', 'oncl');
   check(
-    'Property, plant & equipment: end = beginning + capex - depreciation',
-    (i) => `${ref('ppeEnd', i)}-${ref('ppeBop', i)}-${ref('ppeCapex', i)}-${ref('ppeDep', i)}`,
+    'Property, plant & equipment: end = beginning + capex - depreciation + other movements',
+    (i) => `${ref('ppeEnd', i)}-${ref('ppeBop', i)}-${ref('ppeCapex', i)}-${ref('ppeDep', i)}-${ref('ppeOther', i)}`,
     nH
   );
   check(
@@ -805,7 +805,8 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   pct('Depreciation as % of capital expenditure', 'depPct');
   bal('Beginning of period', 'ppeBop');
   bal('Plus: capital expenditures', 'ppeCapex');
-  bal('Less: depreciation', 'ppeDep');
+  bal('Less: depreciation', 'ppeDep', { notReported: true });
+  bal('Plus: other movements in the balance', 'ppeOther', { notReported: true });
   end('End of period', 'ppeEnd');
   b.blank();
   b.sub('Amortisation of intangibles');

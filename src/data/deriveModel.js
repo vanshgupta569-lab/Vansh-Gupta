@@ -491,6 +491,52 @@ export function deriveModel(fetched) {
   const revenue = pick('revenue');
   const cogs = pick('cogs');
   const provenance = {};
+
+  // ---- Depreciation of PP&E, as filed -------------------------------------
+  //
+  // The forecast depreciates capital spending at a rate read from history. That
+  // rate used to be measured from the balance sheet: opening PP&E plus capex
+  // less closing PP&E. Everything else that moves PP&E — disposals,
+  // impairments, finance-lease additions, acquisitions, currency — landed in it,
+  // so it measured the wrong thing (Amazon came out at -92% of capex, Union
+  // Pacific at 419%). The filing states depreciation directly, so that is what
+  // is used:
+  //
+  //   1. filed depreciation of PP&E, where the filing reports it on its own;
+  //   2. filed D&A less filed amortisation of intangibles, where it reports
+  //      those two;
+  //   3. filed D&A, where the filing does not split it at all. Amortisation is
+  //      then treated as depreciation of PP&E and none is run off, which is
+  //      said in `provenance` and recorded in `meta.depreciationBasis`.
+  //
+  // Where the filing reports no D&A in any year, there is nothing filed to read
+  // and the engine falls back to the balance-sheet movement for the years it
+  // can measure (never the first reported year, which has no opening balance).
+  const filedDepreciation = rows.map((r) =>
+    isNum(r.depreciationOfPpe)
+      ? r.depreciationOfPpe
+      : isNum(r.depreciation) && isNum(r.amortisationOfIntangibles)
+      ? r.depreciation - r.amortisationOfIntangibles
+      : isNum(r.depreciation)
+      ? r.depreciation
+      : null
+  );
+  const depreciationBasis = rows.map((r, i) => ({
+    year: r.fiscalYear,
+    basis: isNum(r.depreciationOfPpe)
+      ? 'filed depreciation of PP&E'
+      : isNum(r.depreciation) && isNum(r.amortisationOfIntangibles)
+      ? 'filed D&A less filed amortisation of intangibles'
+      : isNum(r.depreciation)
+      ? 'filed D&A, which this filing does not split between the two'
+      : 'not filed',
+    depreciation: filedDepreciation[i],
+    capex: isNum(r.capex) ? r.capex : null,
+  }));
+  const depreciationRates = rows.map((r, i) =>
+    isNum(filedDepreciation[i]) && isNum(r.capex) && r.capex > 0 ? filedDepreciation[i] / r.capex : null
+  );
+  const filedDepreciationRate = mean(depreciationRates);
   if (excluded.length) {
     provenance.excludedPeriods =
       'set aside as not comparable: ' +
@@ -730,12 +776,25 @@ export function deriveModel(fetched) {
       depreciationAmortisation: pick('depreciation'),
       // As filed; null where the filing does not report the line (see NOT_REPORTED).
       stockBasedCompensation: pick('stockComp'),
+      // Depreciation of PP&E on its own, and amortisation of intangibles on its
+      // own, as filed where the filing separates them (see filedDepreciation
+      // below and NO_SPLIT). The engine charges the first against capital
+      // spending and runs the second off against the intangible pool.
+      depreciationOfPpe: filedDepreciation,
+      amortisationOfIntangibles: pick('amortisationOfIntangibles'),
       capex: pick('capex'),
       dividends: pickNeg('dividendsPaid'),
       shareRepurchases: pickNeg('buybacks'),
     },
 
-    ppeOpeningBalance: rows[0]?.ppeNet ?? null,
+    // NOT the first reported year's own closing balance, which is what used to
+    // sit here: opening equal to closing made that year's balance movement come
+    // out as exactly its capital spending, a depreciation rate of exactly 100%
+    // that nothing had measured, and it went into the average the forecast
+    // used (155 of 168 companies). A derived model has no balance from before
+    // its first reported year, so this is null and that year has no
+    // roll-forward.
+    ppeOpeningBalance: null,
     basicSharesClosing: isNum(rows[rows.length - 1]?.dilutedShares)
       ? rows[rows.length - 1].dilutedShares / 1e6
       : null,
@@ -875,6 +934,17 @@ export function deriveModel(fetched) {
     1
   )}% of revenue — average of the reported years`;
 
+  const splitYears = depreciationBasis.filter((b) => b.basis === 'filed depreciation of PP&E' || b.basis.startsWith('filed D&A less')).length;
+  provenance.depreciation = isNum(filedDepreciationRate)
+    ? `${(filedDepreciationRate * 100).toFixed(1)}% of capital spending — filed depreciation over capital spending, averaged over the ` +
+      `${depreciationRates.filter(isNum).length} reported years that give both` +
+      (splitYears === 0
+        ? '. The filing does not separate depreciation from amortisation of intangibles, so all of its D&A is treated as depreciation of PP&E and none is run off'
+        : splitYears < depreciationRates.filter(isNum).length
+        ? `. ${splitYears} of those years separate depreciation from amortisation of intangibles; the rest treat all D&A as depreciation`
+        : '')
+    : 'the filing reports no depreciation, so the rate is read from the movement in the PP&E balance instead, for the years that have an opening balance';
+
   // DIVIDENDS — the cheat sheet says to use the historical average payout ratio
   // (common dividends / net income). This replaces a linear regression through
   // the payout history, which could trend the ratio somewhere the company has
@@ -917,9 +987,13 @@ export function deriveModel(fetched) {
 
     capexRatio,
     capexMethod: 'percentOfRevenue',
-    // PP&E roll-forward: opening balance + capex - depreciation = closing,
-    // with depreciation as a % of capex guided by history.
-    depreciationAsPercentOfCapex: 'avgOfHistory',
+    // Depreciation as a share of capital spending, averaged over the reported
+    // years from FILED depreciation (see filedDepreciation above).
+    // 'avgOfHistory' is the fallback for a filing that reports no D&A at all:
+    // the engine then reads the balance-sheet movement for the years it can.
+    depreciationAsPercentOfCapex: isNum(filedDepreciationRate)
+      ? filedDepreciationRate
+      : 'avgOfHistory',
 
     // Working capital, per the cheat sheet:
     //   receivables grow at the revenue growth rate  (constant DSO)
@@ -1068,6 +1142,10 @@ export function deriveModel(fetched) {
       // Lines shown as not reported rather than nil, by year, with what is done
       // wherever arithmetic needs them (NOT_REPORTED above).
       notReported,
+      // Which figure each year's depreciation came from, and the rate built
+      // from them (filedDepreciation above).
+      depreciationBasis,
+      filedDepreciationRate: isNum(filedDepreciationRate) ? filedDepreciationRate : null,
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
       // Whether the price, the share count and the statements describe the same
