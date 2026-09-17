@@ -307,6 +307,155 @@ function selectComparablePeriods(statements) {
   return { rows: kept, excluded };
 }
 
+// ---------------------------------------------------------------------------
+// IS THE PRICE COMPARABLE WITH THE STATEMENTS?
+// ---------------------------------------------------------------------------
+// A value per share is statements divided by a share count, compared with a
+// price. That comparison means something only if all three describe the same
+// thing: the statements and the price in the same currency, and the share count
+// counting the security the price is for. Two things break it for listings
+// outside the US:
+//
+//   CURRENCY. Toyota's statements are in yen; its New York listing trades in
+//   dollars. The reporting currency is taken from the filing's own statement of
+//   it (the SEC's XBRL units, or Yahoo's financialCurrency, cross-checked
+//   against the currency Yahoo stamps on each figure), never inferred. A price
+//   in another currency is converted at a rate fetched with it (api/company.js);
+//   if no rate could be fetched, there is no value.
+//
+//   SHARE BASIS. A depositary receipt can stand for a fraction or a multiple of
+//   an ordinary share, and nothing free publishes the ratio in a form that can
+//   be read reliably. Yahoo's own share counts for these listings are
+//   inconsistent: scaled to the receipt for Toyota (a tenth of the Tokyo count),
+//   Shell (a half) and Alibaba (an eighth), but the ordinary count for
+//   AstraZeneca, whose receipt is half a share. So a listing on a US market by a
+//   company based elsewhere, or on London's international order book, is
+//   refused: its ratio cannot be established. A 10-K filer's statements count
+//   the registered shares its ticker trades, and a home-market listing trades
+//   the ordinary shares its statements count; for Yahoo listings that is also
+//   checked against the listing's own share count.
+//
+// Returns { refusal, basis }: refusal is null when the comparison holds.
+const US_MARKET_EXCHANGES = new Set(['NYQ', 'NMS', 'NGM', 'NCM', 'NAS', 'NYS', 'ASE', 'PCX', 'BTS', 'PNK', 'OQX', 'OQB', 'OEM', 'OBB', 'CXI']);
+const DEPOSITARY_VENUES = new Set(['IOB']);
+const SHARE_COUNT_TOLERANCE = 1.5;
+
+export function listingComparability(fetched) {
+  const evidence = fetched?.currencyEvidence || null;
+  const listing = fetched?.listing || null;
+  const conversion = fetched?.priceConversion || null;
+  const isSec = fetched?.source === 'SEC EDGAR';
+  const name = fetched?.name || fetched?.ticker || 'This company';
+
+  // Payloads from before the currency was recorded. The SEC path only ever read
+  // US-dollar filings of registered shares then; the Yahoo path is the one this
+  // check exists for, so an old Yahoo payload is refused.
+  const reportingCurrency = evidence ? evidence.reportingCurrency : isSec ? 'USD' : null;
+  const quotedCurrency = conversion?.quotedCurrency ?? fetched?.quote?.asQuoted?.currency ?? fetched?.quote?.currency ?? null;
+  const basis = {
+    reportingCurrency,
+    reportingCurrencySource: evidence ? evidence.reportingCurrencySource : isSec ? 'SEC filing (payload recorded no units)' : null,
+    statementCurrencies: evidence?.statementCurrencies ?? [],
+    quotedCurrency,
+    tradingCurrency: conversion?.tradingCurrency ?? quotedCurrency,
+    priceConverted: Boolean(conversion?.converted),
+    rate: conversion?.rate ?? null,
+    pair: conversion?.pair ?? null,
+    rateAsOf: conversion?.asOf ?? null,
+    exchange: listing?.exchangeName || listing?.exchange || fetched?.quote?.exchange || null,
+    country: listing?.country ?? null,
+    shareBasis: null,
+  };
+  const refuse = (reason, detail) => ({
+    refusal: {
+      code: 'listingNotComparable',
+      reason,
+      message:
+        `${detail} A value per share would compare figures that do not describe the same thing, ` +
+        'so none is shown. The reported figures below are unaffected.',
+    },
+    basis,
+  });
+
+  // 1. The reporting currency must be stated, and stated consistently.
+  if (!reportingCurrency) {
+    return refuse(
+      'reportingCurrencyUnknown',
+      `The data for ${name} does not say which currency its financial statements are in.`
+    );
+  }
+  const others = basis.statementCurrencies.filter((c) => c !== reportingCurrency);
+  if (others.length) {
+    return refuse(
+      'reportingCurrencyConflict',
+      `${name}'s statements are said to be in ${reportingCurrency}, but figures in them are stamped ${others.join(', ')}.`
+    );
+  }
+
+  // 2. The share count must count the security the price is for.
+  if (isSec) {
+    basis.shareBasis = 'registered shares of the SEC filer';
+  } else {
+    const exchange = listing?.exchange ?? null;
+    const usMarket = listing?.market === 'us_market' || (exchange != null && US_MARKET_EXCHANGES.has(exchange));
+    if (!listing || !exchange) {
+      return refuse(
+        'listingUnknown',
+        `The data for ${name} does not say which exchange this listing trades on, so it cannot be told whether the price is for an ordinary share or a depositary receipt.`
+      );
+    }
+    if (DEPOSITARY_VENUES.has(exchange)) {
+      return refuse(
+        'depositaryReceipt',
+        `This listing of ${name} trades on ${basis.exchange}, a market for depositary receipts. A receipt can stand for a fraction or a multiple of an ordinary share, and the ratio cannot be established from the data available.`
+      );
+    }
+    if (usMarket && listing.country !== 'United States') {
+      return refuse(
+        'depositaryReceipt',
+        `${name} is based ${listing.country ? `in ${listing.country}` : 'outside the United States, or its country is not reported,'} and this listing trades on a US market (${basis.exchange}). It is likely a depositary receipt, which can stand for a fraction or a multiple of an ordinary share, and the ratio cannot be established from the data available. The company's home-market listing can be valued instead.`
+      );
+    }
+    const rows = Array.isArray(fetched?.statements) ? fetched.statements : [];
+    const filedShares = [...rows].reverse().find((r) => isNum(r?.dilutedShares) && r.dilutedShares > 0)?.dilutedShares ?? null;
+    const listedShares = isNum(listing.sharesOutstanding) ? listing.sharesOutstanding : null;
+    if (filedShares && listedShares) {
+      const ratio = listedShares / filedShares;
+      basis.listedToFiledShares = ratio;
+      if (ratio > SHARE_COUNT_TOLERANCE || ratio < 1 / SHARE_COUNT_TOLERANCE) {
+        return refuse(
+          'shareCountMismatch',
+          `This listing of ${name} has ${Math.round(listedShares / 1e6).toLocaleString('en-US')} million shares outstanding, but its statements count ${Math.round(filedShares / 1e6).toLocaleString('en-US')} million, so the price and the share count may not be for the same security.`
+        );
+      }
+    }
+    basis.shareBasis = usMarket ? 'ordinary shares of a US company' : 'ordinary shares on a home-market listing';
+  }
+
+  // 3. The price must be in the reporting currency.
+  if (!fetched?.quote || !isNum(fetched.quote.price)) return { refusal: null, basis };
+  if (conversion) {
+    if (!conversion.tradingCurrency) {
+      return refuse('quoteCurrencyUnknown', `The currency ${name}'s price is quoted in (${conversion.quotedCurrency ?? 'not reported'}) could not be read.`);
+    }
+    if (conversion.rate === null) {
+      return refuse(
+        'exchangeRateUnavailable',
+        `${name}'s statements are in ${reportingCurrency} and this listing trades in ${conversion.tradingCurrency}, and no exchange rate (${conversion.pair}) could be fetched to convert the price: ${conversion.reason}.`
+      );
+    }
+    if (conversion.reportingCurrency !== reportingCurrency || fetched.quote.currency !== reportingCurrency) {
+      return refuse('exchangeRateUnavailable', `${name}'s price could not be put in ${reportingCurrency}, the currency its statements are in.`);
+    }
+  } else if (quotedCurrency !== reportingCurrency) {
+    return refuse(
+      'exchangeRateUnavailable',
+      `${name}'s statements are in ${reportingCurrency} and its price is quoted in ${quotedCurrency ?? 'an unreported currency'}, with no conversion.`
+    );
+  }
+  return { refusal: null, basis };
+}
+
 export function deriveModel(fetched) {
   const { rows, excluded } = selectComparablePeriods(fetched.statements || []);
 
@@ -795,6 +944,18 @@ export function deriveModel(fetched) {
   provenance.segments =
     'single combined revenue line — segment detail is not machine-readable from free sources';
 
+  const { refusal: listingRefusal, basis: currencyBasis } = listingComparability(fetched);
+  provenance.currency = currencyBasis.reportingCurrency
+    ? `statements in ${currencyBasis.reportingCurrency} (${currencyBasis.reportingCurrencySource})` +
+      (currencyBasis.priceConverted
+        ? `; price quoted in ${currencyBasis.quotedCurrency}, converted at ${Number(currencyBasis.rate.toPrecision(6))} ${currencyBasis.reportingCurrency} per ${currencyBasis.quotedCurrency}` +
+          `${currencyBasis.pair ? ` (${currencyBasis.pair}${currencyBasis.rateAsOf ? `, ${currencyBasis.rateAsOf.slice(0, 10)}` : ''})` : ''}`
+        : currencyBasis.quotedCurrency
+        ? `; price quoted in ${currencyBasis.quotedCurrency}`
+        : '') +
+      (currencyBasis.shareBasis ? `; share count: ${currencyBasis.shareBasis}` : '')
+    : 'reporting currency not stated by the source';
+
   return {
     meta: {
       name: fetched.name || fetched.ticker,
@@ -821,6 +982,11 @@ export function deriveModel(fetched) {
       incomeStatementGaps,
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
+      // Whether the price, the share count and the statements describe the same
+      // security in the same currency (listingComparability above). A refusal
+      // here withholds every valuation.
+      currencyBasis,
+      listingRefusal,
     },
     historical,
     assumptions,

@@ -882,6 +882,7 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
   };
   metaRow('Filing source', meta.source || 'company filings');
   if (meta.sourceUrl) metaRow('Source URL', meta.sourceUrl);
+  if (source?.provenance?.currency) metaRow('Currency and share basis', source.provenance.currency);
   r++;
 
   if (nS === 0) {

@@ -995,6 +995,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   {displayChangePct >= 0 ? '+' : ''}{displayChangePct}%
                 </span>
               </div>
+              {/* A listing quoted in another currency (or in pence) is shown in
+                  the currency the statements are in, so the price and the value
+                  beside it can be compared. Say so, with the rate. */}
+              {company.currencyBasis?.priceConverted && (
+                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-wider mt-1">
+                  Quoted in {company.currencyBasis.quotedCurrency}; shown in {company.currencyBasis.reportingCurrency}, the
+                  statements' currency, at {company.currencyBasis.rate?.toPrecision(6)}
+                  {company.currencyBasis.pair ? ` (${company.currencyBasis.pair})` : ''}
+                </div>
+              )}
             </div>
 
             {/* Derived vs analyst model switch — only where both exist */}

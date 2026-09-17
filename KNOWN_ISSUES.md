@@ -21,8 +21,9 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
 outputs; no source was changed to measure anything below. Entries 7, 8, 10,
-13 and 19 and design choice D1 come from the conventions audit
-(CONVENTIONS_AUDIT.md), measured at `f1d9339` on the same payloads.
+13 and 20 and design choice D1 come from the conventions audit
+(CONVENTIONS_AUDIT.md), measured at `f1d9339` on the same payloads. Entries
+1 and 15 come from the currency sweep: payloads fetched 2026-09-17.
 
 ---
 
@@ -30,8 +31,8 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
-| 1 | Foreign listings valued in reporting currency against a US-dollar price and US share count | at least 7 badly, ~11 in all | Toyota 354,859.91 a share against $192.21 | up to 1,846x the price |
-| 2 | PP&E depreciation rate derived from the roll-forward counts disposals, leases and acquisitions | 12 of 41 valued move >5% | Amazon rate -91.8% (filed basis 49.9%) | -44.5% to +41.7% (Toyota +69.8%) |
+| 1 | Reliance Infrastructure values at twelve times its price; likely unfetched short-term debt | 1 | RELINFRA.NS 630.54 vs 50.76 | 12.4x the price |
+| 2 | PP&E depreciation rate derived from the roll-forward counts disposals, leases and acquisitions | 12 of 41 valued move >5% | Amazon rate -91.8% (filed basis 49.9%) | -44.5% to +41.7% |
 | 3 | Two EBITDA definitions: model adds SBC back, peers' multiples do not | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value -36.3%; EV/EBITDA method overstated 90.9% |
 | 4 | Non-controlling interests not deducted from equity value | 14 valued | Reliance Infrastructure 276.16 a share | up to 48.1% of value |
 | 5 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
@@ -44,41 +45,36 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 | 12 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
 | 13 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
 | 14 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
-| 15 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 16 | Reported SG&A is not the filed SG&A | 47 (34 valued) | UnitedHealth 377,948 vs filed 59,592 | none directly; SG&A slider acts on the wrong base |
-| 17 | Nil shown where the filing reports nothing | R&D 43, SBC 22, dividends 17, buybacks 23 | — | small (SBC nil is never charged or added back) |
-| 18 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 19 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 20 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 15 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 16 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 17 | Reported SG&A is not the filed SG&A | 47 (34 valued) | UnitedHealth 377,948 vs filed 59,592 | none directly; SG&A slider acts on the wrong base |
+| 18 | Nil shown where the filing reports nothing | R&D 43, SBC 22, dividends 17, buybacks 23 | — | small (SBC nil is never charged or added back) |
+| 19 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 20 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 21 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
-### 1. Foreign listings valued in reporting currency against a US-dollar price and share count
+### 1. Reliance Infrastructure values at twelve times its price
 
-- **What is wrong.** For Yahoo-sourced listings in the US (ADRs and foreign
-  ordinary shares), the payload is labelled `USD` while the statements are in
-  the company's reporting currency. The model values yen, kroner, yuan or
-  Canadian dollars of cash flow over the listing's share count and compares the
-  result with a US-dollar price. Where the listing is an ADR representing
-  several ordinary shares, the share count is a second mismatch.
-- **Where.** `api/company.js` (Yahoo path: currency taken from the quote, not
-  the statements' financial currency); `src/data/deriveModel.js` (`dcf`,
-  `meta.currency`).
-- **How measured.** Frozen payloads: value per share against quoted price, with
-  the payload's currency label and revenue scale. The reporting currency is
-  inferred from revenue magnitude and the companies' known reporting
-  currencies; confirming it needs Yahoo's `financialCurrency`.
-- **Affects.** Large distortion: Toyota (JPY), MUFG and SMFG (JPY), Novo Nordisk
-  (DKK), Alibaba (CNY), TD and Royal Bank (CAD). Likely smaller: SAP, ASML,
-  Santander, BBVA (EUR). US-dollar reporters (AstraZeneca, Novartis, BHP, Shell,
-  TotalEnergies, HSBC, UBS) look consistent.
-- **Worst example.** Toyota: revenue 50,684,952 (yen, millions), value
-  354,859.91 against a $192.21 price, 1,846x. MUFG residual income 3,122.24
-  against $23.18 (135x); SMFG 3,444.20 against $26.29 (131x); Novo Nordisk
-  1,279.10 against $41.71 (31x); Alibaba 444.36 against $107.27 (4.1x).
-- **Value moved.** The whole value, by the exchange rate and any ADR ratio.
-- **Related, not diagnosed.** Reliance Infrastructure (RELINFRA.NS) is quoted and
-  reported in INR yet values at 574.33 against 51.54, 11.1x.
+- **What is wrong.** Reliance Infrastructure (RELINFRA.NS) values far above its
+  price. It is not the foreign-listing currency or share-basis defect, now
+  fixed: its statements and its price are both in rupees, and the listing's own share
+  count (408 million) matches the filing's (406 million). The likeliest cause is
+  debt the model does not see. Net debt counts only the fetched long-term debt,
+  while the filing's current liabilities exceed its payables by 148,487, and
+  short-term borrowings are not fetched, so how much of that is debt cannot be
+  confirmed. Non-controlling interests (#4) add to it.
+- **Where.** `api/company.js` (no short-term borrowings fetched);
+  `src/data/deriveModel.js` (`dcf.netDebt`).
+- **How measured.** Payload fetched 2026-09-17 with the working API: net debt,
+  current liabilities, payables and the DCF bridge from the engine's outputs.
+- **Affects.** 1 known.
+- **Worst example.** Perpetuity value 574.45 and exit-multiple value 686.63
+  (headline 630.54) against a price of 50.76. Enterprise value 229,926
+  (perpetuity) against net debt of -3,370: long-term debt 13,720, cash 17,090;
+  current liabilities 320,810 against payables 172,324.
+- **Value moved.** The headline is 12.4 times the price. Not diagnosed further.
 
 ### 2. PP&E depreciation rate derived from the roll-forward
 
@@ -103,7 +99,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Worst example.** Amazon: rate -91.8% (so forecast depreciation is negative);
   on the filed basis (49.9%) its value moves 400.75 to 222.38, -44.5%. Also
   Alibaba +41.7%, Alphabet +27.4% (rate 100.4% against 23.1%), Home Depot
-  +21.9%, Amgen -18.5%. (Toyota +69.8%, but see #1.)
+  +21.9%, Amgen -18.5%. (Toyota's New York listing +69.8%; that listing is now refused, L8.)
 - **Value moved.** -44.5% to +41.7% where material. The filed-basis rate is a
   diagnostic, not a proposed fix: filed D&A includes amortisation.
 
@@ -199,8 +195,8 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   median spread 15.9%.
 - **Worst example.** TotalEnergies perpetuity 33.85 against exit multiple 77.00
   (77.9% apart); Shell 57.18 / 100.30 (54.8%); Amazon 400.75 / 235.47 (52.0%);
-  Arista 62.25 / 100.36 (46.9%); Palantir 15.76 / 24.62 (43.9%). (Toyota
-  130.6%, but see #1.)
+  Arista 62.25 / 100.36 (46.9%); Palantir 15.76 / 24.62 (43.9%). (Toyota's New York
+  listing 130.6%; now refused, L8.)
 - **Value moved.** The headline sits half the spread from either method: median
   about 8%, up to 39% (TotalEnergies). The exit multiple is a flat 12x for every
   derived company, so part of the spread is the multiple, not the business; see
@@ -224,7 +220,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   by more than 10%.
 - **Worst example.** Alibaba: WACC 7.1% to 5.9%, value +21.2%. Amphenol (debt
   weight -12.7%): WACC 9.8% to 8.7%, +9.8%. Novo Nordisk +8.1%, TotalEnergies
-  +5.7%, BHP +5.3%. (Toyota +9.3%, but see #1.)
+  +5.7%, BHP +5.3%. (Toyota's New York listing +9.3%; now refused, L8.)
 - **Value moved.** Median +1.2%; up to +21.2%.
 
 ### 9. Workbook and site DCF disagree
@@ -337,7 +333,21 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   like tag changes the fetcher does not follow.
 - **Value moved.** No value is shown at all for these companies.
 
-### 15. Workbook reported-year operating cash flow is derived, not filed
+### 15. An SEC lookup that fails stops the company loading at all
+
+- **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
+  company-facts file answers 404, the fetcher throws instead of falling back
+  to Yahoo, so the company cannot be loaded. This is what was recorded under
+  verification limits as "source unavailable".
+- **Where.** `api/company.js` (`fetchFromSEC` throws on a non-OK response; the
+  handler falls back to Yahoo only when it returns null).
+- **How measured.** Currency sweep, 2026-09-17: the handler's error for each.
+- **Affects.** 3 found: ICICI Bank (IBN), CyberAgent (CYATY), RTNTF.
+- **Worst example.** ICICI Bank: "Could not retrieve data for that ticker right
+  now", on every attempt.
+- **Value moved.** No page at all for these companies.
+
+### 16. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -353,7 +363,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 16. Reported SG&A is not the filed SG&A
+### 17. Reported SG&A is not the filed SG&A
 
 - **What is wrong.** Where the cost lines do not add up to filed operating
   income, the difference is carried in SG&A so operating income ties. The line
@@ -368,7 +378,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Value moved.** None directly (operating income is right), but the SG&A
   margin slider moves a base that is not SG&A.
 
-### 17. Nil shown where the filing reports nothing
+### 18. Nil shown where the filing reports nothing
 
 - **What is wrong.** R&D, stock compensation, dividends and buybacks show 0 when
   the filing is silent, rather than "not reported".
@@ -379,7 +389,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Worst example.** —
 - **Value moved.** Small. A nil SBC is never charged and never added back.
 
-### 18. Reported net income still does not tie for three companies
+### 19. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -390,7 +400,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 19. The 50% minimum cash buffer has no documented basis
+### 20. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -407,7 +417,7 @@ outputs; no source was changed to measure anything below. Entries 7, 8, 10,
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 20. Net debt excludes lease liabilities
+### 21. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
@@ -459,6 +469,42 @@ for either.
   on the filed balance sheet balancing, because it is built from the filing,
   not the forecast. BlackRock's is withheld (L3). `src/data/autoCompany.ts`.
 
+- **L8. A US listing of a company based elsewhere gets no value.** A depositary
+  receipt can stand for a fraction or a multiple of an ordinary share, and no
+  free source publishes the ratio reliably; Yahoo's own share counts for these
+  listings are scaled to the receipt for some (Toyota a tenth, Shell a half,
+  Alibaba an eighth) and not for others (AstraZeneca, whose receipt is half a
+  share). So every Yahoo-sourced listing on a US market by a company not based
+  in the United States is refused, and so is London's international order book
+  (Samsung's GDR). That includes listings that are in fact ordinary shares one
+  for one (Toronto-Dominion, Royal Bank, Arm, Sea, Nu, UBS). The currency sweep
+  refuses 38 such listings; 35 of them showed a value before, and none do now. The home-market
+  listing (7203.T, SHEL.L, TD.TO) is valued instead. Non-US companies that file
+  10-Ks (Eaton, Linde, Medtronic, Accenture) are unaffected: their statements
+  count the registered shares their ticker trades. `src/data/deriveModel.js`
+  (`listingComparability`).
+- **L9. A reporting currency that is not stated, or stated two ways, gets no
+  value.** Yahoo's financialCurrency is cross-checked against the currency
+  stamped on each figure, and the SEC path reads the XBRL units. Refused where
+  they disagree: Vale (VALE, VALE3.SA) and Petrobras (PBR, PETR4.SA), whose
+  figures are stamped USD while financialCurrency says BRL; Enbridge's SEC
+  filing mixes CAD and USD units. `api/company.js`, `src/data/deriveModel.js`.
+- **L10. A converted price uses the rate on the day it was fetched.** Where the
+  statements and the listing differ in currency (Shell in London: USD
+  statements, price in pence), the price, previous close and 52-week range are
+  converted at one Yahoo rate fetched with the price, so the 52-week range is
+  today's rate applied to a year of prices. No rate within a week, no value.
+  The header says the price is converted and at what rate; the workbook's
+  Sources sheet records it. `api/company.js` (`quoteInReportingCurrency`).
+- **L11. The share-count check on home listings is loose.** A Yahoo listing's
+  own shares outstanding must be within 1.5 times the filing's diluted count.
+  It catches a gross mismatch, not a small one, and it is skipped when Yahoo
+  gives no count. `src/data/deriveModel.js`.
+- **L12. Cached payloads from before this fix.** The API response is cached for
+  up to six hours (a day stale). A cached Yahoo payload has no currency
+  evidence and is refused until it refreshes; a cached SEC payload is read as
+  US dollars, as it was built.
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -484,5 +530,10 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch (CYATY, RTNTF: source unavailable; TATAMOTORS.NS: no
-  statements found).
+  payloads failed to fetch: CYATY and RTNTF (see #15) and TATAMOTORS.NS, which
+  Yahoo no longer carries statements for after its demerger.
+- The currency sweep covers 101 non-US listings (97 fetched) chosen to span
+  every kind: US depositary receipts and cross-listings, 10-K filers based
+  abroad, and home listings on 22 exchanges quoted in 19 currencies, including
+  prices in pence, cents and agorot. The site can reach more listings than that
+  through search.

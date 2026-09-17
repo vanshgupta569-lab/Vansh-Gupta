@@ -57,7 +57,7 @@ come last, together.
 | 2 | Consistent definition of "core operating" EBITDA across the comp set and the exit multiple (Comps 4; DCF 12) | Hard rule | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value −36.3%; EV/EBITDA method overstated 90.9% (KI #3) |
 | 3 | EV to equity deducts non-controlling interests and preferred securities (DCF 15) | Hard rule | 14 valued with NCI | Reliance Infrastructure | up to 48.1% of value (KI #4) |
 | 4 | Depreciation schedule: existing PP&E vs capex vintages, useful lives, historical plausibility check (Dep 6, 8) | Hard rule / rule of thumb | 12 of 41 move >5% | Amazon; Alibaba; Toyota | −44.5% to +41.7%; Toyota +69.8% (KI #2, #6) |
-| 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound, KI #5); leases and short-term borrowings not measured (KI #20) |
+| 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound, KI #5); leases and short-term borrowings not measured (KI #21) |
 | 6 | A material gap between the exit-multiple and perpetuity values is investigated, not averaged (DCF 14) | Hard rule | 23 of 42 more than 10% apart; 12 more than 25% | TotalEnergies 77.9% apart; Amazon 52.0% | choosing either method alone moves the headline by half the spread: median ±8%, up to ±39% |
 | 7 | WACC weights debt and equity at market value (DCF 7) | Hard rule | 42; 13 have a *negative* debt weight | Alibaba WACC 7.1% → 5.9% on gross debt | median +1.2%; Alibaba +21.2%, Amphenol +9.8% |
 | 8 | Explicit end-of-year or mid-year discounting choice, applied consistently (DCF 1) | Judgment call | every company | first forecast year is a full year's cash flow discounted over 0.29 years | mid-year: median +4.3% (max +5.4%); pro-rating the first year: median −1.5% (max −5.3%) |
@@ -88,7 +88,7 @@ depend on them.
 
 **Recorded in KNOWN_ISSUES.md.** Row 6 is KI #7, row 7 is KI #8, row 8 is
 KI #10, the site-vs-workbook working capital drivers in row 12 are KI #13, and
-the undocumented minimum cash buffer (Debt 10) is KI #19. Row 1 is recorded
+the undocumented minimum cash buffer (Debt 10) is KI #20. Row 1 is recorded
 there as design choice D1, with its measured effect, not as a defect: the last
 reported year is a defensible choice and the conservative default is a rule of
 thumb.
@@ -127,7 +127,7 @@ thumb.
 | # | Item | Verdict | Reason |
 |---|---|---|---|
 | CF 1 | Three sections with subtotals and total change in cash | Followed | Operating, investing, financing, each with a total, plus the change in cash (`excelSheets.ts:684-722`; `model.js:613-633`). |
-| CF 2 | CFO starts from NI before distributions | Partly followed | The forecast starts from net income before dividends, and forecast items after tax are zero, so it is the same figure. In reported years CFO starts from net income *after* non-controlling interests (`model.js:617`), because the filing's "net income" is attributable to parent. The workbook's reported CFO is derived, not filed (KI #15). |
+| CF 2 | CFO starts from NI before distributions | Partly followed | The forecast starts from net income before dividends, and forecast items after tax are zero, so it is the same figure. In reported years CFO starts from net income *after* non-controlling interests (`model.js:617`), because the filing's "net income" is attributable to parent. The workbook's reported CFO is derived, not filed (KI #16). |
 | CF 3 | Every material non-cash item added back and documented | **Partly followed** | D&A, SBC and PIK interest are added back and labelled (`excelSheets.ts:687-690`). Deferred taxes are not: there is no deferred tax expense line, and the deferred tax asset moves as a working capital line at a % of revenue (`excelExport.ts:845`). Failures #11. |
 | CF 4 | CF D&A linked from the IS D&A line | Followed | The cash flow D&A links the model's `da` row, which the income statement charges through `daCost` and which is itself built from the PP&E and amortisation schedules (`excelExport.ts:613, 724`). |
 | CF 5 | Unscheduled CF items from a defined, documented method | Followed | Dividends use the average payout, buybacks the average % of a ceiling, and other income zero. Each method is named in `provenance` (`deriveModel.js:646-672`). |
@@ -172,7 +172,7 @@ thumb.
 | # | Item | Verdict | Reason |
 |---|---|---|---|
 | BS 1 | Each line tied to the CF item(s) that drive it, with direction | Followed | Every forecast balance is beginning + movement = end, with the movement taken from the cash flow line (`model.js:635-703`; `excelExport.ts` `bopRow`/`eopRow`). |
-| BS 2 | CF drives BS (not BS differencing) | Partly followed | Forecast years are CF-driven. Reported-year cash flows in the workbook are derived by differencing filed balance sheets, which the Cash Flow sheet says in a note (`excelSheets.ts:720-723`; KI #15). |
+| BS 2 | CF drives BS (not BS differencing) | Partly followed | Forecast years are CF-driven. Reported-year cash flows in the workbook are derived by differencing filed balance sheets, which the Cash Flow sheet says in a note (`excelSheets.ts:720-723`; KI #16). |
 | BS 3 | Sign convention: assets opposite, cash/liabilities/equity same | Followed | The Checks sheet's balance and cash tie rows are zero across all scenarios (`excelSheets.ts:336-352`). |
 | BS 4 | Each CF item used exactly once | Followed | The cash tie "change in cash = CFO + CFI + CFF" and the balance check would both break on an omission or duplicate. Both are zero. |
 | BS 5 | Imbalance diagnosed into four error types | Partly followed | No diagnosis is written up, but the per-schedule roll-forward checks isolate an omitted, duplicated or mis-signed link to one line (`excelSheets.ts:356-406`). Derived models whose balance check is nonzero are refused outright (`model.js`, `balanceSheetRefusal`). |
@@ -184,7 +184,7 @@ thumb.
 | # | Item | Verdict | Reason |
 |---|---|---|---|
 | Debt 1 | Built last, once the balance sheet balances | Followed | The circularity switch defaults to off, so the model balances without the loop; only switching it on closes the loop (`excelExport.ts:513-536`). The build order is fixed in code, not a manual step. |
-| Debt 2 | Every debt instrument has a section | **Not followed** | Only long-term debt and a revolver are tracked (`model.js:482-508`). Short-term borrowings, the current portion of long-term debt and lease liabilities are not (KI #14, #20). Failures #5. |
+| Debt 2 | Every debt instrument has a section | **Not followed** | Only long-term debt and a revolver are tracked (`model.js:482-508`). Short-term borrowings, the current portion of long-term debt and lease liabilities are not (KI #14, #21). Failures #5. |
 | Debt 3 | Each tranche modelled separately | Not followed | One blended long-term debt balance. The filings the site reads do not tag tranches. Defensible for filed data, but unstated in the workbook. |
 | Debt 4 | Tranche opening balance linked from prior ending | Followed | `debtBop` and `revBop` link the prior ending balance (`excelExport.ts:914-978`; `model.js:500`). |
 | Debt 5 | Mandatory and discretionary lines kept separate | Partly followed | "Additional borrowing / (pay down)" (input) is separate from the automatic revolver draw (`excelExport.ts:914, 970`), so the sweep cannot overwrite it. There is no contractual maturity schedule: derived models hold debt flat (`deriveModel.js:715`) because maturity ladders are not machine-readable. |
@@ -225,7 +225,7 @@ thumb.
 | DCF 12 | Both TV methods, discounted consistently | Followed | Both are built and discounted at the same WACC and final-period factor (`model.js:1094-1143`; `excelExport.ts` rows 33-44). The exit multiple is a flat 12x for derived companies (`deriveModel.js:776`). |
 | DCF 13 | Perpetual growth low, tied to GDP/inflation | Followed for derived; not followed for Apple (rule of thumb) | Derived models use 2.5%, provenance "a flat default". It sits inside long-run nominal GDP and inflation, so it is defensible. Hand-built Apple uses 4.0% (`AAPL.js:170`), carried from its source workbook. That is at or above long-run nominal GDP for a perpetuity, and hard to defend. |
 | DCF 14 | Divergence between TV methods investigated, not averaged | **Not followed** | The headline averages the two methods (`TerminalDashboard.tsx:505-518`; `excelExport.ts` row 53). The spread is shown (row 54, and the football field) but never investigated. A large spread triggers no flag or refusal. Median spread 15.9%; 12 of 42 above 25%. Failures #6. |
-| DCF 15 | EV − net debt − NCI − preferred, ÷ diluted shares | **Not followed** | `equityValue = enterpriseValue − netDebt` only (`model.js:1169-1170`; `excelExport.ts` rows 47-51). No NCI (KI #4, up to 48.1%). No preferred. Cash excludes marketable securities (KI #5). Leases are excluded (KI #20). Failures #3 and #5. |
+| DCF 15 | EV − net debt − NCI − preferred, ÷ diluted shares | **Not followed** | `equityValue = enterpriseValue − netDebt` only (`model.js:1169-1170`; `excelExport.ts` rows 47-51). No NCI (KI #4, up to 48.1%). No preferred. Cash excludes marketable securities (KI #5). Leases are excluded (KI #21). Failures #3 and #5. |
 
 ## Comparables (`api/comps.js`)
 

@@ -8,7 +8,7 @@
 // @ts-ignore — plain JS module, no type declarations
 import { deriveModel } from './deriveModel.js';
 // @ts-ignore
-import { buildModel, buildDCF, filedBalanceSheetRefusal } from '../engine/model.js';
+import { buildModel, buildDCF, filedBalanceSheetRefusal, listingRefusal } from '../engine/model.js';
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
@@ -139,6 +139,9 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
   const price = fetched.quote?.price ?? 0;
   const shares = modelData.dcf.dilutedSharesCount ?? 0;
   const marketCap = price * shares; // millions
+  // A price that is not comparable with the statements (a depositary receipt,
+  // or a currency that could not be converted) makes price x shares meaningless.
+  const incomparableListing = listingRefusal(modelData);
 
   const years: number[] = M.years.slice(0, nH);
   const symbol = fetched.currencySymbol || '$';
@@ -153,8 +156,9 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
     priceChangePct: fetched.quote?.changePct ?? 0,
     fiftyTwoWeekHigh: fetched.quote?.fiftyTwoWeekHigh ?? null,
     fiftyTwoWeekLow: fetched.quote?.fiftyTwoWeekLow ?? null,
-    marketCapStr:
-      marketCap >= 1e6
+    marketCapStr: incomparableListing
+      ? '—'
+      : marketCap >= 1e6
         ? r(marketCap / 1e6, 2) + 'T'
         : marketCap >= 1000
         ? r(marketCap / 1000, 1) + 'B'
@@ -190,7 +194,9 @@ dataSource: fetched.source,
     // that says nothing about the book value this model uses. If the filed
     // sheet does not balance, no value is shown and the refusal says why.
     residualIncome: isFinancialCompany(fetched)
-      ? filedBalanceSheetRefusal(M, modelData)
+      ? incomparableListing
+        ? { applicable: false, message: incomparableListing.message }
+        : filedBalanceSheetRefusal(M, modelData)
         ? { applicable: false, message: filedBalanceSheetRefusal(M, modelData).message }
         : buildResidualIncome(fetched, {
             riskFreeRate: modelData?.dcf?.costOfCapital?.riskFreeRate,
@@ -208,5 +214,6 @@ dataSource: fetched.source,
     // and so it can show where each assumption came from.
     modelData,
     provenance: modelData.provenance,
+    currencyBasis: modelData.meta?.currencyBasis ?? null,
   } as CompanyData;
 }

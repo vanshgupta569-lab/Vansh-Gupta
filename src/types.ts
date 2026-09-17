@@ -127,6 +127,16 @@ export interface CompanyData {
   modelData?: any;
   // Plain-English note on where each derived assumption came from.
   provenance?: Record<string, string>;
+  // The currency the statements are in, the currency the listing is quoted in,
+  // and the rate the price was converted at when the two differ.
+  currencyBasis?: {
+    reportingCurrency: string | null;
+    quotedCurrency: string | null;
+    priceConverted: boolean;
+    rate: number | null;
+    pair: string | null;
+    rateAsOf: string | null;
+  } | null;
   // The reasoning behind the health score: each ratio, its value, and the
   // threshold it was judged against.
   healthDetail?: any;

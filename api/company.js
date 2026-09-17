@@ -235,7 +235,7 @@ const US_TAGS = {
 
 // Pull one line item out of the giant XBRL blob, for the annual periods only.
 // Returns an object like { 2023: 383285000000, 2024: 391035000000 }
-function extractUSFact(facts, tagList) {
+function extractUSFact(facts, tagList, unitsSeen) {
   // Two different ideas of "which value wins" apply here, and they must not be
   // confused — mixing them up is how Apple's SG&A briefly came back as bare
   // G&A, missing the selling costs entirely:
@@ -253,6 +253,10 @@ function extractUSFact(facts, tagList) {
 
     const unitKey = Object.keys(entry.units || {})[0];
     if (!unitKey) continue;
+    // The unit a figure is filed in is the filing's own statement of its
+    // currency (USD, EUR, CAD...). Recorded so the currency is read from the
+    // filing rather than assumed.
+    if (unitsSeen) unitsSeen.add(unitKey);
 
     // Collect this tag's figures on their own first.
     const thisTag = {};
@@ -323,9 +327,18 @@ async function fetchFromSEC(ticker) {
 
   // Build { fieldName: { year: value } } for every field we care about.
   const extracted = {};
+  const monetaryUnits = new Set();
   for (const [field, tags] of Object.entries(US_TAGS)) {
-    extracted[field] = extractUSFact(facts, tags);
+    extracted[field] = extractUSFact(facts, tags, field === 'dilutedShares' ? null : monetaryUnits);
   }
+  // The currency every monetary figure was filed in, from the XBRL units. A
+  // single ISO code is the reporting currency; anything else (no units, mixed
+  // currencies) leaves it unestablished, and the model refuses a valuation.
+  const filedCurrencies = [...monetaryUnits].filter((u) => /^[A-Z]{3}$/.test(u));
+  const reportingCurrency =
+    filedCurrencies.length === 1 && filedCurrencies.length === monetaryUnits.size
+      ? filedCurrencies[0]
+      : null;
 
   // Which fiscal years do we actually have? Use revenue as the anchor, since a
   // company with no revenue figure is unusable anyway.
@@ -355,8 +368,16 @@ async function fetchFromSEC(ticker) {
     source: 'SEC EDGAR',
     sourceUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${match.cik}&type=10-K`,
     name: match.name,
-    currency: 'USD',
-    currencySymbol: '$',
+    currency: reportingCurrency || 'USD',
+    currencySymbol: currencySymbolFor(reportingCurrency || 'USD'),
+    currencyEvidence: {
+      reportingCurrency,
+      reportingCurrencySource: 'the units the SEC XBRL facts are filed in',
+      statementCurrencies: [...monetaryUnits].sort(),
+    },
+    // A 10-K filer's statements count the registered shares that trade under
+    // its own ticker, so the share count and the price are for the same security.
+    listing: { shareBasis: 'registeredShares' },
     sicCode,
     sicDescription,
     statements,
@@ -463,13 +484,16 @@ const COUNT_FIELDS = new Set(['dilutedShares']);
 async function fetchFromYahoo(symbol) {
   const auth = await getYahooAuth();
 
-  // First call: the company's name, currency and sector.
+  // First call: the company's name, sector, listing and reporting currency.
+  // financialData and earnings carry financialCurrency, the currency the
+  // statements are in, which is not necessarily the currency the listing trades
+  // in (Toyota's New York listing trades in dollars; its statements are in yen).
   let profile = {};
   try {
     const profileRes = await fetch(
       `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
         symbol
-      )}?modules=price%2CassetProfile&crumb=${encodeURIComponent(auth.crumb)}`,
+      )}?modules=price%2CassetProfile%2CfinancialData%2Cearnings%2CdefaultKeyStatistics&crumb=${encodeURIComponent(auth.crumb)}`,
       { headers: { ...auth.browserHeaders, Cookie: auth.cookie } }
     );
     if (profileRes.ok) {
@@ -503,6 +527,9 @@ async function fetchFromYahoo(symbol) {
   // date. Reshape that into { fieldName: { year: value } }, matching how the
   // SEC path already works.
   const byField = {};
+  // Every currency code Yahoo stamps on a monetary figure, as a cross-check on
+  // financialCurrency.
+  const statementCurrencies = new Set();
   for (const [ourName, yahooName] of Object.entries(YAHOO_FIELDS)) {
     byField[ourName] = {};
     const block = series.find((entry) => entry?.meta?.type?.[0] === yahooName);
@@ -511,6 +538,9 @@ async function fetchFromYahoo(symbol) {
       const raw = point.reportedValue?.raw;
       if (typeof raw !== 'number') continue;
       byField[ourName][Number(point.asOfDate.slice(0, 4))] = raw;
+      if (!COUNT_FIELDS.has(ourName) && typeof point.currencyCode === 'string') {
+        statementCurrencies.add(point.currencyCode);
+      }
     }
   }
 
@@ -537,14 +567,41 @@ async function fetchFromYahoo(symbol) {
     return row;
   });
 
-  const currency = profile.price?.currency || 'USD';
+  // The currency the statements are in, as Yahoo states it. Never inferred
+  // from the size of the figures and never taken from the listing's price: when
+  // Yahoo does not say, it stays null and the model refuses a valuation.
+  const reportingCurrency =
+    profile.financialData?.financialCurrency || profile.earnings?.financialCurrency || null;
+  const count = (v) => (typeof v?.raw === 'number' && v.raw > 0 ? v.raw : null);
 
   return {
     source: 'Yahoo Finance',
     sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`,
     name: profile.price?.longName || profile.price?.shortName || symbol,
-    currency,
-    currencySymbol: currencySymbolFor(currency),
+    currency: reportingCurrency || 'USD',
+    currencySymbol: currencySymbolFor(reportingCurrency || 'USD'),
+    currencyEvidence: {
+      reportingCurrency,
+      reportingCurrencySource: profile.financialData?.financialCurrency
+        ? 'Yahoo financialData.financialCurrency'
+        : profile.earnings?.financialCurrency
+        ? 'Yahoo earnings.financialCurrency'
+        : null,
+      statementCurrencies: [...statementCurrencies].sort(),
+    },
+    // What the listing is, so the model can tell whether its price and the
+    // statements' share count describe the same security.
+    listing: {
+      shareBasis: null,
+      exchange: profile.price?.exchange || null,
+      exchangeName: profile.price?.exchangeName || null,
+      market: profile.price?.market || null,
+      country: profile.assetProfile?.country || null,
+      priceCurrency: profile.price?.currency || null,
+      sharesOutstanding:
+        count(profile.defaultKeyStatistics?.impliedSharesOutstanding) ??
+        count(profile.defaultKeyStatistics?.sharesOutstanding),
+    },
     sicCode: null,
     sicDescription: profile.assetProfile?.industry || null,
     sector: profile.assetProfile?.sector || null,
@@ -553,8 +610,118 @@ async function fetchFromYahoo(symbol) {
 }
 
 function currencySymbolFor(code) {
-  const map = { USD: '$', INR: '₹', EUR: '€', GBP: '£', JPY: '¥' };
+  const map = {
+    USD: '$', INR: '₹', EUR: '€', GBP: '£', JPY: '¥', CNY: 'CN¥', HKD: 'HK$',
+    CAD: 'CA$', AUD: 'A$', KRW: '₩', TWD: 'NT$', BRL: 'R$',
+  };
   return map[code] || (code ? `${code} ` : '$');
+}
+
+// Yahoo quotes some markets in a minor unit: London in pence, Johannesburg in
+// cents, Tel Aviv in agorot. The price must be brought to the major unit before
+// it can be compared with statements, which are always in the major unit.
+const MINOR_UNITS = {
+  GBp: { currency: 'GBP', factor: 0.01 },
+  GBX: { currency: 'GBP', factor: 0.01 },
+  ZAc: { currency: 'ZAR', factor: 0.01 },
+  ZAC: { currency: 'ZAR', factor: 0.01 },
+  ILA: { currency: 'ILS', factor: 0.01 },
+};
+
+// The currency a price is quoted in, as an ISO code and the factor that brings
+// the quoted figure to it. Null when the code is not one we can read.
+function tradingCurrencyOf(code) {
+  if (typeof code !== 'string') return null;
+  if (MINOR_UNITS[code]) return MINOR_UNITS[code];
+  if (/^[A-Z]{3}$/.test(code)) return { currency: code, factor: 1 };
+  return null;
+}
+
+// One exchange rate from Yahoo's chart endpoint, the same free endpoint the
+// price comes from. The pair "GBPUSD=X" is priced in USD per GBP. A rate is
+// returned only when Yahoo confirms the pair's quote currency and the rate is
+// no more than a week old.
+async function fetchExchangeRate(from, to) {
+  const pair = `${from}${to}=X`;
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(pair)}?range=5d&interval=1d`,
+      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
+    );
+    if (!res.ok) return { pair, rate: null, asOf: null, reason: `Yahoo did not answer (${res.status})` };
+    const meta = (await res.json())?.chart?.result?.[0]?.meta;
+    const rate = meta?.regularMarketPrice;
+    const asOf = meta?.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null;
+    if (typeof rate !== 'number' || !isFinite(rate) || rate <= 0) {
+      return { pair, rate: null, asOf, reason: 'Yahoo returned no rate' };
+    }
+    if (meta.currency !== to) {
+      return { pair, rate: null, asOf, reason: `the pair is quoted in ${meta.currency}, not ${to}` };
+    }
+    const ageDays = asOf ? (Date.now() - Date.parse(asOf)) / 86400000 : Infinity;
+    if (!(ageDays <= 7)) return { pair, rate: null, asOf, reason: 'the latest rate is more than a week old' };
+    return { pair, rate, asOf, reason: null };
+  } catch {
+    return { pair, rate: null, asOf: null, reason: 'the request failed' };
+  }
+}
+
+// Put the quote in the currency the statements are in, so that every price on
+// the site (the header, the live refresh, the 52-week range, the valuation's
+// comparison) is in the same currency as the value it sits beside. The figures
+// as quoted are kept alongside, with the rate used. When no rate can be
+// fetched the quote is left as quoted and the conversion is marked unavailable;
+// the model then refuses a valuation rather than compare different currencies.
+async function quoteInReportingCurrency(quote, reportingCurrency) {
+  if (!quote) return { quote, conversion: null };
+  const trading = tradingCurrencyOf(quote.currency);
+  const base = {
+    quotedCurrency: quote.currency ?? null,
+    tradingCurrency: trading?.currency ?? null,
+    minorUnitFactor: trading?.factor ?? null,
+    reportingCurrency: reportingCurrency ?? null,
+  };
+  if (!trading || !reportingCurrency) {
+    return {
+      quote,
+      conversion: {
+        ...base, converted: false, rate: null, pair: null, asOf: null,
+        reason: trading ? 'the reporting currency is not known' : 'the quote currency could not be read',
+      },
+    };
+  }
+  let rate = trading.factor;
+  let fx = { pair: null, asOf: null };
+  if (trading.currency !== reportingCurrency) {
+    fx = await fetchExchangeRate(trading.currency, reportingCurrency);
+    if (fx.rate === null) {
+      return { quote, conversion: { ...base, converted: false, rate: null, pair: fx.pair, asOf: fx.asOf, reason: fx.reason } };
+    }
+    rate = trading.factor * fx.rate;
+  }
+  if (rate === 1) {
+    return { quote, conversion: { ...base, converted: false, rate: 1, pair: null, asOf: null, reason: null } };
+  }
+  const scale = (v) => (typeof v === 'number' && isFinite(v) ? v * rate : v);
+  const round2 = (v) => (typeof v === 'number' && isFinite(v) ? Number(v.toFixed(2)) : v);
+  return {
+    quote: {
+      ...quote,
+      price: scale(quote.price),
+      previousClose: scale(quote.previousClose),
+      fiftyTwoWeekHigh: round2(scale(quote.fiftyTwoWeekHigh)),
+      fiftyTwoWeekLow: round2(scale(quote.fiftyTwoWeekLow)),
+      currency: reportingCurrency,
+      asQuoted: {
+        currency: quote.currency,
+        price: quote.price,
+        previousClose: quote.previousClose,
+        fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
+        fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
+      },
+    },
+    conversion: { ...base, converted: true, rate, pair: fx.pair, asOf: fx.asOf, reason: null },
+  };
 }
 
 // ===========================================================================
@@ -729,10 +896,15 @@ export default async function handler(req, res) {
 
     // Price and profile in parallel: neither depends on the other, and the
     // profile must never hold up the page if Yahoo is slow.
-    const [quote, profile] = await Promise.all([
+    const [quotedPrice, profile] = await Promise.all([
       fetchQuote(raw),
       fetchProfile(raw).catch(() => null),
     ]);
+    const { quote, conversion } = await quoteInReportingCurrency(
+      quotedPrice,
+      data.currencyEvidence?.reportingCurrency ?? null
+    );
+    data.priceConversion = conversion;
 
     // Cache for six hours. Financial statements change four times a year, so
     // this is generous, and it keeps us far inside every free tier.

@@ -956,13 +956,27 @@ function incomeStatementRefusal(data) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// THE PRICE MUST BE COMPARABLE WITH THE STATEMENTS
+// ---------------------------------------------------------------------------
+// Set by the derivation (deriveModel.js, listingComparability): the statements'
+// currency is not established, the price could not be put in it, or the share
+// count may not count the security the price is for (a depositary receipt).
+// Every value per share, a bank's residual income included, would compare
+// things that do not describe the same security in the same currency.
+export function listingRefusal(data) {
+  const refusal = data?.meta?.listingRefusal;
+  return refusal && refusal.code ? refusal : null;
+}
+
 // The codes that mean "no valuation of any kind", not merely "no DCF". A bank's
-// residual income is the one exception, gated instead by
-// filedBalanceSheetRefusal above.
+// residual income is gated instead by filedBalanceSheetRefusal above, and by
+// listingRefusal, which applies to it too.
 export const INTEGRITY_REFUSAL_CODES = [
   'balanceSheetDoesNotBalance',
   'filingMissingValuationInput',
   'filingMissingIncomeStatementLine',
+  'listingNotComparable',
 ];
 
 export function checkValuationApplicability(model, data, wacc) {
@@ -977,6 +991,8 @@ export function checkValuationApplicability(model, data, wacc) {
   if (brokenBalanceSheet) return { applicable: false, ...brokenBalanceSheet };
   const incompleteIncomeStatement = incomeStatementRefusal(data);
   if (incompleteIncomeStatement) return { applicable: false, ...incompleteIncomeStatement };
+  const incomparableListing = listingRefusal(data);
+  if (incomparableListing) return { applicable: false, ...incomparableListing };
 
   // 1. Financial-sector companies — unlevered FCF is not a meaningful concept
   const sicIsFinancial = sic != null && Number(sic) >= 6000 && Number(sic) <= 6799;
