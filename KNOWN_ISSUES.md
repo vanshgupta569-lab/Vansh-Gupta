@@ -26,7 +26,8 @@ outputs; no source was changed to measure anything below. Entries 6, 7, 9,
 currency sweep and entry 18 from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
-showing a DCF value), which is the basis for the entries that cite `HEAD`.
+showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
+2026-09-18 with minority interests and preferred stock added.
 
 ---
 
@@ -34,14 +35,14 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
 
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
-| 1 | Reliance Infrastructure values at twelve times its price; likely unfetched short-term debt | 1 | RELINFRA.NS 630.54 vs 50.76 | 12.4x the price |
+| 1 | Reliance Infrastructure values at 6.6 times its price; likely unfetched short-term debt | 1 | RELINFRA.NS 328.58 vs 49.99 | 6.6x the price |
 | 2 | Two EBITDA definitions: model adds SBC back, peers' multiples do not | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value -36.3%; EV/EBITDA method overstated 90.9% |
-| 3 | Non-controlling interests not deducted from equity value | 14 valued | Reliance Infrastructure 276.16 a share | up to 48.1% of value |
-| 4 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
-| 5 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
-| 6 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
-| 7 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
-| 8 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 3 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
+| 4 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
+| 5 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
+| 6 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
+| 7 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 8 | Bank residual income counts preferred stock as common equity | 8 banks | Citigroup 74.79 vs 64.71 | overstated 3.4% to 13.5% |
 | 9 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | 10 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | 11 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
@@ -56,7 +57,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
 
 ---
 
-### 1. Reliance Infrastructure values at twelve times its price
+### 1. Reliance Infrastructure values at 6.6 times its price
 
 - **What is wrong.** Reliance Infrastructure (RELINFRA.NS) values far above its
   price. It is not the foreign-listing currency or share-basis defect, now
@@ -65,17 +66,19 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   debt the model does not see. Net debt counts only the fetched long-term debt,
   while the filing's current liabilities exceed its payables by 148,487, and
   short-term borrowings are not fetched, so how much of that is debt cannot be
-  confirmed. Non-controlling interests (#3) add to it.
+  confirmed. Its minority interests (112,156) now come off enterprise value,
+  which took the headline from 604.75 to 328.58; what is left is not them.
 - **Where.** `api/company.js` (no short-term borrowings fetched);
   `src/data/deriveModel.js` (`dcf.netDebt`).
 - **How measured.** Payload fetched 2026-09-17 with the working API: net debt,
   current liabilities, payables and the DCF bridge from the engine's outputs.
 - **Affects.** 1 known.
-- **Worst example.** Perpetuity value 574.45 and exit-multiple value 686.63
-  (headline 630.54) against a price of 50.76. Enterprise value 229,926
-  (perpetuity) against net debt of -3,370: long-term debt 13,720, cash 17,090;
-  current liabilities 320,810 against payables 172,324.
-- **Value moved.** The headline is 12.4 times the price. Not diagnosed further.
+- **Worst example.** At `HEAD`, on payloads fetched 2026-09-18: perpetuity value
+  246.55 and headline 328.58 against a price of 49.99, after net debt and
+  112,156 of minority interests. Current liabilities 320,810 against payables
+  172,324.
+- **Value moved.** The headline is 6.6 times the price (it was 12.4 before minority
+  interests were deducted). Not diagnosed further.
 
 ### 2. Two EBITDA definitions
 
@@ -100,24 +103,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   approach EV up to +91% overstated. The headline blends both DCF methods, so
   it moves by part of this.
 
-### 3. Non-controlling interests not deducted from equity value
-
-- **What is wrong.** The equity bridge takes enterprise value less net debt.
-  Minority shareholders' claim on consolidated subsidiaries is not deducted, so
-  the full enterprise value is attributed to the parent's shareholders. The
-  model's reported equity line includes NCI too, so it differs from filed
-  shareholders' equity for 30 companies (19 valued).
-- **Where.** `src/engine/model.js` (`buildDCF`, `equityBridge`);
-  `src/data/deriveModel.js` (`dcf.netDebt`; equity = total assets less total
-  liabilities).
-- **How measured.** NCI = filed total assets less filed total liabilities less
-  filed shareholders' equity, per diluted share, against value per share.
-- **Affects.** 14 valued companies carry NCI.
-- **Worst example.** Reliance Infrastructure 112,156 = 276.16 a share, 48.1% of
-  value; Reliance Industries 15.5%; Alibaba 6.1%; ExxonMobil 3.7%.
-- **Value moved.** Overstated by up to 48%; under 4% for most.
-
-### 4. "Cash" excludes marketable securities
+### 3. "Cash" excludes marketable securities
 
 - **What is wrong.** The fetched cash line is cash and cash equivalents only.
   Short-term marketable securities fall into other current assets and never
@@ -135,7 +121,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
 - **Value moved.** Understated by up to ~40% at the upper bound; the true figure
   needs the securities balance.
 
-### 5. Forecast depreciation tracks same-year capex
+### 4. Forecast depreciation tracks same-year capex
 
 - **What is wrong.** Forecast depreciation is that year's capex times a rate,
   so it follows the capex forecast rather than the assets already in service.
@@ -154,7 +140,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   is applied to the year's own capital spending rather than to the assets in
   service.
 
-### 6. The two terminal values are averaged, not investigated
+### 5. The two terminal values are averaged, not investigated
 
 - **What is wrong.** The headline is the mean of the perpetuity-growth and
   exit-multiple values. The spread between them is shown (workbook DCF row 54,
@@ -179,7 +165,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   derived company, so part of the spread is the multiple, not the business; see
   also #2.
 
-### 7. WACC weights capital on net debt
+### 6. WACC weights capital on net debt
 
 - **What is wrong.** The debt weight is net debt / (market capitalisation + net
   debt). For a company holding more cash than debt the debt weight is negative
@@ -200,7 +186,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   +5.7%, BHP +5.3%. (Toyota's New York listing +9.3%; now refused, L8.)
 - **Value moved.** Median +1.2%; up to +21.2%.
 
-### 8. Workbook and site DCF disagree
+### 7. Workbook and site DCF disagree
 
 - **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
   (+ amortisation after tax), leaving out working capital and the terminal
@@ -216,6 +202,26 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   Walmart -5.4%; Apple 122.67 against 126.89 (-3.3%); Microsoft +1.2%;
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
+
+### 8. Bank residual income counts preferred stock as common equity
+
+- **What is wrong.** Residual income values a bank's common shares from its book
+  equity and its net income. The filed shareholders' equity includes preferred
+  stock, and filed net income is before preferred dividends, so the value per
+  common share includes what belongs to the preferred holders. The discounted
+  cash flow's equity bridge now takes preferred stock off; residual income does
+  not have a bridge and still carries it.
+- **Where.** `src/data/residualIncome.js` (`buildResidualIncome`: opening book
+  equity and net income).
+- **How measured.** At `HEAD` on payloads fetched 2026-09-18: residual income
+  re-run with each year's filed preferred stock taken out of equity and its
+  preferred dividends out of net income.
+- **Affects.** 8 banks shown with a residual income value that report preferred
+  stock.
+- **Worst example.** Citigroup 74.79 against 64.71 with the preferred taken out
+  (-13.5%); Wells Fargo -11.3%, Goldman Sachs -8.3%, Bank of America -7.7%,
+  Charles Schwab -7.5%, Toronto-Dominion -4.9%, Royal Bank -3.9%, JPMorgan -3.4%.
+- **Value moved.** Overstated by 3.4% to 13.5%.
 
 ### 9. No stated discounting convention; timing runs from the fetch date
 
@@ -286,7 +292,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`.
   `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
   (the `ap`, `oca` and `oncl` schedules).
 - **How measured.** Code comparison during the conventions audit; agreement at
-  defaults from the site-vs-workbook run (#8).
+  defaults from the site-vs-workbook run (#7).
 - **Affects.** Every derived company (payables, other current assets); every
   company (other non-current liabilities).
 - **Worst example.** —
@@ -442,8 +448,13 @@ for either.
   `src/engine/model.js` section 4b.
 - **L6. Derived total liabilities include non-controlling interests.** Where
   total liabilities is worked out as total assets less shareholders' equity
-  (Coca-Cola, Walmart, 24 companies), NCI sits in liabilities.
-  `src/data/deriveModel.js`.
+  (23 of 169 companies), minority interests sit in liabilities on the model's
+  balance sheet. That is presentation only and is not deducted twice: the
+  equity bridge takes net debt as long-term debt less cash, never total
+  liabilities, and reads minority interests from the filing's own balance
+  (15 of the 23) or finds none (8). The total-assets-less-liabilities-less-
+  equity route to minority interests uses only a FILED total liabilities
+  figure, so it can never read the derived one. `src/data/deriveModel.js`.
 - **L7. Bank residual income is exempt from the forecast refusal.** It is gated
   on the filed balance sheet balancing, because it is built from the filing,
   not the forecast. BlackRock's is withheld (L3). `src/data/autoCompany.ts`.
@@ -503,7 +514,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #19); a line not reported in the last reported year is forecast
+  credited with it, which is #18); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -535,6 +546,22 @@ for either.
   have been valued from an opening balance of nil. `src/engine/model.js`
   (`filingMissingValuationInput`).
 
+- **L18. Minority interests and preferred stock come off at book value, as
+  filed.** Both are taken at the last reported balance sheet, as net debt is,
+  not at the value the market puts on them. Minority interests are read from
+  the filing's own balance (plus redeemable minority interests where it has
+  them), else from equity including minority interests less shareholders'
+  equity, else from total assets less filed total liabilities less
+  shareholders' equity; preferred stock from its carrying value. Where the
+  filing shows a claim exists (a minority share of net income, preferred
+  dividends) but gives no amount, the company is refused rather than the claim
+  treated as nil (Boeing, Morgan Stanley and Santander on this sweep, none of
+  which had a discounted cash flow value before; Morgan Stanley keeps its
+  residual income value, which is built on parent equity and income). Convertible preferred that the filing already counts in
+  its diluted share count is not taken off again (Procter & Gamble, 68.3
+  million shares). `src/data/deriveModel.js`, `src/engine/model.js`
+  (`nonCommonClaimNotReported`).
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -560,7 +587,7 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #15) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #14) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based

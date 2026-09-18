@@ -1297,36 +1297,40 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   );
   vOne(48, 'Cash at the last reported date', `'3-StatementModel'!${L(cOf(nH - 1))}${R.cashEnd}`, money(), { cross: true });
   vOne(49, 'Net debt', `${F}47-${F}48`, money(), { bold: true, indent: 0 });
-  vInput(50, 'Net diluted shares outstanding', D.perpetuity?.dilutedShares ?? D.dilutedShares ?? 1, money(), {
+  // Claims on the group that are not the common shareholders', from the filing
+  // at the last reported date (see the Sources sheet for where each was read).
+  vInput(50, 'Less: minority interests at the last reported date', D.minorityInterest ?? 0, money());
+  vInput(51, 'Less: preferred stock at the last reported date', D.preferredStock ?? 0, money());
+  vInput(52, 'Net diluted shares outstanding', D.perpetuity?.dilutedShares ?? D.dilutedShares ?? 1, money(), {
     unit: '# M',
   });
-  vOne(51, 'Value per share, perpetuity growth', `(${F}37-${F}49)/${F}50`, money2(currencySymbol), {
+  vOne(53, 'Value per share, perpetuity growth', `(${F}37-${F}49-${F}50-${F}51)/${F}52`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vOne(52, 'Value per share, exit multiple', `(${F}44-${F}49)/${F}50`, money2(currencySymbol), {
+  vOne(54, 'Value per share, exit multiple', `(${F}44-${F}49-${F}50-${F}51)/${F}52`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vOne(53, 'The two methods, weighted equally', `(${F}51+${F}52)/2`, money2(currencySymbol), {
+  vOne(55, 'The two methods, weighted equally', `(${F}53+${F}54)/2`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vOne(54, 'Spread between the two methods', `ABS(${F}52-${F}51)/${F}53`, PCT1, { unit: '%' });
-  vInput(55, 'Share price as of last close', D.marketPrice ?? 0, money2(currencySymbol), {
+  vOne(56, 'Spread between the two methods', `ABS(${F}54-${F}53)/${F}55`, PCT1, { unit: '%' });
+  vInput(57, 'Share price as of last close', D.marketPrice ?? 0, money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
-  vOne(56, 'Premium / (discount) to the model', `${F}55/${F}53-1`, PCT1, { bold: true, indent: 0, unit: '%' });
+  vOne(58, 'Premium / (discount) to the model', `${F}57/${F}55-1`, PCT1, { bold: true, indent: 0, unit: '%' });
 
   [
     'With the circularity switch off, interest is charged on opening balances rather than average balances, so nothing',
     'computes circularly. The difference to the answer is small. See Model settings on the 3-statement model sheet.',
   ].forEach((text, i) => {
-    V.getCell(58 + i, 3).value = text;
-    V.getCell(58 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
+    V.getCell(60 + i, 3).value = text;
+    V.getCell(60 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
   });
 
   // =========================================================================

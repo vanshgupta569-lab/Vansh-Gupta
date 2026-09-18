@@ -1066,6 +1066,119 @@ export function deriveModel(fetched) {
   }
 
   // lastRow, the last reported year, is declared with the operating cost margins.
+
+  // ---- Claims on the group that are not its common shareholders' ----------
+  //
+  // A company that consolidates a subsidiary it only partly owns reports all of
+  // that subsidiary's cash flows, so the enterprise value built from them
+  // includes value that belongs to the subsidiary's other shareholders. Their
+  // claim (minority, or non-controlling, interests) and the claim of preferred
+  // shareholders come off before the value per common share. Both are taken at
+  // the last reported balance sheet, as net debt is.
+  //
+  // MINORITY INTERESTS, in order:
+  //   1. the filing's own minority-interest balance, plus any redeemable
+  //      minority interests it carries outside equity;
+  //   2. equity including minority interests less shareholders' equity, where
+  //      the filing reports both and they differ;
+  //   3. total assets less total liabilities less shareholders' equity, where
+  //      all three are FILED (a total liabilities figure this file derived as
+  //      assets less equity has the minority interests inside it, so says
+  //      nothing about them). On an SEC filing this also picks up redeemable
+  //      preferred and other temporary equity, which is also not the common
+  //      shareholders'.
+  // Where none of those can be read but the filing shows a minority share of
+  // net income, minority interests exist and their amount is not known: the
+  // model is refused rather than treating them as nil. Where nothing in the
+  // filing points to any, there are none, and provenance says so.
+  //
+  // PREFERRED STOCK: the filing's preferred-stock carrying value. Where the
+  // filing says its diluted share count already includes the common shares the
+  // preferred converts into, the preferred holders are in the denominator and
+  // nothing comes off value (it would count them twice). Where no balance is
+  // tagged, nothing converts, and the filing pays preferred dividends, the
+  // model is refused.
+  const claimsYear = lastRow.fiscalYear;
+  const minorityEvidence = isNum(lastRow.netIncomeToMinority) && lastRow.netIncomeToMinority !== 0;
+  const taggedMinority = [lastRow.minorityInterest, lastRow.redeemableMinorityInterest].filter(isNum);
+  let minorityInterest = null;
+  let minoritySource = null;
+  if (taggedMinority.length) {
+    minorityInterest = taggedMinority.reduce((a, b) => a + b, 0);
+    minoritySource = isNum(lastRow.redeemableMinorityInterest)
+      ? isNum(lastRow.minorityInterest)
+        ? 'the filing\'s minority interests plus its redeemable minority interests'
+        : 'the filing\'s redeemable minority interests'
+      : 'the filing\'s minority interests';
+  } else if (
+    isNum(lastRow.equityIncludingMinority) &&
+    isNum(lastRow.equity) &&
+    lastRow.equityIncludingMinority !== lastRow.equity
+  ) {
+    minorityInterest = lastRow.equityIncludingMinority - lastRow.equity;
+    minoritySource = "equity including minority interests less shareholders' equity, as filed";
+  } else if (
+    isNum(lastRow.totalAssets) &&
+    isNum(lastRow.totalLiabilities) &&
+    isNum(lastRow.equity) &&
+    // Equity reported only as the figure that includes minority interests
+    // hides them from this identity; with a minority share of income on
+    // file, it cannot be used.
+    !(isNum(lastRow.equityIncludingMinority) && lastRow.equityIncludingMinority === lastRow.equity && minorityEvidence)
+  ) {
+    const gap = lastRow.totalAssets - lastRow.totalLiabilities - lastRow.equity;
+    const tolerance = Math.abs(lastRow.totalAssets) * 0.001;
+    if (gap >= -tolerance) {
+      minorityInterest = Math.abs(gap) <= tolerance ? 0 : gap;
+      minoritySource =
+        minorityInterest === 0
+          ? "none: total assets equal total liabilities plus shareholders' equity, as filed"
+          : "total assets less total liabilities less shareholders' equity, as filed";
+    }
+  }
+  if (minorityInterest === null && !minorityEvidence) {
+    minorityInterest = 0;
+    minoritySource = 'none: the filing reports no minority interests and no minority share of income';
+  }
+
+  let preferredStock = null;
+  let preferredSource = null;
+  if (isNum(lastRow.preferredConversionShares) && lastRow.preferredConversionShares > 0) {
+    preferredStock = 0;
+    preferredSource =
+      'convertible preferred stock, already counted in the diluted share count as the common shares it converts into';
+  } else if (isNum(lastRow.preferredStock)) {
+    preferredStock = lastRow.preferredStock;
+    preferredSource = "the filing's preferred stock";
+  } else if (isNum(lastRow.preferredDividends) && lastRow.preferredDividends !== 0) {
+    preferredStock = null;
+  } else {
+    preferredStock = 0;
+    preferredSource = 'none: the filing reports no preferred stock and no preferred dividends';
+  }
+
+  const unknownClaims = [
+    minorityInterest === null
+      ? `a minority share of net income (${lastRow.netIncomeToMinority.toLocaleString('en-US', { maximumFractionDigits: 0 })}) but no minority-interest balance that can be read`
+      : null,
+    preferredStock === null
+      ? `preferred dividends (${lastRow.preferredDividends.toLocaleString('en-US', { maximumFractionDigits: 0 })}) but no preferred-stock balance`
+      : null,
+  ].filter(Boolean);
+  const otherClaimsRefusal = unknownClaims.length
+    ? {
+        code: 'nonCommonClaimNotReported',
+        message:
+          `For FY${claimsYear} the filing reports ${unknownClaims.join(', and ')}. Part of the enterprise value ` +
+          'belongs to those holders and not to the common shareholders, and without the amount it cannot be ' +
+          'taken off, so no value is shown rather than treating it as nil. The reported figures below are unaffected.',
+      }
+    : null;
+  provenance.equityBridge =
+    `minority interests ${isNum(minorityInterest) ? minorityInterest.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
+    `(${minoritySource ?? 'amount not in the filing'}) and preferred stock ${isNum(preferredStock) ? preferredStock.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
+    `(${preferredSource ?? 'amount not in the filing'}), FY${claimsYear}, taken off enterprise value with net debt`;
+
   const dcf = {
     sharePrice: price,
     sharePriceDate: (fetched.fetchedAt || new Date().toISOString()).slice(0, 10),
@@ -1076,6 +1189,10 @@ export function deriveModel(fetched) {
       cashAndSecurities: isNum(lastRow.cash) ? -lastRow.cash : 0,
       longTermDebt: isNum(lastRow.longTermDebt) ? lastRow.longTermDebt : 0,
     },
+    // Taken off enterprise value with net debt (see above). Null where the
+    // filing shows the claim exists but not its amount; the engine then refuses.
+    minorityInterest,
+    preferredStock,
 
     longTermGrowthRate: 0.025,
     exitEbitdaMultiple: 12,
@@ -1146,6 +1263,10 @@ export function deriveModel(fetched) {
       // from them (filedDepreciation above).
       depreciationBasis,
       filedDepreciationRate: isNum(filedDepreciationRate) ? filedDepreciationRate : null,
+      // Minority interests and preferred stock, where each was read from, and
+      // the refusal where the filing shows one exists but not its amount.
+      otherClaims: { minorityInterest, minoritySource, preferredStock, preferredSource, year: claimsYear },
+      otherClaimsRefusal,
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
       // Whether the price, the share count and the statements describe the same

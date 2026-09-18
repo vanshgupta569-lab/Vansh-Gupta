@@ -1080,6 +1080,7 @@ export const INTEGRITY_REFUSAL_CODES = [
   'filingMissingValuationInput',
   'filingMissingIncomeStatementLine',
   'listingNotComparable',
+  'nonCommonClaimNotReported',
 ];
 
 export function checkValuationApplicability(model, data, wacc) {
@@ -1096,6 +1097,11 @@ export function checkValuationApplicability(model, data, wacc) {
   if (incompleteIncomeStatement) return { applicable: false, ...incompleteIncomeStatement };
   const incomparableListing = listingRefusal(data);
   if (incomparableListing) return { applicable: false, ...incomparableListing };
+
+  // 0. Minority interests or preferred stock the filing shows exist but does
+  //    not give the amount of (deriveModel.js, otherClaimsRefusal). Every value
+  //    per share would include what belongs to those holders.
+  if (meta.otherClaimsRefusal?.code) return { applicable: false, ...meta.otherClaimsRefusal };
 
   // 0a. An input the forecast is built from that the filing never reports:
   //     cost of sales, capital expenditure, or two years of PP&E. The
@@ -1297,12 +1303,20 @@ export function buildDCF(model, data) {
     (R.terminalValueMultiple * R.wacc - R.normalisedFCF) / (R.normalisedFCF + R.terminalValueMultiple);
 
   // ---- Equity bridge ----
+  // Enterprise value less net debt, less the claims that are not the common
+  // shareholders': minority interests in subsidiaries the group consolidates
+  // but does not wholly own, and preferred stock. The derivation reads both
+  // from the filing (deriveModel.js); a data file that carries neither has
+  // none (Apple's).
   R.netDebt = d.netDebt.cashAndSecurities + d.netDebt.longTermDebt;
+  R.minorityInterest = typeof d.minorityInterest === 'number' && isFinite(d.minorityInterest) ? d.minorityInterest : 0;
+  R.preferredStock = typeof d.preferredStock === 'number' && isFinite(d.preferredStock) ? d.preferredStock : 0;
+  R.otherClaims = R.minorityInterest + R.preferredStock;
   R.dilutedShares = d.dilutedSharesCount;
   R.marketPrice = d.sharePrice;
 
-  R.perpetuity = equityBridge(R.enterpriseValuePerpetuity, R.netDebt, R.dilutedShares, d.sharePrice);
-  R.exitMultipleValuation = equityBridge(R.enterpriseValueMultiple, R.netDebt, R.dilutedShares, d.sharePrice);
+  R.perpetuity = equityBridge(R.enterpriseValuePerpetuity, R.netDebt, R.minorityInterest, R.preferredStock, R.dilutedShares, d.sharePrice);
+  R.exitMultipleValuation = equityBridge(R.enterpriseValueMultiple, R.netDebt, R.minorityInterest, R.preferredStock, R.dilutedShares, d.sharePrice);
 
   // ---- Sensitivity grids ----
   R.sensitivity = {
@@ -1320,12 +1334,14 @@ export function buildDCF(model, data) {
   return R;
 }
 
-function equityBridge(enterpriseValue, netDebt, shares, marketPrice) {
-  const equityValue = enterpriseValue - netDebt;
+function equityBridge(enterpriseValue, netDebt, minorityInterest, preferredStock, shares, marketPrice) {
+  const equityValue = enterpriseValue - netDebt - minorityInterest - preferredStock;
   const perShare = equityValue / shares;
   return {
     enterpriseValue,
     lessNetDebt: -netDebt,
+    lessMinorityInterest: -minorityInterest,
+    lessPreferredStock: -preferredStock,
     equityValue,
     dilutedShares: shares,
     valuePerShare: perShare,
@@ -1341,7 +1357,7 @@ function valuePerShare(R, wacc, growth, multiple, data) {
     ? (R.normalisedFCF * (1 + growth)) / (wacc - growth)
     : R.terminalEBITDA * multiple;
   const ev = pvStage1 + tv / (1 + wacc) ** lastDF;
-  return (ev - R.netDebt) / R.dilutedShares;
+  return (ev - R.netDebt - R.otherClaims) / R.dilutedShares;
 }
 
 function grid(rowSteps, colSteps, fn) {

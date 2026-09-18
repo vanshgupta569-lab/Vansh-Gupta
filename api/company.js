@@ -218,6 +218,40 @@ const US_TAGS = {
   // Amazon files 41,860 of depreciation and 817 of amortisation inside 65,756
   // of total D&A.
   depreciationOfPpe: ['Depreciation'],
+  // Claims on the group that do not belong to its common shareholders, which
+  // the equity bridge deducts from enterprise value. Minority (non-controlling)
+  // interests in equity, and the redeemable kind carried outside it; preferred
+  // stock, and the preferred dividends that show it exists even where its
+  // carrying value is not tagged; the minority share of net income, which shows
+  // minority interests exist even where their balance is not tagged; and equity
+  // including minority interests, the other half of that balance.
+  minorityInterest: ['MinorityInterest'],
+  redeemableMinorityInterest: [
+    'RedeemableNoncontrollingInterestEquityCarryingAmount',
+    'RedeemableNoncontrollingInterestEquityFairValue',
+  ],
+  preferredStock: [
+    'PreferredStockValue',
+    'PreferredStockIncludingAdditionalPaidInCapital',
+    'PreferredStockIncludingAdditionalPaidInCapitalNetOfDiscount',
+    'PreferredStockValueOutstanding',
+    'PreferredStockLiquidationPreferenceValue',
+  ],
+  // Common shares the diluted count already includes for the conversion of
+  // preferred stock. Where it is filed, the preferred holders' claim is in the
+  // per-share denominator, and taking the preferred off value as well would
+  // count it twice (Procter & Gamble: 68.3 million shares).
+  preferredConversionShares: ['IncrementalCommonSharesAttributableToConversionOfPreferredStock'],
+  preferredDividends: [
+    'DividendsPreferredStock',
+    'PreferredStockDividendsIncomeStatementImpact',
+    'DividendsPreferredStockCash',
+  ],
+  netIncomeToMinority: [
+    'NetIncomeLossAttributableToNoncontrollingInterest',
+    'MinorityInterestInNetIncomeLossOfConsolidatedEntities',
+  ],
+  equityIncludingMinority: ['StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
   amortisationOfIntangibles: [
     'AmortizationOfIntangibleAssets',
     'AmortizationOfIntangibleAssetsExcludingGoodwill',
@@ -338,10 +372,13 @@ async function fetchFromSEC(ticker) {
   }
 
   // Build { fieldName: { year: value } } for every field we care about.
+  // Share counts, filed in shares: not money, so they neither vote on the
+  // reporting currency nor get divided into millions.
+  const SEC_COUNT_FIELDS = new Set(['dilutedShares', 'preferredConversionShares']);
   const extracted = {};
   const monetaryUnits = new Set();
   for (const [field, tags] of Object.entries(US_TAGS)) {
-    extracted[field] = extractUSFact(facts, tags, field === 'dilutedShares' ? null : monetaryUnits);
+    extracted[field] = extractUSFact(facts, tags, SEC_COUNT_FIELDS.has(field) ? null : monetaryUnits);
   }
   // The currency every monetary figure was filed in, from the XBRL units. A
   // single ISO code is the reporting currency; anything else (no units, mixed
@@ -371,8 +408,10 @@ async function fetchFromSEC(ticker) {
       row[field] = typeof value === 'number' ? value / 1e6 : null;
     }
     // Share counts must NOT be divided; they are counts, not currency.
-    const rawShares = extracted.dilutedShares[year];
-    row.dilutedShares = typeof rawShares === 'number' ? rawShares : null;
+    for (const field of SEC_COUNT_FIELDS) {
+      const count = extracted[field][year];
+      row[field] = typeof count === 'number' ? count : null;
+    }
     return row;
   });
 
@@ -481,6 +520,13 @@ const YAHOO_FIELDS = {
   // intangibles, so that stays null on this path and the model says what it
   // does without it.
   depreciationOfPpe: 'annualDepreciation',
+  // See the SEC list above. Yahoo's minority share of net income is signed as
+  // a deduction; only whether it is non-zero is used.
+  minorityInterest: 'annualMinorityInterest',
+  preferredStock: 'annualPreferredStock',
+  preferredDividends: 'annualPreferredStockDividends',
+  netIncomeToMinority: 'annualMinorityInterests',
+  equityIncludingMinority: 'annualTotalEquityGrossMinorityInterest',
   capex: 'annualCapitalExpenditure',
   operatingCashFlow: 'annualOperatingCashFlow',
   dividendsPaid: 'annualCashDividendsPaid',

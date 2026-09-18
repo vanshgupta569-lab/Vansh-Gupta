@@ -1041,7 +1041,9 @@ export const DCFView: React.FC<ViewProps> = ({
         </h3>
         <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
           A shareholder does not own the debt, so it comes off, and the cash in
-          the bank goes on.
+          the bank goes on. Nor do they own the part of a partly owned subsidiary
+          that belongs to its other shareholders, or the preferred stock, so
+          those come off too.
         </p>
         <div className="border border-[#222228] divide-y divide-[#222228]">
           {[
@@ -1050,6 +1052,13 @@ export const DCFView: React.FC<ViewProps> = ({
               label: D.netDebt < 0 ? 'Plus net cash' : 'Less net debt',
               value: money(Math.abs(D.netDebt)),
             },
+            // Claims on the group that are not the common shareholders'.
+            ...(D.minorityInterest
+              ? [{ label: 'Less minority interests', value: money(D.minorityInterest) }]
+              : []),
+            ...(D.preferredStock
+              ? [{ label: 'Less preferred stock', value: money(D.preferredStock) }]
+              : []),
             { label: 'Equity value', value: money(D.perpetuity?.equityValue), bold: true },
             { label: 'Diluted shares', value: fmt(D.dilutedShares, 1) },
             {

@@ -55,9 +55,9 @@ come last, together.
 |---|---|---|---|---|---|
 | 1 | Conservative method as default when choosing a cost driver (IS 7) | Rule of thumb; kept by design (KI D1) | 31 of 42 valued would change | AMD, GILD, STX; ARM, MRVL, PLTR would be refused | median −11.5%; 23 lower by >10%, 10 by >25%; worst −95.9% |
 | 2 | Consistent definition of "core operating" EBITDA across the comp set and the exit multiple (Comps 4; DCF 12) | Hard rule | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value −36.3%; EV/EBITDA method overstated 90.9% (KI #2) |
-| 3 | EV to equity deducts non-controlling interests and preferred securities (DCF 15) | Hard rule | 14 valued with NCI | Reliance Infrastructure | up to 48.1% of value (KI #3) |
-| 4 | Depreciation schedule: existing PP&E vs capex vintages, useful lives, historical plausibility check (Dep 6, 8) | Hard rule / rule of thumb | 15 of 82 valued move >5% | Amazon −24.2%; Toyota Tokyo +23.8% | the rate is now read from filed depreciation (fixed after this audit); vintages and lives are not (KI #5) |
-| 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound, KI #4); leases and short-term borrowings not measured (KI #19) |
+| 3 | EV to equity deducts non-controlling interests and preferred securities (DCF 15) | Hard rule | 14 valued with NCI | Reliance Infrastructure | up to 48.1% of value; fixed after this audit: minority interests and preferred stock now come off enterprise value |
+| 4 | Depreciation schedule: existing PP&E vs capex vintages, useful lives, historical plausibility check (Dep 6, 8) | Hard rule / rule of thumb | 15 of 82 valued move >5% | Amazon −24.2%; Toyota Tokyo +23.8% | the rate is now read from filed depreciation (fixed after this audit); vintages and lives are not (KI #4) |
+| 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound, KI #3); leases and short-term borrowings not measured (KI #19) |
 | 6 | A material gap between the exit-multiple and perpetuity values is investigated, not averaged (DCF 14) | Hard rule | 23 of 42 more than 10% apart; 12 more than 25% | TotalEnergies 77.9% apart; Amazon 52.0% | choosing either method alone moves the headline by half the spread: median ±8%, up to ±39% |
 | 7 | WACC weights debt and equity at market value (DCF 7) | Hard rule | 42; 13 have a *negative* debt weight | Alibaba WACC 7.1% → 5.9% on gross debt | median +1.2%; Alibaba +21.2%, Amphenol +9.8% |
 | 8 | Explicit end-of-year or mid-year discounting choice, applied consistently (DCF 1) | Judgment call | every company | first forecast year is a full year's cash flow discounted over 0.29 years | mid-year: median +4.3% (max +5.4%); pro-rating the first year: median −1.5% (max −5.3%) |
@@ -86,7 +86,7 @@ depend on them.
   market approach, not the DCF, and were not measured.
 - FD 2: DCF sheet rows placed by number in the generator.
 
-**Recorded in KNOWN_ISSUES.md.** Row 6 is KI #6, row 7 is KI #7, row 8 is
+**Recorded in KNOWN_ISSUES.md.** Row 6 is KI #5, row 7 is KI #6, row 8 is
 KI #9, the site-vs-workbook working capital drivers in row 12 are KI #12, and
 the undocumented minimum cash buffer (Debt 10) is KI #17. Row 1 is recorded
 there as design choice D1, with its measured effect, not as a defect: the last
@@ -146,7 +146,7 @@ thumb.
 | Dep 3 | Declining-balance rate mechanics | Not applicable | As Dep 2. |
 | Dep 4 | Sum-of-the-years'-digits mechanics | Not applicable | As Dep 2. |
 | Dep 5 | MACRS mid-quarter default | Not applicable (rule of thumb) | As Dep 2: no placed-in-service data exists in filings. |
-| Dep 6 | Existing PP&E separated from each capex vintage | **Not followed** | One pool: this year's depreciation tracks this year's capex, not the assets in service (`model.js:256`). Amortisation of intangibles is separated and runs off (`model.js:273`), which is the one split we make. Failures #4 (KI #5). |
+| Dep 6 | Existing PP&E separated from each capex vintage | **Not followed** | One pool: this year's depreciation tracks this year's capex, not the assets in service (`model.js:256`). Amortisation of intangibles is separated and runs off (`model.js:273`), which is the one split we make. Failures #4 (KI #4). |
 | Dep 7 | Opening PP&E linked from prior ending | Followed | `ppeBop` links the prior `ppeEnd` (`excelExport.ts` PP&E block; `model.js:210-260`). |
 | Dep 8 | Separate useful-life cells; projected depreciation checked against history | **Not followed** (rule of thumb) | There are no useful-life cells, and the forecast is not checked against historical depreciation growth. Instead we use one depreciation-to-capex ratio from the PP&E roll-forward, which counts disposals, leases and acquisitions as depreciation (Amazon came out at -91.8% of capital spending). Defensibility: a filed-data model cannot see asset lives, so a ratio is defensible. A roll-forward ratio with no plausibility check is not. A net PP&E ÷ D&A implied life, checked against filed D&A growth, is available from filed data. Failures #4. (The rate has since been changed to filed depreciation over capital spending, with a refusal where it cannot be forecast from; useful lives and vintages are unchanged.) |
 | Dep 9 | Fixed useful life anchored with absolute references | Not applicable | There is no useful-life cell to anchor (Dep 1). The depreciation rate is a per-year input row, not a copied constant. |
@@ -157,7 +157,7 @@ thumb.
 
 | # | Item | Verdict | Reason |
 |---|---|---|---|
-| WC 1 | Narrow definition: ex cash, ex interest-bearing debt | Partly followed | Cash and debt are excluded. But deferred tax assets, other assets and other non-current liabilities also move through the working capital block and unlevered free cash flow (`model.js:154-208`, `:1062-1073`), and other current assets can hold marketable securities (KI #4). Failures #12. |
+| WC 1 | Narrow definition: ex cash, ex interest-bearing debt | Partly followed | Cash and debt are excluded. But deferred tax assets, other assets and other non-current liabilities also move through the working capital block and unlevered free cash flow (`model.js:154-208`, `:1062-1073`), and other current assets can hold marketable securities (KI #3). Failures #12. |
 | WC 2 | Only operating items, each on its own driver | Partly followed | Receivables → revenue and inventory → COGS are followed. Accrued expenses → revenue, not SG&A. Payables → COGS on the site (`deriveModel.js:702`) but revenue in the workbook (`excelExport.ts:842`), and other current assets → COGS on the site but revenue in the workbook. There is no accrued-tax line. Failures #12. |
 | WC 3 | Non-recurring/discontinued items excluded | Not applicable | Identifying held-for-sale or discontinued balances needs footnote research. Filed current-asset tags are taken as reported. |
 | WC 4 | Historical days on average balances × 360 | Not followed | The Ratios sheet computes DSO, DIO and DPO on period-end balances × 365 (`excelSheets.ts:178-195`), and DPO is on revenue, not COGS. No value effect: the ratios are display only. |
@@ -225,7 +225,7 @@ thumb.
 | DCF 12 | Both TV methods, discounted consistently | Followed | Both are built and discounted at the same WACC and final-period factor (`model.js:1094-1143`; `excelExport.ts` rows 33-44). The exit multiple is a flat 12x for derived companies (`deriveModel.js:776`). |
 | DCF 13 | Perpetual growth low, tied to GDP/inflation | Followed for derived; not followed for Apple (rule of thumb) | Derived models use 2.5%, provenance "a flat default". It sits inside long-run nominal GDP and inflation, so it is defensible. Hand-built Apple uses 4.0% (`AAPL.js:170`), carried from its source workbook. That is at or above long-run nominal GDP for a perpetuity, and hard to defend. |
 | DCF 14 | Divergence between TV methods investigated, not averaged | **Not followed** | The headline averages the two methods (`TerminalDashboard.tsx:505-518`; `excelExport.ts` row 53). The spread is shown (row 54, and the football field) but never investigated. A large spread triggers no flag or refusal. Median spread 15.9%; 12 of 42 above 25%. Failures #6. |
-| DCF 15 | EV − net debt − NCI − preferred, ÷ diluted shares | **Not followed** | `equityValue = enterpriseValue − netDebt` only (`model.js:1169-1170`; `excelExport.ts` rows 47-51). No NCI (KI #3, up to 48.1%). No preferred. Cash excludes marketable securities (KI #4). Leases are excluded (KI #18). Failures #3 and #5. |
+| DCF 15 | EV − net debt − NCI − preferred, ÷ diluted shares | **Not followed** | `equityValue = enterpriseValue − netDebt` only (`model.js:1169-1170`; `excelExport.ts` rows 47-51). No NCI (up to 48.1%) and no preferred at the time of this audit; both have since been deducted. Cash excludes marketable securities (KI #3). Leases are excluded (KI #18). Failures #3 and #5. |
 
 ## Comparables (`api/comps.js`)
 

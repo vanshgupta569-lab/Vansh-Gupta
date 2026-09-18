@@ -34,6 +34,8 @@ export interface SubjectFigures {
   revenue: number | null;
   netIncome: number | null;
   netDebt: number | null;
+  /** Minority interests plus preferred stock, taken off enterprise value with net debt. */
+  otherClaims: number;
   dilutedShares: number | null;
   fiscalYear?: number | null;
 }
@@ -122,6 +124,7 @@ export function trailingFiguresFrom(model: any, dcf: any, source?: any): Subject
     revenue: at(model?.revenue),
     netIncome: at(model?.netIncome),
     netDebt: isNum(dcf?.netDebt) ? dcf.netDebt : null,
+    otherClaims: isNum(dcf?.otherClaims) ? dcf.otherClaims : 0,
     dilutedShares: isNum(dcf?.dilutedShares)
       ? dcf.dilutedShares
       : isNum(dcf?.perpetuity?.dilutedShares)
@@ -180,7 +183,9 @@ export function buildMarketApproach(
   const fromEnterpriseValue = (median: number | null, metric: number | null) => {
     if (!isNum(median) || !isNum(metric) || metric <= 0) return null;
     if (!isNum(shares) || shares <= 0 || !isNum(netDebt)) return null;
-    const value = (median * metric - netDebt) / shares;
+    // Enterprise value less net debt, minority interests and preferred stock,
+    // as in the discounted cash flow's bridge.
+    const value = (median * metric - netDebt - (subject.otherClaims ?? 0)) / shares;
     return isNum(value) && value > 0 ? value : null;
   };
 
