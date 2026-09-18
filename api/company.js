@@ -272,6 +272,11 @@ const US_TAGS = {
     'PaymentsOfDistributionsToAffiliates',
     'PaymentsOfOrdinaryDividends',
   ],
+  // Dividends to common shareholders alone. The list above falls back to tags
+  // that include preferred dividends (Bank of America 9,563: 8,083 common plus
+  // preferred) while others file common only (Wells Fargo), so dividends paid
+  // cannot say whose they were; residual income needs the common figure.
+  commonDividendsPaid: ['PaymentsOfDividendsCommonStock'],
   buybacks: ['PaymentsForRepurchaseOfCommonStock'],
   dilutedShares: [
     'WeightedAverageNumberOfDilutedSharesOutstanding',
@@ -530,6 +535,7 @@ const YAHOO_FIELDS = {
   capex: 'annualCapitalExpenditure',
   operatingCashFlow: 'annualOperatingCashFlow',
   dividendsPaid: 'annualCashDividendsPaid',
+  commonDividendsPaid: 'annualCommonStockDividendPaid',
   buybacks: 'annualRepurchaseOfCapitalStock',
   stockComp: 'annualStockBasedCompensation',
   dilutedShares: 'annualDilutedAverageShares',
@@ -538,7 +544,7 @@ const YAHOO_FIELDS = {
 // Yahoo reports money leaving the company as a negative number. The engine
 // expects these as positive amounts, matching how they appear in the Excel
 // model, so their sign gets flipped on the way in.
-const OUTFLOW_FIELDS = new Set(['capex', 'dividendsPaid', 'buybacks']);
+const OUTFLOW_FIELDS = new Set(['capex', 'dividendsPaid', 'commonDividendsPaid', 'buybacks']);
 
 // Share counts are counts, not currency — they must not be divided into
 // millions the way every monetary figure is.

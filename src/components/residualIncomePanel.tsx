@@ -183,6 +183,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
         </p>
         <p className="font-mono text-[12px]">
           {model.provenance?.roe}. {model.provenance?.costOfEquity}.
+          {model.provenance?.preferred ? ` ${model.provenance.preferred}.` : ''}
         </p>
       </div>
     </section>

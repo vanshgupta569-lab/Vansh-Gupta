@@ -30,6 +30,9 @@
 //
 //     residual income = net income − (cost of equity × opening book value)
 //
+// Both on the common shareholders' basis: book value after preferred stock,
+// net income after preferred dividends.
+//
 // This is a standard technique, not an invention: it is the method used for
 // financial institutions precisely because it works from book equity and
 // earnings, which banks report, rather than from free cash flow, which they do
@@ -78,6 +81,60 @@ export function isFinancialCompany(fetched) {
   return sicIsFinancial || sectorIsFinancial;
 }
 
+const fmt = (v) => v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+/**
+ * The preferred holders' claim, per reported year: the balance to take out of
+ * book equity and the dividends to take out of net income, or why it cannot be
+ * read. The same reading as the discounted cash flow's equity bridge, per year.
+ */
+function preferredClaims(rows) {
+  const last = rows[rows.length - 1];
+  const converts = isNum(last?.preferredConversionShares) && last.preferredConversionShares > 0;
+  return rows.map((r) => {
+    if (converts) {
+      return {
+        balance: 0,
+        dividends: 0,
+        source:
+          'Preferred stock converts and is already in the diluted share count as the common shares it becomes, so it stays in book equity',
+      };
+    }
+    const balance = isNum(r.preferredStock) ? r.preferredStock : null;
+    const dividends = isNum(r.preferredDividends) ? Math.abs(r.preferredDividends) : null;
+    if (!(balance > 0) && !(dividends > 0)) {
+      return {
+        balance: 0,
+        dividends: 0,
+        source: 'The filing reports no preferred stock and no preferred dividends',
+      };
+    }
+    // A preferred balance filed as nil beside preferred dividends is the par
+    // value, not the claim (American Express: nil, and 58 paid).
+    if (!(balance > 0)) {
+      return {
+        balance: null,
+        dividends: null,
+        unreadable: `preferred dividends (${fmt(dividends)}) but no preferred-stock balance`,
+      };
+    }
+    if (dividends === null) {
+      return {
+        balance: null,
+        dividends: null,
+        unreadable: `preferred stock (${fmt(balance)}) but no preferred dividends`,
+      };
+    }
+    return {
+      balance,
+      dividends,
+      source:
+        `Preferred stock ${fmt(balance)} taken out of book equity and preferred dividends ${fmt(dividends)} ` +
+        `out of net income, FY${r.fiscalYear}, as filed`,
+    };
+  });
+}
+
 /**
  * Build a residual income valuation from fetched statements.
  *
@@ -101,9 +158,50 @@ export function buildResidualIncome(fetched, options = {}) {
   // Book equity. Taken as total assets less total liabilities rather than the
   // reported equity line, for the same reason the DCF does: some sources report
   // equity excluding minority interests, which leaves the balance sheet out.
-  const bookValue = rows.map((r) =>
-    isNum(r.totalAssets) && isNum(r.totalLiabilities) ? r.totalAssets - r.totalLiabilities : null
+  //
+  // What is valued is the common shares, so preferred stock comes out of book
+  // equity, its dividends out of net income, and out of the dividends paid,
+  // year by year: the preferred holders' claim stays theirs, and returns are
+  // measured on the common equity that earns them. Preferred stock that
+  // converts, and is already in the diluted share count as the common shares
+  // it becomes, stays in, as in the discounted cash flow's equity bridge.
+  const claims = preferredClaims(rows);
+  const bookValue = rows.map((r, i) =>
+    isNum(r.totalAssets) && isNum(r.totalLiabilities) && isNum(claims[i].balance)
+      ? r.totalAssets - r.totalLiabilities - claims[i].balance
+      : null
   );
+  const incomeToCommon = rows.map((r, i) =>
+    isNum(r.netIncome) && isNum(claims[i].dividends) ? r.netIncome - claims[i].dividends : null
+  );
+  const commonDividends = rows.map((r, i) => {
+    if (isNum(r.commonDividendsPaid)) return r.commonDividendsPaid;
+    if (!isNum(r.dividendsPaid) || !isNum(claims[i].dividends)) return null;
+    // Without the common figure, dividends paid is the total the filing tags
+    // (Citigroup, JPMorgan, Bank of America), preferred dividends included.
+    const common = Math.abs(r.dividendsPaid) - claims[i].dividends;
+    return common >= 0 ? common : null;
+  });
+
+  // The forecast starts from the last year's book and the last year's return
+  // on the year before's, so a preferred claim that cannot be read in either
+  // year leaves nothing to start from. Refused, not treated as nil.
+  const unread = rows
+    .map((r, i) => ({ r, c: claims[i] }))
+    .slice(-2)
+    .filter(({ c }) => c.unreadable);
+  if (unread.length) {
+    return {
+      applicable: false,
+      message:
+        unread
+          .map(({ r, c }) => `For FY${r.fiscalYear} the filing reports ${c.unreadable}.`)
+          .join(' ') +
+        ' Book equity and earnings include what belongs to the preferred holders, and without both ' +
+        "figures the common shareholders' share cannot be separated, so no value is shown rather " +
+        'than treating it as nil. The reported figures below are unaffected.',
+    };
+  }
   const openingBook = bookValue[bookValue.length - 1];
   if (!isNum(openingBook) || openingBook <= 0) {
     return {
@@ -118,7 +216,7 @@ export function buildResidualIncome(fetched, options = {}) {
   // residual income formula uses.
   const roeByYear = rows.map((r, i) => {
     const opening = i === 0 ? null : bookValue[i - 1];
-    return isNum(r.netIncome) && isNum(opening) && opening > 0 ? r.netIncome / opening : null;
+    return isNum(incomeToCommon[i]) && isNum(opening) && opening > 0 ? incomeToCommon[i] / opening : null;
   });
 
   // The forecast return on equity: the last reported year, for the same reason
@@ -130,9 +228,9 @@ export function buildResidualIncome(fetched, options = {}) {
 
   // Payout ratio, averaged, because dividends are lumpy and a single year is
   // a poor guide.
-  const payoutByYear = rows.map((r) =>
-    isNum(r.dividendsPaid) && isNum(r.netIncome) && r.netIncome > 0
-      ? Math.abs(r.dividendsPaid) / r.netIncome
+  const payoutByYear = rows.map((r, i) =>
+    isNum(commonDividends[i]) && isNum(incomeToCommon[i]) && incomeToCommon[i] > 0
+      ? commonDividends[i] / incomeToCommon[i]
       : null
   );
   const payout = clamp(mean(payoutByYear), 0, 0.95, 0.2);
@@ -246,7 +344,7 @@ export function buildResidualIncome(fetched, options = {}) {
     years,
     history: rows.map((r, i) => ({
       year: r.fiscalYear,
-      netIncome: r.netIncome ?? null,
+      netIncome: incomeToCommon[i],
       bookValue: bookValue[i],
       roe: roeByYear[i],
       payout: payoutByYear[i],
@@ -258,6 +356,7 @@ export function buildResidualIncome(fetched, options = {}) {
         2
       )}% plus beta ${beta.toFixed(2)} times a ${(marketRiskPremium * 100).toFixed(2)}% market risk premium`,
       terminalGrowth: `${(terminalGrowth * 100).toFixed(1)}% — a flat default, not company specific`,
+      preferred: claims[claims.length - 1].source,
     },
   };
 }

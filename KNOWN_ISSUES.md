@@ -27,7 +27,10 @@ currency sweep and entry 18 from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
 showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
-2026-09-18 with minority interests and preferred stock added.
+2026-09-18 with minority interests and preferred stock added. The residual
+income preferred-stock work refetched them on 2026-09-19 with dividends to
+common shareholders added (176 fetched, 169 modelled, 80 showing a value),
+which is the basis for entry 8 and L19.
 
 ---
 
@@ -42,7 +45,7 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`. The e
 | 5 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
 | 6 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
 | 7 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 8 | Bank residual income counts preferred stock as common equity | 8 banks | Citigroup 74.79 vs 64.71 | overstated 3.4% to 13.5% |
+| 8 | Residual income book equity includes minority interests; its net income does not | 7 of 17 shown | HDFC Bank 529.82 vs 578.15 | understated 2.1% to 9.1% |
 | 9 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | 10 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | 11 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
@@ -203,25 +206,24 @@ showing a DCF value), which is the basis for the entries that cite `HEAD`. The e
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 8. Bank residual income counts preferred stock as common equity
+### 8. Residual income book equity includes minority interests; its net income does not
 
-- **What is wrong.** Residual income values a bank's common shares from its book
-  equity and its net income. The filed shareholders' equity includes preferred
-  stock, and filed net income is before preferred dividends, so the value per
-  common share includes what belongs to the preferred holders. The discounted
-  cash flow's equity bridge now takes preferred stock off; residual income does
-  not have a bridge and still carries it.
-- **Where.** `src/data/residualIncome.js` (`buildResidualIncome`: opening book
-  equity and net income).
-- **How measured.** At `HEAD` on payloads fetched 2026-09-18: residual income
-  re-run with each year's filed preferred stock taken out of equity and its
-  preferred dividends out of net income.
-- **Affects.** 8 banks shown with a residual income value that report preferred
-  stock.
-- **Worst example.** Citigroup 74.79 against 64.71 with the preferred taken out
-  (-13.5%); Wells Fargo -11.3%, Goldman Sachs -8.3%, Bank of America -7.7%,
-  Charles Schwab -7.5%, Toronto-Dominion -4.9%, Royal Bank -3.9%, JPMorgan -3.4%.
-- **Value moved.** Overstated by 3.4% to 13.5%.
+- **What is wrong.** Residual income takes book equity as total assets less
+  total liabilities. Where the filing's total liabilities leave minority
+  interests out, they are in that book equity, while filed net income is the
+  parent's share. Return on equity is then the parent's income over a book that
+  includes what belongs to minority holders, which understates it, and the
+  minority holders' book is valued as if it were the common shareholders'.
+- **Where.** `src/data/residualIncome.js` (`buildResidualIncome`: book equity).
+- **How measured.** On payloads fetched 2026-09-19, with preferred stock
+  already out (L19): residual income re-run with each year's total assets less
+  total liabilities less shareholders' equity, where it is more than 0.1% of
+  assets, taken out of book equity.
+- **Affects.** 7 of the 17 companies shown with a residual income value.
+- **Worst example.** HDFC Bank 529.82 against 578.15 with minority interests
+  taken out (+9.1%); Welltower +7.7%, UnitedHealth +5.2%, Chubb +3.3%,
+  Mitsubishi UFJ +2.8%, HSBC (Hong Kong and London) +2.1%.
+- **Value moved.** Understated by 2.1% to 9.1%.
 
 ### 9. No stated discounting convention; timing runs from the fetch date
 
@@ -493,7 +495,10 @@ for either.
 - **L12. Cached payloads from before this fix.** The API response is cached for
   up to six hours (a day stale). A cached Yahoo payload has no currency
   evidence and is refused until it refreshes; a cached SEC payload is read as
-  US dollars, as it was built.
+  US dollars, as it was built. A payload cached before dividends to common
+  shareholders were fetched (L19) has none, so residual income takes dividends
+  paid less preferred dividends; for a filer whose dividends paid is already
+  common only (Wells Fargo) that understates the payout ratio until it refreshes.
 
 - **L13. Other operating costs are forecast by a rule, not from a named line.**
   Where they are a cost, their share of revenue in the last reported year is
@@ -556,11 +561,36 @@ for either.
   filing shows a claim exists (a minority share of net income, preferred
   dividends) but gives no amount, the company is refused rather than the claim
   treated as nil (Boeing, Morgan Stanley and Santander on this sweep, none of
-  which had a discounted cash flow value before; Morgan Stanley keeps its
-  residual income value, which is built on parent equity and income). Convertible preferred that the filing already counts in
+  which had a discounted cash flow value before; Morgan Stanley's residual
+  income value is withheld too, L19). Convertible preferred that the filing already counts in
   its diluted share count is not taken off again (Procter & Gamble, 68.3
   million shares). `src/data/deriveModel.js`, `src/engine/model.js`
   (`nonCommonClaimNotReported`).
+
+- **L19. Residual income values the common shares, and refuses where the
+  preferred claim cannot be read.** Each year's preferred stock comes out of
+  book equity, its preferred dividends out of net income, and dividends to
+  common shareholders are used for the payout ratio: the filing's common
+  dividends where it tags them (Wells Fargo), else dividends paid less preferred
+  dividends, because the tags used then include preferred dividends (checked
+  against the SEC filings for Citigroup, JPMorgan, Bank of America, Goldman
+  Sachs and Schwab). For Royal Bank and Toronto-Dominion (Toronto listings),
+  Yahoo gives only total cash dividends and no split; they are taken to include
+  preferred dividends, which has not been checked against their filings, and
+  moves the payout ratio by about 3 points either way. Convertible preferred
+  already in the diluted share count stays in, as in L18. Where either of the
+  last two reported years shows a preferred claim without both its balance and
+  its dividends, no value is shown: ICBC (preferred stock, no preferred
+  dividends; was 12.70), American Express (preferred dividends beside a
+  preferred balance filed as nil, the par value; was 555.07) and Morgan Stanley
+  (preferred dividends, no balance; was 15.04). Measured against `80b27f2` on
+  the same payloads: Schwab 88.90 to 103.18 (+16.1%), Citigroup 74.79 to 68.36
+  (-8.6%), Wells Fargo -4.0%, Bank of America -3.1%, Goldman Sachs -2.1%,
+  Toronto-Dominion +1.7%, JPMorgan +1.6%, Royal Bank -0.8%. Values rise where
+  the preferred stock costs less than the common shareholders earn: taking it
+  out raises the return on common equity more than it lowers the book.
+  `src/data/residualIncome.js` (`preferredClaims`), `api/company.js`
+  (`commonDividendsPaid`).
 
 ## Design choices, with their measured effect
 
