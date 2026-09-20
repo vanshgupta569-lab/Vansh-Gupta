@@ -110,8 +110,160 @@ const BALANCE_SHEET_FIELDS = [
 // the balance sheet can be made to add up, because absorbing them would
 // balance the sheet while corrupting net debt: cash in the last reported year,
 // and long-term debt in the last reported year when earlier years report it.
-function deriveBalanceSheet(rows) {
+/**
+ * Everything the company has borrowed, split into what falls due within the
+ * year and what does not, per reported year.
+ *
+ * WHICH OBLIGATIONS COUNT
+ *
+ * Borrowings count in full: short-term borrowings, commercial paper, the
+ * current maturities of long-term loans and the rest of those loans. Only the
+ * last of these used to be fetched, so a company financing itself on
+ * short-term paper looked unlevered (Reliance Infrastructure: 13,720 of
+ * long-term debt fetched against 49,367 of total debt).
+ *
+ * LEASES, and why operating leases are NOT in net debt.
+ *
+ * The test is whether the model's own cash flow already carries the whole cost
+ * of the lease. Enterprise value is built from unlevered free cash flow, which
+ * is struck after operating costs and before financing.
+ *
+ *   - A finance lease (US GAAP) reaches profit as depreciation plus interest.
+ *     Operating profit carries only the depreciation, so the financing half is
+ *     not in the cash flow: the liability is debt and comes off.
+ *   - An operating lease under ASC 842 reaches profit as a single operating
+ *     lease cost, inside operating profit. The rent is already charged in full
+ *     against the cash flow the enterprise value is built from. Taking the
+ *     liability off as well would charge the shareholder twice for the same
+ *     leases, so it is reported and not netted.
+ *   - Under IFRS 16 there is no operating lease: every lease is depreciation
+ *     plus interest, exactly like a finance lease, so the whole lease
+ *     liability is debt. That is the treatment for the non-SEC listings, where
+ *     the source publishes one combined lease obligation.
+ *
+ * This is the point reasonable people differ on, and the reason to state it:
+ * the answer is not "leases are debt" or "leases are rent", it is that a lease
+ * liability belongs in net debt exactly when the forecast cash flow does not
+ * already bear the financing part of it.
+ */
+function debtLines(rows, source) {
+  const isUsGaap = /SEC/i.test(String(source || ''));
+  return rows.map((r) => {
+    const parts = [];
+    const add = (label, value) => {
+      if (isNum(value) && value !== 0) parts.push(`${label} ${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`);
+      return isNum(value) ? value : 0;
+    };
+
+    let current = 0;
+    let noncurrent = 0;
+    let leaseInCurrentAlready = false;
+
+    if (isUsGaap) {
+      // Current borrowings. DebtCurrent is every borrowing due within the
+      // year at once; where it is absent the pieces are added instead.
+      if (isNum(r.debtCurrent)) {
+        current += add('current debt', r.debtCurrent);
+      } else if (isNum(r.debtAndLeaseCurrent)) {
+        current += add('current debt and finance leases', r.debtAndLeaseCurrent);
+        leaseInCurrentAlready = true;
+        current += add('short-term borrowings', r.shortTermBorrowings);
+      } else {
+        current += add('current maturities of long-term debt', r.longTermDebtCurrent);
+        current += add('short-term borrowings', r.shortTermBorrowings);
+      }
+
+      // Non-current borrowings. LongTermDebtNoncurrent is already the part due
+      // after a year; LongTermDebt is the whole loan, so the current portion
+      // comes off it before it is used (Home Depot tags only the whole one:
+      // 49,397 including the 4,967 counted above as current).
+      let leaseInNoncurrentAlready = false;
+      if (isNum(r.longTermDebtAndLeaseNoncurrent)) {
+        noncurrent += add('long-term debt and finance leases', r.longTermDebtAndLeaseNoncurrent);
+        leaseInNoncurrentAlready = true;
+      } else if (isNum(r.longTermDebtNoncurrent)) {
+        noncurrent += add('long-term debt', r.longTermDebtNoncurrent);
+      } else if (isNum(r.longTermDebtTotal)) {
+        const currentMaturities = isNum(r.longTermDebtCurrent)
+          ? r.longTermDebtCurrent
+          : isNum(r.debtAndLeaseCurrent)
+            ? r.debtAndLeaseCurrent
+            : 0;
+        noncurrent += add(
+          currentMaturities ? 'long-term debt less the current maturities counted above' : 'long-term debt',
+          Math.max(r.longTermDebtTotal - currentMaturities, 0)
+        );
+      } else if (isNum(r.longTermDebt)) {
+        noncurrent += add('long-term debt', r.longTermDebt);
+      }
+
+      // Finance leases. Where only a combined figure is filed it is carried as
+      // non-current: which side of the year it falls on changes where it sits
+      // on the balance sheet, not whether it is debt.
+      // Where only one side of the lease is tagged beside a total, the other
+      // side is the difference; where only the total is, it is carried whole.
+      const fcCurrent = isNum(r.financeLeaseCurrent)
+        ? r.financeLeaseCurrent
+        : isNum(r.financeLeaseTotal) && isNum(r.financeLeaseNoncurrent)
+          ? Math.max(r.financeLeaseTotal - r.financeLeaseNoncurrent, 0)
+          : null;
+      const fcNoncurrent = isNum(r.financeLeaseNoncurrent)
+        ? r.financeLeaseNoncurrent
+        : isNum(r.financeLeaseTotal)
+          ? Math.max(r.financeLeaseTotal - (isNum(r.financeLeaseCurrent) ? r.financeLeaseCurrent : 0), 0)
+          : null;
+      if (!leaseInCurrentAlready) current += add('current finance leases', fcCurrent);
+      if (!leaseInNoncurrentAlready) noncurrent += add('non-current finance leases', fcNoncurrent);
+    } else {
+      // IFRS listings: the combined debt-and-lease figures where they are
+      // published, the debt-only ones where they are not.
+      if (isNum(r.currentDebtAndLease)) current += add('current debt and lease liabilities', r.currentDebtAndLease);
+      else current += add('current debt', r.currentDebt);
+
+      if (isNum(r.longTermDebtAndLease)) noncurrent += add('long-term debt and lease liabilities', r.longTermDebtAndLease);
+      else noncurrent += add('long-term debt', r.longTermDebt);
+    }
+
+    // Operating leases under US GAAP: reported, never netted (see above).
+    const operatingLease = !isUsGaap
+      ? null
+      : isNum(r.operatingLeaseCurrent) && isNum(r.operatingLeaseNoncurrent)
+        ? r.operatingLeaseCurrent + r.operatingLeaseNoncurrent
+        : isNum(r.operatingLeaseTotal)
+          ? r.operatingLeaseTotal
+          : isNum(r.operatingLeaseCurrent)
+            ? r.operatingLeaseCurrent
+            : isNum(r.operatingLeaseNoncurrent)
+              ? r.operatingLeaseNoncurrent
+              : null;
+
+    // A right-of-use asset with no liability beside it: leases exist and the
+    // filing does not say how much is owed on them.
+    const leaseUnreadable =
+      isNum(r.financeLeaseRightOfUseAsset) &&
+      r.financeLeaseRightOfUseAsset > 0 &&
+      ![r.financeLeaseCurrent, r.financeLeaseNoncurrent, r.financeLeaseTotal].some(isNum) &&
+      !leaseInCurrentAlready
+        ? `finance-leased assets (${r.financeLeaseRightOfUseAsset.toLocaleString('en-US', { maximumFractionDigits: 0 })}) but no lease liability that can be read`
+        : null;
+
+    return {
+      current,
+      noncurrent,
+      total: current + noncurrent,
+      operatingLease,
+      leaseUnreadable,
+      source: parts.length ? parts.join(' plus ') : 'no borrowings reported',
+    };
+  });
+}
+
+function deriveBalanceSheet(rows, source) {
   const out = {
+    debt: [],
+    debtSource: [],
+    operatingLease: [],
+    leaseUnreadableYears: [],
     cashAndSecurities: [],
     shortTermSecurities: [],
     securitiesNotSplitYears: [],
@@ -137,8 +289,23 @@ function deriveBalanceSheet(rows) {
     if (absorbed.length) note(`${absorbed.join(' and ')} not reported separately: carried in ${line}`, year);
   };
 
-  for (const r of rows) {
+  const debt = debtLines(rows, source);
+
+  for (const [i, r] of rows.entries()) {
     const fy = r.fiscalYear;
+    // Every borrowing, not just the long-term loan (debtLines says what is in
+    // it and what is deliberately left out). The current part comes out of
+    // the accrued-and-other plug and the rest out of other non-current
+    // liabilities, so what the debt line gains, a plug gives up: the balance
+    // sheet is unchanged in total.
+    const d = debt[i];
+    out.debt.push(d.total);
+    out.debtSource.push(d.source);
+    out.operatingLease.push(d.operatingLease);
+    if (d.leaseUnreadable) {
+      out.leaseUnreadableYears.push(fy);
+      note(`the filing reports ${d.leaseUnreadable}, so none is counted as debt`, fy);
+    }
     const equity = isNum(r.equity) ? r.equity : null;
     let totalAssets = isNum(r.totalAssets) ? r.totalAssets : null;
     let totalLiabilities = isNum(r.totalLiabilities) ? r.totalLiabilities : null;
@@ -221,15 +388,21 @@ function deriveBalanceSheet(rows) {
 
     // Liabilities
     if (currentLiabilities !== null) {
-      const acc = plug(currentLiabilities, [['accounts payable', r.payables]]);
+      const acc = plug(currentLiabilities, [
+        ['accounts payable', r.payables],
+        ['borrowings due within the year', d.current || null],
+      ]);
+      acc.absorbed = acc.absorbed.filter((l) => l !== 'borrowings due within the year');
       absorbedInto('accrued and other current liabilities', acc.absorbed, fy);
-      const oncl = plug(totalLiabilities, [['current liabilities', currentLiabilities], ['long-term debt', r.longTermDebt]]);
+      const oncl = plug(totalLiabilities, [['current liabilities', currentLiabilities], ['long-term debt', d.noncurrent || null]]);
+      oncl.absorbed = oncl.absorbed.filter((l) => l !== 'long-term debt');
       absorbedInto('other non-current liabilities', oncl.absorbed, fy);
       out.accruedExpenses.push(acc.value);
       out.otherNonCurrentLiabilities.push(oncl.value);
     } else if (totalLiabilities !== null) {
-      const oncl = plug(totalLiabilities, [['accounts payable', r.payables], ['long-term debt', r.longTermDebt]]);
-      note('current liabilities not reported: every liability beyond accounts payable and long-term debt is carried in other non-current liabilities', fy);
+      const oncl = plug(totalLiabilities, [['accounts payable', r.payables], ['borrowings', d.total || null]]);
+      oncl.absorbed = oncl.absorbed.filter((l) => l !== 'borrowings');
+      note('current liabilities not reported: every liability beyond accounts payable and borrowings is carried in other non-current liabilities', fy);
       absorbedInto('other non-current liabilities', oncl.absorbed, fy);
       out.accruedExpenses.push(0);
       out.otherNonCurrentLiabilities.push(oncl.value);
@@ -252,8 +425,12 @@ function deriveBalanceSheet(rows) {
       gap.blocksValuation = true;
       gap.reason = 'net debt cannot be measured without the cash balance';
     }
-    if (field === 'longTermDebt' && !isNum(last.longTermDebt)) {
-      const earlier = rows.filter((r) => isNum(r.longTermDebt) && r.longTermDebt > 0).map((r) => r.fiscalYear);
+    // Debt is read from every borrowing now, not the long-term loan alone, so
+    // the test is whether the last year has ANY borrowings: a company that
+    // finances itself on short-term paper no longer looks like a company that
+    // stopped reporting its debt.
+    if (field === 'longTermDebt' && !(debt[rows.length - 1]?.total > 0)) {
+      const earlier = rows.filter((r, i) => debt[i].total > 0).map((r) => r.fiscalYear);
       if (earlier.length) {
         gap.blocksValuation = true;
         gap.reportedIn = earlier;
@@ -721,6 +898,10 @@ export function deriveModel(fetched) {
   // does report. See deriveBalanceSheet: whatever cannot be derived stays
   // null, and the engine refuses a model whose balance sheet does not balance.
   const {
+    debt: debtByYear,
+    debtSource,
+    operatingLease,
+    leaseUnreadableYears,
     cashAndSecurities,
     shortTermSecurities,
     securitiesNotSplitYears,
@@ -731,7 +912,7 @@ export function deriveModel(fetched) {
     equity: equityLine,
     notes: balanceSheetNotes,
     gaps: balanceSheetGaps,
-  } = deriveBalanceSheet(rows);
+  } = deriveBalanceSheet(rows, fetched.source);
   if (balanceSheetNotes.length) provenance.balanceSheet = balanceSheetNotes.join('; ');
 
   // Inputs the forecast is built from that the filing never reports at all.
@@ -801,7 +982,9 @@ export function deriveModel(fetched) {
       accountsPayable: pick('payables'),
       accruedExpenses,
       revolver: rows.map(() => 0),
-      longTermDebt: pick('longTermDebt'),
+      // Every borrowing, current and non-current, as one stock: the engine
+      // carries a single debt line plus a revolver.
+      longTermDebt: debtByYear,
       otherNonCurrentLiabilities,
       // The filing gives total equity but not its internal split. Putting the
       // whole balance in one line keeps the balance sheet correct; the split
@@ -1229,8 +1412,11 @@ export function deriveModel(fetched) {
 
   const lastSecurities = shortTermSecurities[shortTermSecurities.length - 1];
   const lastLongTermSecurities = isNum(lastRow.longTermInvestments) ? lastRow.longTermInvestments : null;
+  const lastDebt = debtByYear[debtByYear.length - 1];
+  const lastOperatingLease = operatingLease[operatingLease.length - 1];
   provenance.netDebt =
-    `long-term debt ${isNum(lastRow.longTermDebt) ? lastRow.longTermDebt.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
+    `borrowings ${isNum(lastDebt) ? lastDebt.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
+    `(${debtSource[debtSource.length - 1]}) ` +
     `less cash ${isNum(lastRow.cash) ? lastRow.cash.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} and ` +
     (isNum(lastSecurities)
       ? `short-term marketable securities ${lastSecurities.toLocaleString('en-US', { maximumFractionDigits: 0 })}, as filed`
@@ -1239,6 +1425,12 @@ export function deriveModel(fetched) {
         : 'no short-term marketable securities: the filing reports none') +
     (isNum(lastLongTermSecurities) && lastLongTermSecurities > 0
       ? `. Long-term investments of ${lastLongTermSecurities.toLocaleString('en-US', { maximumFractionDigits: 0 })} are reported but not netted off`
+      : '') +
+    (isNum(lastOperatingLease) && lastOperatingLease > 0
+      ? `. Operating lease liabilities of ${lastOperatingLease.toLocaleString('en-US', { maximumFractionDigits: 0 })} are reported but not netted off: their rent is already charged inside operating profit, so the cash flow carries them`
+      : '') +
+    (leaseUnreadableYears.includes(claimsYear)
+      ? '. The filing shows finance-leased assets with no lease liability that can be read, so none is counted as debt'
       : '') +
     `, FY${claimsYear}`;
 
@@ -1258,7 +1450,7 @@ export function deriveModel(fetched) {
       cashAndSecurities: isNum(cashAndSecurities[cashAndSecurities.length - 1])
         ? -cashAndSecurities[cashAndSecurities.length - 1]
         : 0,
-      longTermDebt: isNum(lastRow.longTermDebt) ? lastRow.longTermDebt : 0,
+      longTermDebt: isNum(debtByYear[debtByYear.length - 1]) ? debtByYear[debtByYear.length - 1] : 0,
     },
     // Taken off enterprise value with net debt (see above). Null where the
     // filing shows the claim exists but not its amount; the engine then refuses.
@@ -1343,6 +1535,13 @@ export function deriveModel(fetched) {
       // Marketable securities: what was netted off with cash, what was only
       // reported, and the years where the filing shows securities but never
       // says how much of them is short-term.
+      // Borrowings: what went into net debt, what was reported beside it.
+      debt: {
+        total: lastDebt ?? null,
+        source: debtSource[debtSource.length - 1] ?? null,
+        operatingLease: lastOperatingLease ?? null,
+        leaseUnreadableYears,
+      },
       securities: {
         shortTerm: shortTermSecurities[shortTermSecurities.length - 1] ?? null,
         longTerm: lastLongTermSecurities,

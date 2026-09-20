@@ -666,7 +666,9 @@ function buildBalanceSheetSheet(ctx: SupportingSheetsContext) {
   const rev = b.link('Revolver', 'bsRevolver');
   const tcl = b.total('Total current liabilities', [ap, acc, rev]);
   b.sub('Non-current liabilities');
-  const debt = b.link('Long term debt', 'bsDebt');
+  // Every borrowing, not the long-term loan alone: short-term borrowings,
+  // current maturities and finance leases are all in this line.
+  const debt = b.link('Borrowings, including finance leases', 'bsDebt');
   const oncl = b.link('Other non-current liabilities', 'bsOncl');
   const tncl = b.total('Total non-current liabilities', [debt, oncl]);
   b.blank();
@@ -818,7 +820,7 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   b.blank();
 
   b.group('Annexure C - debt & revolver');
-  b.sub('Long term debt');
+  b.sub('Borrowings, including finance leases');
   pct('Cash interest rate on debt', 'debtRate');
   pct('PIK interest rate on debt', 'pikRate');
   bal('Beginning of period', 'debtBop');

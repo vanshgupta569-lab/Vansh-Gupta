@@ -485,7 +485,11 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
           { label: 'Accounts payable', values: bs.accountsPayable, indent: true },
           { label: 'Accrued expenses', values: bs.accruedExpenses, indent: true },
           { label: 'Revolver', values: bs.revolver, indent: true },
-          { label: 'Long term debt', values: bs.longTermDebt, indent: true },
+          {
+            label: 'Borrowings, including finance leases',
+            values: bs.longTermDebt,
+            indent: true,
+          },
           { label: 'Other non-current liabilities', values: bs.otherNonCurrentLiabilities, indent: true },
           { label: 'Total liabilities', values: bs.totalLiabilities, bold: true },
           { spacer: true, label: '' },

@@ -37,7 +37,10 @@ L21; its market-approach figures use peer medians fetched the same day. The
 marketable securities work refetched every payload on 2026-09-20 with
 short-term and long-term securities added (176 fetched, 169 modelled, 63 with
 a DCF value), which is the basis for L22 and, re-measured at `b7432d6` after
-the securities went into net debt, L23.
+the securities went into net debt, L23. The debt work refetched every payload
+on 2026-09-20 with short-term borrowings, current maturities and lease
+liabilities added (176 fetched, 169 modelled, 64 with a DCF value), which is
+the basis for entry 1 and L24.
 
 ---
 
@@ -45,7 +48,7 @@ the securities went into net debt, L23.
 
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
-| 1 | Reliance Infrastructure values at 6.6 times its price; likely unfetched short-term debt | 1 | RELINFRA.NS 328.58 vs 49.99 | 6.6x the price |
+| 1 | Cost of debt is a flat rate, so borrowing lowers the discount rate without limit | 3 valued with a debt weight above 50% | RELINFRA.NS WACC 4.27%, 997.55 vs 49.99 | up to 20x the price |
 | 2 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
 | 3 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
 | 4 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
@@ -53,38 +56,42 @@ the securities went into net debt, L23.
 | 6 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | 7 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
 | 8 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 9 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
+| 9 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
 | 10 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
 | 11 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
 | 12 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
 | 13 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
 | 14 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
-| 15 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
-### 1. Reliance Infrastructure values at 6.6 times its price
+### 1. Cost of debt is a flat rate, so borrowing lowers the discount rate
 
-- **What is wrong.** Reliance Infrastructure (RELINFRA.NS) values far above its
-  price. It is not the foreign-listing currency or share-basis defect, now
-  fixed: its statements and its price are both in rupees, and the listing's own share
-  count (408 million) matches the filing's (406 million). The likeliest cause is
-  debt the model does not see. Net debt counts only the fetched long-term debt,
-  while the filing's current liabilities exceed its payables by 148,487, and
-  short-term borrowings are not fetched, so how much of that is debt cannot be
-  confirmed. Its minority interests (112,156) now come off enterprise value,
-  which took the headline from 604.75 to 328.58; what is left is not them.
-- **Where.** `api/company.js` (no short-term borrowings fetched);
-  `src/data/deriveModel.js` (`dcf.netDebt`).
-- **How measured.** Payload fetched 2026-09-17 with the working API: net debt,
-  current liabilities, payables and the DCF bridge from the engine's outputs.
-- **Affects.** 1 known.
-- **Worst example.** At `HEAD`, on payloads fetched 2026-09-18: perpetuity value
-  246.55 and headline 328.58 against a price of 49.99, after net debt and
-  112,156 of minority interests. Current liabilities 320,810 against payables
-  172,324.
-- **Value moved.** The headline is 6.6 times the price (it was 12.4 before minority
-  interests were deducted). Not diagnosed further.
+- **What is wrong.** The cost of debt is the model's own forecast rate, 4.5%
+  before tax for every derived company, whatever the borrower. It is below
+  every company's cost of equity, so the more debt a company carries, the lower
+  its weighted average cost of capital goes, without limit and without regard
+  to whether that debt is cheap or the company is in trouble. Weighting on
+  gross debt (L23) is right, and fetching all of the debt (L24) is right, and
+  together they hand the full weight to a rate that does not vary.
+- **Where.** `src/data/deriveModel.js` (`dcf.costOfDebt`, 4.5%);
+  `src/engine/model.js` (`computeWACC`, `afterTaxCostOfDebt`).
+- **How measured.** At `HEAD` on payloads fetched 2026-09-20, after every
+  borrowing was fetched: the debt weight and WACC of each valued company
+  against its value and its price.
+- **Affects.** 3 of the 64 valued companies carry a debt weight above 50%, and
+  they are exactly the three furthest above their own share price.
+- **Worst example.** Reliance Infrastructure: debt 49,367 against a market
+  capitalisation near 20,400, so the debt weight is 71% and WACC 4.27%, below
+  the 4.5% risk-free rate it is built from. Value 997.55 against a price of
+  49.99. Before its short-term borrowings were fetched it was 339.88 (6.8x);
+  now it is 20.0x, because the missing debt was cheap in the model.
+  Vodafone: debt weight 60%, WACC 4.51%, 4.7x its price. Toyota: 52%, 5.07%,
+  1.6x, and its value fell 34.6% when its finance arm's borrowings arrived.
+- **Value moved.** Up to 20x the price for the worst case. A cost of debt read
+  from each company's own filed interest over its own debt would fix the
+  direction; whether it fixes Reliance Infrastructure is not known until it is
+  tried, and its filed interest is itself suspect (#7).
 
 ### 2. Forecast depreciation tracks same-year capex
 
@@ -223,22 +230,24 @@ the securities went into net debt, L23.
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 9. Possible false-positive missing-debt refusals
+### 9. A possible false-positive missing-debt refusal
 
-- **What is wrong.** A company is refused when long-term debt is missing in the
+- **What is wrong.** A company is refused when its borrowings are missing in the
   last reported year but reported earlier (so that debt is not silently counted
   as zero). This is kept on purpose: understating debt overstates value, which
   is worse than an explained refusal. But it cannot tell a changed XBRL tag from
   debt that was genuinely repaid.
 - **Where.** `src/data/deriveModel.js` (`deriveBalanceSheet`,
-  `blocksValuation`); `api/company.js` (long-term debt tags).
+  `blocksValuation`); `api/company.js` (the borrowing tags).
 - **How measured.** Company sweep refusals.
-- **Affects.** 3: Broadcom (debt reported FY2021 only), Palo Alto Networks
-  (FY2022-FY2023 only), Coca-Cola (FY2021-FY2023 only).
+- **Affects.** 1: Palo Alto Networks. Broadcom and Coca-Cola were refused for
+  this reason until every borrowing was fetched (L24): both tag short-term
+  borrowings the fetcher did not read before, and both are now valued
+  (Broadcom 225.50, Coca-Cola 46.60). Palo Alto tags none in any form, so the
+  test still refuses it.
 - **Worst example.** Palo Alto, whose convertible notes may simply have been
-  settled; accepted as a possible false positive. Broadcom and Coca-Cola look
-  like tag changes the fetcher does not follow.
-- **Value moved.** No value is shown at all for these companies.
+  settled; accepted as a possible false positive.
+- **Value moved.** No value is shown at all for this company.
 
 ### 10. An SEC lookup that fails stops the company loading at all
 
@@ -326,17 +335,6 @@ the securities went into net debt, L23.
   charged and added back.
 - **Value moved.** +1.8% in the one case that can be estimated; not measurable
   for the other 19 without the figure the filing does not give.
-
-### 15. Net debt excludes lease liabilities
-
-- **What is wrong.** Lease liabilities are not fetched, so they are not in net
-  debt, while lease-financed assets depreciate through filed D&A.
-- **Where.** `api/company.js`; `src/data/deriveModel.js` (`dcf.netDebt`).
-- **How measured.** Not measured; found while diagnosing the depreciation rate (Amazon's negative
-  roll-forward depreciation is lease-driven).
-- **Affects.** Not measured.
-- **Worst example.** Amazon.
-- **Value moved.** Not measured.
 
 ---
 
@@ -627,6 +625,48 @@ for either.
   equity; now none do, and debt weights run 0.0% to 50.4% (median 5.7%, 8
   companies with no debt at all). `src/engine/model.js` (`computeWACC`),
   `src/data/excelExport.ts` (DCF sheet rows 24-25).
+
+- **L24. Net debt counts every borrowing, and the lease liabilities whose
+  financing cost the cash flow does not already carry.** Short-term borrowings,
+  commercial paper, the current maturities of long-term loans and the loans
+  themselves are all in it; only the last of these used to be. The tags overlap
+  and the overlaps are where a total goes wrong, so each is fetched separately
+  and the most inclusive figure a filer gives is used without adding the pieces
+  it already contains: `LongTermDebt` is the whole loan including its current
+  maturities (Apple 90,678 = 78,328 + 12,350), `LongTermDebtAndCapitalLease-
+  Obligations` has the finance leases inside it (Home Depot 46,341), and
+  `LongTermDebtAndCapitalLeaseObligationsCurrent` has the current lease inside
+  it (4,967). Checked by hand against the filings for Apple (99,887), Amazon
+  (81,137) and Home Depot, and against the source's own total debt for
+  Reliance Infrastructure (49,367, to the rupee).
+  **Leases.** A lease liability belongs in net debt exactly when the forecast
+  cash flow does not already bear the financing half of it. A finance lease
+  reaches profit as depreciation plus interest, so operating profit carries
+  only the depreciation: it is debt. An operating lease under ASC 842 reaches
+  profit as a single operating lease cost inside operating profit, so the rent
+  is already charged in full against the cash flow the enterprise value is
+  built from, and taking the liability off as well would charge the shareholder
+  twice: it is reported beside net debt and not netted (Amazon 89,252, Home
+  Depot 9,578). Under IFRS 16 there is no operating lease - every lease is
+  depreciation plus interest - so for the non-SEC listings the whole lease
+  obligation is debt. This is the point reasonable people differ on, and the
+  answer here is not "leases are debt" or "leases are rent" but that it depends
+  on which line of the income statement the lease already passes through.
+  **What is not netted and why:** operating leases under US GAAP, as above.
+  **Missing is not nil:** where a filing shows finance-leased assets with no
+  lease liability that can be read, none is counted and the provenance says so.
+  **Knock-on:** the borrowings come out of the liability plugs, so what the
+  debt line gains, accrued liabilities or other non-current liabilities give
+  up; no company's plug goes negative (one did before this change:
+  MercadoLibre at -1,907) and every reported year still balances, in the
+  workbook too (Amazon, Home Depot and Walmart run alongside curated Apple).
+  Because net debt now feeds the WACC weights as well as the bridge, adding
+  debt moves value twice and in opposite directions: the bridge takes the debt
+  off the shareholders, while the heavier debt weight lowers the discount rate
+  and raises enterprise value. The bridge effect is the larger of the two for
+  43 of the 62 companies valued on both sides; where the discount rate wins,
+  the cause is the flat cost of debt (#1). `api/company.js`,
+  `src/data/deriveModel.js` (`debtLines`).
 
 ## Design choices, with their measured effect
 

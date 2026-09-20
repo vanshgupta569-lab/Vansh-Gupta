@@ -223,6 +223,58 @@ const US_TAGS = {
     'LongTermDebt',
     'LongTermNotesPayable',
   ],
+  // ---- the rest of the borrowings, and the leases -------------------------
+  //
+  // These overlap, and the overlaps are where a careless total goes wrong, so
+  // each is fetched on its own and deriveModel decides what to add:
+  //
+  //   LongTermDebt            the WHOLE loan, current portion included
+  //                           (Apple 90,678 = 78,328 noncurrent + 12,350
+  //                           current). Home Depot tags only this one.
+  //   LongTermDebtNoncurrent  the part due after a year, above.
+  //   DebtCurrent             every borrowing due within a year, short-term
+  //                           borrowings and current maturities together.
+  //   LongTermDebtAndCapitalLeaseObligationsCurrent
+  //                           the current maturities WITH the current finance
+  //                           lease inside them (Home Depot 4,967).
+  longTermDebtTotal: ['LongTermDebt'],
+  // The noncurrent tag on its own, so the derivation can tell which of the two
+  // the `longTermDebt` field above came from: that list falls back to the
+  // whole-loan tag, and adding current maturities to a whole loan counts them
+  // twice (Home Depot tags no noncurrent figure at all).
+  longTermDebtNoncurrent: ['LongTermDebtNoncurrent'],
+  // The non-current borrowings WITH the finance leases already inside them.
+  // Where a filer gives this, it is the most inclusive figure it publishes and
+  // the lease is not added again (Home Depot: 46,341, of which 2,675 leases).
+  longTermDebtAndLeaseNoncurrent: ['LongTermDebtAndCapitalLeaseObligations'],
+  debtCurrent: ['DebtCurrent'],
+  longTermDebtCurrent: ['LongTermDebtCurrent'],
+  debtAndLeaseCurrent: ['LongTermDebtAndCapitalLeaseObligationsCurrent'],
+  shortTermBorrowings: [
+    'ShortTermBorrowings',
+    'CommercialPaper',
+    'OtherShortTermBorrowings',
+    'LinesOfCreditCurrent',
+    'ShortTermBankLoansAndNotesPayable',
+    'NotesPayableCurrent',
+  ],
+  // Finance (formerly capital) leases: borrowing to use an asset. Their cost
+  // reaches profit as depreciation plus interest, so operating profit carries
+  // only the depreciation and the liability is debt.
+  financeLeaseCurrent: ['FinanceLeaseLiabilityCurrent', 'CapitalLeaseObligationsCurrent'],
+  financeLeaseNoncurrent: ['FinanceLeaseLiabilityNoncurrent', 'CapitalLeaseObligationsNoncurrent'],
+  financeLeaseTotal: ['FinanceLeaseLiability'],
+  // Operating leases: reported, never netted off. See deriveModel for why.
+  operatingLeaseCurrent: ['OperatingLeaseLiabilityCurrent'],
+  operatingLeaseNoncurrent: ['OperatingLeaseLiabilityNoncurrent'],
+  operatingLeaseTotal: ['OperatingLeaseLiability'],
+  // A right-of-use asset with no liability beside it says leases exist and
+  // their amount was not tagged: evidence, not an amount.
+  financeLeaseRightOfUseAsset: [
+    'FinanceLeaseRightOfUseAsset',
+    'CapitalLeasedAssetsGross',
+  ],
+  operatingLeaseRightOfUseAsset: ['OperatingLeaseRightOfUseAsset'],
   totalLiabilities: ['Liabilities'],
 
   // Goodwill and other intangibles. Needed for TANGIBLE book value, which is
@@ -556,6 +608,14 @@ const YAHOO_FIELDS = {
   payables: 'annualAccountsPayable',
   currentLiabilities: 'annualCurrentLiabilities',
   longTermDebt: 'annualLongTermDebt',
+  // See the SEC lists above. Yahoo publishes debt with and without the lease
+  // obligations folded in; under IFRS there is no operating/finance split, so
+  // the "AndCapitalLeaseObligation" figures are the whole borrowing.
+  currentDebt: 'annualCurrentDebt',
+  currentDebtAndLease: 'annualCurrentDebtAndCapitalLeaseObligation',
+  longTermDebtAndLease: 'annualLongTermDebtAndCapitalLeaseObligation',
+  leaseObligations: 'annualCapitalLeaseObligations',
+  totalDebtReported: 'annualTotalDebt',
   totalLiabilities: 'annualTotalLiabilitiesNetMinorityInterest',
   equity: 'annualStockholdersEquity',
   goodwill: 'annualGoodwill',
