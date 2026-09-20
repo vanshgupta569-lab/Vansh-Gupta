@@ -1250,8 +1250,10 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   vInput(21, 'Beta', D.waccDetail?.beta ?? 1, PLAIN2, { unit: 'x' });
   vOne(22, 'Cost of equity', `${F}19+${F}21*${F}20`, PCT2, { unit: '%' });
   vInput(23, 'After tax cost of debt', D.waccDetail?.afterTaxCostOfDebt ?? 0.03, PCT2, { unit: '%' });
-  vInput(24, 'Weight of equity', D.waccDetail?.weightEquity ?? 1, PCT1, { unit: '%' });
-  vInput(25, 'Weight of debt', D.waccDetail?.weightDebt ?? 0, PCT1, { unit: '%' });
+  // Gross debt at book against equity at market: how the business is financed.
+  // Cash is not netted off here; it comes back in the bridge below.
+  vInput(24, 'Weight of equity, at market value', D.waccDetail?.weightEquity ?? 1, PCT1, { unit: '%' });
+  vInput(25, 'Weight of debt, gross and at book value', D.waccDetail?.weightDebt ?? 0, PCT1, { unit: '%' });
   vOne(26, 'Weighted average cost of capital', `${F}24*${F}22+${F}25*${F}23`, PCT2, {
     bold: true,
     unit: '%',

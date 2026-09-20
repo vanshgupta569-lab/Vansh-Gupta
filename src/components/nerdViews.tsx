@@ -787,8 +787,16 @@ export const DCFView: React.FC<ViewProps> = ({
             },
             { label: 'Cost of equity', value: fmtPct(w.costOfEquity, 2) },
             { label: 'Cost of debt, after tax', value: fmtPct(w.afterTaxCostOfDebt, 2) },
-            { label: 'Weight of equity', value: fmtPct(w.weightEquity, 1) },
-            { label: 'Weight of debt', value: fmtPct(w.weightDebt, 1) },
+            {
+              label: 'Weight of equity, at market value',
+              value: fmtPct(w.weightEquity, 1),
+            },
+            {
+              label: 'Weight of debt, gross and at book value',
+              value: fmtPct(w.weightDebt, 1),
+              note:
+                'How the business is financed, not what it would cost to buy. Cash is not netted off here: it is added to the shareholders’ side in the bridge below, and taking it off the weights as well would count it twice.',
+            },
             {
               label: 'Weighted average cost of capital',
               value: fmtPct(D.wacc, 3),

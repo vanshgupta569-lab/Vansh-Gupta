@@ -1398,30 +1398,57 @@ export function computeWACC(model, data) {
   const taxRate = M.taxRate[lastFcst];
   const afterTaxCostOfDebt = costOfDebt * (1 - taxRate);
 
-  // Beta — either the stated equity beta or the delevered industry average
+  // CAPITAL IS WEIGHTED ON GROSS DEBT, NOT NET DEBT.
+  //
+  // The weights say how the business is financed: what share of the money in
+  // it was borrowed and what share was put in by shareholders. A company that
+  // borrows 100 and holds 150 in the bank still has 100 of borrowed money in
+  // it, costing what it costs. Weighting on net debt made that share negative,
+  // the equity weight more than 100%, and the whole cost of capital higher
+  // than the cost of equity alone — so holding cash made a company worth less
+  // (Equinor lost 4.2% when its securities were finally counted, b7432d6).
+  //
+  // Cash does not belong here for a second reason: it is already in the equity
+  // bridge, where it is added to what the shareholders get. Netting it off the
+  // weights as well counts it twice, once in the discount rate and once in the
+  // bridge.
+  //
+  // Debt is at book value, which is what the filing gives; the market value of
+  // a company's bonds is not in any free source. Equity is at market value,
+  // which is the price the model is comparing itself against anyway.
+  const grossDebt = isNum(data.dcf.netDebt.longTermDebt) ? data.dcf.netDebt.longTermDebt : 0;
+  const netDebt = data.dcf.netDebt.cashAndSecurities + data.dcf.netDebt.longTermDebt;
+  const marketCap = data.dcf.sharePrice * data.dcf.dilutedSharesCount;
+
+  // Beta — either the stated equity beta or the delevered industry average.
+  // Delevering and relevering carry gross debt for the same reason: the
+  // formula is asking how much of the equity's risk comes from borrowing, and
+  // a borrower's leverage is what it owes, not what it owes less its bank
+  // balance. On net debt a company with more cash than debt came out with a
+  // beta BELOW its industry's unlevered beta, which says its shares are safer
+  // than the same business with no debt at all.
   const comps = c.comparables.map((k) => {
     const marketCap = k.sharePrice * k.dilutedShares;
-    const delevered = (k.equityBeta * marketCap) / (((k.debt - k.cash) * (1 - k.taxRate)) + marketCap);
+    const delevered = (k.equityBeta * marketCap) / ((k.debt * (1 - k.taxRate)) + marketCap);
     return { ...k, marketCap, delevered };
   });
   const industryDelevered = avg(comps.map((k) => k.delevered));
 
-  const netDebt = data.dcf.netDebt.cashAndSecurities + data.dcf.netDebt.longTermDebt;
-  const marketCap = data.dcf.sharePrice * data.dcf.dilutedSharesCount;
-  const relevered = (industryDelevered * (netDebt * (1 - taxRate) + marketCap)) / marketCap;
+  const relevered = (industryDelevered * (grossDebt * (1 - taxRate) + marketCap)) / marketCap;
 
   const beta = c.betaSource === 'industryUnlevered' ? relevered : c.equityBeta;
   const costOfEquity = c.riskFreeRate + c.marketRiskPremium * beta;
 
-  const totalCapital = marketCap + netDebt;
-  const weightEquity = marketCap / totalCapital;
-  const weightDebt = netDebt / totalCapital;
+  const totalCapital = marketCap + grossDebt;
+  const weightEquity = totalCapital > 0 ? marketCap / totalCapital : 1;
+  const weightDebt = totalCapital > 0 ? grossDebt / totalCapital : 0;
 
   return {
     costOfDebt, taxRate, afterTaxCostOfDebt,
     riskFreeRate: c.riskFreeRate, marketRiskPremium: c.marketRiskPremium,
     beta, costOfEquity, comps, industryDelevered, releveredBeta: relevered,
-    marketCap, netDebt, weightEquity, weightDebt,
+    // netDebt is reported because the bridge uses it; the weights do not.
+    marketCap, netDebt, grossDebt, weightEquity, weightDebt,
     wacc: weightEquity * costOfEquity + weightDebt * afterTaxCostOfDebt,
   };
 }
