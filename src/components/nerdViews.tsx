@@ -1085,6 +1085,11 @@ export const DCFView: React.FC<ViewProps> = ({
             </div>
           ))}
         </div>
+        {source?.provenance?.netDebt && (
+          <p className="font-mono text-[12px] leading-relaxed text-[#8A8A8F] mt-3 max-w-3xl">
+            {source.provenance.netDebt}.
+          </p>
+        )}
       </section>
 
       {D.sensitivity?.perpetuity && D.sensitivityAxes && (

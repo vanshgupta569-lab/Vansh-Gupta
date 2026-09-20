@@ -112,6 +112,9 @@ const BALANCE_SHEET_FIELDS = [
 // and long-term debt in the last reported year when earlier years report it.
 function deriveBalanceSheet(rows) {
   const out = {
+    cashAndSecurities: [],
+    shortTermSecurities: [],
+    securitiesNotSplitYears: [],
     otherCurrentAssets: [],
     otherAssets: [],
     accruedExpenses: [],
@@ -155,17 +158,59 @@ function deriveBalanceSheet(rows) {
       markDerived('equity', 'total assets less total liabilities', fy);
     }
 
+    // Cash, and the short-term marketable securities that belong with it.
+    //
+    // Securities are money parked in instruments rather than in the bank; a
+    // company holding them is no more indebted for it, so they come off debt
+    // with cash. They are taken out of other current assets at the same time,
+    // which is where an untagged balance would otherwise sit: counting them in
+    // both would add them to the balance sheet twice.
+    //
+    // Where the filing shows securities but never says how much is current,
+    // the year is recorded and NOTHING is netted off: the securities stay
+    // inside other current assets, where they already were, rather than being
+    // read as nil or split by guesswork.
+    const securities = isNum(r.shortTermInvestments) && r.shortTermInvestments >= 0
+      ? r.shortTermInvestments
+      : null;
+    const securitiesExist = isNum(r.securitiesNotSplit) && r.securitiesNotSplit > 0;
+    if (securities === null && securitiesExist) {
+      out.securitiesNotSplitYears.push(fy);
+      note(
+        `the filing reports marketable securities (${r.securitiesNotSplit.toLocaleString('en-US', { maximumFractionDigits: 0 })}) ` +
+          'but not how much of them is short-term, so none is counted as cash and they stay in other current assets',
+        fy
+      );
+    }
+    out.shortTermSecurities.push(securities);
+    out.cashAndSecurities.push(isNum(r.cash) ? r.cash + (securities ?? 0) : null);
+
     // Assets
     if (currentAssets !== null) {
-      const oca = plug(currentAssets, [['cash', r.cash], ['receivables', r.receivables], ['inventory', r.inventory]]);
+      const oca = plug(currentAssets, [
+        ['cash', r.cash],
+        ['short-term investments', securities],
+        ['receivables', r.receivables],
+        ['inventory', r.inventory],
+      ]);
+      // A securities balance that is not reported is not "absorbed into other
+      // current assets" in the sense the note means; the line above says it.
+      oca.absorbed = oca.absorbed.filter((l) => l !== 'short-term investments');
       absorbedInto('other current assets', oca.absorbed, fy);
       const oa = plug(totalAssets, [['current assets', currentAssets], ['net PP&E', r.ppeNet]]);
       absorbedInto('other assets', oa.absorbed, fy);
       out.otherCurrentAssets.push(oca.value);
       out.otherAssets.push(oa.value);
     } else if (totalAssets !== null) {
-      const oa = plug(totalAssets, [['cash', r.cash], ['receivables', r.receivables], ['inventory', r.inventory], ['net PP&E', r.ppeNet]]);
-      note('current assets not reported: every asset beyond cash, receivables, inventory and PP&E is carried in other assets', fy);
+      const oa = plug(totalAssets, [
+        ['cash', r.cash],
+        ['short-term investments', securities],
+        ['receivables', r.receivables],
+        ['inventory', r.inventory],
+        ['net PP&E', r.ppeNet],
+      ]);
+      oa.absorbed = oa.absorbed.filter((l) => l !== 'short-term investments');
+      note('current assets not reported: every asset beyond cash, securities, receivables, inventory and PP&E is carried in other assets', fy);
       absorbedInto('other assets', oa.absorbed, fy);
       out.otherCurrentAssets.push(0);
       out.otherAssets.push(oa.value);
@@ -676,6 +721,9 @@ export function deriveModel(fetched) {
   // does report. See deriveBalanceSheet: whatever cannot be derived stays
   // null, and the engine refuses a model whose balance sheet does not balance.
   const {
+    cashAndSecurities,
+    shortTermSecurities,
+    securitiesNotSplitYears,
     otherCurrentAssets,
     otherAssets,
     accruedExpenses,
@@ -739,7 +787,7 @@ export function deriveModel(fetched) {
     segments: { 'Total revenue': revenue },
 
     balanceSheet: {
-      cashAndSecurities: pick('cash'),
+      cashAndSecurities,
       accountsReceivable: pick('receivables'),
       inventory: pick('inventory'),
       deferredTaxAssets: rows.map(() => 0),
@@ -1179,20 +1227,45 @@ export function deriveModel(fetched) {
     `(${minoritySource ?? 'amount not in the filing'}) and preferred stock ${isNum(preferredStock) ? preferredStock.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
     `(${preferredSource ?? 'amount not in the filing'}), FY${claimsYear}, taken off enterprise value with net debt`;
 
+  const lastSecurities = shortTermSecurities[shortTermSecurities.length - 1];
+  const lastLongTermSecurities = isNum(lastRow.longTermInvestments) ? lastRow.longTermInvestments : null;
+  provenance.netDebt =
+    `long-term debt ${isNum(lastRow.longTermDebt) ? lastRow.longTermDebt.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
+    `less cash ${isNum(lastRow.cash) ? lastRow.cash.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} and ` +
+    (isNum(lastSecurities)
+      ? `short-term marketable securities ${lastSecurities.toLocaleString('en-US', { maximumFractionDigits: 0 })}, as filed`
+      : securitiesNotSplitYears.includes(claimsYear)
+        ? 'no securities: the filing reports marketable securities but not how much of them is short-term, so none is counted'
+        : 'no short-term marketable securities: the filing reports none') +
+    (isNum(lastLongTermSecurities) && lastLongTermSecurities > 0
+      ? `. Long-term investments of ${lastLongTermSecurities.toLocaleString('en-US', { maximumFractionDigits: 0 })} are reported but not netted off`
+      : '') +
+    `, FY${claimsYear}`;
+
   const dcf = {
     sharePrice: price,
     sharePriceDate: (fetched.fetchedAt || new Date().toISOString()).slice(0, 10),
     basicSharesCount: shares,
     dilutedSharesCount: shares,
 
+    // Cash and the short-term securities held with it, as the balance sheet
+    // line does. Long-term securities are NOT netted off: they are reported
+    // (`longTermSecurities` below) but a holding the company has placed out of
+    // reach for a year or more is not money it can pay a lender with tomorrow,
+    // and some of what sits there is not marketable at all (Alphabet's
+    // non-marketable equity stakes are tagged in the same place).
     netDebt: {
-      cashAndSecurities: isNum(lastRow.cash) ? -lastRow.cash : 0,
+      cashAndSecurities: isNum(cashAndSecurities[cashAndSecurities.length - 1])
+        ? -cashAndSecurities[cashAndSecurities.length - 1]
+        : 0,
       longTermDebt: isNum(lastRow.longTermDebt) ? lastRow.longTermDebt : 0,
     },
     // Taken off enterprise value with net debt (see above). Null where the
     // filing shows the claim exists but not its amount; the engine then refuses.
     minorityInterest,
     preferredStock,
+    // Reported beside net debt, never inside it (see netDebt above).
+    longTermSecurities: lastLongTermSecurities,
 
     longTermGrowthRate: 0.025,
     exitEbitdaMultiple: 12,
@@ -1267,6 +1340,14 @@ export function deriveModel(fetched) {
       // the refusal where the filing shows one exists but not its amount.
       otherClaims: { minorityInterest, minoritySource, preferredStock, preferredSource, year: claimsYear },
       otherClaimsRefusal,
+      // Marketable securities: what was netted off with cash, what was only
+      // reported, and the years where the filing shows securities but never
+      // says how much of them is short-term.
+      securities: {
+        shortTerm: shortTermSecurities[shortTermSecurities.length - 1] ?? null,
+        longTerm: lastLongTermSecurities,
+        notSplitYears: securitiesNotSplitYears,
+      },
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
       // Whether the price, the share count and the statements describe the same

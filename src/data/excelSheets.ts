@@ -909,6 +909,9 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
   metaRow('Filing source', meta.source || 'company filings');
   if (meta.sourceUrl) metaRow('Source URL', meta.sourceUrl);
   if (source?.provenance?.currency) metaRow('Currency and share basis', source.provenance.currency);
+  // What the cash in the bridge is made of, and where a securities balance
+  // could not be read (deriveModel, provenance.netDebt).
+  if (source?.provenance?.netDebt) metaRow('Net debt', source.provenance.netDebt);
   r++;
 
   if (nS === 0) {

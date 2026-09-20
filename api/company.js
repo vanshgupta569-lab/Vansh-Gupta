@@ -173,6 +173,41 @@ const US_TAGS = {
     'CashAndCashEquivalentsAtCarryingValue',
     'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
   ],
+  // Marketable securities, split by where they sit on the balance sheet.
+  // Short-term securities are money the company can turn into cash on a few
+  // days' notice and are part of net debt; long-term ones are fetched to be
+  // reported, not netted off (see deriveModel's net debt).
+  //
+  // The tag lists are ordered by what filers use NOW: a filer that once used
+  // AvailableForSaleSecuritiesCurrent may have moved to MarketableSecurities-
+  // Current years ago (Apple's last AvailableForSale is 2018), and the
+  // earlier-tag-wins rule would otherwise keep reading the stale one.
+  shortTermInvestments: [
+    'ShortTermInvestments',
+    'MarketableSecuritiesCurrent',
+    'AvailableForSaleSecuritiesDebtSecuritiesCurrent',
+    'AvailableForSaleSecuritiesCurrent',
+    'OtherShortTermInvestments',
+    'HeldToMaturitySecuritiesCurrent',
+  ],
+  longTermInvestments: [
+    'LongTermInvestments',
+    'MarketableSecuritiesNoncurrent',
+    'AvailableForSaleSecuritiesDebtSecuritiesNoncurrent',
+    'AvailableForSaleSecuritiesNoncurrent',
+    'HeldToMaturitySecuritiesNoncurrent',
+    'OtherLongTermInvestments',
+  ],
+  // Securities the filing reports WITHOUT saying how much is current. On its
+  // own this says only that securities exist: Dell reports investments of
+  // 1,700 and tags no current portion at all. It is evidence, never an amount
+  // to net off, and it stops a missing split being read as "none".
+  securitiesNotSplit: [
+    'MarketableSecurities',
+    'AvailableForSaleSecuritiesDebtSecurities',
+    'AvailableForSaleSecurities',
+    'Investments',
+  ],
   receivables: [
     'AccountsReceivableNetCurrent',
     'ReceivablesNetCurrent',
@@ -506,6 +541,13 @@ const YAHOO_FIELDS = {
   interestExpense: 'annualInterestExpense',
 
   cash: 'annualCashAndCashEquivalents',
+  // See the SEC lists above. Yahoo publishes the short-term securities on
+  // their own, and cash-plus-short-term-securities as a total, which is used
+  // to fill the figure where the first is absent (they agree where both are
+  // present: Reliance 1,373,270 + 1,398,850 = 2,772,120).
+  shortTermInvestments: 'annualOtherShortTermInvestments',
+  cashAndShortTermInvestments: 'annualCashCashEquivalentsAndShortTermInvestments',
+  longTermInvestments: 'annualInvestmentsAndAdvances',
   receivables: 'annualAccountsReceivable',
   inventory: 'annualInventory',
   currentAssets: 'annualCurrentAssets',
@@ -632,6 +674,17 @@ async function fetchFromYahoo(symbol) {
       } else {
         row[field] = (OUTFLOW_FIELDS.has(field) ? Math.abs(value) : value) / 1e6;
       }
+    }
+    // Short-term securities where Yahoo gives only the combined total: the
+    // total less cash. Not a guess — the two are the same figure filed twice,
+    // and where both are present they agree.
+    if (
+      row.shortTermInvestments === null &&
+      typeof row.cashAndShortTermInvestments === 'number' &&
+      typeof row.cash === 'number'
+    ) {
+      const derived = row.cashAndShortTermInvestments - row.cash;
+      row.shortTermInvestments = derived >= 0 ? derived : null;
     }
     return row;
   });
