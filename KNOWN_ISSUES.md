@@ -28,9 +28,10 @@ currency sweep and entry 18 from the SG&A sweep, on payloads fetched
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
 showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
 2026-09-18 with minority interests and preferred stock added. The residual
-income preferred-stock work refetched them on 2026-09-19 with dividends to
-common shareholders added (176 fetched, 169 modelled, 80 showing a value),
-which is the basis for entry 8 and L19.
+income work refetched them on 2026-09-19 with dividends to common
+shareholders added (176 fetched, 169 modelled, 80 showing a value, 17 of them
+a residual income value),
+which is the basis for L19 and L20.
 
 ---
 
@@ -45,18 +46,17 @@ which is the basis for entry 8 and L19.
 | 5 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
 | 6 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
 | 7 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 8 | Residual income book equity includes minority interests; its net income does not | 7 of 17 shown | HDFC Bank 529.82 vs 578.15 | understated 2.1% to 9.1% |
-| 9 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 10 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 11 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
-| 12 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 13 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
-| 14 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 15 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 16 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 17 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 18 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
-| 19 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 8 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 9 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 10 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
+| 11 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 12 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
+| 13 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 14 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 15 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 16 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 17 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 18 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
@@ -206,26 +206,7 @@ which is the basis for entry 8 and L19.
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 8. Residual income book equity includes minority interests; its net income does not
-
-- **What is wrong.** Residual income takes book equity as total assets less
-  total liabilities. Where the filing's total liabilities leave minority
-  interests out, they are in that book equity, while filed net income is the
-  parent's share. Return on equity is then the parent's income over a book that
-  includes what belongs to minority holders, which understates it, and the
-  minority holders' book is valued as if it were the common shareholders'.
-- **Where.** `src/data/residualIncome.js` (`buildResidualIncome`: book equity).
-- **How measured.** On payloads fetched 2026-09-19, with preferred stock
-  already out (L19): residual income re-run with each year's total assets less
-  total liabilities less shareholders' equity, where it is more than 0.1% of
-  assets, taken out of book equity.
-- **Affects.** 7 of the 17 companies shown with a residual income value.
-- **Worst example.** HDFC Bank 529.82 against 578.15 with minority interests
-  taken out (+9.1%); Welltower +7.7%, UnitedHealth +5.2%, Chubb +3.3%,
-  Mitsubishi UFJ +2.8%, HSBC (Hong Kong and London) +2.1%.
-- **Value moved.** Understated by 2.1% to 9.1%.
-
-### 9. No stated discounting convention; timing runs from the fetch date
+### 8. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -247,7 +228,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 10. Forecast tax rate: a filed ratio on a different pretax figure
+### 9. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -265,7 +246,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 11. Forecast interest is 4.5% of average debt
+### 10. Forecast interest is 4.5% of average debt
 
 - **What is wrong.** No coupon is fetched, so forecast interest is average
   reported long-term debt at 4.5%. Filed interest expense is now fetched (since
@@ -281,7 +262,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** Small: unlevered cash flow excludes interest; it reaches value
   through the cost of debt in WACC. Not measured.
 
-### 12. Working capital drivers differ between site and workbook
+### 11. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -301,7 +282,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 13. Possible false-positive missing-debt refusals
+### 12. Possible false-positive missing-debt refusals
 
 - **What is wrong.** A company is refused when long-term debt is missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -318,7 +299,7 @@ which is the basis for entry 8 and L19.
   like tag changes the fetcher does not follow.
 - **Value moved.** No value is shown at all for these companies.
 
-### 14. An SEC lookup that fails stops the company loading at all
+### 13. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -332,7 +313,7 @@ which is the basis for entry 8 and L19.
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 15. Workbook reported-year operating cash flow is derived, not filed
+### 14. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -348,7 +329,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 16. Reported net income still does not tie for three companies
+### 15. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -359,7 +340,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 17. The 50% minimum cash buffer has no documented basis
+### 16. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -376,7 +357,7 @@ which is the basis for entry 8 and L19.
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 18. Stock compensation the filing does not break out is never added back
+### 17. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
@@ -403,7 +384,7 @@ which is the basis for entry 8 and L19.
 - **Value moved.** +1.8% in the one case that can be estimated; not measurable
   for the other 19 without the figure the filing does not give.
 
-### 19. Net debt excludes lease liabilities
+### 18. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
@@ -519,7 +500,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #18); a line not reported in the last reported year is forecast
+  credited with it, which is #17); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -592,6 +573,25 @@ for either.
   `src/data/residualIncome.js` (`preferredClaims`), `api/company.js`
   (`commonDividendsPaid`).
 
+- **L20. Residual income book equity is the parent's, minority interests taken
+  out.** Book equity is total assets less FILED total liabilities, which is the
+  whole group's including minority interests, while the filing's net income is
+  the parent's share. Minority interests now come out of each year's book on
+  the same sourcing as the equity bridge (L18): the filing's own balance plus
+  any redeemable minority interests, else equity including minority interests
+  less shareholders' equity, else total assets less total liabilities less
+  shareholders' equity, all filed. Where a filing reports a minority share of
+  net income and no balance that can be read, no value is shown rather than
+  the claim treated as nil; no company on this sweep is refused for that.
+  Checked on all 17 companies shown: book plus preferred stock equals the
+  filed parent equity figure exactly for every one, including UnitedHealth,
+  whose equity line is the group figure (100,090 against the parent's 94,110).
+  Measured against `e277bf5` on the same payloads: HDFC Bank 529.82 to 578.15
+  (+9.1%), UnitedHealth 178.63 to 193.31 (+8.2%), Welltower 5.45 to 5.87
+  (+7.7%), Chubb +3.3%, Mitsubishi UFJ +2.8%, HSBC (Hong Kong and London)
+  +2.1%, Wells Fargo +0.3%, Royal Bank +0.1%, Citigroup -0.1%, DBS and Bank of
+  America under 0.05%. `src/data/residualIncome.js` (`minorityClaims`).
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -617,7 +617,7 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #14) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #13) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based

@@ -184,6 +184,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
         <p className="font-mono text-[12px]">
           {model.provenance?.roe}. {model.provenance?.costOfEquity}.
           {model.provenance?.preferred ? ` ${model.provenance.preferred}.` : ''}
+          {model.provenance?.minority ? ` ${model.provenance.minority}.` : ''}
         </p>
       </div>
     </section>

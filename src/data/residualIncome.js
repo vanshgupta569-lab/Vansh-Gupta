@@ -30,8 +30,9 @@
 //
 //     residual income = net income − (cost of equity × opening book value)
 //
-// Both on the common shareholders' basis: book value after preferred stock,
-// net income after preferred dividends.
+// Both on the parent's common shareholders' basis: book value after minority
+// interests and preferred stock, net income after preferred dividends (the
+// filing's net income is already the parent's share).
 //
 // This is a standard technique, not an invention: it is the method used for
 // financial institutions precisely because it works from book equity and
@@ -82,6 +83,83 @@ export function isFinancialCompany(fetched) {
 }
 
 const fmt = (v) => v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+/**
+ * The minority holders' claim on book equity, per reported year.
+ *
+ * Book equity here is total assets less FILED total liabilities, so it is the
+ * whole group's, minority interests included, while the filing's net income is
+ * the parent's share. This reads their balance so the two are on one basis, in
+ * the same order as the discounted cash flow's equity bridge:
+ *   1. the filing's own minority-interest balance, plus redeemable minority
+ *      interests carried outside equity;
+ *   2. equity including minority interests less shareholders' equity;
+ *   3. total assets less total liabilities less shareholders' equity, all
+ *      filed, which on an SEC filing also picks up redeemable preferred and
+ *      other temporary equity, also not the common shareholders'.
+ * Where none can be read but the filing reports a minority share of net
+ * income, they exist and their amount does not: refused, not treated as nil.
+ */
+function minorityClaims(rows) {
+  return rows.map((r) => {
+    const evidence = isNum(r.netIncomeToMinority) && r.netIncomeToMinority !== 0;
+    const tagged = [r.minorityInterest, r.redeemableMinorityInterest].filter(isNum);
+    if (tagged.length) {
+      const balance = tagged.reduce((a, b) => a + b, 0);
+      return {
+        balance,
+        source: isNum(r.redeemableMinorityInterest)
+          ? isNum(r.minorityInterest)
+            ? `Minority interests ${fmt(balance)}, the filing's own balance plus its redeemable minority interests, taken out of book equity`
+            : `Redeemable minority interests ${fmt(balance)}, as filed, taken out of book equity`
+          : `Minority interests ${fmt(balance)}, the filing's own balance, taken out of book equity`,
+      };
+    }
+    if (
+      isNum(r.equityIncludingMinority) &&
+      isNum(r.equity) &&
+      r.equityIncludingMinority !== r.equity
+    ) {
+      const balance = r.equityIncludingMinority - r.equity;
+      return {
+        balance,
+        source: `Minority interests ${fmt(balance)}, equity including minority interests less shareholders' equity as filed, taken out of book equity`,
+      };
+    }
+    if (
+      isNum(r.totalAssets) &&
+      isNum(r.totalLiabilities) &&
+      isNum(r.equity) &&
+      // Equity reported only as the figure that includes minority interests
+      // hides them from this identity; with a minority share of income on
+      // file, it cannot be used.
+      !(isNum(r.equityIncludingMinority) && r.equityIncludingMinority === r.equity && evidence)
+    ) {
+      const gap = r.totalAssets - r.totalLiabilities - r.equity;
+      const tolerance = Math.abs(r.totalAssets) * 0.001;
+      if (gap >= -tolerance) {
+        const balance = Math.abs(gap) <= tolerance ? 0 : gap;
+        return {
+          balance,
+          source:
+            balance === 0
+              ? "No minority interests: total assets equal total liabilities plus shareholders' equity, as filed"
+              : `Minority interests ${fmt(balance)}, total assets less total liabilities less shareholders' equity as filed, taken out of book equity`,
+        };
+      }
+    }
+    if (!evidence) {
+      return {
+        balance: 0,
+        source: 'The filing reports no minority interests and no minority share of income',
+      };
+    }
+    return {
+      balance: null,
+      unreadable: `a minority share of net income (${fmt(r.netIncomeToMinority)}) but no minority-interest balance that can be read`,
+    };
+  });
+}
 
 /**
  * The preferred holders' claim, per reported year: the balance to take out of
@@ -159,16 +237,26 @@ export function buildResidualIncome(fetched, options = {}) {
   // reported equity line, for the same reason the DCF does: some sources report
   // equity excluding minority interests, which leaves the balance sheet out.
   //
-  // What is valued is the common shares, so preferred stock comes out of book
-  // equity, its dividends out of net income, and out of the dividends paid,
-  // year by year: the preferred holders' claim stays theirs, and returns are
-  // measured on the common equity that earns them. Preferred stock that
+  // What is valued is the parent's common shares, so preferred stock comes out
+  // of book equity, its dividends out of net income, and out of the dividends
+  // paid, year by year: the preferred holders' claim stays theirs, and returns
+  // are measured on the common equity that earns them. Preferred stock that
   // converts, and is already in the diluted share count as the common shares
   // it becomes, stays in, as in the discounted cash flow's equity bridge.
+  //
+  // Minority interests come out for the same reason and on the same sourcing.
+  // Book equity here is total assets less filed total liabilities, the whole
+  // group's, while the filing's net income is the parent's share alone: return
+  // on equity measured across that mismatch is the parent's earnings over a
+  // book that is partly other shareholders', which understates it.
   const claims = preferredClaims(rows);
+  const minority = minorityClaims(rows);
   const bookValue = rows.map((r, i) =>
-    isNum(r.totalAssets) && isNum(r.totalLiabilities) && isNum(claims[i].balance)
-      ? r.totalAssets - r.totalLiabilities - claims[i].balance
+    isNum(r.totalAssets) &&
+    isNum(r.totalLiabilities) &&
+    isNum(claims[i].balance) &&
+    isNum(minority[i].balance)
+      ? r.totalAssets - r.totalLiabilities - minority[i].balance - claims[i].balance
       : null
   );
   const incomeToCommon = rows.map((r, i) =>
@@ -187,18 +275,21 @@ export function buildResidualIncome(fetched, options = {}) {
   // on the year before's, so a preferred claim that cannot be read in either
   // year leaves nothing to start from. Refused, not treated as nil.
   const unread = rows
-    .map((r, i) => ({ r, c: claims[i] }))
+    .map((r, i) => ({
+      r,
+      why: [claims[i].unreadable, minority[i].unreadable].filter(Boolean),
+    }))
     .slice(-2)
-    .filter(({ c }) => c.unreadable);
+    .filter(({ why }) => why.length);
   if (unread.length) {
     return {
       applicable: false,
       message:
         unread
-          .map(({ r, c }) => `For FY${r.fiscalYear} the filing reports ${c.unreadable}.`)
+          .map(({ r, why }) => `For FY${r.fiscalYear} the filing reports ${why.join(', and ')}.`)
           .join(' ') +
-        ' Book equity and earnings include what belongs to the preferred holders, and without both ' +
-        "figures the common shareholders' share cannot be separated, so no value is shown rather " +
+        ' Book equity and earnings include what belongs to those holders, and without the amounts ' +
+        "the common shareholders' share cannot be separated, so no value is shown rather " +
         'than treating it as nil. The reported figures below are unaffected.',
     };
   }
@@ -357,6 +448,7 @@ export function buildResidualIncome(fetched, options = {}) {
       )}% plus beta ${beta.toFixed(2)} times a ${(marketRiskPremium * 100).toFixed(2)}% market risk premium`,
       terminalGrowth: `${(terminalGrowth * 100).toFixed(1)}% — a flat default, not company specific`,
       preferred: claims[claims.length - 1].source,
+      minority: minority[minority.length - 1].source,
     },
   };
 }
