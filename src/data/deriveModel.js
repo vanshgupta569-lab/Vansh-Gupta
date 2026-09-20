@@ -1195,14 +1195,63 @@ export function deriveModel(fetched) {
   // is applied to the average of the reported debt balances. Debt is then held
   // flat (straight-lined) rather than run down a maturity ladder we cannot see,
   // which the cheat sheet says is the safer treatment in any case.
-  const debtBalances = rows.map((row) =>
-    isNum(row.longTermDebt) ? row.longTermDebt : null
-  );
+  const debtBalances = debtByYear.map((v) => (isNum(v) ? v : null));
   const averageDebt = mean(debtBalances) ?? 0;
-  const interestExpense = Math.round(averageDebt * 0.045);
-  provenance.interest = `average debt of ${Math.round(
-    averageDebt
-  ).toLocaleString()} at an assumed 4.5%`;
+
+  // THE RATE IS THE COMPANY'S OWN, not a flat 4.5%.
+  //
+  // Each reported year's filed interest over the average of that year's and
+  // the previous year's borrowings, averaged across the years that have both.
+  // The first reported year is skipped: it has no opening balance.
+  //
+  // Two answers are not usable, and both say so rather than pretending:
+  //
+  //   - a rate above 25%. Filed interest is not always interest on THIS debt:
+  //     a bank's is mostly what it pays depositors (JPMorgan 118%, HSBC 29%),
+  //     and a company that repaid its debt mid-year divides a full year's
+  //     interest by a balance that is no longer there (Accenture 36%). The
+  //     highest rate that is really a borrowing cost on this sweep is Reliance
+  //     Infrastructure's 22.7%, which is what a distressed Indian borrower
+  //     pays, so the cut is above it.
+  //   - no filed interest at all, in any year with debt (Arm, Caterpillar,
+  //     GE, NextEra, T-Mobile, MercadoLibre). Apple stopped tagging interest
+  //     expense after FY2023 and is carried by its earlier years.
+  //
+  // In both cases the rate falls back to 4.5%, the old flat assumption, and
+  // the provenance says it is an assumption rather than the company's own.
+  const COST_OF_DEBT_CEILING = 0.25;
+  const DEFAULT_COST_OF_DEBT = 0.045;
+  const yearRates = [];
+  for (let i = 1; i < rows.length; i++) {
+    const filed = isNum(rows[i].interestExpense) ? Math.abs(rows[i].interestExpense) : null;
+    const opening = debtBalances[i - 1];
+    const closing = debtBalances[i];
+    if (filed === null || !isNum(opening) || !isNum(closing)) continue;
+    const average = (opening + closing) / 2;
+    if (!(average > 0)) continue;
+    yearRates.push(filed / average);
+  }
+  const filedRate = mean(yearRates);
+  const rateUsable = isNum(filedRate) && filedRate >= 0 && filedRate <= COST_OF_DEBT_CEILING;
+  const costOfDebtRate = rateUsable ? filedRate : DEFAULT_COST_OF_DEBT;
+  const costOfDebtSource = rateUsable
+    ? `${(costOfDebtRate * 100).toFixed(2)}% — this company's own filed interest over its own borrowings, averaged across ${yearRates.length} reported ${yearRates.length === 1 ? 'year' : 'years'}`
+    : isNum(filedRate)
+      ? `${(DEFAULT_COST_OF_DEBT * 100).toFixed(1)}% assumed — the filed interest implies ${(filedRate * 100).toFixed(1)}% of borrowings, which is not a borrowing cost (a bank's deposits, or debt repaid during the year)`
+      : `${(DEFAULT_COST_OF_DEBT * 100).toFixed(1)}% assumed — the filing reports no interest expense against its borrowings`;
+
+  // The rate is charged on the balance the FORECAST actually carries, which is
+  // the last reported one held flat, not the average across the reported
+  // years. Charging the average against a smaller closing balance made the
+  // forward rate something the company never pays: Reliance Infrastructure,
+  // whose borrowings fell, came out paying 36.8% on a 22.7% rate.
+  const forecastDebt = isNum(debtBalances[debtBalances.length - 1])
+    ? debtBalances[debtBalances.length - 1]
+    : averageDebt;
+  const interestExpense = Math.round(forecastDebt * costOfDebtRate);
+  provenance.interest = `borrowings of ${Math.round(
+    forecastDebt
+  ).toLocaleString()} at ${costOfDebtSource}`;
 
   const assumptions = {
     grossMargin: Array(FORECAST_YEARS).fill(grossMargin),
@@ -1468,8 +1517,14 @@ export function deriveModel(fetched) {
     costOfCapital: {
       riskFreeRate: 0.045,
       marketRiskPremium: 0.0423,
+      // 1.0 is the no-data default, and for a derived company it is the
+      // ASSET beta: the risk of the business before borrowing. The engine
+      // relevers it on this company's own debt and equity, which is what
+      // stops a cheap cost of debt dragging the whole cost of capital down
+      // as leverage rises (see computeWACC).
       equityBeta: 1.0,
       betaSource: 'equityBeta',
+      betaIsUnlevered: true,
       comparables: [],
     },
 

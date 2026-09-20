@@ -56,7 +56,7 @@ come last, together.
 | 1 | Conservative method as default when choosing a cost driver (IS 7) | Rule of thumb; kept by design (KI D1) | 31 of 42 valued would change | AMD, GILD, STX; ARM, MRVL, PLTR would be refused | median −11.5%; 23 lower by >10%, 10 by >25%; worst −95.9% |
 | 2 | Consistent definition of "core operating" EBITDA across the comp set and the exit multiple (Comps 4; DCF 12) | Hard rule | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value −36.3%; EV/EBITDA method overstated 90.9%; fixed after this audit: EBITDA is before D&A only, the basis the peer multiples are on (KI L21) |
 | 3 | EV to equity deducts non-controlling interests and preferred securities (DCF 15) | Hard rule | 14 valued with NCI | Reliance Infrastructure | up to 48.1% of value; fixed after this audit: minority interests and preferred stock now come off enterprise value |
-| 4 | Depreciation schedule: existing PP&E vs capex vintages, useful lives, historical plausibility check (Dep 6, 8) | Hard rule / rule of thumb | 15 of 82 valued move >5% | Amazon −24.2%; Toyota Tokyo +23.8% | the rate is now read from filed depreciation (fixed after this audit); vintages and lives are not (KI #2) |
+| 4 | Depreciation schedule: existing PP&E vs capex vintages, useful lives, historical plausibility check (Dep 6, 8) | Hard rule / rule of thumb | 15 of 82 valued move >5% | Amazon −24.2%; Toyota Tokyo +23.8% | the rate is now read from filed depreciation (fixed after this audit); vintages and lives are not (KI #1) |
 | 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound); fixed after this audit: cash now includes short-term marketable securities (KI L22); leases and short-term borrowings now in net debt (KI L24) |
 | 6 | A material gap between the exit-multiple and perpetuity values is investigated, not averaged (DCF 14) | Hard rule | 23 of 42 more than 10% apart; 12 more than 25% | TotalEnergies 77.9% apart; Amazon 52.0% | choosing either method alone moves the headline by half the spread: median ±8%, up to ±39% |
 | 7 | WACC weights debt and equity at market value (DCF 7) | Hard rule | 63 valued; 27 had a *negative* debt weight | Toyota WACC 7.72% → 6.49% on gross debt | fixed after this audit: gross debt at book value, equity at market (KI L23); median +2.4%, Toyota +24.0%, BP +15.0%; no company falls |
@@ -65,7 +65,7 @@ come last, together.
 | 10 | Consistent tenor for risk-free rate, beta and market risk premium; comparable betas unlevered and relevered (DCF 9, 10) | Preference | every derived company | beta 1.0 for all, so every derived company has the same cost of equity | not measured (no betas in payloads) |
 | 11 | Deferred taxes added back; DTL from tax depreciation; NOL carryforwards (CF 3; Dep 10, 11) | Hard rule | every company | — | not measured (deferred tax detail not fetched) |
 | 12 | Working capital: narrow operating definition, days metrics on average balances, each item mapped to its own driver (WC 1, 2, 4, 5) | Hard rule | every company | payables driven by COGS on the site, by revenue in the workbook | small; not isolated |
-| 13 | Other income sits in its own section with a documented above/below-EBIT decision; non-recurring items separated (IS 11, 14, 17) | Hard rule / rule of thumb | 18 valued with >10% non-operating pretax | AbbVie | through the tax rate: ~1.2% of value per point (KI #6) |
+| 13 | Other income sits in its own section with a documented above/below-EBIT decision; non-recurring items separated (IS 11, 14, 17) | Hard rule / rule of thumb | 18 valued with >10% non-operating pretax | AbbVie | through the tax rate: ~1.2% of value per point (KI #5) |
 | 14 | Capex projected from guidance, not a percentage of revenue alone (CF 6) | Rule of thumb | every derived company | — | not measured |
 | 15 | Items that cannot move a value | — | — | — | none on value: listed below |
 
@@ -86,9 +86,9 @@ depend on them.
   market approach, not the DCF, and were not measured.
 - FD 2: DCF sheet rows placed by number in the generator.
 
-**Recorded in KNOWN_ISSUES.md.** Row 6 is KI #3, row 7 is fixed (KI L23), row 8 is
-KI #5, the site-vs-workbook working capital drivers in row 12 are KI #8, and
-the undocumented minimum cash buffer (Debt 10) is KI #13. Row 1 is recorded
+**Recorded in KNOWN_ISSUES.md.** Row 6 is KI #2, row 7 is fixed (KI L23), row 8 is
+KI #4, the site-vs-workbook working capital drivers in row 12 are KI #6, and
+the undocumented minimum cash buffer (Debt 10) is KI #11. Row 1 is recorded
 there as design choice D1, with its measured effect, not as a defect: the last
 reported year is a defensible choice and the conservative default is a rule of
 thumb.
@@ -127,7 +127,7 @@ thumb.
 | # | Item | Verdict | Reason |
 |---|---|---|---|
 | CF 1 | Three sections with subtotals and total change in cash | Followed | Operating, investing, financing, each with a total, plus the change in cash (`excelSheets.ts:684-722`; `model.js:613-633`). |
-| CF 2 | CFO starts from NI before distributions | Partly followed | The forecast starts from net income before dividends, and forecast items after tax are zero, so it is the same figure. In reported years CFO starts from net income *after* non-controlling interests (`model.js:617`), because the filing's "net income" is attributable to parent. The workbook's reported CFO is derived, not filed (KI #11). |
+| CF 2 | CFO starts from NI before distributions | Partly followed | The forecast starts from net income before dividends, and forecast items after tax are zero, so it is the same figure. In reported years CFO starts from net income *after* non-controlling interests (`model.js:617`), because the filing's "net income" is attributable to parent. The workbook's reported CFO is derived, not filed (KI #9). |
 | CF 3 | Every material non-cash item added back and documented | **Partly followed** | D&A, SBC and PIK interest are added back and labelled (`excelSheets.ts:687-690`). Deferred taxes are not: there is no deferred tax expense line, and the deferred tax asset moves as a working capital line at a % of revenue (`excelExport.ts:845`). Failures #11. |
 | CF 4 | CF D&A linked from the IS D&A line | Followed | The cash flow D&A links the model's `da` row, which the income statement charges through `daCost` and which is itself built from the PP&E and amortisation schedules (`excelExport.ts:613, 724`). |
 | CF 5 | Unscheduled CF items from a defined, documented method | Followed | Dividends use the average payout, buybacks the average % of a ceiling, and other income zero. Each method is named in `provenance` (`deriveModel.js:646-672`). |
@@ -146,7 +146,7 @@ thumb.
 | Dep 3 | Declining-balance rate mechanics | Not applicable | As Dep 2. |
 | Dep 4 | Sum-of-the-years'-digits mechanics | Not applicable | As Dep 2. |
 | Dep 5 | MACRS mid-quarter default | Not applicable (rule of thumb) | As Dep 2: no placed-in-service data exists in filings. |
-| Dep 6 | Existing PP&E separated from each capex vintage | **Not followed** | One pool: this year's depreciation tracks this year's capex, not the assets in service (`model.js:256`). Amortisation of intangibles is separated and runs off (`model.js:273`), which is the one split we make. Failures #4 (KI #2). |
+| Dep 6 | Existing PP&E separated from each capex vintage | **Not followed** | One pool: this year's depreciation tracks this year's capex, not the assets in service (`model.js:256`). Amortisation of intangibles is separated and runs off (`model.js:273`), which is the one split we make. Failures #4 (KI #1). |
 | Dep 7 | Opening PP&E linked from prior ending | Followed | `ppeBop` links the prior `ppeEnd` (`excelExport.ts` PP&E block; `model.js:210-260`). |
 | Dep 8 | Separate useful-life cells; projected depreciation checked against history | **Not followed** (rule of thumb) | There are no useful-life cells, and the forecast is not checked against historical depreciation growth. Instead we use one depreciation-to-capex ratio from the PP&E roll-forward, which counts disposals, leases and acquisitions as depreciation (Amazon came out at -91.8% of capital spending). Defensibility: a filed-data model cannot see asset lives, so a ratio is defensible. A roll-forward ratio with no plausibility check is not. A net PP&E ÷ D&A implied life, checked against filed D&A growth, is available from filed data. Failures #4. (The rate has since been changed to filed depreciation over capital spending, with a refusal where it cannot be forecast from; useful lives and vintages are unchanged.) |
 | Dep 9 | Fixed useful life anchored with absolute references | Not applicable | There is no useful-life cell to anchor (Dep 1). The depreciation rate is a per-year input row, not a copied constant. |
@@ -172,7 +172,7 @@ thumb.
 | # | Item | Verdict | Reason |
 |---|---|---|---|
 | BS 1 | Each line tied to the CF item(s) that drive it, with direction | Followed | Every forecast balance is beginning + movement = end, with the movement taken from the cash flow line (`model.js:635-703`; `excelExport.ts` `bopRow`/`eopRow`). |
-| BS 2 | CF drives BS (not BS differencing) | Partly followed | Forecast years are CF-driven. Reported-year cash flows in the workbook are derived by differencing filed balance sheets, which the Cash Flow sheet says in a note (`excelSheets.ts:720-723`; KI #11). |
+| BS 2 | CF drives BS (not BS differencing) | Partly followed | Forecast years are CF-driven. Reported-year cash flows in the workbook are derived by differencing filed balance sheets, which the Cash Flow sheet says in a note (`excelSheets.ts:720-723`; KI #9). |
 | BS 3 | Sign convention: assets opposite, cash/liabilities/equity same | Followed | The Checks sheet's balance and cash tie rows are zero across all scenarios (`excelSheets.ts:336-352`). |
 | BS 4 | Each CF item used exactly once | Followed | The cash tie "change in cash = CFO + CFI + CFF" and the balance check would both break on an omission or duplicate. Both are zero. |
 | BS 5 | Imbalance diagnosed into four error types | Partly followed | No diagnosis is written up, but the per-schedule roll-forward checks isolate an omitted, duplicated or mis-signed link to one line (`excelSheets.ts:356-406`). Derived models whose balance check is nonzero are refused outright (`model.js`, `balanceSheetRefusal`). |
@@ -188,7 +188,7 @@ thumb.
 | Debt 3 | Each tranche modelled separately | Not followed | One blended long-term debt balance. The filings the site reads do not tag tranches. Defensible for filed data, but unstated in the workbook. |
 | Debt 4 | Tranche opening balance linked from prior ending | Followed | `debtBop` and `revBop` link the prior ending balance (`excelExport.ts:914-978`; `model.js:500`). |
 | Debt 5 | Mandatory and discretionary lines kept separate | Partly followed | "Additional borrowing / (pay down)" (input) is separate from the automatic revolver draw (`excelExport.ts:914, 970`), so the sweep cannot overwrite it. There is no contractual maturity schedule: derived models hold debt flat (`deriveModel.js:715`) because maturity ladders are not machine-readable. |
-| Debt 6 | Interest on average balance × rate | Partly followed | Workbook: opening balance with the switch off (the default), average with it on (`excelExport.ts:629-680`). Site engine: a fixed dollar amount, 4.5% of average reported debt (`deriveModel.js:669`; `model.js:505`). No DCF effect (KI #7). |
+| Debt 6 | Interest on average balance × rate | Partly followed | Workbook: opening balance with the switch off (the default), average with it on (`excelExport.ts:629-680`). Site engine: a fixed dollar amount on the last reported borrowings at the company's own filed rate (`deriveModel.js`, `costOfDebtRate`). Fixed after this audit: the rate was a flat 4.5% for every company (KI L25). |
 | Debt 7 | Blended rate for sub-tranches, weighted by principal | Not applicable | Needs coupons per tranche from the debt footnote, which is manual research. We apply an assumed 4.5% (`deriveModel.js:669`). |
 | Debt 8 | Total interest = sum of tranches; company's split mirrored | Partly followed | Interest expense = term debt cash interest + PIK + revolver interest (`excelExport.ts:669-676`). The filing's split (e.g. finance-lease interest) is not mirrored. |
 | Debt 9 | "Cash flow before debt paydown" feeds the debt schedule | Followed | Cash available = opening cash − minimum cash + CFO + CFI + non-revolver financing (`model.js:643-655`; `excelExport.ts:959-975`). |
@@ -211,11 +211,11 @@ thumb.
 
 | # | Item | Verdict | Reason |
 |---|---|---|---|
-| DCF 1 | Explicit end-of-year vs mid-year choice, applied consistently | **Partly followed** (judgment call) | One convention is applied consistently to every year and both terminal values: each year's cash flow is discounted from the valuation date to its fiscal year-end (`model.js:1085`; `excelExport.ts` rows 27-28). But it is not stated as a choice. The first forecast year's *full* cash flow is discounted over the fraction of the year left (0.29 years at the frozen date), while net debt is taken at the last reported year-end, so the cash flows and the balance sheet are timed from different dates (KI #5). Mid-year would add a median 4.3%; pro-rating the first year would take off a median 1.5%. Failures #8. |
+| DCF 1 | Explicit end-of-year vs mid-year choice, applied consistently | **Partly followed** (judgment call) | One convention is applied consistently to every year and both terminal values: each year's cash flow is discounted from the valuation date to its fiscal year-end (`model.js:1085`; `excelExport.ts` rows 27-28). But it is not stated as a choice. The first forecast year's *full* cash flow is discounted over the fraction of the year left (0.29 years at the frozen date), while net debt is taken at the last reported year-end, so the cash flows and the balance sheet are timed from different dates (KI #4). Mid-year would add a median 4.3%; pro-rating the first year would take off a median 1.5%. Failures #8. |
 | DCF 2 | Projection length a judgment call | Followed | Five years, as a named constant (`deriveModel.js`, `FORECAST_YEARS`), within the common 5-7. |
 | DCF 3 | UFCF starts from EBIT | Followed | EBIAT = EBIT × (1 − tax) (`model.js:1056`; `excelExport.ts` row 11). |
 | DCF 4 | Adds D&A, deferred taxes, non-cash items and CF-statement WC; subtracts capex | Partly followed | D&A, SBC and working capital from the model's cash flow statement are added and capex subtracted (`model.js:1059-1083`; `excelExport.ts` rows 12-15). Deferred taxes are not a separate add-back (CF 3). |
-| DCF 5 | Unlevered tax = EBIT × rate | Followed | `M.ebit[i] * (1 - M.taxRate[i])` (`model.js:1056`). The rate itself is a filed ratio on a different pretax base (KI #6), which the convention does not address. |
+| DCF 5 | Unlevered tax = EBIT × rate | Followed | `M.ebit[i] * (1 - M.taxRate[i])` (`model.js:1056`). The rate itself is a filed ratio on a different pretax base (KI #5), which the convention does not address. |
 | DCF 6 | Non-cash adjustments cross-checked against CF treatment | Followed | SBC is in UFCF because the cash flow statement adds it back (`model.js:617-631`). Deferred tax and other non-current movements are excluded from the terminal year only, with the reason in the data file (`deriveModel.js:777`). |
 | DCF 7 | WACC on market-value weights, after-tax debt | **Fixed after this audit** | Cost of debt is tax-effected, equity is at market value, and the debt weight is now GROSS debt at book value, `grossDebt / (marketCap + grossDebt)` (`model.js`, `computeWACC`). It was net debt, so 27 of the 63 valued companies carried a negative debt weight, an equity weight above 100% and a WACC above their own cost of equity; now none do. The beta relevering carries gross debt too (KI L23). The workbook still hard-codes the engine's weights as inputs (`excelExport.ts` rows 24-25). Failures #7. |
 | DCF 8 | CAPM cost of equity | Followed | rf + β × MRP (`model.js:1227`; `excelExport.ts` row 22). |
@@ -234,7 +234,7 @@ thumb.
 | Comps 1 | LTM from annual + interims − prior interims | Not followed | We take Yahoo's trailing figures (`comps.js:196-200`) rather than building LTM from filings. Trailing is the right basis, but it is not constructed or checked. |
 | Comps 2 | Calendarize to target's fiscal period | Not followed | No calendarization; peers' trailing periods are used as-is. |
 | Comps 3 | Most granular data (rule of thumb) | Not followed (rule of thumb) | Only what the provider gives. Defensible for a free-data source, but not a choice we make. |
-| Comps 4 | Non-recurring items reclassified consistently across the set | **Not followed** | Fixed after this audit: the subject's EBITDA no longer adds SBC back, matching the basis the peers' provider computes (`model.js`, `S.ebitda`; KI L21). Identifying non-recurring items would not be applicable (research). Failures #2 (KI #2). |
+| Comps 4 | Non-recurring items reclassified consistently across the set | **Not followed** | Fixed after this audit: the subject's EBITDA no longer adds SBC back, matching the basis the peers' provider computes (`model.js`, `S.ebitda`; KI L21). Identifying non-recurring items would not be applicable (research). Failures #2 (KI #1). |
 | Comps 5 | Tax effect of reclassified items net of tax | Not applicable | Depends on identifying non-recurring items (Comps 4), which needs research. |
 | Comps 6 | Unclear depreciation split immaterial if EBITDA right (rule of thumb) | Followed (rule of thumb) | Provider EBITDA is taken as stated; the split is not modelled. Defensible. |
 | Comps 7 | Missing quarter = full year − interims for flows | Not followed | No quarterly data is fetched. No value effect on the DCF. |

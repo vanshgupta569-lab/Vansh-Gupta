@@ -1436,7 +1436,35 @@ export function computeWACC(model, data) {
 
   const relevered = (industryDelevered * (grossDebt * (1 - taxRate) + marketCap)) / marketCap;
 
-  const beta = c.betaSource === 'industryUnlevered' ? relevered : c.equityBeta;
+  // BORROWING MAKES THE SHARES RISKIER, and the cost of equity has to say so.
+  //
+  // Debt is cheaper than equity, so weighting capital on gross debt (above)
+  // means a company that borrows more gets a lower cost of capital. Left
+  // there, that runs away: Reliance Infrastructure, borrowing more than twice
+  // its market capitalisation, came out at a WACC of 4.27% — below the
+  // risk-free rate the model starts from, which is not a defensible rate at
+  // which to discount anybody's equity.
+  //
+  // What was missing is the other half of the trade. Borrowing does not make
+  // a business safer; it moves risk onto the shareholders, who rank behind
+  // the lenders. So the beta a derived company carries is its ASSET beta, the
+  // risk of the business itself, and it is relevered onto this company's own
+  // capital structure before the cost of equity is taken from it:
+  //
+  //     equity beta = asset beta x (1 + (1 - tax) x debt / equity)
+  //
+  // That is the same Hamada relation used for the comparables above. As
+  // leverage rises the equity weight shrinks, but the cost of equity rises to
+  // meet it, and the cost of capital falls only by the tax shield rather than
+  // without limit.
+  const debtToEquity = marketCap > 0 ? grossDebt / marketCap : 0;
+  const leveredFromAsset = c.equityBeta * (1 + (1 - taxRate) * debtToEquity);
+  const beta =
+    c.betaSource === 'industryUnlevered'
+      ? relevered
+      : c.betaIsUnlevered
+        ? leveredFromAsset
+        : c.equityBeta;
   const costOfEquity = c.riskFreeRate + c.marketRiskPremium * beta;
 
   const totalCapital = marketCap + grossDebt;
@@ -1447,6 +1475,10 @@ export function computeWACC(model, data) {
     costOfDebt, taxRate, afterTaxCostOfDebt,
     riskFreeRate: c.riskFreeRate, marketRiskPremium: c.marketRiskPremium,
     beta, costOfEquity, comps, industryDelevered, releveredBeta: relevered,
+    // What the beta was before this company's own borrowings were put back on
+    // it, so the screen can show both.
+    assetBeta: c.betaIsUnlevered ? c.equityBeta : null,
+    debtToEquity,
     // netDebt is reported because the bridge uses it; the weights do not.
     marketCap, netDebt, grossDebt, weightEquity, weightDebt,
     wacc: weightEquity * costOfEquity + weightDebt * afterTaxCostOfDebt,

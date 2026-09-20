@@ -20,10 +20,10 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below. Entries 4, 5, 8
-and 13 and design choice D1 come from the conventions audit
-(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entries 1 and 10 come from the
-currency sweep and entry 14 from the SG&A sweep, on payloads fetched
+outputs; no source was changed to measure anything below. Entries 3, 4, 6
+and 11 and design choice D1 come from the conventions audit
+(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entry 8 comes from the
+currency sweep and entry 12 from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
 showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
@@ -40,7 +40,8 @@ a DCF value), which is the basis for L22 and, re-measured at `b7432d6` after
 the securities went into net debt, L23. The debt work refetched every payload
 on 2026-09-20 with short-term borrowings, current maturities and lease
 liabilities added (176 fetched, 169 modelled, 64 with a DCF value), which is
-the basis for entry 1 and L24.
+the basis for L24, and for L25 re-measured at `e1e6cfc` on the same
+payloads.
 
 ---
 
@@ -48,52 +49,22 @@ the basis for entry 1 and L24.
 
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
-| 1 | Cost of debt is a flat rate, so borrowing lowers the discount rate without limit | 3 valued with a debt weight above 50% | RELINFRA.NS WACC 4.27%, 997.55 vs 49.99 | up to 20x the price |
-| 2 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
-| 3 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
-| 4 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 5 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 6 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 7 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
-| 8 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 9 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
-| 10 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 11 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 12 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 13 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 14 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 1 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
+| 2 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
+| 3 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 4 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 5 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 6 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 7 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
+| 8 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 9 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 10 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 11 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 12 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
 
 ---
 
-### 1. Cost of debt is a flat rate, so borrowing lowers the discount rate
-
-- **What is wrong.** The cost of debt is the model's own forecast rate, 4.5%
-  before tax for every derived company, whatever the borrower. It is below
-  every company's cost of equity, so the more debt a company carries, the lower
-  its weighted average cost of capital goes, without limit and without regard
-  to whether that debt is cheap or the company is in trouble. Weighting on
-  gross debt (L23) is right, and fetching all of the debt (L24) is right, and
-  together they hand the full weight to a rate that does not vary.
-- **Where.** `src/data/deriveModel.js` (`dcf.costOfDebt`, 4.5%);
-  `src/engine/model.js` (`computeWACC`, `afterTaxCostOfDebt`).
-- **How measured.** At `HEAD` on payloads fetched 2026-09-20, after every
-  borrowing was fetched: the debt weight and WACC of each valued company
-  against its value and its price.
-- **Affects.** 3 of the 64 valued companies carry a debt weight above 50%, and
-  they are exactly the three furthest above their own share price.
-- **Worst example.** Reliance Infrastructure: debt 49,367 against a market
-  capitalisation near 20,400, so the debt weight is 71% and WACC 4.27%, below
-  the 4.5% risk-free rate it is built from. Value 997.55 against a price of
-  49.99. Before its short-term borrowings were fetched it was 339.88 (6.8x);
-  now it is 20.0x, because the missing debt was cheap in the model.
-  Vodafone: debt weight 60%, WACC 4.51%, 4.7x its price. Toyota: 52%, 5.07%,
-  1.6x, and its value fell 34.6% when its finance arm's borrowings arrived.
-- **Value moved.** Up to 20x the price for the worst case. A cost of debt read
-  from each company's own filed interest over its own debt would fix the
-  direction; whether it fixes Reliance Infrastructure is not known until it is
-  tried, and its filed interest is itself suspect (#7).
-
-### 2. Forecast depreciation tracks same-year capex
+### 1. Forecast depreciation tracks same-year capex
 
 - **What is wrong.** Forecast depreciation is that year's capex times a rate,
   so it follows the capex forecast rather than the assets already in service.
@@ -112,7 +83,7 @@ the basis for entry 1 and L24.
   is applied to the year's own capital spending rather than to the assets in
   service.
 
-### 3. The two terminal values are averaged, not investigated
+### 2. The two terminal values are averaged, not investigated
 
 - **What is wrong.** The headline is the mean of the perpetuity-growth and
   exit-multiple values. The spread between them is shown (workbook DCF row 54,
@@ -137,7 +108,7 @@ the basis for entry 1 and L24.
   derived company, so part of the spread is the multiple, not the business; see
   also L21.
 
-### 4. Workbook and site DCF disagree
+### 3. Workbook and site DCF disagree
 
 - **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
   (+ amortisation after tax), leaving out working capital and the terminal
@@ -154,7 +125,7 @@ the basis for entry 1 and L24.
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 5. No stated discounting convention; timing runs from the fetch date
+### 4. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -176,7 +147,7 @@ the basis for entry 1 and L24.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 6. Forecast tax rate: a filed ratio on a different pretax figure
+### 5. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -194,23 +165,7 @@ the basis for entry 1 and L24.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 7. Forecast interest is 4.5% of average debt
-
-- **What is wrong.** No coupon is fetched, so forecast interest is average
-  reported long-term debt at 4.5%. Filed interest expense is now fetched (since
-  `03617c2`) but only used for reported years. A company with no long-term debt
-  tag forecasts no interest at all.
-- **Where.** `src/data/deriveModel.js` (`interestExpenseOnLongTermDebt`);
-  `src/engine/model.js` (`computeWACC` cost of debt from the weighted average
-  rate).
-- **How measured.** First-year forecast interest against filed interest.
-- **Affects.** 16 valued companies outside 0.67x-1.5x of filed interest.
-- **Worst example.** Amphenol forecast 0 against filed 368; BHP 798 against
-  2,108; Cisco 692 against 1,470.
-- **Value moved.** Small: unlevered cash flow excludes interest; it reaches value
-  through the cost of debt in WACC. Not measured.
-
-### 8. Working capital drivers differ between site and workbook
+### 6. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -223,14 +178,14 @@ the basis for entry 1 and L24.
   `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
   (the `ap`, `oca` and `oncl` schedules).
 - **How measured.** Code comparison during the conventions audit; agreement at
-  defaults from the site-vs-workbook run (#4).
+  defaults from the site-vs-workbook run (#3).
 - **Affects.** Every derived company (payables, other current assets); every
   company (other non-current liabilities).
 - **Worst example.** —
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 9. A possible false-positive missing-debt refusal
+### 7. A possible false-positive missing-debt refusal
 
 - **What is wrong.** A company is refused when its borrowings are missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -249,7 +204,7 @@ the basis for entry 1 and L24.
   settled; accepted as a possible false positive.
 - **Value moved.** No value is shown at all for this company.
 
-### 10. An SEC lookup that fails stops the company loading at all
+### 8. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -263,7 +218,7 @@ the basis for entry 1 and L24.
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 11. Workbook reported-year operating cash flow is derived, not filed
+### 9. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -279,7 +234,7 @@ the basis for entry 1 and L24.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 12. Reported net income still does not tie for three companies
+### 10. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -290,7 +245,7 @@ the basis for entry 1 and L24.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 13. The 50% minimum cash buffer has no documented basis
+### 11. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -307,7 +262,7 @@ the basis for entry 1 and L24.
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 14. Stock compensation the filing does not break out is never added back
+### 12. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
@@ -441,7 +396,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #14); a line not reported in the last reported year is forecast
+  credited with it, which is #12); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -549,13 +504,13 @@ for either.
   margin and net debt / EBITDA (the last two were already on this basis).
   Unlevered free cash flow still adds stock compensation back, because that
   calculation is about cash rather than about a multiple; the two methods
-  therefore take different views of it and are averaged into the headline (#3),
+  therefore take different views of it and are averaged into the headline (#2),
   which is a design boundary, not a measurement, and it is not quantified here.
   Where a filing never breaks stock compensation out, its EBITDA was already on
   this basis, because the cost stays inside the filed cost lines and operating
   profit is after it (18 of the 63 valued companies): those companies need no
   adjustment and are comparable with the peers, and what is still missing for
-  them is the cash-flow add-back, which is #14. Measured against `2d02f95` on
+  them is the cash-flow add-back, which is #12. Measured against `2d02f95` on
   the payloads of 2026-09-19: of the 63 companies with a DCF value, 22 move
   more than 5% on the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%,
   Cisco -14.6%, Qualcomm -14.3%) and 11 on the headline, which averages the
@@ -665,8 +620,56 @@ for either.
   off the shareholders, while the heavier debt weight lowers the discount rate
   and raises enterprise value. The bridge effect is the larger of the two for
   43 of the 62 companies valued on both sides; where the discount rate wins,
-  the cause is the flat cost of debt (#1). `api/company.js`,
+  the cause is the flat cost of debt, since fixed (L25). `api/company.js`,
   `src/data/deriveModel.js` (`debtLines`).
+
+- **L25. Each company pays its own cost of debt, and borrowing raises its cost
+  of equity.** The rate is that company's filed interest over its own average
+  borrowings, taken year by year and averaged across the reported years that
+  have both (the first reported year has no opening balance, so it is
+  skipped), and it is used in both places the old flat 4.5% was used: the cost
+  of debt in the cost of capital, and the forecast interest charge. The rate is
+  charged on the balance the forecast actually carries - the last reported one,
+  held flat - not on the average of the reported years, which made the forward
+  rate a figure the company never pays (Reliance Infrastructure came out paying
+  36.8% on a 22.7% rate). Across the sweep the rates run from 0.19% (Toyota,
+  borrowing in yen) to 22.7% (Reliance Infrastructure), median 4.49%, so the
+  old flat 4.5% was a fair guess at the middle and wrong about almost every
+  company individually.
+  **When the answer is not usable:** a rate above 25% is not a borrowing cost.
+  It is a bank paying depositors (JPMorgan 118%, HSBC 29%, ICBC 35%) or a
+  company that repaid its debt during the year and divides a full year's
+  interest by a balance that is no longer there (Accenture 36%). Those fall
+  back to 4.5% and the provenance says the rate is assumed rather than the
+  company's own. So does a company that reports no interest at all against its
+  borrowings (Arm, Caterpillar, GE, NextEra, T-Mobile, MercadoLibre - 3 of the
+  63 valued). Apple stopped tagging interest expense after FY2023 and is
+  carried by its earlier years.
+  **The structural half.** A cost of debt below the cost of equity means the
+  more a company borrows the lower its cost of capital goes, without limit:
+  that is what produced a 4.27% WACC, below the risk-free rate the model starts
+  from. The answer is not a floor on WACC, which would be a number picked to
+  hide the problem, but the half of the trade that was missing. Borrowing does
+  not make a business safer; it moves risk onto the shareholders, who rank
+  behind the lenders. So a derived company's beta of 1.0 is now its ASSET beta,
+  relevered onto its own capital structure before the cost of equity is taken
+  from it: equity beta = asset beta x (1 + (1 - tax) x debt / equity), the same
+  Hamada relation already used for the curated comparables. Cost of capital now
+  falls with leverage only by the tax shield. Measured: no valued company is
+  left below the risk-free rate (the range is 5.95% to 9.13%, against 4.27% to
+  8.73%), so no floor and no leverage refusal are needed, and none was added.
+  **What this costs.** A flat asset beta of 1.0 relevered will overstate the
+  cost of equity of a heavily borrowed company against a market whose average
+  EQUITY beta is 1.0; the honest reading is that 1.0 is a no-data default in
+  either place and a beta lookback is still missing (CONVENTIONS_AUDIT DCF 9).
+  Every valued company with borrowings is now worth less: 63 valued, 62 fall
+  and none rises, median -4.1%, 25 by more than 5% (Enbridge -33.9%, Vodafone
+  -32.8%, Toyota -25.4%, BP -19.6%, Nestle -19.3%, Reliance Industries -17.3%).
+  Reliance Infrastructure is no longer valued at 20x its price: at a 22.7% cost
+  of debt and a relevered beta of 3.43 its WACC is 21.29%, its enterprise value
+  no longer covers its net debt and its 112,156 of minority interests, and the
+  existing guard withholds the value and says so. `src/data/deriveModel.js`
+  (`costOfDebtRate`), `src/engine/model.js` (`computeWACC`).
 
 ## Design choices, with their measured effect
 
@@ -693,7 +696,7 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #10) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #8) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based
