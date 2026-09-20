@@ -28,6 +28,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { DCFResult, ValuationDrivers } from '../types';
 import type { MarketApproachResult } from '../data/marketApproach';
+import type { TerminalSpread } from '../data/terminalSpread';
 import type { AssetApproachResult } from '../data/assetApproach';
 import { RECOVERY_PRESETS } from '../data/assetApproach';
 
@@ -42,7 +43,8 @@ interface HowCalculatedProps {
   isDerived: boolean;
   sourceLabel: string;
   methods?: { label: string; value: number }[];
-  blendedValue?: number | null;
+  /** The two terminal methods and how far apart they are; never averaged. */
+  terminalSplit?: TerminalSpread | null;
   marketApproach?: MarketApproachResult | null;
   assetApproach?: AssetApproachResult | null;
   /** Which set of recovery rates the liquidation figure is using. */
@@ -79,7 +81,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
   companyName,
   sourceLabel,
   methods,
-  blendedValue,
+  terminalSplit,
   marketApproach,
   assetApproach,
   recoveryKey = 'forcedSale',
@@ -107,11 +109,11 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
   const perShare = (v: any) => (isNum(v) ? money(v, 2) : '—');
   const pct = (v: any, dp = 0) => (isNum(v) ? `${v.toFixed(dp)}%` : '—');
 
-  const incomeValue = isNum(blendedValue)
-    ? blendedValue
-    : isNum(dcfResult?.targetPrice)
-    ? dcfResult.targetPrice
-    : null;
+  // Where the page compares the three approaches it needs one figure for the
+  // income approach. It is the perpetuity value, which is what targetPrice
+  // holds, and the label beside it says so. The exit multiple is shown in
+  // full beside it rather than averaged into it.
+  const incomeValue = isNum(dcfResult?.targetPrice) ? dcfResult.targetPrice : null;
   const marketValue = marketApproach?.available ? marketApproach.mid : null;
   const assetValue = assetApproach?.available ? assetApproach.mid : null;
 
@@ -384,8 +386,11 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
               ) : (
                 <Figure label="One share" value={perShare(dcfResult.targetPrice)} />
               )}
-              {isNum(blendedValue) && (
-                <Figure label="The two, weighted equally" value={perShare(blendedValue)} />
+              {terminalSplit && (
+                <Figure
+                  label="How far apart the two methods land"
+                  value={`${(terminalSplit.spread * 100).toFixed(0)}%`}
+                />
               )}
             </>
           ),

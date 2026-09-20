@@ -28,7 +28,7 @@ export interface BatchRow {
   price: number | null;
   value: number | null;
   premiumPct: number | null;
-  method: 'discounted cash flow' | 'residual income' | null;
+  method: 'discounted cash flow, perpetuity growth' | 'residual income' | null;
   sector: string | null;
   error: string | null;
 }
@@ -72,7 +72,10 @@ async function runOne(ticker: string): Promise<BatchRow> {
       const result = calculateDCFFor(source, drivers, base.price);
       if (result.applicable !== false && isNum(result.targetPrice) && result.targetPrice > 0) {
         base.value = result.targetPrice;
-        base.method = 'discounted cash flow';
+        // One column across many companies needs one figure. It is the
+        // perpetuity value (what targetPrice holds), named here rather than
+        // an average of the two terminal methods.
+        base.method = 'discounted cash flow, perpetuity growth';
       } else {
         base.error = result.message || 'No value could be produced for this company.';
       }

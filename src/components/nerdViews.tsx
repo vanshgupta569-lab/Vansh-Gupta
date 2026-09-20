@@ -961,42 +961,30 @@ export const DCFView: React.FC<ViewProps> = ({
         </div>
       </section>
 
-      {/* The two methods do not agree, and the published figure is the average
-          of them. Showing that arithmetic here, rather than only the two halves
-          above, means the headline number can be checked in one place. */}
+      {/* The two methods do not agree, and both are published. Showing them
+          together with the gap between them means the disagreement can be read
+          in one place instead of being averaged away. */}
       <section className="mb-12">
         <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
-          The two methods, weighted equally
+          The two terminal methods, side by side
         </h3>
         <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
-          Neither method is more correct than the other, so each carries half
-          the weight. This is the figure published at the top of the company
-          page.
+          Neither method is more correct than the other, so both are published
+          and neither is averaged away. Where the site needs a single figure —
+          a screen across companies, a reverse DCF — it uses the perpetuity
+          value and says so, because the exit multiple rests on a multiple that
+          is the same for every derived company.
         </p>
         <div className="border border-[#222228] divide-y divide-[#222228]">
           {[
             {
-              label: 'Growing forever, at 50%',
+              label: 'Growing forever (perpetuity growth)',
               value: money(D.perpetuity?.valuePerShare, 2),
-              weight: '50%',
+              bold: true,
             },
             {
-              label: 'Sold at the end, at 50%',
+              label: 'Sold at the end (exit multiple)',
               value: money(D.exitMultipleValuation?.valuePerShare, 2),
-              weight: '50%',
-            },
-            {
-              label: 'Weighted average — the published value',
-              value:
-                num(D.perpetuity?.valuePerShare) &&
-                num(D.exitMultipleValuation?.valuePerShare)
-                  ? money(
-                      (D.perpetuity.valuePerShare +
-                        D.exitMultipleValuation.valuePerShare) /
-                        2,
-                      2
-                    )
-                  : '—',
               bold: true,
             },
             {

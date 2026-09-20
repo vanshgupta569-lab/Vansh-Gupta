@@ -20,10 +20,10 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below. Entries 3, 4, 6
-and 11 and design choice D1 come from the conventions audit
-(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entry 8 comes from the
-currency sweep and entry 12 from the SG&A sweep, on payloads fetched
+outputs; no source was changed to measure anything below. Entries 2, 3, 5
+and 10 and design choice D1 come from the conventions audit
+(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entry 7 comes from the
+currency sweep and entry 11 from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
 showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
@@ -40,8 +40,8 @@ a DCF value), which is the basis for L22 and, re-measured at `b7432d6` after
 the securities went into net debt, L23. The debt work refetched every payload
 on 2026-09-20 with short-term borrowings, current maturities and lease
 liabilities added (176 fetched, 169 modelled, 64 with a DCF value), which is
-the basis for L24, and for L25 re-measured at `e1e6cfc` on the same
-payloads.
+the basis for L24, for L25 re-measured at `e1e6cfc`, and for L26 re-measured
+at `5ecd822`, all on the same payloads.
 
 ---
 
@@ -50,17 +50,16 @@ payloads.
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
 | 1 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
-| 2 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
-| 3 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 4 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 5 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 6 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 7 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
-| 8 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 9 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 10 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 11 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 12 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 2 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 3 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 4 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 5 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 6 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
+| 7 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 8 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 9 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 10 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 11 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
 
 ---
 
@@ -83,32 +82,7 @@ payloads.
   is applied to the year's own capital spending rather than to the assets in
   service.
 
-### 2. The two terminal values are averaged, not investigated
-
-- **What is wrong.** The headline is the mean of the perpetuity-growth and
-  exit-multiple values. The spread between them is shown (workbook DCF row 54,
-  the dashboard's football field) but nothing acts on it: a company whose two
-  methods land 78% apart gets a headline as confident as one where they agree.
-  The convention is to investigate a material divergence, because it says
-  whether the exit multiple or the cash-flow forecast is out of line.
-- **Where.** `src/components/TerminalDashboard.tsx` (`blendedValue`);
-  `src/data/excelExport.ts` (DCF sheet rows 53-54); `src/engine/model.js`
-  (`buildDCF`, both terminal values).
-- **How measured.** Code at `f1d9339`: spread = |exit-multiple value -
-  perpetuity value| / headline, per valued company. Taking either method alone
-  moves the headline by half the spread.
-- **Affects.** 23 of 42 valued companies more than 10% apart, 12 more than 25%;
-  median spread 15.9%.
-- **Worst example.** TotalEnergies perpetuity 33.85 against exit multiple 77.00
-  (77.9% apart); Shell 57.18 / 100.30 (54.8%); Amazon 400.75 / 235.47 (52.0%);
-  Arista 62.25 / 100.36 (46.9%); Palantir 15.76 / 24.62 (43.9%). (Toyota's New York
-  listing 130.6%; now refused, L8.)
-- **Value moved.** The headline sits half the spread from either method: median
-  about 8%, up to 39% (TotalEnergies). The exit multiple is a flat 12x for every
-  derived company, so part of the spread is the multiple, not the business; see
-  also L21.
-
-### 3. Workbook and site DCF disagree
+### 2. Workbook and site DCF disagree
 
 - **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
   (+ amortisation after tax), leaving out working capital and the terminal
@@ -125,7 +99,7 @@ payloads.
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 4. No stated discounting convention; timing runs from the fetch date
+### 3. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -147,7 +121,7 @@ payloads.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 5. Forecast tax rate: a filed ratio on a different pretax figure
+### 4. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -165,7 +139,7 @@ payloads.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 6. Working capital drivers differ between site and workbook
+### 5. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -178,14 +152,14 @@ payloads.
   `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
   (the `ap`, `oca` and `oncl` schedules).
 - **How measured.** Code comparison during the conventions audit; agreement at
-  defaults from the site-vs-workbook run (#3).
+  defaults from the site-vs-workbook run (#2).
 - **Affects.** Every derived company (payables, other current assets); every
   company (other non-current liabilities).
 - **Worst example.** —
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 7. A possible false-positive missing-debt refusal
+### 6. A possible false-positive missing-debt refusal
 
 - **What is wrong.** A company is refused when its borrowings are missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -204,7 +178,7 @@ payloads.
   settled; accepted as a possible false positive.
 - **Value moved.** No value is shown at all for this company.
 
-### 8. An SEC lookup that fails stops the company loading at all
+### 7. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -218,7 +192,7 @@ payloads.
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 9. Workbook reported-year operating cash flow is derived, not filed
+### 8. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -234,7 +208,7 @@ payloads.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 10. Reported net income still does not tie for three companies
+### 9. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -245,7 +219,7 @@ payloads.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 11. The 50% minimum cash buffer has no documented basis
+### 10. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -262,7 +236,7 @@ payloads.
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 12. Stock compensation the filing does not break out is never added back
+### 11. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
@@ -396,7 +370,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #12); a line not reported in the last reported year is forecast
+  credited with it, which is #11); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -504,13 +478,15 @@ for either.
   margin and net debt / EBITDA (the last two were already on this basis).
   Unlevered free cash flow still adds stock compensation back, because that
   calculation is about cash rather than about a multiple; the two methods
-  therefore take different views of it and are averaged into the headline (#2),
-  which is a design boundary, not a measurement, and it is not quantified here.
+  therefore take different views of it, and both are published side by side
+  rather than averaged (L26), so a reader can see which method carries the
+  stock compensation and which does not. That is a design boundary, not a
+  measurement, and it is not quantified here.
   Where a filing never breaks stock compensation out, its EBITDA was already on
   this basis, because the cost stays inside the filed cost lines and operating
   profit is after it (18 of the 63 valued companies): those companies need no
   adjustment and are comparable with the peers, and what is still missing for
-  them is the cash-flow add-back, which is #12. Measured against `2d02f95` on
+  them is the cash-flow add-back, which is #11. Measured against `2d02f95` on
   the payloads of 2026-09-19: of the 63 companies with a DCF value, 22 move
   more than 5% on the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%,
   Cisco -14.6%, Qualcomm -14.3%) and 11 on the headline, which averages the
@@ -671,6 +647,50 @@ for either.
   existing guard withholds the value and says so. `src/data/deriveModel.js`
   (`costOfDebtRate`), `src/engine/model.js` (`computeWACC`).
 
+- **L26. The two terminal values are published side by side and never
+  averaged.** A discounted cash flow ends with two answers: the perpetuity
+  value, built from this company's own cash flows, and the exit multiple, built
+  from what the market pays for businesses like it. Averaging them produced a
+  figure that is neither method's answer and buried the disagreement, which is
+  the most useful thing on the page. Both now stand on the headline with the
+  gap between them stated, which is the treatment the income, market and asset
+  approaches already had.
+  **Where the gap is wide** - more than a quarter, against the smaller of the
+  two - the page says in plain language what the divergence means, in whichever
+  direction it runs: an exit multiple above the perpetuity value means the
+  multiple is pricing in growth these cash flows do not produce, or the
+  forecast is too conservative for what the business earns; below it means the
+  cash flows are worth more than the market pays for businesses like this, so
+  either the forecast is too generous or the multiple prices in a risk the cash
+  flows do not show. A quarter is the cut because the median spread is 14.5%,
+  so it sits comfortably beyond ordinary disagreement: 18 of the 63 valued
+  companies are past it, 8 more than half apart, 3 more than double.
+  **Where one figure is genuinely needed it is the perpetuity value, named.**
+  That is the batch screen across companies (its method column now reads
+  "discounted cash flow, perpetuity growth"), the reverse DCF's solves for
+  revenue growth and cost of capital, the income approach's figure where the
+  three approaches are compared, and the premium against the share price in the
+  workbook. Not because it is more correct, but because it is built from this
+  company: the exit multiple is a flat 12x for every derived company, so a
+  figure resting on it moves with an assumption that is the same for a software
+  company and a steelmaker. The reverse DCF's terminal-growth solve already ran
+  against the perpetuity value alone and is unchanged.
+  **The workbook follows.** Rows 53 and 54 carry the two values, row 55 the
+  spread against the lower of them, row 56 names the perpetuity value as the
+  one figure anything downstream uses, and row 58 measures the premium against
+  that rather than against an average. No row was inserted or removed, so the
+  DCF sheet's hard-coded row numbers are undisturbed.
+  **The spread today:** median 14.5%, quartiles 7.7% and 31.7%, widest BP 128%
+  (5.00 against 11.39), MercadoLibre 120% (743.48 / 1638.07), TotalEnergies
+  104% (35.93 / 73.26), Vodafone 73%, Toyota 70%, Shell 68%, Equinor 57%,
+  Broadcom 54% (the only one of the widest where the perpetuity value is the
+  higher), Enbridge 48%, Rio Tinto 46%. The exit multiple is the higher figure
+  for 27 of the 63. No valuation changed: this is a presentation and a choice
+  of which figure downstream code reads, not a change to either method.
+  `src/data/terminalSpread.ts`, `src/components/TerminalDashboard.tsx`,
+  `src/components/howCalculated.tsx`, `src/data/excelExport.ts` (DCF rows
+  53-58), `src/data/reverseDcf.ts`, `src/data/batchRun.ts`.
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -696,7 +716,7 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #8) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #7) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based

@@ -1318,18 +1318,30 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vOne(55, 'The two methods, weighted equally', `(${F}53+${F}54)/2`, money2(currencySymbol), {
+  // THE TWO METHODS ARE NOT AVERAGED, here or on the site. An average is
+  // neither method's answer and hides the disagreement, which is the useful
+  // part: rows 53 and 54 both stand, row 55 says how far apart they are, and
+  // row 56 names the one figure anything downstream uses.
+  vOne(55, 'Spread between the two methods, against the lower', `ABS(${F}54-${F}53)/MIN(${F}53,${F}54)`, PCT1, {
+    unit: '%',
+  });
+  vOne(56, 'Where one figure is needed: perpetuity growth', `${F}53`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vOne(56, 'Spread between the two methods', `ABS(${F}54-${F}53)/${F}55`, PCT1, { unit: '%' });
   vInput(57, 'Share price as of last close', D.marketPrice ?? 0, money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
-  vOne(58, 'Premium / (discount) to the model', `${F}57/${F}55-1`, PCT1, { bold: true, indent: 0, unit: '%' });
+  vOne(58, 'Premium / (discount) to the perpetuity value', `${F}57/${F}56-1`, PCT1, { bold: true, indent: 0, unit: '%' });
 
   [
+    'The two terminal methods are shown separately and never averaged. A wide spread (row 55) is information, not noise:',
+    'an exit multiple well above the perpetuity value means the multiple prices in growth these cash flows do not produce,',
+    'and one well below it means the cash flows are worth more than the market pays for businesses like this.',
+    'Where a single figure is needed it is the perpetuity value (row 56), because the exit multiple rests on a multiple',
+    'that is the same for every derived company.',
+    '',
     'With the circularity switch off, interest is charged on opening balances rather than average balances, so nothing',
     'computes circularly. The difference to the answer is small. See Model settings on the 3-statement model sheet.',
   ].forEach((text, i) => {

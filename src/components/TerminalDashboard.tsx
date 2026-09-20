@@ -15,6 +15,9 @@ import {
 import type { AssetApproachResult, RecoveryRates } from '../data/assetApproach';
 import { buildMarketApproach, trailingFiguresFrom, defaultSelection } from '../data/marketApproach';
 import type { MarketApproachResult } from '../data/marketApproach';
+import { terminalSpread } from '../data/terminalSpread';
+
+const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 import { reverseDcf } from '../data/reverseDcf';
 import type { ReverseDcfResult } from '../data/reverseDcf';
 import { HowCalculated } from './howCalculated';
@@ -494,37 +497,41 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return valuationBandsFor(activeSource, drivers, displayPrice);
   }, [activeSource, drivers, displayPrice]);
 
-  // The headline is ONE number: the two terminal methods, weighted equally.
+  // THE HEADLINE IS TWO NUMBERS, NOT ONE.
   //
-  // Both are real outputs of the model, neither is more correct than the other,
-  // so a 50/50 blend states that plainly rather than picking a winner. What it
-  // must not do is hide the disagreement, because the gap between the two IS
-  // information: a company whose methods land 20% apart is a different
-  // proposition from one where they agree. So both figures stay on screen
-  // underneath, and the football field below shows the full spread.
-  const blendedValue = useMemo(() => {
-    const parts = valuationBands
-      .filter((band) => typeof band.point === 'number' && isFinite(band.point) && band.point > 0)
-      .map((band) => ({
-        // The header names each method in a couple of words. The band labels
-        // now carry the approach as well, which belongs on the chart but not in
-        // the header, so it is stripped here.
-        label: band.label.replace('Income — DCF, ', ''),
-        value: band.point,
-      }));
-    if (parts.length < 2) return null;
-    const value = parts.reduce((sum, part) => sum + part.value, 0) / parts.length;
-    return { value, parts };
+  // A discounted cash flow ends with two answers: the perpetuity value, built
+  // from this company's own cash flows, and the exit multiple, built from what
+  // the market pays for businesses like it. They used to be averaged into a
+  // single headline. That produced a figure that is neither method's answer
+  // and buried the disagreement, which is the most useful thing on the page: a
+  // company whose methods land 128% apart (BP) is a different proposition from
+  // one where they agree to within 5%.
+  //
+  // So both stand, side by side, with the gap between them stated - the same
+  // treatment the income, market and asset approaches already get.
+  const terminalMethods = useMemo(() => {
+    const find = (needle: string) =>
+      valuationBands.find(
+        (band: any) =>
+          typeof band.point === 'number' &&
+          isFinite(band.point) &&
+          band.point > 0 &&
+          String(band.label).toLowerCase().includes(needle)
+      )?.point ?? null;
+    const perpetuity = find('perpetuity');
+    const exit = find('exit');
+    return { perpetuity, exit, split: terminalSpread(perpetuity, exit) };
   }, [valuationBands]);
 
-
-  // Premium or discount against that blended value.
-  const blendedPremiumPct = useMemo(() => {
-    if (!blendedValue || blendedValue.value <= 0) return null;
-    return Number(
-      (((displayPrice - blendedValue.value) / blendedValue.value) * 100).toFixed(1)
-    );
-  }, [blendedValue, displayPrice]);
+  // Premium or discount against each method, since there is no single value
+  // to measure it against any more.
+  const premiumAgainst = useMemo(() => {
+    const at = (value: number | null) =>
+      isNum(value) && value > 0
+        ? Number((((displayPrice - value) / value) * 100).toFixed(1))
+        : null;
+    return { perpetuity: at(terminalMethods.perpetuity), exit: at(terminalMethods.exit) };
+  }, [terminalMethods, displayPrice]);
 
 
 
@@ -1070,29 +1077,55 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             ) : hasRealModel && dcfResult.applicable !== false ? (
               <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
                 <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  INTRINSIC VALUE
+                  INTRINSIC VALUE, BOTH TERMINAL METHODS
                 </div>
-                <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
-                  <FlashOnChange watch={viewMode} className="px-1 -mx-1">
-                    <span className="font-display text-3xl text-[#8B1E1E] font-bold">
-                      <TweenNumber
-                        value={blendedValue ? blendedValue.value : dcfResult.targetPrice}
-                        prefix={company.currencySymbol}
-                      />
-                    </span>
-                  </FlashOnChange>
-                  <span
-                    className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border whitespace-nowrap ${
-                      blendedPremiumPct === null ? premiumDiscountStyle : premiumDiscountStyle
-                    }`}
-                  >
-                    {blendedPremiumPct === null
-                      ? premiumDiscountLabel
-                      : blendedPremiumPct > 0
-                      ? `${blendedPremiumPct}% premium`
-                      : `${Math.abs(blendedPremiumPct)}% discount`}
-                  </span>
+                {/* Two answers, never averaged. The gap between them is the
+                    point, not a defect to smooth over. */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2 md:justify-end">
+                  {[
+                    {
+                      label: 'perpetuity growth',
+                      value: terminalMethods.perpetuity ?? dcfResult.targetPrice,
+                      premium: premiumAgainst.perpetuity,
+                    },
+                    {
+                      label: 'exit multiple',
+                      value: terminalMethods.exit,
+                      premium: premiumAgainst.exit,
+                    },
+                  ]
+                    .filter((m) => isNum(m.value))
+                    .map((m) => (
+                      <div key={m.label} className="text-left md:text-right">
+                        <FlashOnChange watch={viewMode} className="px-1 -mx-1">
+                          <span className="font-display text-3xl text-[#8B1E1E] font-bold">
+                            <TweenNumber value={m.value as number} prefix={company.currencySymbol} />
+                          </span>
+                        </FlashOnChange>
+                        <div className="font-mono text-[10px] text-[#8A8A8F] mt-1 uppercase tracking-widest">
+                          {m.label}
+                          {m.premium !== null && (
+                            <span className="ml-2 text-[#A1A1AA]">
+                              {m.premium > 0
+                                ? `${m.premium}% premium`
+                                : `${Math.abs(m.premium)}% discount`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                 </div>
+
+                {terminalMethods.split && (
+                  <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 md:text-right">
+                    the two methods are {(terminalMethods.split.spread * 100).toFixed(0)}% apart
+                  </div>
+                )}
+                {terminalMethods.split?.wide && (
+                  <p className="text-[12px] leading-relaxed text-[#A1A1AA] mt-2 max-w-md md:ml-auto text-left">
+                    {terminalMethods.split.sentence}
+                  </p>
+                )}
 
                 <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
                   (the working is explained below)
@@ -1583,8 +1616,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             }
             companyName={company.name}
             isDerived={viewMode === 'DERIVED' || !company.engineBacked}
-            methods={blendedValue?.parts}
-            blendedValue={blendedValue?.value ?? null}
+            methods={[
+              { label: 'perpetuity growth', value: terminalMethods.perpetuity },
+              { label: 'exit multiple', value: terminalMethods.exit },
+            ].filter((m) => isNum(m.value)) as { label: string; value: number }[]}
+            terminalSplit={terminalMethods.split}
             marketApproach={marketApproach}
             assetApproach={assetApproach}
             recoveryKey={recoveryKey}
@@ -1675,7 +1711,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             presetKey={recoveryKey}
             onPreset={applyRecoveryPreset}
             onRate={setRecoveryRate}
-            dcfValuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+            dcfValuePerShare={terminalMethods.perpetuity ?? dcfResult.targetPrice}
           />
         </FullScreenPanel>
       )}
@@ -1727,7 +1763,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             onSelected={setSelectedPeers}
             onReset={() => setSelectedPeers(null)}
             fiscalYear={subjectTrailing?.fiscalYear ?? null}
-            dcfValuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+            dcfValuePerShare={terminalMethods.perpetuity ?? dcfResult.targetPrice}
           />
         </FullScreenPanel>
       )}
@@ -1745,7 +1781,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             viewMode={viewMode}
             drivers={drivers}
             defaults={activeDefaults}
-            valuePerShare={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+            valuePerShare={terminalMethods.perpetuity ?? dcfResult.targetPrice}
             onRestore={(restored, mode) => {
               setViewMode(mode);
               // The stored set is applied after the model switch, because
@@ -1780,7 +1816,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             }}
             onClose={() => setNerdView(null)}
             currencySymbol={company.currencySymbol}
-            currentValue={blendedValue ? blendedValue.value : dcfResult.targetPrice}
+            currentValue={terminalMethods.perpetuity ?? dcfResult.targetPrice}
             companyName={company.name}
             profile={company.profile}
           />

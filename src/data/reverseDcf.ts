@@ -16,13 +16,14 @@
 //
 // Four questions, each solved against the method it belongs to:
 //
-//   revenue growth   -> against the blended value, because growth moves both
+//   revenue growth   -> against the perpetuity value; growth moves both, and
+//                      the perpetuity method is the one built from this company
 //                       terminal methods
 //   terminal growth  -> against the perpetuity value only, because the exit
 //                       multiple method does not use a terminal growth rate
 //   exit multiple    -> against the exit multiple value only, for the mirror
 //                       of that reason
-//   cost of capital  -> against the blended value; the discount rate moves both
+//   cost of capital  -> against the perpetuity value; the discount rate moves both
 //
 // A note on precision. The engine treats a driver as "moved" only when it
 // differs from the model's own default at one decimal place, so figures are
@@ -184,12 +185,12 @@ export function reverseDcf(
   //    value, and it is still solved for rather than assumed: if the override
   //    ever stops being an exact shift, this keeps the two columns comparing
   //    like with like instead of silently showing a gap that is not there.
-  const growth = bisect(-30, 40, gap('revenueGrowthPct', 'blend'));
+  const growth = bisect(-30, 40, gap('revenueGrowthPct', 'perpetuity'));
   const baseFlatGrowth =
     modelValue === null
       ? baseRevenueGrowthPct
       : bisect(-30, 40, (x: number) => {
-          const v = valueUnder(source, drivers, { revenueGrowthPct: x }, 'blend');
+          const v = valueUnder(source, drivers, { revenueGrowthPct: x }, 'perpetuity');
           return v === null ? null : v - modelValue;
         }) ?? baseRevenueGrowthPct;
   figures.push({
@@ -198,7 +199,7 @@ export function reverseDcf(
     base: baseFlatGrowth,
     implied: snapToBase(growth, baseFlatGrowth),
     unit: 'pct',
-    method: 'solved against the blended value',
+    method: 'solved against the perpetuity value',
     question:
       "the model's own growth path moved up or down as a whole, margins unchanged — the figure shown is the first forecast year",
     outOfRange: growth === null,
@@ -238,14 +239,14 @@ export function reverseDcf(
   // using during this solve, which is the base rate, not the implied one found
   // above. At or below it the perpetuity formula has no meaning.
   const waccFloor = Math.max((baseTerminalPct ?? 0) + 0.5, 1);
-  const wacc = bisect(waccFloor, 40, gap('waccPct', 'blend'));
+  const wacc = bisect(waccFloor, 40, gap('waccPct', 'perpetuity'));
   figures.push({
     key: 'wacc',
     label: 'Cost of capital',
     base: baseWaccPct,
     implied: snapToBase(wacc, baseWaccPct),
     unit: 'pct',
-    method: 'solved against the blended value',
+    method: 'solved against the perpetuity value',
     question: 'the discount rate at which the model agrees with the price',
     outOfRange: wacc === null,
   });
