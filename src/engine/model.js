@@ -619,8 +619,25 @@ export function buildModel(data) {
 
   S.ebitda = blank();
   for (let t = 0; t < nH + nF; t++) {
-    // Unreported stock compensation was never charged, so there is none to add back.
-    S.ebitda[t] = S.ebit[t] + S.depreciationAmortisation[t] + (S.stockBasedCompensation[t] ?? 0);
+    // EBITDA is operating profit before depreciation and amortisation, and
+    // NOT before stock compensation, which stays a cost.
+    //
+    // This is a definition the model does not get to choose. A multiple is
+    // only meaningful against the same measure it was computed from, and the
+    // peers' EV/EBITDA multiples come from a source that computes EBITDA as
+    // operating income plus depreciation and amortisation, stock compensation
+    // left in costs (checked against that source's own annual figures: for
+    // Arm, Palantir, Salesforce and Apple its EBITDA equals its operating
+    // income plus its depreciation to the last million, and is short of the
+    // stock-compensation add-back by exactly the stock compensation). Adding
+    // it back here and then applying their multiple valued a larger EBITDA at
+    // a multiple derived from a smaller one.
+    //
+    // Stock compensation is also a real cost of employing people: it is paid
+    // in shares rather than cash, and the dilution it causes is carried in the
+    // share count, not waved through as a non-cash add-back. The unlevered
+    // cash flow still adds it back, because that calculation is about cash.
+    S.ebitda[t] = S.ebit[t] + S.depreciationAmortisation[t];
   }
 
   // --------------------------------------------- 7. EQUITY & SHARE SCHEDULES

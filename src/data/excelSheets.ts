@@ -606,9 +606,11 @@ function buildIncomeStatementSheet(ctx: SupportingSheetsContext) {
   b.blank();
 
   b.group('Supplementary');
-  // EBITDA adds the two non-cash charges back to operating income, so here
-  // the same lines enter with a plus.
-  b.total('EBITDA', [ebit, { ...da, sign: 1 }, { ...sbc, sign: 1 }], { fmt: sym });
+  // EBITDA adds depreciation and amortisation back to operating income, so
+  // that line enters with a plus. Stock compensation does not: it stays a
+  // cost, which is the basis the peer multiples are on (see the engine's
+  // EBITDA).
+  b.total('EBITDA', [ebit, { ...da, sign: 1 }], { fmt: sym });
   b.blank();
   b.note([
     'Cost of sales, R&D and SG&A exclude depreciation & amortization and stock based compensation, which are charged',

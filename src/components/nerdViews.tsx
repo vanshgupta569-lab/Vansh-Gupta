@@ -440,7 +440,7 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
           },
           { label: 'Net income', values: M.netIncome, bold: true },
           { spacer: true, label: '' },
-          { label: 'EBITDA (operating profit before D&A and SBC)', values: M.ebitda, bold: true },
+          { label: 'EBITDA (operating profit before D&A; stock compensation stays a cost)', values: M.ebitda, bold: true },
           { spacer: true, label: '' },
           { label: 'Basic shares', values: M.basicShares, indent: true, muted: true },
           { label: 'Diluted shares', values: M.dilutedShares, indent: true, muted: true },

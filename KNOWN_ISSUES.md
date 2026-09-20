@@ -20,18 +20,20 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below. Entries 6, 7, 9,
-12 and 17 and design choice D1 come from the conventions audit
-(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entries 1 and 14 come from the
-currency sweep and entry 18 from the SG&A sweep, on payloads fetched
+outputs; no source was changed to measure anything below. Entries 5, 6, 7,
+10 and 15 and design choice D1 come from the conventions audit
+(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entries 1 and 12 come from the
+currency sweep and entry 16 from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
 showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
 2026-09-18 with minority interests and preferred stock added. The residual
 income work refetched them on 2026-09-19 with dividends to common
 shareholders added (176 fetched, 169 modelled, 80 showing a value, 17 of them
-a residual income value),
-which is the basis for L19 and L20.
+a residual income value), which is the basis for L19 and L20. The EBITDA
+definition work ran on those same payloads on 2026-09-20 (63 companies with a
+DCF value, 45 of them reporting stock compensation), which is the basis for
+L21; its market-approach figures use peer medians fetched the same day.
 
 ---
 
@@ -40,23 +42,22 @@ which is the basis for L19 and L20.
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
 | 1 | Reliance Infrastructure values at 6.6 times its price; likely unfetched short-term debt | 1 | RELINFRA.NS 328.58 vs 49.99 | 6.6x the price |
-| 2 | Two EBITDA definitions: model adds SBC back, peers' multiples do not | 22 valued (SBC >5% of EBITDA) | Arm, SBC 47.6% of EBITDA | exit-multiple value -36.3%; EV/EBITDA method overstated 90.9% |
-| 3 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
-| 4 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
-| 5 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
-| 6 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
-| 7 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 8 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 9 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 10 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
-| 11 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 12 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
-| 13 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 14 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 15 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 16 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 17 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
-| 18 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
+| 2 | "Cash" excludes marketable securities, so net debt is overstated for cash-rich companies | 15 valued | Alibaba, other current assets 176.47 a share | up to 39.7% of value (upper bound) |
+| 3 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
+| 4 | Perpetuity and exit-multiple values averaged; divergence not investigated | 23 of 42 valued more than 10% apart | TotalEnergies 33.85 vs 77.00 | headline ~8% (median) to 39% from either method |
+| 5 | WACC weights capital on net debt; 13 negative debt weights | 42 valued | Alibaba WACC 7.1% vs 5.9% on gross debt | median +1.2%, up to +21.2% |
+| 6 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
+| 7 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 8 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 9 | Forecast interest is 4.5% of average debt, not the filed interest | 16 valued outside 0.67x-1.5x of filed | Amphenol forecast 0 vs filed 368 | small; not measured |
+| 10 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 11 | Broadcom and Palo Alto may be false-positive missing-debt refusals | 3 refused (AVGO, PANW, KO) | Palo Alto | no value shown at all |
+| 12 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 13 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 14 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 15 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 16 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 17 | Net debt excludes lease liabilities | not measured (not fetched) | Amazon | not measured |
 
 ---
 
@@ -83,30 +84,7 @@ which is the basis for L19 and L20.
 - **Value moved.** The headline is 6.6 times the price (it was 12.4 before minority
   interests were deducted). Not diagnosed further.
 
-### 2. Two EBITDA definitions
-
-- **What is wrong.** The engine's EBITDA is operating profit plus D&A plus stock
-  compensation. Peers' EV/EBITDA multiples (Yahoo) use EBITDA without the SBC
-  add-back, and so does the site's "as reported" EBITDA margin and the ratios
-  screen's net debt / EBITDA. The market approach applies the peer multiple to
-  the model's larger EBITDA, and the DCF's exit-multiple method applies a
-  multiple to it too.
-- **Where.** `src/engine/model.js` (`S.ebitda`, `buildDCF` terminal EBITDA);
-  `src/data/marketApproach.ts` (subject EBITDA from the model); `api/comps.js`
-  (peer EBITDA); `src/data/companies.ts` (`financialsFromStatements`
-  `ebitdaMargin`, EBIT + D&A); `src/data/ratios.js` (net debt / EBITDA).
-- **How measured.** SBC as a share of model EBITDA in the last reported year;
-  exit-multiple value recomputed with terminal EBITDA less SBC; market-approach
-  enterprise value overstatement = SBC / (EBITDA - SBC).
-- **Affects.** 22 valued companies with SBC above 5% of EBITDA.
-- **Worst example.** Arm: SBC 47.6% of EBITDA; exit-multiple value 54.58 falls to
-  34.76 (-36.3%); EV/EBITDA method overstated 90.9%. Palantir -27.7% / 47.5%,
-  AMD -23.3% / 38.9%, Marvell -22.6% / 38.2%.
-- **Value moved.** Exit-multiple value up to -36% when corrected; market
-  approach EV up to +91% overstated. The headline blends both DCF methods, so
-  it moves by part of this.
-
-### 3. "Cash" excludes marketable securities
+### 2. "Cash" excludes marketable securities
 
 - **What is wrong.** The fetched cash line is cash and cash equivalents only.
   Short-term marketable securities fall into other current assets and never
@@ -124,7 +102,7 @@ which is the basis for L19 and L20.
 - **Value moved.** Understated by up to ~40% at the upper bound; the true figure
   needs the securities balance.
 
-### 4. Forecast depreciation tracks same-year capex
+### 3. Forecast depreciation tracks same-year capex
 
 - **What is wrong.** Forecast depreciation is that year's capex times a rate,
   so it follows the capex forecast rather than the assets already in service.
@@ -143,7 +121,7 @@ which is the basis for L19 and L20.
   is applied to the year's own capital spending rather than to the assets in
   service.
 
-### 5. The two terminal values are averaged, not investigated
+### 4. The two terminal values are averaged, not investigated
 
 - **What is wrong.** The headline is the mean of the perpetuity-growth and
   exit-multiple values. The spread between them is shown (workbook DCF row 54,
@@ -166,9 +144,9 @@ which is the basis for L19 and L20.
 - **Value moved.** The headline sits half the spread from either method: median
   about 8%, up to 39% (TotalEnergies). The exit multiple is a flat 12x for every
   derived company, so part of the spread is the multiple, not the business; see
-  also #2.
+  also L21.
 
-### 6. WACC weights capital on net debt
+### 5. WACC weights capital on net debt
 
 - **What is wrong.** The debt weight is net debt / (market capitalisation + net
   debt). For a company holding more cash than debt the debt weight is negative
@@ -189,7 +167,7 @@ which is the basis for L19 and L20.
   +5.7%, BHP +5.3%. (Toyota's New York listing +9.3%; now refused, L8.)
 - **Value moved.** Median +1.2%; up to +21.2%.
 
-### 7. Workbook and site DCF disagree
+### 6. Workbook and site DCF disagree
 
 - **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
   (+ amortisation after tax), leaving out working capital and the terminal
@@ -206,7 +184,7 @@ which is the basis for L19 and L20.
   ExxonMobil -0.1%.
 - **Value moved.** -5.4% to +13.6% between the two.
 
-### 8. No stated discounting convention; timing runs from the fetch date
+### 7. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -228,7 +206,7 @@ which is the basis for L19 and L20.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 9. Forecast tax rate: a filed ratio on a different pretax figure
+### 8. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -246,7 +224,7 @@ which is the basis for L19 and L20.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 10. Forecast interest is 4.5% of average debt
+### 9. Forecast interest is 4.5% of average debt
 
 - **What is wrong.** No coupon is fetched, so forecast interest is average
   reported long-term debt at 4.5%. Filed interest expense is now fetched (since
@@ -262,7 +240,7 @@ which is the basis for L19 and L20.
 - **Value moved.** Small: unlevered cash flow excludes interest; it reaches value
   through the cost of debt in WACC. Not measured.
 
-### 11. Working capital drivers differ between site and workbook
+### 10. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -275,14 +253,14 @@ which is the basis for L19 and L20.
   `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
   (the `ap`, `oca` and `oncl` schedules).
 - **How measured.** Code comparison during the conventions audit; agreement at
-  defaults from the site-vs-workbook run (#7).
+  defaults from the site-vs-workbook run (#6).
 - **Affects.** Every derived company (payables, other current assets); every
   company (other non-current liabilities).
 - **Worst example.** —
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 12. Possible false-positive missing-debt refusals
+### 11. Possible false-positive missing-debt refusals
 
 - **What is wrong.** A company is refused when long-term debt is missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -299,7 +277,7 @@ which is the basis for L19 and L20.
   like tag changes the fetcher does not follow.
 - **Value moved.** No value is shown at all for these companies.
 
-### 13. An SEC lookup that fails stops the company loading at all
+### 12. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -313,7 +291,7 @@ which is the basis for L19 and L20.
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 14. Workbook reported-year operating cash flow is derived, not filed
+### 13. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -329,7 +307,7 @@ which is the basis for L19 and L20.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 15. Reported net income still does not tie for three companies
+### 14. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -340,7 +318,7 @@ which is the basis for L19 and L20.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 16. The 50% minimum cash buffer has no documented basis
+### 15. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -357,13 +335,15 @@ which is the basis for L19 and L20.
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 17. Stock compensation the filing does not break out is never added back
+### 16. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
   does pay it, the cost sits inside its cost lines and is treated as though it
   were cash, so cash from operations and unlevered free cash flow are short by
-  that amount and the value is understated. IFRS filers carry it in a footnote
+  that amount and the value is understated. EBITDA is no longer affected: it
+  never adds stock compensation back for anyone (L21), so a company that does
+  not break it out is on the same basis as one that does. IFRS filers carry it in a footnote
   more often than in the cash flow statement, which is why the ones affected
   are almost all non-US.
 - **Where.** `api/company.js` (`annualStockBasedCompensation` only);
@@ -384,7 +364,7 @@ which is the basis for L19 and L20.
 - **Value moved.** +1.8% in the one case that can be estimated; not measurable
   for the other 19 without the figure the filing does not give.
 
-### 18. Net debt excludes lease liabilities
+### 17. Net debt excludes lease liabilities
 
 - **What is wrong.** Lease liabilities are not fetched, so they are not in net
   debt, while lease-financed assets depreciate through filed D&A.
@@ -500,7 +480,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #17); a line not reported in the last reported year is forecast
+  credited with it, which is #16); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -592,6 +572,40 @@ for either.
   +2.1%, Wells Fargo +0.3%, Royal Bank +0.1%, Citigroup -0.1%, DBS and Bank of
   America under 0.05%. `src/data/residualIncome.js` (`minorityClaims`).
 
+- **L21. EBITDA is before depreciation and amortisation only; stock
+  compensation stays a cost.** A multiple means nothing against a measure other
+  than the one it was computed from, and the peers' EV/EBITDA multiples come
+  from a source that computes EBITDA as operating income plus depreciation and
+  amortisation. That was checked rather than assumed, within that source and
+  within one fiscal year, against its own components: for Arm, Palantir,
+  Salesforce and Apple its annual EBITDA equals its operating income plus its
+  depreciation exactly, and falls short of the stock-compensation add-back by
+  exactly the stock compensation. So the model's EBITDA follows it. Stock
+  compensation is also a real cost of employing people, paid in shares, and the
+  dilution is carried in the share count rather than waved through. The
+  definition is now the same in the engine, the exit multiple, the market
+  approach, the workbook's income statement and DCF sheet, the reported EBITDA
+  margin and net debt / EBITDA (the last two were already on this basis).
+  Unlevered free cash flow still adds stock compensation back, because that
+  calculation is about cash rather than about a multiple; the two methods
+  therefore take different views of it and are averaged into the headline (#4),
+  which is a design boundary, not a measurement, and it is not quantified here.
+  Where a filing never breaks stock compensation out, its EBITDA was already on
+  this basis, because the cost stays inside the filed cost lines and operating
+  profit is after it (18 of the 63 valued companies): those companies need no
+  adjustment and are comparable with the peers, and what is still missing for
+  them is the cash-flow add-back, which is #16. Measured against `2d02f95` on
+  the payloads of 2026-09-19: of the 63 companies with a DCF value, 22 move
+  more than 5% on the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%,
+  Cisco -14.6%, Qualcomm -14.3%) and 11 on the headline, which averages the
+  exit multiple with a perpetuity value that did not move at all. On the market
+  approach, 18 of the 28 companies for which a peer median came back move more
+  than 5% (Marvell -28.4%, AMD -27.1%, Cisco -20.0%). The entry this replaces
+  named Arm as its worst case; Arm has had no value since the currency work
+  refused it as `listingNotComparable`. `src/engine/model.js` (`S.ebitda`),
+  `src/data/excelExport.ts`, `src/data/excelSheets.ts`,
+  `src/data/marketApproach.ts`.
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -617,7 +631,7 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #13) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #12) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based

@@ -198,7 +198,9 @@ export function buildMarketApproach(
       metric: subject.ebitda,
       perShare: fromEnterpriseValue(medians.evToEbitda, subject.ebitda),
       workings:
-        'peer median EV/EBITDA × this company’s reported EBITDA, less net debt, divided by diluted shares',
+        'peer median EV/EBITDA × this company’s reported EBITDA, less net debt, divided by diluted shares. ' +
+        'Both sides are operating profit before depreciation and amortisation, with stock compensation left ' +
+        'in costs, which is how the peers’ multiples are computed',
       absentBecause:
         !isNum(medians.evToEbitda)
           ? 'the peer set did not produce a median'

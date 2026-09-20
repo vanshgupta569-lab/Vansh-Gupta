@@ -748,7 +748,9 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // years: the PP&E schedule's depreciation plus the amortisation and other
   // D&A outside it (see that schedule).
   line('da', 'Depreciation & amortization', M.depreciationAmortisation, (c) => `-${c}${R.ppeDep}+${c}${R.amort}`, money());
-  calc('ebitda', 'EBITDA', (c) => `${c}${R.ebit}+${c}${R.da}+${c}${R.sbc}`, money(currencySymbol), {
+  // Before D&A, not before stock compensation: the same definition the peer
+  // multiples are on (see the engine's EBITDA).
+  calc('ebitda', 'EBITDA', (c) => `${c}${R.ebit}+${c}${R.da}`, money(currencySymbol), {
     bold: true,
     indent: 0,
   });
