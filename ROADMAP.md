@@ -41,7 +41,7 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this list; the top of that file is currently method questions rather than missing data.
 
-1. **NEXT — Remaining `KNOWN_ISSUES.md` method entries.** The top of that file is now the capital-spending driver that lets the asset base drift, the undocumented discounting convention, and the forecast tax rate on a different pretax base.
+1. **NEXT — Remaining `KNOWN_ISSUES.md` method entries.** The top of that file is now the undocumented discounting convention (KI-2), the forecast tax rate on a different pretax base (KI-3), and the working-capital drivers that differ between the site and the workbook (KI-4). Entries there carry permanent IDs from 2026-09-22: `KI-4` means the same defect for good, and fixing one no longer renumbers the rest.
 2. **NEXT — Primary-filings data layer, India first.** Section 1 below. The largest planned piece of work, and the one that removes the Yahoo dependency behind the currency, ADR and share-count problems.
 3. **QUEUED — `CLAUDE.md` house-rules file.** Section 7.
 4. **QUEUED — Outsourceable content units.** Did-you-know entries, 10b qualitative factors, eight SEO explainer pages. None needs the repository.

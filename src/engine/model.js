@@ -235,6 +235,9 @@ export function buildModel(data) {
     beginning: blank(), capex: blank(), depreciation: blank(), otherMovements: blank(), ending: blank(),
     // Opening balance plus half the year's additions: what the rate is charged on.
     depreciableBase: blank(),
+    // The half of forecast capital spending that adds plant rather than
+    // replacing it. Nil in reported years, which report one figure.
+    growthCapex: blank(),
   };
   S.depreciationPercentOfAssets = blank();
 
@@ -323,13 +326,68 @@ export function buildModel(data) {
     // percentage-of-revenue method used to negate it, which for every derived
     // company turned forecast capex into a cash inflow, ran PP&E down towards
     // a negative balance, made D&A negative and added capex to free cash flow.
-    capexRaw = a.capexMethod === 'percentOfRnD'
-      ? -S.rndReportedBasis[t] * a.capexRatio       // capex = R&D spend (as filed, negative) × ratio
-      : a.capexMethod === 'percentOfRevenue'
-        ? S.revenue[t] * a.capexRatio                // capex = revenue × ratio
-        : capexRaw * (1 + a.capexRatio);            // capex grows at the ratio
-    S.ppe.capex[t] = capexRaw * capexScale;
     S.depreciationPercentOfAssets[t] = depPct;
+
+    if (a.capexMethod === 'maintenancePlusGrowth') {
+      // CAPITAL SPENDING IN TWO PARTS, because one percentage of revenue
+      // cannot say both things at once.
+      //
+      // A flat share of revenue is set without reference to the plant it has
+      // to keep standing, so the asset base drifted: 64 of 70 valued companies
+      // ended the forecast more than 10% away from where they started, NVIDIA
+      // 390% up and Sony 44% down. CONVENTIONS.md asks for capital spending
+      // taken off guidance and cross-checked against the historical share of
+      // revenue, "rather than relying on a percent-of-revenue assumption in
+      // isolation". The site has no guidance to read, so it keeps the other
+      // half of that rule by splitting the line:
+      //
+      //   maintenance  = depreciation. What wears out is replaced, which is
+      //                  what keeps a pooled asset base standing. It is the
+      //                  same treatment the terminal year already uses.
+      //   growth       = the increase in revenue times this company's own net
+      //                  PP&E to revenue ratio, averaged across the reported
+      //                  years. A percentage of a related balance-sheet line,
+      //                  which is one of the projection methods the
+      //                  conventions name, documented here as they require.
+      //
+      // It works in both directions. A company whose revenue falls releases
+      // plant in the same proportion, because holding the whole base against a
+      // shrinking business is what made the capital intensity of the oil
+      // majors climb past anything they have ever carried - TotalEnergies to
+      // 126% of revenue against the 62% of its reported years. Their own
+      // filings show the symmetric behaviour: BP spent 0.74 to 0.92 times its
+      // depreciation across four reported years while its plant shrank.
+      // Total spending is still never negative; the model does not sell plant
+      // for cash.
+      //
+      // The two are circular on paper - maintenance is depreciation, and
+      // depreciation is charged on a base that includes half the year's
+      // additions - so it is solved rather than iterated:
+      //
+      //   d = r(open + (d + g)/2)  =>  d = r(open + g/2) / (1 - r/2)
+      const growth = (S.revenue[t] - S.revenue[t - 1]) * (a.ppeToRevenue ?? 0) * capexScale;
+      const open = S.ppe.beginning[t];
+      const maintenance =
+        typeof open === 'number' && isFinite(open) ? (depPct * (open + growth / 2)) / (1 - depPct / 2) : null;
+      S.ppe.growthCapex[t] = growth;
+      S.ppe.capex[t] = maintenance === null ? null : Math.max(0, maintenance + growth);
+      S.ppe.depreciation[t] = maintenance === null ? null : -maintenance;
+      // The base the charge was actually taken on. It is the solved base, not
+      // opening plus half of total spending: where spending floors at nil
+      // those differ, and the rate on screen should be the rate charged.
+      S.ppe.depreciableBase[t] =
+        maintenance === null || !(depPct > 0) ? null : maintenance / depPct;
+    } else {
+      capexRaw = a.capexMethod === 'percentOfRnD'
+        ? -S.rndReportedBasis[t] * a.capexRatio     // capex = R&D spend (as filed, negative) × ratio
+        : a.capexMethod === 'percentOfRevenue'
+          ? S.revenue[t] * a.capexRatio              // capex = revenue × ratio
+          : capexRaw * (1 + a.capexRatio);          // capex grows at the ratio
+      S.ppe.capex[t] = capexRaw * capexScale;
+      S.ppe.growthCapex[t] = null;
+      S.ppe.depreciation[t] = null;                  // set with the base below
+    }
+
     // The assets in service this year: what was already owned, plus half of
     // what is bought during it. Measured the same way above.
     //
@@ -338,11 +396,12 @@ export function buildModel(data) {
     // depreciation on half a year's capital spending alone: 3,138 against the
     // 21,136 it filed. The base stays null, and the company is refused below
     // rather than valued off an asset base that was never reported.
-    S.ppe.depreciableBase[t] =
-      typeof S.ppe.beginning[t] === 'number' && isFinite(S.ppe.beginning[t])
-        ? S.ppe.beginning[t] + S.ppe.capex[t] / 2
-        : null;
-    S.ppe.depreciation[t] = -(S.ppe.depreciableBase[t] * depPct);
+    if (S.ppe.depreciableBase[t] == null)
+      S.ppe.depreciableBase[t] =
+        typeof S.ppe.beginning[t] === 'number' && isFinite(S.ppe.beginning[t]) && typeof S.ppe.capex[t] === 'number'
+          ? S.ppe.beginning[t] + S.ppe.capex[t] / 2
+          : null;
+    if (S.ppe.depreciation[t] === null) S.ppe.depreciation[t] = -(S.ppe.depreciableBase[t] * depPct);
     S.ppe.ending[t] = S.ppe.beginning[t] + S.ppe.capex[t] + S.ppe.depreciation[t];
   }
 
@@ -351,6 +410,12 @@ export function buildModel(data) {
   // and refused in checkValuationApplicability, because a forecast built on it
   // is not a valuation (Union Pacific's balance-sheet rate was 419% of capital
   // spending, Amazon's -92%).
+  // The net PP&E to revenue ratio the forecast bought plant at, so the workbook
+  // can carry the same constant rather than recomputing one per year.
+  S.ppeToRevenueUsed =
+    a.capexMethod === 'maintenancePlusGrowth' && typeof a.ppeToRevenue === 'number' && isFinite(a.ppeToRevenue)
+      ? a.ppeToRevenue
+      : null;
   S.depreciationRateUsed = typeof depPct === 'number' && isFinite(depPct) ? depPct : null;
   const noAssetBase = !isNum(S.ppe.ending[nH - 1]);
   S.depreciationRateProblem =

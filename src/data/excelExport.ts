@@ -911,21 +911,79 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       has(M.ppe?.depreciableBase, i) && has(M.ppe?.depreciation, i)
         ? `-${c}${R.ppeDep}/(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)`
         : null,
-    // The rate the engine used, on the same base: the opening balance plus
-    // half the year's additions. Reading it off capital spending instead is
-    // what made the workbook's depreciation disagree with the site's.
+    // Reported years show the rate the filing implies; forecast years carry the
+    // one rate the engine charged. Re-deriving it per year looked identical
+    // until capital spending floored at nil for a company whose revenue falls
+    // (Saudi Aramco), where the base and the charge stop agreeing.
     (i) => {
+      if (i >= nH) return isNum(M.depreciationRateUsed) ? M.depreciationRateUsed : 0;
       const base = at(M.ppe?.depreciableBase, i);
       const dep = at(M.ppe?.depreciation, i);
       return isNum(base) && isNum(dep) && base !== 0 ? Math.abs(dep) / Math.abs(base) : 0;
     },
     PCT1
   );
+  // Capital spending in two parts where the model splits it: what wears out is
+  // replaced, and plant is added in proportion to new revenue. Both rows carry
+  // the engine's own figures in reported years, where the filing gives one
+  // combined number, and the formulas below drive the forecast.
+  const splitCapex = M.ppe?.growthCapex?.some?.((v: any) => isNum(v));
+  if (splitCapex) {
+    driver(
+      'ppeIntensity',
+      'Net PP&E as % of revenue',
+      (c, _p, i) => (has(M.revenue, i) && has(M.ppe?.ending, i) ? `${c}${R.ppeEnd}/${c}${R.rev}` : null),
+      // Reported years show what the company actually carried; forecast years
+      // carry the one ratio the engine bought plant at, not a fresh ratio per
+      // year, or the workbook and the site part company.
+      (i) => {
+        if (i >= nH) return isNum(M.ppeToRevenueUsed) ? M.ppeToRevenueUsed : 0;
+        const rev = at(M.revenue, i);
+        const ppe = at(M.ppe?.ending, i);
+        return isNum(rev) && rev !== 0 && isNum(ppe) ? ppe / rev : 0;
+      },
+      PCT1
+    );
+  }
   bopRow('ppeBop', 'Beginning of period', at(M.ppe?.beginning, 0), 'ppeEnd');
-  line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
+  if (splitCapex) {
+    line(
+      'ppeGrowthCapex',
+      'Plus: capital expenditures to add plant, on the increase in revenue',
+      M.ppe?.growthCapex,
+      (c, p) => `(${c}${R.rev}-${p}${R.rev})*${c}${R.ppeIntensity}`,
+      money()
+    );
+  } else {
+    // A model that projects capital spending as one line: a percentage of
+    // revenue, of R&D, or a growth rate (the curated Apple file).
+    line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
+  }
   // Charged on the plant already owned plus half of what is bought during the
   // year, not on the year's purchases (see the engine's PP&E schedule).
-  line('ppeDep', 'Less: depreciation', M.ppe?.depreciation, (c) => `-(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)*${c}${R.depPct}`, money());
+  //
+  // Where capital spending is split, replacement equals depreciation and
+  // depreciation is charged on a base that includes half of it, so the two are
+  // circular on paper. The engine solves that rather than iterating, and this
+  // is the same solution: d = r(open + g/2) / (1 - r/2).
+  line(
+    'ppeDep',
+    'Less: depreciation',
+    M.ppe?.depreciation,
+    splitCapex
+      ? (c) => `-(${c}${R.depPct}*(${c}${R.ppeBop}+${c}${R.ppeGrowthCapex}/2))/(1-${c}${R.depPct}/2)`
+      : (c) => `-(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)*${c}${R.depPct}`,
+    money()
+  );
+  if (splitCapex) {
+    line(
+      'ppeCapex',
+      'Plus: capital expenditures, replacement plus growth',
+      M.ppe?.capex,
+      (c) => `MAX(0,-${c}${R.ppeDep}+${c}${R.ppeGrowthCapex})`,
+      money()
+    );
+  }
   // Reported years: whatever else moved the balance — disposals, impairments,
   // finance-lease additions, acquisitions, currency. Depreciation above is the
   // filed figure, so these are shown for what they are instead of being counted

@@ -1169,9 +1169,23 @@ export function deriveModel(fetched) {
     return isNum(rev) && isNum(capex) && rev !== 0 ? capex / rev : null;
   });
   const capexRatio = clamp(mean(capexRatios), 0.001, 0.4, 0.04);
-  provenance.capex = `${(capexRatio * 100).toFixed(
-    1
-  )}% of revenue — average of the reported years`;
+
+  // How much plant this company carries for each unit of revenue, averaged
+  // across the reported years. The forecast buys plant in that proportion as
+  // revenue grows, and replaces what wears out separately (see the engine's
+  // PP&E schedule). Where it cannot be measured - no net PP&E, or no revenue -
+  // the forecast falls back to the flat share of revenue, and says so.
+  const intensities = revenue.map((rev, i) =>
+    isNum(rev) && rev > 0 && isNum(rows[i]?.ppeNet) ? rows[i].ppeNet / rev : null
+  );
+  const ppeToRevenue = mean(intensities);
+  const intensityUsable = isNum(ppeToRevenue) && ppeToRevenue > 0;
+  provenance.capex = intensityUsable
+    ? `replacement of what wears out, plus ${(ppeToRevenue * 100).toFixed(1)}% of each year's increase in revenue — ` +
+      `this company's own net PP&E against revenue, averaged over the ${intensities.filter(isNum).length} reported years that give both ` +
+      `(capital spending averaged ${(capexRatio * 100).toFixed(1)}% of revenue across those years)`
+    : `${(capexRatio * 100).toFixed(1)}% of revenue — average of the reported years; ` +
+      'the filing does not give net PP&E against revenue, so capital spending cannot be split into replacement and growth';
 
   const splitYears = depreciationBasis.filter((b) => b.basis === 'filed depreciation of PP&E' || b.basis.startsWith('filed D&A less')).length;
   provenance.depreciation = isNum(filedDepreciationRate)
@@ -1274,7 +1288,8 @@ export function deriveModel(fetched) {
     otherIncomeExpense: Array(FORECAST_YEARS).fill(0),
 
     capexRatio,
-    capexMethod: 'percentOfRevenue',
+    ppeToRevenue: intensityUsable ? ppeToRevenue : null,
+    capexMethod: intensityUsable ? 'maintenancePlusGrowth' : 'percentOfRevenue',
     // Depreciation as a share of capital spending, averaged over the reported
     // years from FILED depreciation (see filedDepreciation above).
     // 'avgOfHistory' is the fallback for a filing that reports no D&A at all:
