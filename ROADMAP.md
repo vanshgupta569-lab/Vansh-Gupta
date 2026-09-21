@@ -306,6 +306,7 @@ Engine and workbook work from September 2026, most recent first. Defect detail a
 
 | Commit | What |
 |---|---|
+| `e52cdc6` | Capital spending split into replacement of what wears out and growth on the company's own capital intensity; `KNOWN_ISSUES.md` entries given permanent IDs. |
 | `4cdec07` | Forecast depreciation charged on the assets in service, not on the year's capital spending. |
 | `48c95b6` | The verification harness committed to `verify/`, runnable from a fresh checkout. |
 | `15232f9` | `ROADMAP.md` added. |
