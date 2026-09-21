@@ -8,7 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "verify": "tsx verify/scenarios.mts",
+    "verify:payloads": "tsx verify/fetch-payloads.mts",
+    "verify:sweep": "tsx verify/sweep.mts",
+    "verify:compare": "tsx verify/compare.mts",
+    "verify:workbook": "tsx verify/workbook-vs-site.mts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -28,6 +33,7 @@
     "@types/three": "^0.180.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "hyperformula": "^3.4.0",
     "playwright": "^1.63.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

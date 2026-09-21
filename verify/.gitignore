@@ -1,0 +1,7 @@
+# Fetched company data: Yahoo-sourced figures are vendor data the site is not
+# licensed to redistribute (see README, "Payloads").
+payloads/
+# Sweep snapshots and built workbooks: local working files.
+snapshots/
+out/
+*.xlsx
