@@ -20,10 +20,10 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below. Entries 2, 3, 5
-and 10 and design choice D1 come from the conventions audit
-(CONVENTIONS_AUDIT.md), measured at `f1d9339`. Entry 7 comes from the
-currency sweep and entry 11 from the SG&A sweep, on payloads fetched
+outputs; no source was changed to measure anything below. Entries 2, 4 and 9
+and design choice D1 come from the conventions audit (CONVENTIONS_AUDIT.md),
+measured at `f1d9339`. Entry 6 comes from the currency sweep and entry 10
+from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
 showing a DCF value), which is the basis for the entries that cite `HEAD`. The equity bridge work refetched them again on
@@ -40,8 +40,8 @@ a DCF value), which is the basis for L22 and, re-measured at `b7432d6` after
 the securities went into net debt, L23. The debt work refetched every payload
 on 2026-09-20 with short-term borrowings, current maturities and lease
 liabilities added (176 fetched, 169 modelled, 64 with a DCF value), which is
-the basis for L24, for L25 re-measured at `e1e6cfc`, and for L26 re-measured
-at `5ecd822`, all on the same payloads.
+the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
+`5ecd822` and for L27 re-measured at `933fc2c`, all on the same payloads.
 
 ---
 
@@ -50,16 +50,15 @@ at `5ecd822`, all on the same payloads.
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
 | 1 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
-| 2 | Workbook and site DCF disagree on the terminal year and net debt | every company | NVIDIA workbook 181.83 vs site 160.06 | -5.4% to +13.6% |
-| 3 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 4 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 5 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 6 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
-| 7 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 8 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 9 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 10 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 11 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 5 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
+| 6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 7 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 8 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 10 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
 
 ---
 
@@ -82,24 +81,7 @@ at `5ecd822`, all on the same payloads.
   is applied to the year's own capital spending rather than to the assets in
   service.
 
-### 2. Workbook and site DCF disagree
-
-- **What is wrong.** The workbook's normalised terminal cash flow is EBIAT + SBC
-  (+ amortisation after tax), leaving out working capital and the terminal
-  exclusions the engine applies. The workbook's net debt is the model's debt
-  plus revolver less cash at the last reported date; the engine uses
-  `dcf.netDebt` from the data file. Explicit-year cash flows agree to the cent.
-- **Where.** `src/data/excelExport.ts` (DCF sheet rows 34 and 47-49);
-  `src/engine/model.js` (`buildDCF`).
-- **How measured.** Site-vs-workbook run: each company's workbook built as the
-  dashboard builds it, recalculated, compared with the engine.
-- **Affects.** Every company with a DCF.
-- **Worst example.** NVIDIA workbook 181.83 against site 160.06 (+13.6%);
-  Walmart -5.4%; Apple 122.67 against 126.89 (-3.3%); Microsoft +1.2%;
-  ExxonMobil -0.1%.
-- **Value moved.** -5.4% to +13.6% between the two.
-
-### 3. No stated discounting convention; timing runs from the fetch date
+### 2. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -121,7 +103,7 @@ at `5ecd822`, all on the same payloads.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 4. Forecast tax rate: a filed ratio on a different pretax figure
+### 3. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -139,7 +121,7 @@ at `5ecd822`, all on the same payloads.
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 5. Working capital drivers differ between site and workbook
+### 4. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -152,14 +134,14 @@ at `5ecd822`, all on the same payloads.
   `src/engine/model.js` (working capital schedule); `src/data/excelExport.ts`
   (the `ap`, `oca` and `oncl` schedules).
 - **How measured.** Code comparison during the conventions audit; agreement at
-  defaults from the site-vs-workbook run (#2).
+  defaults from the site-vs-workbook run (L27).
 - **Affects.** Every derived company (payables, other current assets); every
   company (other non-current liabilities).
 - **Worst example.** —
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 6. A possible false-positive missing-debt refusal
+### 5. A possible false-positive missing-debt refusal
 
 - **What is wrong.** A company is refused when its borrowings are missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -178,7 +160,7 @@ at `5ecd822`, all on the same payloads.
   settled; accepted as a possible false positive.
 - **Value moved.** No value is shown at all for this company.
 
-### 7. An SEC lookup that fails stops the company loading at all
+### 6. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -192,7 +174,7 @@ at `5ecd822`, all on the same payloads.
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 8. Workbook reported-year operating cash flow is derived, not filed
+### 7. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -208,7 +190,7 @@ at `5ecd822`, all on the same payloads.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 9. Reported net income still does not tie for three companies
+### 8. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -219,7 +201,7 @@ at `5ecd822`, all on the same payloads.
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 10. The 50% minimum cash buffer has no documented basis
+### 9. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -236,7 +218,7 @@ at `5ecd822`, all on the same payloads.
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 11. Stock compensation the filing does not break out is never added back
+### 10. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
@@ -370,7 +352,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #11); a line not reported in the last reported year is forecast
+  credited with it, which is #10); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -486,7 +468,7 @@ for either.
   this basis, because the cost stays inside the filed cost lines and operating
   profit is after it (18 of the 63 valued companies): those companies need no
   adjustment and are comparable with the peers, and what is still missing for
-  them is the cash-flow add-back, which is #11. Measured against `2d02f95` on
+  them is the cash-flow add-back, which is #10. Measured against `2d02f95` on
   the payloads of 2026-09-19: of the 63 companies with a DCF value, 22 move
   more than 5% on the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%,
   Cisco -14.6%, Qualcomm -14.3%) and 11 on the headline, which averages the
@@ -691,6 +673,48 @@ for either.
   `src/components/howCalculated.tsx`, `src/data/excelExport.ts` (DCF rows
   53-58), `src/data/reverseDcf.ts`, `src/data/batchRun.ts`.
 
+- **L27. The workbook reproduces the site exactly.** Every valued company's
+  workbook now returns the site's value per share to nine decimal places on
+  both terminal methods; the worst difference across the 63 is 5e-9%, which is
+  floating point in the last significant digit and not a difference in method.
+  Two treatments had to be reconciled, and each was settled by deciding which
+  side was right rather than by making one copy the other.
+  **The normalised terminal cash flow: the engine was right.** The workbook
+  took EBIAT plus stock compensation plus amortisation after tax, leaving
+  working capital out of the terminal year entirely. A terminal year with no
+  working capital investment assumes a growing business needs no further
+  receivables or inventory, ever, which overstates the cash flow it is
+  capitalising: on NVIDIA by 17%, which is where its 13.8% gap came from. The
+  workbook now starts from the final forecast year's own free cash flow, puts
+  capital expenditure back, replaces it with terminal capex equal to PP&E
+  depreciation, and strips the same two timing lines the engine strips (the
+  deferred tax asset and other non-current liabilities).
+  **Net debt: the workbook was right.** The engine used `dcf.netDebt`, a figure
+  carried beside the model; the workbook read the model's own balance sheet at
+  the last reported date. For a derived company the two are identical by
+  construction, so this had already stopped mattering for 63 of the 64
+  companies once securities and borrowings were fetched (L22, L24). It still
+  mattered for the curated Apple file, which carried 146,517 of cash and 82,347
+  of debt against a balance sheet showing 132,420 and 90,678. The balance sheet
+  wins: it is the statement a reader can see, and a bridge resting on a figure
+  that appears nowhere in the model cannot be checked. Apple's site value moves
+  from 131.25 to 129.98, which is what its workbook already said. The WACC
+  weights read the same balance sheet, so the weights and the bridge can no
+  longer describe different capital structures.
+  **Measured** at `933fc2c` against this change, on the payloads of
+  2026-09-20: before, 49 of 63 companies were more than 1% apart, 19 more than
+  5% and 3 more than 25%, median 2.4%, worst Toyota at 108.1% (workbook
+  5,414.88 against site 2,601.94); after, all 63 agree exactly. The recorded
+  range of -5.4% to +13.6% was stale: the securities, borrowings and cost of
+  debt commits had moved it to 108%. The exit-multiple values already agreed,
+  because that method never used the normalised cash flow.
+  **The suite's own check was stale too** and is updated with it: its
+  independent recomputation of value per share hard-coded the old terminal
+  formula, so it would have passed a workbook that no longer matched the
+  engine. It now reads the working capital movement and the two excluded lines
+  off the model sheet. `src/engine/model.js` (`balanceSheetNetDebt`),
+  `src/data/excelExport.ts` (DCF row 34).
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -716,7 +740,7 @@ defects: do not change them as a fix, only as a decision to change the design.
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #7) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #6) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based

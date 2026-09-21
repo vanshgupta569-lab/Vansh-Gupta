@@ -1325,7 +1325,19 @@ export function buildDCF(model, data) {
   // but does not wholly own, and preferred stock. The derivation reads both
   // from the filing (deriveModel.js); a data file that carries neither has
   // none (Apple's).
-  R.netDebt = d.netDebt.cashAndSecurities + d.netDebt.longTermDebt;
+  // NET DEBT COMES OFF THE MODEL'S OWN BALANCE SHEET, at the last reported
+  // date: the borrowings and revolver it shows, less the cash and securities
+  // it shows. Not from a figure carried beside the model.
+  //
+  // The workbook always read the balance sheet, and the engine read a
+  // hand-entered `dcf.netDebt`. For a derived company the two are the same by
+  // construction, but the curated Apple file carried 146,517 of cash and
+  // 82,347 of debt against a balance sheet showing 132,420 and 90,678, so the
+  // site and the workbook bridged the same enterprise value to different
+  // answers. The balance sheet wins: it is the statement the reader can see,
+  // and a bridge that uses a figure appearing nowhere in the model cannot be
+  // checked.
+  R.netDebt = balanceSheetNetDebt(M, d);
   R.minorityInterest = typeof d.minorityInterest === 'number' && isFinite(d.minorityInterest) ? d.minorityInterest : 0;
   R.preferredStock = typeof d.preferredStock === 'number' && isFinite(d.preferredStock) ? d.preferredStock : 0;
   R.otherClaims = R.minorityInterest + R.preferredStock;
@@ -1349,6 +1361,24 @@ export function buildDCF(model, data) {
   };
 
   return R;
+}
+
+/**
+ * Borrowings and revolver at the last reported date, less the cash and
+ * securities held against them. The data file's own `dcf.netDebt` is used only
+ * where the balance sheet does not carry the lines (it always does for a
+ * derived company, and for the curated files).
+ */
+function balanceSheetNetDebt(M, d) {
+  const t = M.nH - 1;
+  const B = M.balanceSheet || {};
+  const debt = B.longTermDebt?.[t];
+  const revolver = B.revolver?.[t];
+  const cash = B.cashAndSecurities?.[t];
+  if (!isNum(debt) || !isNum(cash)) {
+    return (d?.netDebt?.cashAndSecurities ?? 0) + (d?.netDebt?.longTermDebt ?? 0);
+  }
+  return debt + (isNum(revolver) ? revolver : 0) - cash;
 }
 
 function equityBridge(enterpriseValue, netDebt, minorityInterest, preferredStock, shares, marketPrice) {
@@ -1416,8 +1446,13 @@ export function computeWACC(model, data) {
   // Debt is at book value, which is what the filing gives; the market value of
   // a company's bonds is not in any free source. Equity is at market value,
   // which is the price the model is comparing itself against anyway.
-  const grossDebt = isNum(data.dcf.netDebt.longTermDebt) ? data.dcf.netDebt.longTermDebt : 0;
-  const netDebt = data.dcf.netDebt.cashAndSecurities + data.dcf.netDebt.longTermDebt;
+  // The same balance sheet the bridge uses, so the weights and the bridge
+  // cannot describe different capital structures.
+  const lastReported = M.nH - 1;
+  const grossDebt =
+    (isNum(M.balanceSheet?.longTermDebt?.[lastReported]) ? M.balanceSheet.longTermDebt[lastReported] : 0) +
+    (isNum(M.balanceSheet?.revolver?.[lastReported]) ? M.balanceSheet.revolver[lastReported] : 0);
+  const netDebt = balanceSheetNetDebt(M, data.dcf);
   const marketCap = data.dcf.sharePrice * data.dcf.dilutedSharesCount;
 
   // Beta — either the stated equity beta or the delevered industry average.

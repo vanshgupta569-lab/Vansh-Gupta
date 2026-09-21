@@ -1271,13 +1271,29 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
 
   band(V, 32, 'Perpetuity growth approach', OXBLOOD, WHITE, fLast);
   vInput(33, 'Long term growth rate (g)', D.longTermGrowthRate ?? 0.025, PCT1, { unit: '%' });
-  // After the run-off, as in the engine: terminal capex equals PP&E depreciation,
-  // and the final year's amortisation (and its tax shield) is taken out, which
-  // leaves EBIAT plus SBC plus that amortisation after tax.
+  // The engine's normalised terminal cash flow, cell for cell.
+  //
+  // Start from the final forecast year's unlevered free cash flow (row 16),
+  // take the capital expenditure back out (row 15) and replace it with
+  // terminal capex, which equals PP&E depreciation: that is D&A (row 12) less
+  // the amortisation that has run off. Then take out the amortisation's tax
+  // shield, which lasts only as long as the intangibles do.
+  //
+  // WORKING CAPITAL STAYS IN, which is what this row used to leave out. A
+  // terminal year with no working capital investment assumes a growing
+  // business needs no more receivables or inventory, ever; on NVIDIA that
+  // overstated the normalised cash flow by 17%. The two lines the engine
+  // strips from the terminal year - the deferred tax asset and other
+  // non-current liabilities, both timing items with no reason to persist in
+  // perpetuity - come out here as they do there.
   vOne(
     34,
-    'Normalised final year cash flow: amortisation run off, terminal capex equal to PP&E depreciation',
-    `${L(fLast)}11+${L(fLast)}13+'3-StatementModel'!${mCol(nF - 1)}${R.amort}*(1-${L(fLast)}10)`,
+    'Normalised final year cash flow: working capital as forecast, amortisation run off, terminal capex equal to PP&E depreciation',
+    `${L(fLast)}16-${L(fLast)}15-${L(fLast)}12` +
+      `+'3-StatementModel'!${mCol(nF - 1)}${R.amort}` +
+      `+'3-StatementModel'!${mCol(nF - 1)}${R.dtaChg}` +
+      `-'3-StatementModel'!${mCol(nF - 1)}${R.onclChg}` +
+      `-'3-StatementModel'!${mCol(nF - 1)}${R.amort}*${L(fLast)}10`,
     money()
   );
   vOne(35, 'Terminal value', `${F}34*(1+${F}33)/(${F}26-${F}33)`, money());
