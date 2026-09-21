@@ -41,7 +41,7 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this list; the top of that file is currently method questions rather than missing data.
 
-1. **NEXT — Remaining `KNOWN_ISSUES.md` method entries.** The top of that file is now the undocumented discounting convention, the forecast tax rate on a different pretax base, and the site-versus-workbook working capital drivers.
+1. **NEXT — Remaining `KNOWN_ISSUES.md` method entries.** The top of that file is now the capital-spending driver that lets the asset base drift, the undocumented discounting convention, and the forecast tax rate on a different pretax base.
 2. **NEXT — Primary-filings data layer, India first.** Section 1 below. The largest planned piece of work, and the one that removes the Yahoo dependency behind the currency, ADR and share-count problems.
 3. **QUEUED — `CLAUDE.md` house-rules file.** Section 7.
 4. **QUEUED — Outsourceable content units.** Did-you-know entries, 10b qualitative factors, eight SEO explainer pages. None needs the repository.
@@ -83,7 +83,7 @@ Availability and terms of use must be confirmed per source before building. Reco
 ### Stages
 
 1. **India from exchange filings.** Replace the Yahoo path for NSE and BSE companies with the exchanges' own XBRL results, falling back to MCA filings. Measure against the current Yahoo figures for the same companies before switching, so any difference is explained rather than silently introduced. Currency and share count come from the filing itself, which removes the inference that caused the ADR problems for Indian listings.
-2. **Standardised reported statements, downloadable on their own.** A user who does not want a model downloads the company's reported statements, in the site's standard layout, with every line traced to its filing. Provenance per line, and "not reported" wherever the filing is silent — never a zero.
+2. **Standardised reported statements, downloadable on their own.** A user who does not want a model downloads the company's reported statements, in the site's standard layout, with every line traced to its filing. Provenance per line, and "not reported" wherever the filing is silent — never a zero. This stage is what unblocks the house template upload in section 6: the figures it pours into a firm's own layout are these.
 3. **Reclassification layer.** Sits between reported and corrected. The user decides how each expense line is treated: direct or indirect, selling and distribution, administrative, extraordinary and excluded. The filed classification is always kept beside the user's, the same way 11a keeps the filed value beside a correction. The model then runs on the user's classification if they want it to. This extends the existing reported / corrected / modelled rule rather than adding a new one.
 4. **Other jurisdictions.** EU, UK and Japan in that order, each as its own integration.
 
@@ -112,6 +112,7 @@ Availability and terms of use must be confirmed per source before building. Reco
 | Systematic company sweep | LIVE | The planned ~30-name test pass was superseded by a 104–176 company sweep, now run as part of every engine change. The harness lives in `verify/` (`48c95b6`). |
 | Depreciation on the asset base | LIVE | Charged on opening PP&E plus half the year's additions, not on the year's capital spending. |
 | Company-specific beta | QUEUED | Derived companies use an asset beta of 1.0 relevered on their own capital structure. A real beta lookback is missing (limitation L25). |
+| Monte Carlo simulation | IDEA | Thousands of model runs with the inputs drawn from ranges, giving a spread of values rather than one figure. Every range must come from the company's own filed history — how much its growth, margins and capital spending actually varied — never from arbitrary assumptions, or the output is false precision. Build after 9 + 12b, the scenario comparison, which it extends. |
 | Segment revenue | BLOCKED | No free structured source carries it; every derived model runs on one revenue line. Unblocked by AI filing extraction (13 + 14) or the data layer. |
 
 ### Market approach
@@ -217,7 +218,7 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 | Sources and Checks sheets | LIVE | The two sheets that make the workbook defensible. |
 | Standardised reported statements download | NEXT | Stage 2 of the data layer. A product for users who don't want a model. |
 | Reclassification layer | NEXT | Stage 3 of the data layer. |
-| House template upload | IDEA | A firm uploads its own template once; every export arrives in their format. Strongest retention feature on the list; the same engine as item 15 pointed the other way. |
+| House template upload | IDEA | A firm uploads its own Excel layout once and the site fills it with the company's reported filings, the feature Screener offers. Depends on the data layer's standardised reported statements (section 1, stage 2), which is what supplies the figures. What it adds beyond Screener: every figure traced to its filing, "not reported" rather than zero, the reclassification layer, the Checks sheet, and a live model built on top. Where Screener sources its data is unconfirmed, and worth establishing before relying on that comparison. Strongest retention feature on the list; the same engine as item 15 pointed the other way. |
 | 15 — reformat a user's model to convention | QUEUED | Formatting only, never a number. In the browser via exceljs, so the file never leaves their machine. |
 | Model versioning, freeze and shareable link | IDEA | Freeze a model with a date so it can be reproduced later. |
 | Comparables justification sheet | IDEA | Why each peer was included and each rejected. The most attacked section of any valuation report. |
@@ -305,7 +306,7 @@ Engine and workbook work from September 2026, most recent first. Defect detail a
 
 | Commit | What |
 |---|---|
-| (this commit) | Forecast depreciation charged on the assets in service, not on the year's capital spending. Hash recorded the next time this file is touched. |
+| `4cdec07` | Forecast depreciation charged on the assets in service, not on the year's capital spending. |
 | `48c95b6` | The verification harness committed to `verify/`, runnable from a fresh checkout. |
 | `15232f9` | `ROADMAP.md` added. |
 | `52e062a` | Workbook and site agree exactly on value per share; both terminal treatments reconciled. |
