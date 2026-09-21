@@ -89,7 +89,7 @@ const TOL = Math.max(1e-4, 1e-9 * SCALE);
 const FY = (i: number) => `FY${String(M.years[i]).slice(2)}`;
 const rowOf = (sheet: string, text: string | RegExp, after = -1) =>
   base[sheet].findIndex((r, idx) => idx > after && (typeof text === 'string' ? r[2] === text : text.test(String(r[2] ?? ''))));
-const need = (what: string, after = -1, sheet = MODEL) => {
+const need = (what: string | RegExp, after = -1, sheet = MODEL) => {
   const i = rowOf(sheet, what, after);
   if (i < 0) throw new Error(`row not found: ${what}`);
   return i;
@@ -144,7 +144,7 @@ const R = {
   sbcPct: need('Stock based compensation, % of revenue'),
   sbc: need('Stock based compensation'),
   da: need('Depreciation & amortization'),
-  depPct: need('Depreciation as % of capital expenditure'),
+  depPct: need('Depreciation as % of the assets in service'),
   pik: need('PIK interest accrued to the balance'),
   debtBop: need('Beginning of period', borrow),
   debtEnd: need('End of period', borrow),

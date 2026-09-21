@@ -754,10 +754,18 @@ export function deriveModel(fetched) {
       : 'not filed',
     depreciation: filedDepreciation[i],
     capex: isNum(r.capex) ? r.capex : null,
+    openingPpe: i > 0 && isNum(rows[i - 1].ppeNet) ? rows[i - 1].ppeNet : null,
   }));
-  const depreciationRates = rows.map((r, i) =>
-    isNum(filedDepreciation[i]) && isNum(r.capex) && r.capex > 0 ? filedDepreciation[i] / r.capex : null
-  );
+  // The rate is filed depreciation over the ASSETS IN SERVICE that year: the
+  // opening net PP&E plus half the year's additions, the same base the engine
+  // charges it on. The first reported year has no opening balance, so it
+  // measures nothing and is left out rather than counted as nil.
+  const depreciationRates = rows.map((r, i) => {
+    const opening = i > 0 && isNum(rows[i - 1].ppeNet) ? rows[i - 1].ppeNet : null;
+    if (!isNum(filedDepreciation[i]) || opening === null) return null;
+    const base = opening + (isNum(r.capex) ? r.capex : 0) / 2;
+    return base > 0 ? filedDepreciation[i] / base : null;
+  });
   const filedDepreciationRate = mean(depreciationRates);
   if (excluded.length) {
     provenance.excludedPeriods =
@@ -1167,7 +1175,7 @@ export function deriveModel(fetched) {
 
   const splitYears = depreciationBasis.filter((b) => b.basis === 'filed depreciation of PP&E' || b.basis.startsWith('filed D&A less')).length;
   provenance.depreciation = isNum(filedDepreciationRate)
-    ? `${(filedDepreciationRate * 100).toFixed(1)}% of capital spending — filed depreciation over capital spending, averaged over the ` +
+    ? `${(filedDepreciationRate * 100).toFixed(1)}% of the assets in service — filed depreciation over opening PP&E plus half the year's capital spending, averaged over the ` +
       `${depreciationRates.filter(isNum).length} reported years that give both` +
       (splitYears === 0
         ? '. The filing does not separate depreciation from amortisation of intangibles, so all of its D&A is treated as depreciation of PP&E and none is run off'
@@ -1271,7 +1279,7 @@ export function deriveModel(fetched) {
     // years from FILED depreciation (see filedDepreciation above).
     // 'avgOfHistory' is the fallback for a filing that reports no D&A at all:
     // the engine then reads the balance-sheet movement for the years it can.
-    depreciationAsPercentOfCapex: isNum(filedDepreciationRate)
+    depreciationAsPercentOfAssets: isNum(filedDepreciationRate)
       ? filedDepreciationRate
       : 'avgOfHistory',
 

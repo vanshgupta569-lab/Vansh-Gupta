@@ -233,8 +233,10 @@ export function buildModel(data) {
   // ------------------------------------------------------- 4. PP&E SCHEDULE
   S.ppe = {
     beginning: blank(), capex: blank(), depreciation: blank(), otherMovements: blank(), ending: blank(),
+    // Opening balance plus half the year's additions: what the rate is charged on.
+    depreciableBase: blank(),
   };
-  S.depreciationPercentOfCapex = blank();
+  S.depreciationPercentOfAssets = blank();
 
   for (let t = 0; t < nH; t++) {
     S.ppe.ending[t] = h.balanceSheet.propertyPlantEquipment[t];
@@ -268,16 +270,38 @@ export function buildModel(data) {
       S.ppe.depreciation[t] = movement;
       S.ppe.otherMovements[t] = movement === null ? null : 0;
     }
-    S.depreciationPercentOfCapex[t] =
-      S.ppe.depreciation[t] != null && S.ppe.capex[t] ? -S.ppe.depreciation[t] / S.ppe.capex[t] : null;
+    // THE RATE IS A CHARGE ON THE ASSETS, NOT ON THE YEAR'S PURCHASES.
+    //
+    // Depreciation is what the installed base gives up in a year. It was
+    // measured, and forecast, as a percentage of that year's capital
+    // spending, which ties the charge to the purchases instead of to the
+    // plant: Microsoft's forecast capital spending falls from 34.9% of
+    // revenue to 20.3%, and its depreciation fell with it, although none of
+    // the plant it already owns stops wearing out.
+    //
+    // The base is the opening balance plus half the year's additions. Half,
+    // because a machine bought during the year is in service for part of it,
+    // which is the convention a hand-built schedule uses when it cannot see
+    // purchase dates. Using the opening balance alone would charge nothing
+    // for a year's additions; using the closing balance would charge a full
+    // year for a machine installed in December.
+    //
+    // The numerator is unchanged: filed depreciation, never the balance
+    // movement (which counts disposals, leases and acquisitions).
+    S.ppe.depreciableBase[t] =
+      S.ppe.beginning[t] != null ? S.ppe.beginning[t] + (S.ppe.capex[t] ?? 0) / 2 : null;
+    S.depreciationPercentOfAssets[t] =
+      S.ppe.depreciation[t] != null && S.ppe.depreciableBase[t]
+        ? -S.ppe.depreciation[t] / S.ppe.depreciableBase[t]
+        : null;
   }
 
   // The forecast rate: the derivation's figure from filed depreciation, or the
   // average of whatever the reported years could measure. Years that measured
   // nothing are left out rather than counted as nil.
-  const depPct = a.depreciationAsPercentOfCapex === 'avgOfHistory'
-    ? avgReported(S.depreciationPercentOfCapex.slice(firstPpeYear, nH))
-    : a.depreciationAsPercentOfCapex;
+  const depPct = a.depreciationAsPercentOfAssets === 'avgOfHistory'
+    ? avgReported(S.depreciationPercentOfAssets.slice(firstPpeYear, nH))
+    : a.depreciationAsPercentOfAssets;
 
   // capexScale lifts or lowers the whole forecast capex line without changing
   // its shape. It exists for the capital-spending slider and for the
@@ -305,8 +329,20 @@ export function buildModel(data) {
         ? S.revenue[t] * a.capexRatio                // capex = revenue × ratio
         : capexRaw * (1 + a.capexRatio);            // capex grows at the ratio
     S.ppe.capex[t] = capexRaw * capexScale;
-    S.depreciationPercentOfCapex[t] = depPct;
-    S.ppe.depreciation[t] = -(S.ppe.capex[t] * depPct);
+    S.depreciationPercentOfAssets[t] = depPct;
+    // The assets in service this year: what was already owned, plus half of
+    // what is bought during it. Measured the same way above.
+    //
+    // A missing opening balance is NOT nil. Alphabet's last reported year does
+    // not tag net PP&E, and treating that as an empty yard charged it
+    // depreciation on half a year's capital spending alone: 3,138 against the
+    // 21,136 it filed. The base stays null, and the company is refused below
+    // rather than valued off an asset base that was never reported.
+    S.ppe.depreciableBase[t] =
+      typeof S.ppe.beginning[t] === 'number' && isFinite(S.ppe.beginning[t])
+        ? S.ppe.beginning[t] + S.ppe.capex[t] / 2
+        : null;
+    S.ppe.depreciation[t] = -(S.ppe.depreciableBase[t] * depPct);
     S.ppe.ending[t] = S.ppe.beginning[t] + S.ppe.capex[t] + S.ppe.depreciation[t];
   }
 
@@ -316,13 +352,16 @@ export function buildModel(data) {
   // is not a valuation (Union Pacific's balance-sheet rate was 419% of capital
   // spending, Amazon's -92%).
   S.depreciationRateUsed = typeof depPct === 'number' && isFinite(depPct) ? depPct : null;
+  const noAssetBase = !isNum(S.ppe.ending[nH - 1]);
   S.depreciationRateProblem =
-    S.depreciationRateUsed === null
+    noAssetBase
+      ? 'the last reported year does not report property, plant & equipment, so there is no asset base for the forecast to depreciate'
+      : S.depreciationRateUsed === null
       ? 'no depreciation rate could be measured from the filing'
       : S.depreciationRateUsed <= 0
-        ? `the depreciation rate measured from the filing is ${(S.depreciationRateUsed * 100).toFixed(1)}% of capital spending, which is not a rate anything can be depreciated at`
+        ? `the depreciation rate measured from the filing is ${(S.depreciationRateUsed * 100).toFixed(1)}% of the assets in service, which is not a rate anything can be depreciated at`
         : S.ppe.ending.slice(nH, nH + nF).some((v) => typeof v === 'number' && v < 0)
-          ? `a depreciation rate of ${(S.depreciationRateUsed * 100).toFixed(1)}% of capital spending depreciates the property, plant & equipment balance past nothing inside the forecast`
+          ? `a depreciation rate of ${(S.depreciationRateUsed * 100).toFixed(1)}% of the assets in service depreciates the property, plant & equipment balance past nothing inside the forecast`
           : null;
 
   // D&A and SBC are charged in operating profit (section 4b) and added back in

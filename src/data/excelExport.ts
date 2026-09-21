@@ -906,18 +906,26 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   );
   driver(
     'depPct',
-    'Depreciation as % of capital expenditure',
-    (c, _p, i) => (has(M.ppe?.capex, i) && has(M.ppe?.depreciation, i) ? `-${c}${R.ppeDep}/${c}${R.ppeCapex}` : null),
+    'Depreciation as % of the assets in service',
+    (c, _p, i) =>
+      has(M.ppe?.depreciableBase, i) && has(M.ppe?.depreciation, i)
+        ? `-${c}${R.ppeDep}/(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)`
+        : null,
+    // The rate the engine used, on the same base: the opening balance plus
+    // half the year's additions. Reading it off capital spending instead is
+    // what made the workbook's depreciation disagree with the site's.
     (i) => {
-      const cap = at(M.ppe?.capex, i);
+      const base = at(M.ppe?.depreciableBase, i);
       const dep = at(M.ppe?.depreciation, i);
-      return isNum(cap) && isNum(dep) && cap !== 0 ? Math.abs(dep) / Math.abs(cap) : 0.8;
+      return isNum(base) && isNum(dep) && base !== 0 ? Math.abs(dep) / Math.abs(base) : 0;
     },
     PCT1
   );
   bopRow('ppeBop', 'Beginning of period', at(M.ppe?.beginning, 0), 'ppeEnd');
   line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
-  line('ppeDep', 'Less: depreciation', M.ppe?.depreciation, (c) => `-${c}${R.ppeCapex}*${c}${R.depPct}`, money());
+  // Charged on the plant already owned plus half of what is bought during the
+  // year, not on the year's purchases (see the engine's PP&E schedule).
+  line('ppeDep', 'Less: depreciation', M.ppe?.depreciation, (c) => `-(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)*${c}${R.depPct}`, money());
   // Reported years: whatever else moved the balance — disposals, impairments,
   // finance-lease additions, acquisitions, currency. Depreciation above is the
   // filed figure, so these are shown for what they are instead of being counted

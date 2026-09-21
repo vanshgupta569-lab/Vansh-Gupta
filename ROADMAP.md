@@ -41,11 +41,11 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this list; the top of that file is currently method questions rather than missing data.
 
-1. **IN FLIGHT — Workbook and site DCF agreement.** `KNOWN_ISSUES.md` entry on the terminal year and net debt. Target is exact agreement on value per share.
-2. **NEXT — Remaining `KNOWN_ISSUES.md` method entries.** Depreciation tracking same-year capex; the undocumented discounting convention.
-3. **NEXT — Primary-filings data layer, India first.** Section 1 below. The largest planned piece of work, and the one that removes the Yahoo dependency behind the currency, ADR and share-count problems.
-4. **QUEUED — `CLAUDE.md` house-rules file.** Section 7.
-5. **QUEUED — Outsourceable content units.** Did-you-know entries, 10b qualitative factors, eight SEO explainer pages. None needs the repository.
+1. **NEXT — Remaining `KNOWN_ISSUES.md` method entries.** The top of that file is now the undocumented discounting convention, the forecast tax rate on a different pretax base, and the site-versus-workbook working capital drivers.
+2. **NEXT — Primary-filings data layer, India first.** Section 1 below. The largest planned piece of work, and the one that removes the Yahoo dependency behind the currency, ADR and share-count problems.
+3. **QUEUED — `CLAUDE.md` house-rules file.** Section 7.
+4. **QUEUED — Outsourceable content units.** Did-you-know entries, 10b qualitative factors, eight SEO explainer pages. None needs the repository.
+5. **IDEA — A check that the dashboard renders what the engine produced.** The one hole the verification harness leaves, recorded under the verification limits in `KNOWN_ISSUES.md`. `playwright` is already a dev dependency.
 
 ---
 
@@ -109,7 +109,8 @@ Availability and terms of use must be confirmed per source before building. Reco
 | Health score | LIVE | Each ratio, its value, and the threshold it was judged against. |
 | Batch mode | LIVE | Method column names the perpetuity basis. |
 | Terminal values shown separately | LIVE | Perpetuity and exit multiple side by side with the spread; a gap over 25% is explained on screen (`933fc2c`). |
-| Systematic company sweep | LIVE | The planned ~30-name test pass was superseded by a 104–176 company sweep, now run as part of every engine change. |
+| Systematic company sweep | LIVE | The planned ~30-name test pass was superseded by a 104–176 company sweep, now run as part of every engine change. The harness lives in `verify/` (`48c95b6`). |
+| Depreciation on the asset base | LIVE | Charged on opening PP&E plus half the year's additions, not on the year's capital spending. |
 | Company-specific beta | QUEUED | Derived companies use an asset beta of 1.0 relevered on their own capital structure. A real beta lookback is missing (limitation L25). |
 | Segment revenue | BLOCKED | No free structured source carries it; every derived model runs on one revenue line. Unblocked by AI filing extraction (13 + 14) or the data layer. |
 
@@ -304,6 +305,10 @@ Engine and workbook work from September 2026, most recent first. Defect detail a
 
 | Commit | What |
 |---|---|
+| (this commit) | Forecast depreciation charged on the assets in service, not on the year's capital spending. Hash recorded the next time this file is touched. |
+| `48c95b6` | The verification harness committed to `verify/`, runnable from a fresh checkout. |
+| `15232f9` | `ROADMAP.md` added. |
+| `52e062a` | Workbook and site agree exactly on value per share; both terminal treatments reconciled. |
 | `933fc2c` | Terminal values no longer averaged; spread shown and explained. |
 | `5ecd822` | Each company's own cost of debt; asset beta relevered on its capital structure. |
 | `e1e6cfc` | Short-term borrowings, current maturities and finance leases counted as debt; operating leases reported, not netted, under ASC 842. |

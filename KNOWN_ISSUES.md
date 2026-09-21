@@ -20,9 +20,9 @@ three Yahoo listings (RELIANCE.NS, RELINFRA.NS, TATAMOTORS.NS), frozen on
 2026-09-17. Of the 103 fetched, 98 are modelled and 42 show a DCF value at
 default drivers. Values are the site's headline value per share. "What if"
 figures come from moving existing sliders or recomputing from the engine's own
-outputs; no source was changed to measure anything below. Entries 2, 4 and 9
+outputs; no source was changed to measure anything below. Entries 1, 3 and 8
 and design choice D1 come from the conventions audit (CONVENTIONS_AUDIT.md),
-measured at `f1d9339`. Entry 6 comes from the currency sweep and entry 10
+measured at `f1d9339`. Entry 5 comes from the currency sweep and entry 9
 from the SG&A sweep, on payloads fetched
 2026-09-17. The depreciation work refetched every payload on 2026-09-18 with
 filed depreciation and amortisation added (176 fetched, 168 modelled, 82
@@ -41,7 +41,10 @@ the securities went into net debt, L23. The debt work refetched every payload
 on 2026-09-20 with short-term borrowings, current maturities and lease
 liabilities added (176 fetched, 169 modelled, 64 with a DCF value), which is
 the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
-`5ecd822` and for L27 re-measured at `933fc2c`, all on the same payloads.
+`5ecd822` and for L27 re-measured at `933fc2c`, all on the same payloads. The
+depreciation work refetched every payload on 2026-09-21, with net PP&E read
+from the finance-lease-inclusive tag as well (L28), and both sides of its
+measurement were snapshotted on that set with `verify/`.
 
 ---
 
@@ -49,39 +52,19 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 
 | # | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
-| 1 | Forecast depreciation tracks same-year capex, not assets in service | 22 | Microsoft D&A 6.3% of revenue forecast vs 10.3% filed | not isolated |
-| 2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| 3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
-| 4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
-| 5 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
-| 6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| 7 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| 8 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
-| 9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
-| 10 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
+| 1 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
+| 2 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
+| 3 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
+| 4 | Palo Alto may be a false-positive missing-debt refusal | 1 refused (PANW) | Palo Alto | no value shown at all |
+| 5 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
+| 6 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
+| 7 | Reported net income still does not tie for three companies | 3 | McDonald's 19,930 vs filed 8,563 | none (all refused or valued from filed statements) |
+| 8 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| 9 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
 
 ---
 
-### 1. Forecast depreciation tracks same-year capex
-
-- **What is wrong.** Forecast depreciation is that year's capex times a rate,
-  so it follows the capex forecast rather than the assets already in service.
-  When forecast capex falls below the last reported year, depreciation falls
-  at once, although the installed base keeps depreciating.
-- **Where.** `src/engine/model.js`, PP&E forecast loop.
-- **How measured.** Forecast capex share of revenue against the last reported
-  year; forecast D&A share against filed.
-- **Affects.** 22 companies whose forecast capex share differs from the last
-  reported year by more than 2 points.
-- **Worst example.** Microsoft: capex 34.9% of revenue last year, 20.3% in the
-  forecast; forecast D&A 6.3% of revenue in year one against 10.3% filed.
-- **Value moved.** Not isolated. D&A reaches value through the tax shield and
-  the terminal year (capex = depreciation). The rate itself is now filed
-  depreciation over capital spending (fixed at `HEAD`); what remains is that it
-  is applied to the year's own capital spending rather than to the assets in
-  service.
-
-### 2. No stated discounting convention; timing runs from the fetch date
+### 1. No stated discounting convention; timing runs from the fetch date
 
 - **What is wrong.** Each forecast year's cash flow is discounted from the price
   date to that fiscal year-end, as though all of it arrives at year-end, and no
@@ -103,7 +86,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
 
-### 3. Forecast tax rate: a filed ratio on a different pretax figure
+### 2. Forecast tax rate: a filed ratio on a different pretax figure
 
 - **What is wrong.** The forecast rate is filed tax over filed pretax income,
   which includes non-operating items (investment gains, interest, one-offs) that
@@ -121,7 +104,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 - **Value moved.** One point of tax rate moves value by a median -1.2% (range
   -3.0% to +6.3%); the misstatement in points is not yet measured.
 
-### 4. Working capital drivers differ between site and workbook
+### 3. Working capital drivers differ between site and workbook
 
 - **What is wrong.** On the site, derived models grow payables and other current
   assets with cost of sales, and every model holds other non-current liabilities
@@ -141,7 +124,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 - **Value moved.** None at default assumptions. After a workbook edit, only the
   working capital movement differs; not measured.
 
-### 5. A possible false-positive missing-debt refusal
+### 4. A possible false-positive missing-debt refusal
 
 - **What is wrong.** A company is refused when its borrowings are missing in the
   last reported year but reported earlier (so that debt is not silently counted
@@ -160,7 +143,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
   settled; accepted as a possible false positive.
 - **Value moved.** No value is shown at all for this company.
 
-### 6. An SEC lookup that fails stops the company loading at all
+### 5. An SEC lookup that fails stops the company loading at all
 
 - **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
   company-facts file answers 404, the fetcher throws instead of falling back
@@ -174,7 +157,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
 
-### 7. Workbook reported-year operating cash flow is derived, not filed
+### 6. Workbook reported-year operating cash flow is derived, not filed
 
 - **What is wrong.** The workbook's reported-year cash from operations is built
   from net income, D&A, SBC and balance sheet movements, not taken from the
@@ -190,7 +173,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
 
-### 8. Reported net income still does not tie for three companies
+### 7. Reported net income still does not tie for three companies
 
 - **What is wrong.** Pretax income is not filed for a reported year, so the
   derived income statement cannot be tied.
@@ -201,7 +184,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 - **Value moved.** None: McDonald's and Oracle are refused; Welltower's residual
   income value is built from the filed statements, not the model.
 
-### 9. The 50% minimum cash buffer has no documented basis
+### 8. The 50% minimum cash buffer has no documented basis
 
 - **What is wrong.** Derived models set the minimum cash balance at half the
   last reported cash. Every other derived assumption states its basis in
@@ -218,7 +201,7 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
   circularity switch on, revolver interest; neither reaches unlevered free cash
   flow or the equity bridge.
 
-### 10. Stock compensation the filing does not break out is never added back
+### 9. Stock compensation the filing does not break out is never added back
 
 - **What is wrong.** Where a filing does not report stock based compensation,
   the model charges none and adds none back (limitation L14). If the company
@@ -352,7 +335,7 @@ for either.
   or SG&A cost is inside other operating costs, so operating income still ties;
   unreported stock compensation is neither charged nor added back, so any the
   company paid stays inside its cost lines (and cash from operations is not
-  credited with it, which is #10); a line not reported in the last reported year is forecast
+  credited with it, which is #9); a line not reported in the last reported year is forecast
   at nil. Dividends and buybacks are averaged over the years that report them,
   and none are forecast where none are. The workbook's statement totals read
   "not reported" cells through N(), which its notes state; the provenance lists
@@ -468,7 +451,7 @@ for either.
   this basis, because the cost stays inside the filed cost lines and operating
   profit is after it (18 of the 63 valued companies): those companies need no
   adjustment and are comparable with the peers, and what is still missing for
-  them is the cash-flow add-back, which is #10. Measured against `2d02f95` on
+  them is the cash-flow add-back, which is #9. Measured against `2d02f95` on
   the payloads of 2026-09-19: of the 63 companies with a DCF value, 22 move
   more than 5% on the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%,
   Cisco -14.6%, Qualcomm -14.3%) and 11 on the headline, which averages the
@@ -715,6 +698,67 @@ for either.
   off the model sheet. `src/engine/model.js` (`balanceSheetNetDebt`),
   `src/data/excelExport.ts` (DCF row 34).
 
+- **L28. Depreciation is charged on the assets in service, not on the year's
+  purchases.** The forecast charge was capital spending times a rate, so a
+  company that cut its capital budget stopped depreciating plant it already
+  owned: Microsoft's forecast capital spending falls from 34.9% of revenue to
+  20.3%, and its forecast depreciation fell to 7.7% of revenue against the
+  10.3% it files. The base is now the opening balance plus half the year's
+  additions.
+  **Why half.** A machine bought during the year is in service for part of it.
+  Charging the opening balance alone would depreciate nothing on a year's
+  additions; charging the closing balance would take a full year from a
+  machine installed in December. Half is the convention a hand-built schedule
+  uses when it cannot see purchase dates, and it needs no iteration.
+  **Why not vintages.** Depreciating each year's capital spending over its own
+  life is more faithful, and it needs a useful life per vintage. No filing
+  gives one, and inferring it from net PP&E over depreciation would produce
+  the same single rate this uses, dressed as something more precise.
+  CONVENTIONS_AUDIT Dep 1 records the absence of useful lives; this does not
+  close it.
+  **The numerator is unchanged**, as the last fix left it: filed depreciation,
+  never the balance movement, which counts disposals, leases and acquisitions.
+  Only the base it is divided by, and applied to, has changed - in the engine,
+  in the derivation that measures it, and in the workbook's PP&E schedule,
+  which charges the same base so the two still agree to 4e-9%.
+  **Measured** at `48c95b6` against this change, on payloads refetched
+  2026-09-21: 82 companies valued on both sides, 18 move more than 5%, 27 up
+  and 38 down, median 0.0%. The largest: TotalEnergies -47.9%, Toyota -30.4%,
+  Shell -27.7%, Enbridge +23.0%, Texas Instruments -19.9%, BP -19.8%, Equinor
+  -15.3%, Siemens +14.1%. Forecast depreciation now lands near what these
+  companies file: Texas Instruments 7.2% of revenue to 10.8% against 10.8%
+  filed, Microsoft 7.7% to 12.0% against 10.3%, Amazon 5.4% to 6.9% against
+  5.8%. Four companies gain a value (Sony, Naspers, Palantir, Shopify's Toronto
+  listing), whose rate on capital spending was not usable and whose rate on the
+  asset base is. `src/engine/model.js` (PP&E schedule),
+  `src/data/deriveModel.js` (`depreciationRates`), `src/data/excelExport.ts`.
+
+- **L29. Two things the depreciation base exposed, both fixed here.**
+  **Net PP&E is also tagged with finance-lease right-of-use assets in it.**
+  Alphabet, Home Depot and Tesla stopped tagging `PropertyPlantAndEquipmentNet`
+  after their FY2024 or FY2025 filing and moved to
+  `PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulated-
+  DepreciationAndAmortization`. Where both exist they agree to the million
+  (Alphabet 171,036 for FY2024 under either), so it is the same measure under a
+  longer name, and it is now read as a fallback. It matters more than it did:
+  a missing balance used to cost nothing, because depreciation was charged on
+  capital spending. Including the lease asset also pairs correctly with net
+  debt, which carries the lease liability (L24).
+  **A missing opening balance is not an empty yard.** With the asset base
+  missing, the forecast charged depreciation on half a year's capital spending
+  alone - Alphabet 3,138 against the 21,136 it files - because a null opening
+  balance added as zero. The model now refuses a company whose last reported
+  year has no net PP&E rather than valuing it off an asset base that was never
+  reported. With the tag above in place, no company on this sweep is refused
+  for that.
+  **One company is refused that was not:** Cisco, whose filed D&A is a flat
+  700 for four straight years while its filed amortisation of intangibles
+  rises to 1,028, so depreciation measured as D&A less amortisation is negative
+  in two of them. Averaged over capital spending that came out positive and
+  produced a value; averaged over the asset base it comes out at -0.8%, and a
+  negative rate refuses the company. The refusal is right and the cause is the
+  source's rounded D&A, not the base.
+
 ## Design choices, with their measured effect
 
 Deliberate choices that differ from a textbook convention. They are not
@@ -736,11 +780,20 @@ defects: do not change them as a fix, only as a decision to change the design.
 
 ## Verification limits
 
+- **Nothing checks that the dashboard renders what the engine produced.** The
+  suite in `verify/` covers the engine, the derivation and the workbook, and
+  `verify:workbook` proves the workbook reproduces the engine to 4e-9%. No
+  check stands between the engine's output and the React screens: a component
+  reading the wrong field, or a label naming a figure it is not showing, would
+  pass everything. `playwright` is already a dev dependency, so a check that
+  loads a company, reads the headline figures off the page and compares them
+  with a direct engine run would close it. Not built.
+
 - HyperFormula, used to recalculate workbooks outside Excel, cannot iterate:
   switch-on scenarios are verified with a hand-written fixed-point loop over the
   circular cells, not an Excel recalculation.
 - The sweep covers 104 companies; the site reaches any listed ticker. Three
-  payloads failed to fetch: CYATY and RTNTF (see #6) and TATAMOTORS.NS, which
+  payloads failed to fetch: CYATY and RTNTF (see #5) and TATAMOTORS.NS, which
   Yahoo no longer carries statements for after its demerger.
 - The currency sweep covers 101 non-US listings (97 fetched) chosen to span
   every kind: US depositary receipts and cross-listings, 10-K filers based

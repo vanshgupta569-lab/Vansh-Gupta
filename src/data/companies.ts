@@ -56,8 +56,8 @@ export function defaultDriversFor(source: any): Partial<ValuationDrivers> {
       exitMultipleX: r(source.dcf?.exitEbitdaMultiple ?? 12, 1),
       rndMarginPct: r(((M.rndMargin?.[nH] ?? 0) as number) * 100, 1),
       sgaMarginPct: r(((M.sgaMargin?.[nH] ?? 0) as number) * 100, 1),
-      depreciationPctOfCapex: r(
-        ((M.depreciationPercentOfCapex?.[nH] ?? 0) as number) * 100,
+      depreciationPctOfAssets: r(
+        ((M.depreciationPercentOfAssets?.[nH] ?? 0) as number) * 100,
         1
       ),
       dividendPayoutPct: r(((M.dividendPayoutRatio?.[nH] ?? 0) as number) * 100, 1),
@@ -334,11 +334,11 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
     d.assumptions.sellingGeneralAdminMargin = Number(drivers.sgaMarginPct) / 100 + embeddedMargin().sga;
   }
   if (
-    drivers.depreciationPctOfCapex !== undefined &&
-    touchedNum('depreciationPctOfCapex', 1)
+    drivers.depreciationPctOfAssets !== undefined &&
+    touchedNum('depreciationPctOfAssets', 1)
   ) {
-    d.assumptions.depreciationAsPercentOfCapex =
-      Number(drivers.depreciationPctOfCapex) / 100;
+    d.assumptions.depreciationAsPercentOfAssets =
+      Number(drivers.depreciationPctOfAssets) / 100;
   }
   if (drivers.dividendPayoutPct !== undefined && touchedNum('dividendPayoutPct', 1)) {
     d.assumptions.dividendPayoutRatio = Number(drivers.dividendPayoutPct) / 100;

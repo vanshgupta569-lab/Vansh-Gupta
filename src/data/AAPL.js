@@ -112,7 +112,7 @@ const AAPL = {
     //   'growth'       -> capex(t) = capex(t-1) * (1 + capexRatio)   [replicates the Excel]
     //   'percentOfRnD' -> capex(t) = R&D(t) * capexRatio             [matches the row label]
     capexMethod: 'growth',
-    depreciationAsPercentOfCapex: 'avgOfHistory',
+    depreciationAsPercentOfAssets: 'avgOfHistory',
 
     // ---- Working capital drivers ----
     // Which line each balance is grown by: 'revenue' or 'cogs'

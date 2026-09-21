@@ -561,12 +561,14 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
               'Disposals, impairments, finance-lease additions, acquisitions and currency: whatever moved the balance besides capital spending and depreciation. These used to be counted as depreciation, which is what the forecast rate was read from.',
           },
           {
-            label: 'Depreciation as a share of capex',
-            values: M.depreciationPercentOfCapex,
+            label: 'Depreciation as a share of the assets in service',
+            values: M.depreciationPercentOfAssets,
             format: pct,
             indent: true,
             muted: true,
-            adjuster: A('depreciationPctOfCapex'),
+            note:
+              'Charged on the plant the company already owns plus half of what it buys during the year, not on that year’s purchases: a company that spends less on new plant does not stop depreciating the old.',
+            adjuster: A('depreciationPctOfAssets'),
           },
           { label: 'Closing balance', values: M.ppe?.ending, bold: true },
           { spacer: true, label: '' },

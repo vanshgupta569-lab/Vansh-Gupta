@@ -38,7 +38,7 @@ export interface ValuationDrivers {
   exitMultipleX?: number;
   rndMarginPct?: number;
   sgaMarginPct?: number;
-  depreciationPctOfCapex?: number;
+  depreciationPctOfAssets?: number;
   dividendPayoutPct?: number;
 }
 

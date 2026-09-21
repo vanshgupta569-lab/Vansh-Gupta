@@ -104,6 +104,15 @@ for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json')).s
         cash: M.balanceSheet.cashAndSecurities[nH - 1],
         otherCurrentAssets: M.balanceSheet.otherCurrentAssets[nH - 1],
         ebitda: M.ebitda[nH - 1],
+        // Capital spending and the depreciation it drives, as shares of
+        // revenue: the last reported year against the first forecast year.
+        capexShareReported: M.revenue[nH - 1] ? M.ppe.capex[nH - 1] / M.revenue[nH - 1] : null,
+        capexShareForecast: M.revenue[nH] ? M.ppe.capex[nH] / M.revenue[nH] : null,
+        depShareReported: M.revenue[nH - 1] ? -M.ppe.depreciation[nH - 1] / M.revenue[nH - 1] : null,
+        depShareForecast: M.revenue[nH] ? -M.ppe.depreciation[nH] / M.revenue[nH] : null,
+        depreciationYearOne: -M.ppe.depreciation[nH],
+        depreciationRateUsed: M.depreciationRateUsed ?? null,
+        ppeOpeningForecast: M.ppe.beginning[nH],
         minorityInterest: D.minorityInterest,
         preferredStock: D.preferredStock,
         shares: D.dilutedShares ?? D.perpetuity?.dilutedShares ?? null,

@@ -214,7 +214,17 @@ const US_TAGS = {
   ],
   inventory: ['InventoryNet'],
   currentAssets: ['AssetsCurrent'],
-  ppeNet: ['PropertyPlantAndEquipmentNet'],
+  // Net property, plant and equipment. Filers that put finance-lease
+  // right-of-use assets on the same line renamed the tag, and several did so
+  // in their latest year only (Alphabet, Home Depot and Tesla all stopped
+  // tagging the plain one after FY2024/25). Where both exist they agree to the
+  // million, so this is the same measure under a longer name, not a second
+  // basis. Without it the last reported year has no asset base at all, which
+  // now refuses the company.
+  ppeNet: [
+    'PropertyPlantAndEquipmentNet',
+    'PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization',
+  ],
   totalAssets: ['Assets'],
   payables: ['AccountsPayableCurrent'],
   currentLiabilities: ['LiabilitiesCurrent'],
