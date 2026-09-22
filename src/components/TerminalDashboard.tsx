@@ -26,6 +26,7 @@ import { SavedModelsPanel } from './savedModelsPanel';
 import { CompsPanel } from './compsPanel';
 import { AssetPanel } from './assetPanel';
 import { ResidualIncomePanel } from './residualIncomePanel';
+import { DataConstraintBanner, DataConstraintPanel } from './dataConstraintPanel';
 import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
@@ -944,6 +945,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
       </div>
 
+      {/* WHAT THE SOURCE DOES NOT GIVE US, before any number is read. The
+          full list sits beside the working; this is only the ones that could
+          move the value. */}
+      <DataConstraintBanner
+        constraints={company.dataConstraints ?? []}
+        onSeeDetail={() => {
+          document.getElementById('data-constraints')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+
       {/* Primary Header Info Bar */}
       <div className="bg-[#111114] border hairline-border p-6 lg:p-8 mb-6 shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mb-6">
@@ -1600,6 +1611,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             currencySymbol={company.currencySymbol}
           />
         )}
+        {/* The whole list, including what cannot move a value, next to the
+            figures someone checking the model will be reading. */}
+        <DataConstraintPanel constraints={company.dataConstraints ?? []} />
+
         {activeSource && (
           <div id="working" className="scroll-mt-24">
           <HowCalculated

@@ -416,6 +416,30 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 
+// ---- the data-constraint refusal fires, and refuses only the DCF ----------
+//
+// No company on the frozen payloads crosses the 25% bound that sets this flag
+// (DATA_CONSTRAINTS.md), so without this the path would never run. It is the
+// path that decides whether a reader sees a number at all, so it is exercised
+// directly rather than left to a company that might one day trip it.
+{
+  console.log('\n=== data-constraint refusal ===');
+  const probe: any = JSON.parse(JSON.stringify({ ...SRC, rawStatements: undefined }));
+  const before: any = buildDCF(buildModel(probe), probe);
+  probe.meta.dataConstraintRefusal = {
+    code: 'dataConstraintTooLarge',
+    message: 'A figure the source does not publish could move the value by more than a quarter.',
+  };
+  const after: any = buildDCF(buildModel(probe), probe);
+  let bad = 0;
+  if (before.applicable !== true) { bad++; console.log('  PROBLEM: the model does not value without the flag'); }
+  if (after.applicable !== false) { bad++; console.log('  PROBLEM: the flag does not refuse the discounted cash flow'); }
+  if (after.code !== 'dataConstraintTooLarge') { bad++; console.log(`  PROBLEM: refusal code is ${after.code}`); }
+  if (after.perpetuity !== undefined) { bad++; console.log('  PROBLEM: a value per share survives the refusal'); }
+  console.log(`  flag off: value ${before.perpetuity?.valuePerShare?.toFixed(2)}; flag on: refused as ${after.code} -- ${bad ? bad + ' PROBLEMS' : 'confirmed'}`);
+  totalProblems += bad;
+}
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {

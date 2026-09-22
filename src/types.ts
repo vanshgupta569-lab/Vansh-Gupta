@@ -96,6 +96,16 @@ export interface NewsItem {
   url?: string;
 }
 
+export interface DataConstraint {
+  code: string;
+  label: string;
+  detail: string;
+  source: string;
+  effect: string;
+  bound: number | null;
+  severity: 'refusal' | 'warning' | 'note';
+}
+
 export interface CompanyData {
   ticker: string;
   name: string;
@@ -127,6 +137,12 @@ export interface CompanyData {
   modelData?: any;
   // Plain-English note on where each derived assumption came from.
   provenance?: Record<string, string>;
+  // What the source does not give us for this company, each with the bound on
+  // what it could do to the value and what the site does about it. See
+  // src/data/dataConstraints.ts and DATA_CONSTRAINTS.md.
+  dataConstraints?: DataConstraint[];
+  // Those worth showing above the model, rather than only beside it.
+  dataConstraintWarnings?: DataConstraint[];
   // The currency the statements are in, the currency the listing is quoted in,
   // and the rate the price was converted at when the two differ.
   currencyBasis?: {

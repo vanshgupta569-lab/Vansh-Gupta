@@ -1259,6 +1259,17 @@ export function checkValuationApplicability(model, data, wacc) {
     };
   }
 
+  // 0c. A figure the source never publishes, whose absence could move the value
+  //     per share further than the two terminal methods ordinarily disagree.
+  //     Set by src/data/dataConstraints.ts, which computes the bound from what
+  //     the filing DOES report and states the threshold it applied. This is a
+  //     gap in the data rather than a fault in the model or the company, so it
+  //     refuses the discounted cash flow and nothing else: residual income, the
+  //     market approach and the asset approach are unaffected.
+  if (meta.dataConstraintRefusal?.code) {
+    return { applicable: false, ...meta.dataConstraintRefusal };
+  }
+
   // 1. Financial-sector companies — unlevered FCF is not a meaningful concept
   const sicIsFinancial = sic != null && Number(sic) >= 6000 && Number(sic) <= 6799;
   const sectorIsFinancial = meta.sector != null && FINANCIAL_SECTOR.test(meta.sector);

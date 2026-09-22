@@ -14,8 +14,13 @@ written from the code, not from the intentions.
   and leaves the description standing makes the description a lie, and a
   description nobody can trust is worse than none.
 - It says what the code does and why, with the convention each choice follows
-  or departs from. It does not list defects — those are in `KNOWN_ISSUES.md` —
-  and it does not record history, which is in the commit messages.
+  or departs from. It does not record history, which is in the commit messages.
+- **Three files, one kind of thing each.** What the model does incorrectly is in
+  `KNOWN_ISSUES.md`, and that list is meant to reach zero. What the filing or
+  the data source does not publish is in `DATA_CONSTRAINTS.md`, with the bound
+  on each and the threshold between warning the reader and refusing the model.
+  How the engine works, and why, is here. A deliberate behaviour does not belong
+  in the defect list, and a gap in the data is not a defect at all.
 - Measured figures quoted here carry the commit and the payload date they were
   measured at, as they do in `KNOWN_ISSUES.md`.
 
@@ -54,7 +59,9 @@ this file explains the machinery those verdicts are about.
 20. [The valuation range](#20-the-valuation-range)
 21. [The drivers the reader can move](#21-the-drivers-the-reader-can-move)
 22. [The workbook, and where it differs](#22-the-workbook-and-where-it-differs)
-23. [What is not modelled at all](#23-what-is-not-modelled-at-all)
+23. [What the source does not give us](#23-what-the-source-does-not-give-us)
+24. [What is verified, and what is not](#24-what-is-verified-and-what-is-not)
+25. [What is not modelled at all](#25-what-is-not-modelled-at-all)
 
 ---
 
@@ -1083,17 +1090,18 @@ deepest one:
 | 5 | `nonCommonClaimNotReported` | a minority share of income with no readable balance, or preferred dividends with no preferred balance |
 | 6 | `filingMissingValuationInput` | cost of sales never reported, capital expenditure never reported, or fewer than two years of net PP&E |
 | 7 | `implausibleDepreciationRate` | no asset base in the last reported year; no measurable rate; a rate at or below zero; or a rate that depreciates the balance past nothing inside the forecast |
-| 8 | `financialSector` | SIC 6000–6799, or a sector matching financial / bank / insurance / capital market / asset management / NBFC |
-| 9 | `negativeOperatingProfit` | operating profit at or below zero in any forecast year |
-| 10 | `terminalGrowthExceedsWACC` | terminal growth at or above the cost of capital |
-| 11 | `negativeTerminalCashFlow` | normalised terminal cash flow at or below zero |
-| 12 | *(no code)* | value per share not a positive finite number, or WACC not above terminal growth |
+| 8 | `dataConstraintTooLarge` | a figure the source never publishes whose absence could move the value per share by more than 25% (§23) |
+| 9 | `financialSector` | SIC 6000–6799, or a sector matching financial / bank / insurance / capital market / asset management / NBFC |
+| 10 | `negativeOperatingProfit` | operating profit at or below zero in any forecast year |
+| 11 | `terminalGrowthExceedsWACC` | terminal growth at or above the cost of capital |
+| 12 | `negativeTerminalCashFlow` | normalised terminal cash flow at or below zero |
+| 13 | *(no code)* | value per share not a positive finite number, or WACC not above terminal growth |
 
 Codes 1–5 are **integrity refusals**: no valuation of any kind is shown, not the
 DCF, not the market or asset approach, not residual income, not the reverse DCF.
 The rest refuse the DCF alone.
 
-A bank is refused by 8 and valued by residual income instead (§17), which is
+A bank is refused by 9 and valued by residual income instead (§17), which is
 gated separately on whether the **filed** balance sheet balances, because that
 is what residual income is built from. A bank's forecast usually cannot be
 computed at all — banks do not report cost of sales, capital expenditure or PP&E
@@ -1391,7 +1399,83 @@ balance sheet balances in every year.
 
 ---
 
-## 23. What is not modelled at all
+## 23. What the source does not give us
+
+`src/data/dataConstraints.ts`. A figure the filing or the data source never
+publishes is not a defect and cannot be fixed in code. What the engine can do is
+measure how much the absence could matter, and then either refuse or say so.
+
+**The bound.** For each constraint, the model is re-run with the missing figure
+set to the largest value the filing allows, and the move in value per share is
+the bound. Stock compensation the filing never mentions has no bound at all; a
+marketable-securities balance the filing reports without splitting does, because
+the total is on the face of the balance sheet.
+
+**The threshold.**
+
+| Bound | What happens |
+|---|---|
+| more than **25%** | the discounted cash flow is refused and the message names the missing figure |
+| **5%** to 25% | a warning above the model and a panel beside the working, with the size and the direction |
+| below 5% | listed in the panel, nothing flagged |
+
+25% is the cut the site already uses for a *wide* disagreement between its two
+terminal methods (§13), chosen because the median disagreement between them is
+14.5%: a single missing input that could move the answer further than two
+legitimate methods disagree is not a number worth showing. 5% is the cut every
+measurement in `KNOWN_ISSUES.md` uses for "materially moved", which is the right
+bar for telling the reader rather than for withholding.
+
+**Where the bound cannot be computed**, the constraint is judged on the effect
+measured on the companies that do report the figure, and on whether the error
+has a known direction. An error that can only ever understate the value is a
+floor, and a floor with its direction stated is information; an error that could
+flatter the company is not. So an uncomputable bound warns when the error runs
+one way and is under 25% where it can be measured, and refuses otherwise.
+
+**A refusal is set on the model data, not at the point of display**, so it
+reaches the dashboard on every slider move, the batch screen, the workbook and
+the verification harness alike. It refuses the discounted cash flow and nothing
+else: residual income, the market approach and the asset approach do not depend
+on the forecast and are unaffected.
+
+`DATA_CONSTRAINTS.md` lists every constraint, the source it comes from, the
+measured bound, and which ones a primary-filings data layer would remove.
+
+## 24. What is verified, and what is not
+
+`verify/`, four commands, runnable from a fresh checkout.
+
+| Command | What it proves |
+|---|---|
+| `npm run verify` | ten scenarios over the engine and the derivation, plus a sweep; every check must come out zero |
+| `npm run verify:workbook` | the workbook reproduces the site's value per share on both terminal methods, for every valued company |
+| `npm run verify:sweep` | snapshots what the site would show for every fetched company, for measuring a change |
+| `npm run verify:compare` | two snapshots against each other |
+
+**The workbook agrees with the site exactly.** Every valued company's workbook
+returns the site's value per share to nine decimal places on both terminal
+methods; the worst difference across the 70 models checked is 3.87e-9%, which is
+floating point in the last digit.
+
+**Two limits on the verification itself**, neither of which is a defect in the
+model:
+
+- **HyperFormula cannot iterate.** The library used to recalculate workbooks
+  outside Excel has no iterative calculation, so a switch-on scenario (§22) is
+  verified with a hand-written fixed-point loop over the circular cells rather
+  than by an Excel recalculation.
+- **The sweep covers 104 companies; the site reaches any listed ticker.** Three
+  payloads failed to fetch on the last full sweep: two whose SEC lookup fails
+  (`KI-6`) and TATAMOTORS.NS, which Yahoo no longer carries statements for after
+  its demerger. The currency sweep covers 101 non-US listings chosen to span
+  every kind: depositary receipts and cross-listings, 10-K filers based abroad,
+  and home listings on 22 exchanges quoted in 19 currencies.
+
+What nothing checks is that the dashboard renders what the engine produced,
+which is `KI-16` and is a gap to be closed rather than a limit to be accepted.
+
+## 25. What is not modelled at all
 
 Named here so the absence is a statement rather than an oversight.
 
@@ -1412,12 +1496,11 @@ Named here so the absence is a statement rather than an oversight.
 - **A revolver capacity limit**, a debt maturity ladder, and per-tranche rates.
 - **Precedent transactions.** Licensed vendor data, which the site cannot
   redistribute.
-- **Any check that the dashboard renders what the engine produced.** The
-  verification harness in `verify/` covers the engine, the derivation and the
-  workbook. Nothing stands between the engine's output and the React screens.
+- **Any check that the dashboard renders what the engine produced.** See §24
+  and `KI-16`.
 
 ---
 
-*Written against `e52cdc6`, 2026-09-22. Defects are in `KNOWN_ISSUES.md`; the
-convention-by-convention audit is in `CONVENTIONS_AUDIT.md`; the plan is in
-`ROADMAP.md`.*
+*Written against `e52cdc6` plus the data-constraint handling added the same day. Defects are in `KNOWN_ISSUES.md`; what the
+source does not publish is in `DATA_CONSTRAINTS.md`; the convention-by-convention
+audit is in `CONVENTIONS_AUDIT.md`; the plan is in `ROADMAP.md`.*

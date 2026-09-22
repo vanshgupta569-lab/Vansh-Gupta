@@ -57,6 +57,8 @@ In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this
 
 For US companies the site already reads the company's own filing: SEC XBRL, which is primary data, not a third party. For every other company it reads Yahoo Finance, which licenses fundamentals from data vendors, who in turn extract them from the same filings. That extra layer is where the worst defects of September 2026 came from: financial statements in yen labelled as US dollars, ADR share counts scaled inconsistently (Toyota a tenth of the Tokyo count, AstraZeneca left at the ordinary count), and Brazilian companies whose currency field contradicted every figure. The fix at the time was to refuse 38 US-listed foreign companies.
 
+**What it would remove, counted.** `DATA_CONSTRAINTS.md` records every figure the sources do not publish, which source each gap comes from, and the measured size of the error it leaves behind. Five of them are vendor gaps that reading filings directly would close outright: stock compensation never broken out (17 valued companies), bank dividends not split between common and preferred (18), depreciation not separated from amortisation (9 valued), the depositary-receipt ratio (38 refused listings) and a reporting currency stated two ways (3 refused). That is the argument for this section in figures rather than in principle.
+
 Going to the filings directly removes that layer. It has three further advantages:
 
 - **Redistribution.** Figures extracted from public filings are the site's own to redistribute. Licensed vendor data is not — the same constraint that blocks precedent transactions (section 2). Building this layer removes that ceiling everywhere.

@@ -20,6 +20,7 @@ import {
   type Corrections,
 } from './corrections';
 import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
+import { buildDataConstraints } from './dataConstraints';
 
 const r = (n: number | null | undefined, dp = 0): number => {
   if (n == null || !isFinite(n)) return 0;
@@ -105,7 +106,22 @@ export async function loadDerivedModelData(ticker: string): Promise<any> {
 
 export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
   const M: any = buildModel(modelData);
-  const D: any = buildDCF(M, modelData);
+  let D: any = buildDCF(M, modelData);
+
+  // WHAT THE SOURCE DOES NOT GIVE US (src/data/dataConstraints.ts).
+  //
+  // Computed after the first run, because the size of a missing figure is
+  // measured against the value it would move. Where that size is larger than
+  // the two terminal methods ordinarily disagree, the flag goes on the model
+  // data and the DCF is built again — so every path that reads this model (the
+  // dashboard on every slider move, the batch screen, the workbook, the
+  // verification harness) refuses it the same way, rather than each having to
+  // remember to check.
+  const constraints = buildDataConstraints(fetched, modelData, M, D);
+  if (constraints.refusal) {
+    modelData.meta.dataConstraintRefusal = constraints.refusal;
+    D = buildDCF(M, modelData);
+  }
 
   const nH: number = M.nH;
   const last = nH - 1;
@@ -213,6 +229,11 @@ dataSource: fetched.source,
     // Carried so the dashboard can re-run the engine on every slider move,
     // and so it can show where each assumption came from.
     modelData,
+    // What the source does not give us for this company, with the bound on
+    // each and what the site does about it. The dashboard shows the warnings
+    // above the model and the whole list beside it.
+    dataConstraints: constraints.constraints,
+    dataConstraintWarnings: constraints.warnings,
     provenance: modelData.provenance,
     currencyBasis: modelData.meta?.currencyBasis ?? null,
   } as CompanyData;
