@@ -3,6 +3,11 @@
 A living record of defects that have been found and not yet fixed, and of the
 limitations that fixes have deliberately left behind.
 
+**What the engine does, and why, is in `METHODOLOGY.md`.** This file is the
+list of what is wrong with it. Where a limitation below is really a design
+decision, the treatment and the reasoning live there and the entry here keeps
+the measurement and points to it.
+
 **How this file is kept**
 
 - Fixing something listed here? Delete its entry **in the same commit as the
@@ -18,7 +23,7 @@ limitations that fixes have deliberately left behind.
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
   Limitations (`L1` and up) have always worked this way.
-- Taken so far: `KI-1` to `KI-13`, and `L1` to `L30`. **Next free: `KI-14`,
+- Taken so far: `KI-1` to `KI-14`, and `L1` to `L30`. **Next free: `KI-15`,
   `L31`.** Retired, meaning fixed and never to be reused: `KI-1` (forecast
   capital spending a flat share of revenue, fixed 2026-09-22, see `L30`).
 - Numbers used before 2026-09-22 — "#4" in a commit message, say — were
@@ -67,6 +72,7 @@ companies that show a DCF value there.
 | KI-12 | Most of the value is the terminal year, and the terminal year is a step change from the forecast | 56 of 69 over 75% of EV | Enbridge 100.4% of EV; its normalised cash flow flips sign | +-1pt of terminal growth: Enbridge -50.2%/+72.0%, Toyota -36.8%/+66.8% |
 | KI-13 | Revenue growth is a clamped trailing CAGR, then +2.5% forever at the join | 8 of 69 clamped; the join affects all | TotalEnergies and Shell shrink 10% a year for five years, then grow forever | holding revenue flat: TotalEnergies +74.9%, BP +51.7%, Shell +33.0% |
 | KI-11 | Forecast capital spending assumes revenue measures the size of the plant | 21 of 69 more than 50% from their own filed ratio | Saudi Aramco forecast to spend nothing against 1.82x depreciation filed | not isolated; sets the explicit-stage cash flow and the terminal asset base |
+| KI-14 | Every derived company is discounted to a 31 December year end, whatever its real one | every derived company; how many are non-December is not knowable from the payloads | Apple's year ends in late September | re-dated a quarter earlier: median +2.21%, up to +6.20% |
 | KI-2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | KI-3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | KI-4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
@@ -183,6 +189,36 @@ companies that show a DCF value there.
   year, which are the two halves of KI-12. The predecessor defect, a flat share
   of revenue, moved 31 of 85 valued companies by more than 5% when it was
   replaced (L30); this is the part of that replacement that does not hold.
+
+### KI-14. Every derived company is discounted to a 31 December year end
+
+- **What is wrong.** The fetch carries the fiscal *year* of each period and not
+  the date it ended, so the derivation writes 31 December for the last reported
+  year-end and for each of the five forecast year-ends. Every company is
+  therefore discounted as though its year ended on 31 December. It does not for
+  Apple, Microsoft, Oracle, Nvidia, Walmart, Toyota or any other filer with a
+  non-calendar year, and the error runs the same way in every forecast year
+  rather than cancelling. The curated Apple file shows what the right dates look
+  like (27 September 2025, then 30 September 2026 and so on); no derived company
+  has them.
+- **Where.** `api/company.js` (the fetch never reads the period end date);
+  `src/data/deriveModel.js` (`latestFiscalYearEnd`, `forecastYearEndDates`),
+  consumed by `src/engine/model.js` (`buildDCF`, `yearFrac`).
+- **How measured.** Re-dating every forecast year-end to 30 September, a quarter
+  earlier than the assumption, and re-reading the perpetuity value per share, at
+  `e52cdc6` on the payloads of 2026-09-21. This measures the size of the error
+  for a September filer, not how many companies have one, which the payloads
+  cannot say.
+- **Affects.** Every derived company's discounting. The subset with a
+  non-December year end is discounted wrongly and cannot be identified without
+  refetching.
+- **Worst example.** Re-dated a quarter earlier, the largest move is +6.20%.
+- **Value moved.** Median +2.21% across the 69 valued companies, range +1.80% to
+  +6.20%, 64 of them more than 2%. It runs one way: a company whose year really
+  ends earlier than assumed has its cash flows discounted over too long a period,
+  so it is undervalued. Distinct from KI-2, which is about the convention not
+  being stated and the first year being timed from the fetch date; this is the
+  year-end itself being wrong.
 
 ### KI-2. No stated discounting convention; timing runs from the fetch date
 
@@ -487,21 +523,17 @@ for either.
   have been valued from an opening balance of nil. `src/engine/model.js`
   (`filingMissingValuationInput`).
 
-- **L18. Minority interests and preferred stock come off at book value, as
-  filed.** Both are taken at the last reported balance sheet, as net debt is,
-  not at the value the market puts on them. Minority interests are read from
-  the filing's own balance (plus redeemable minority interests where it has
-  them), else from equity including minority interests less shareholders'
-  equity, else from total assets less filed total liabilities less
-  shareholders' equity; preferred stock from its carrying value. Where the
-  filing shows a claim exists (a minority share of net income, preferred
-  dividends) but gives no amount, the company is refused rather than the claim
-  treated as nil (Boeing, Morgan Stanley and Santander on this sweep, none of
-  which had a discounted cash flow value before; Morgan Stanley's residual
-  income value is withheld too, L19). Convertible preferred that the filing already counts in
-  its diluted share count is not taken off again (Procter & Gamble, 68.3
-  million shares). `src/data/deriveModel.js`, `src/engine/model.js`
-  (`nonCommonClaimNotReported`).
+- **L18. Minority interests and preferred stock come off at book value.** Both
+  are taken at the last reported balance sheet, as net debt is, not at the
+  value the market puts on them; a minority interest's market value is not
+  observable and a preferred balance filed at par is not the claim. Where the
+  filing shows a claim exists but gives no amount, the company is refused
+  rather than the claim treated as nil (Boeing, Morgan Stanley and Santander on
+  this sweep, none of which had a discounted cash flow value before; Morgan
+  Stanley's residual income value is withheld too, L19). How each is read, and
+  why convertible preferred already in the diluted count is not taken off
+  again, is in METHODOLOGY.md §15. `src/data/deriveModel.js`,
+  `src/engine/model.js` (`nonCommonClaimNotReported`).
 
 - **L19. Residual income values the common shares, and refuses where the
   preferred claim cannot be read.** Each year's preferred stock comes out of
@@ -547,234 +579,104 @@ for either.
   +2.1%, Wells Fargo +0.3%, Royal Bank +0.1%, Citigroup -0.1%, DBS and Bank of
   America under 0.05%. `src/data/residualIncome.js` (`minorityClaims`).
 
-- **L21. EBITDA is before depreciation and amortisation only; stock
-  compensation stays a cost.** A multiple means nothing against a measure other
-  than the one it was computed from, and the peers' EV/EBITDA multiples come
-  from a source that computes EBITDA as operating income plus depreciation and
-  amortisation. That was checked rather than assumed, within that source and
-  within one fiscal year, against its own components: for Arm, Palantir,
-  Salesforce and Apple its annual EBITDA equals its operating income plus its
-  depreciation exactly, and falls short of the stock-compensation add-back by
-  exactly the stock compensation. So the model's EBITDA follows it. Stock
-  compensation is also a real cost of employing people, paid in shares, and the
-  dilution is carried in the share count rather than waved through. The
-  definition is now the same in the engine, the exit multiple, the market
-  approach, the workbook's income statement and DCF sheet, the reported EBITDA
-  margin and net debt / EBITDA (the last two were already on this basis).
-  Unlevered free cash flow still adds stock compensation back, because that
-  calculation is about cash rather than about a multiple; the two methods
-  therefore take different views of it, and both are published side by side
-  rather than averaged (L26), so a reader can see which method carries the
-  stock compensation and which does not. That is a design boundary, not a
-  measurement, and it is not quantified here.
-  Where a filing never breaks stock compensation out, its EBITDA was already on
-  this basis, because the cost stays inside the filed cost lines and operating
-  profit is after it (18 of the 63 valued companies): those companies need no
-  adjustment and are comparable with the peers, and what is still missing for
-  them is the cash-flow add-back, which is KI-10. Measured against `2d02f95` on
-  the payloads of 2026-09-19: of the 63 companies with a DCF value, 22 move
-  more than 5% on the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%,
-  Cisco -14.6%, Qualcomm -14.3%) and 11 on the headline, which averages the
-  exit multiple with a perpetuity value that did not move at all. On the market
-  approach, 18 of the 28 companies for which a peer median came back move more
-  than 5% (Marvell -28.4%, AMD -27.1%, Cisco -20.0%). The entry this replaces
-  named Arm as its worst case; Arm has had no value since the currency work
-  refused it as `listingNotComparable`. `src/engine/model.js` (`S.ebitda`),
-  `src/data/excelExport.ts`, `src/data/excelSheets.ts`,
-  `src/data/marketApproach.ts`.
+- **L21. The DCF and the exit multiple take different views of stock
+  compensation, and both are published.** EBITDA leaves it in costs, because
+  the peers' multiples do; unlevered free cash flow adds it back, because that
+  calculation is about cash. The two methods therefore disagree about it by
+  construction, and neither is corrected towards the other: they stand side by
+  side (L26) so a reader can see which carries the charge. That is a design
+  boundary, not a measurement, and it is not quantified. Where a filing never
+  breaks stock compensation out, its EBITDA was already on this basis (18 of
+  the 63 valued companies then); what is still missing for those is the
+  cash-flow add-back, which is KI-10. The definition and the evidence for it
+  are in METHODOLOGY.md §5. Measured against `2d02f95` on the payloads of
+  2026-09-19: of the 63 companies with a DCF value, 22 moved more than 5% on
+  the exit multiple (AMD -23.3%, Tesla -23.2%, Marvell -22.6%, Cisco -14.6%,
+  Qualcomm -14.3%); on the market approach, 18 of the 28 companies with a peer
+  median moved more than 5% (Marvell -28.4%, AMD -27.1%, Cisco -20.0%).
+  `src/engine/model.js` (`S.ebitda`), `src/data/excelExport.ts`,
+  `src/data/excelSheets.ts`, `src/data/marketApproach.ts`.
 
-- **L22. Net debt takes off cash and short-term marketable securities, not
-  long-term ones.** Short-term securities are money parked in instruments
-  rather than in the bank, and a company holding them is no more indebted for
-  it, so they come off debt with cash. Long-term securities are fetched and
-  reported beside net debt but never netted off: a holding placed out of reach
-  for a year or more is not money a lender can be paid with tomorrow, and some
-  of what filers tag there is not marketable at all (Alphabet's non-marketable
-  equity stakes, 68,687, are tagged in the same place as its bonds). Where a
-  filing shows securities but never says how much of them is short-term,
-  NOTHING is netted off and the provenance says so on screen and in the
-  workbook's Sources sheet: the securities stay in other current assets, where
-  they already were, rather than being read as nil or split by guesswork. That
-  is 35 of the 176 payloads and 7 of the 63 companies with a value, NVIDIA and
-  Dell among them; NVIDIA tags a combined 39,520 and maturity buckets, which
-  are a different idea from the balance-sheet split, so they are not used.
-  Securities are taken out of other current assets at the same time, which is
-  where an untagged balance sat: checked on all 50 companies that report them,
-  other current assets falls by exactly the securities, none goes negative, and
-  every reported year still balances to 0.0000 (the workbook too, run for
-  Microsoft, Alphabet and Arista as well as curated Apple). Because other
-  current assets is a working capital driver, that also changes the forecast:
-  a smaller base means a smaller working capital drag, so free cash flow rises.
-  For 16 of the 50 that effect, together with the discount rate, outweighs the
-  cash itself. The discount rate moved at the time because net debt was also a
-  WACC weight: Equinor gained 14,297 of securities and LOST 4.2%, because its
-  WACC rose 7.82% to 8.49% as the debt weight fell. That weighting has since
-  been fixed (L23) and Equinor gains 8.0% back. `api/company.js`
+- **L22. Securities the filing does not split are not counted at all.** Where a
+  filing reports marketable securities but never says how much of them is
+  short-term, nothing is netted off: they stay inside other current assets,
+  where they already were, rather than being read as nil or split by guesswork.
+  That was 35 of the 176 payloads and 7 of the 63 companies with a value,
+  NVIDIA and Dell among them; NVIDIA tags a combined 39,520 and maturity
+  buckets, which are a different idea from the balance-sheet split. Long-term
+  securities are reported and never netted, for the reasons in METHODOLOGY.md
+  §4, which also sets out what is netted and why. Taking securities out of
+  other current assets changes the forecast as well as net debt, because other
+  current assets is a working capital driver: checked on all 50 companies that
+  report them, other current assets falls by exactly the securities, none goes
+  negative, every reported year balances to 0.0000, and for 16 of the 50 the
+  smaller working capital drag outweighs the cash itself. `api/company.js`
   (`shortTermInvestments`, `longTermInvestments`, `securitiesNotSplit`),
   `src/data/deriveModel.js` (`deriveBalanceSheet`, `dcf.netDebt`).
 
-- **L23. Capital is weighted on gross debt at book value and equity at market
-  value.** The weights say how the business is financed: what share of the
-  money in it was borrowed. A company that borrows 100 and holds 150 in the
-  bank still has 100 of borrowed money in it, costing what it costs. Weighting
-  on net debt made that share negative for a company with net cash, the equity
-  weight more than 100%, and the whole cost of capital higher than the cost of
-  equity alone, so holding cash made a company worth less. Cash is left out for
-  a second reason: it is already added to the shareholders' side in the equity
-  bridge, and netting it off the weights as well counts it twice. Debt is at
-  book value because the market value of a company's bonds is not in any free
-  source; equity is at market value, which is the price the model is compared
-  against anyway. The beta relevering carries gross debt for the same reason,
-  and its old form was visibly backwards: delevering Alphabet on net debt
-  produced an unlevered beta of 1.278 against its own equity beta of 1.25,
-  which says the business is riskier without its borrowings than with them.
-  Delevered peers are now MSFT 1.069, Alphabet 1.223, Meta 1.182 (were 1.087,
-  1.278, 1.236) and Apple's industry unlevered beta 1.201 to 1.158. No derived
-  model reaches it: 0 of 169 carry comparables or ask for the industry beta,
-  and curated Apple states its beta, so switching it on is the only way to see
-  it (Apple would be 124.36 rather than 119.43 with the fixed formula).
-  Measured against `b7432d6` on the payloads of 2026-09-20: all 63 valued
-  companies rise or hold, none falls, median +2.4%, 14 move more than 5%
-  (Toyota +24.0%, BP +15.0%, Reliance Industries +12.3%, Vodafone +12.3%,
-  Alibaba +11.7%, Amphenol +10.1%). Before the fix 27 of the 63 carried a
-  negative debt weight and the same 27 had a WACC above their own cost of
-  equity; now none do, and debt weights run 0.0% to 50.4% (median 5.7%, 8
-  companies with no debt at all). `src/engine/model.js` (`computeWACC`),
-  `src/data/excelExport.ts` (DCF sheet rows 24-25).
+- **L23. Debt is weighted at book value, because no free source gives its
+  market value.** The conventions ask for both sides of the capital weights at
+  market value; equity is, debt cannot be, and the workbook's row label says
+  so. The weighting itself — gross debt against market equity, cash left out
+  because the bridge already has it — is in METHODOLOGY.md §14. Measured
+  against `b7432d6` on the payloads of 2026-09-20: all 63 valued companies rise
+  or hold, none falls, median +2.4%, 14 move more than 5% (Toyota +24.0%, BP
+  +15.0%, Reliance Industries +12.3%, Vodafone +12.3%, Alibaba +11.7%, Amphenol
+  +10.1%). Before the fix 27 of the 63 carried a negative debt weight and an
+  equity weight above 100%; now none do, and debt weights run 0.0% to 50.4%
+  (median 5.7%). `src/engine/model.js` (`computeWACC`).
 
-- **L24. Net debt counts every borrowing, and the lease liabilities whose
-  financing cost the cash flow does not already carry.** Short-term borrowings,
-  commercial paper, the current maturities of long-term loans and the loans
-  themselves are all in it; only the last of these used to be. The tags overlap
-  and the overlaps are where a total goes wrong, so each is fetched separately
-  and the most inclusive figure a filer gives is used without adding the pieces
-  it already contains: `LongTermDebt` is the whole loan including its current
-  maturities (Apple 90,678 = 78,328 + 12,350), `LongTermDebtAndCapitalLease-
-  Obligations` has the finance leases inside it (Home Depot 46,341), and
-  `LongTermDebtAndCapitalLeaseObligationsCurrent` has the current lease inside
-  it (4,967). Checked by hand against the filings for Apple (99,887), Amazon
-  (81,137) and Home Depot, and against the source's own total debt for
-  Reliance Infrastructure (49,367, to the rupee).
-  **Leases.** A lease liability belongs in net debt exactly when the forecast
-  cash flow does not already bear the financing half of it. A finance lease
-  reaches profit as depreciation plus interest, so operating profit carries
-  only the depreciation: it is debt. An operating lease under ASC 842 reaches
-  profit as a single operating lease cost inside operating profit, so the rent
-  is already charged in full against the cash flow the enterprise value is
-  built from, and taking the liability off as well would charge the shareholder
-  twice: it is reported beside net debt and not netted (Amazon 89,252, Home
-  Depot 9,578). Under IFRS 16 there is no operating lease - every lease is
-  depreciation plus interest - so for the non-SEC listings the whole lease
-  obligation is debt. This is the point reasonable people differ on, and the
-  answer here is not "leases are debt" or "leases are rent" but that it depends
-  on which line of the income statement the lease already passes through.
-  **What is not netted and why:** operating leases under US GAAP, as above.
-  **Missing is not nil:** where a filing shows finance-leased assets with no
-  lease liability that can be read, none is counted and the provenance says so.
-  **Knock-on:** the borrowings come out of the liability plugs, so what the
-  debt line gains, accrued liabilities or other non-current liabilities give
-  up; no company's plug goes negative (one did before this change:
-  MercadoLibre at -1,907) and every reported year still balances, in the
-  workbook too (Amazon, Home Depot and Walmart run alongside curated Apple).
-  Because net debt now feeds the WACC weights as well as the bridge, adding
-  debt moves value twice and in opposite directions: the bridge takes the debt
-  off the shareholders, while the heavier debt weight lowers the discount rate
-  and raises enterprise value. The bridge effect is the larger of the two for
-  43 of the 62 companies valued on both sides; where the discount rate wins,
-  the cause is the flat cost of debt, since fixed (L25). `api/company.js`,
+- **L24. Operating leases under US GAAP are reported beside net debt, not in
+  it.** Their rent is already charged inside operating profit, so the cash flow
+  the enterprise value is built from carries them; netting the liability as
+  well would charge the shareholder twice (Amazon 89,252, Home Depot 9,578).
+  This is the point reasonable people differ on, and it is a judgment, not a
+  fact: the test used, and the treatment of finance leases and of IFRS 16, are
+  in METHODOLOGY.md §4. Where a filing shows finance-leased assets with no
+  readable lease liability, none is counted and the provenance says so.
+  Counting every borrowing was checked by hand against the filings for Apple
+  (99,887), Amazon (81,137) and Home Depot, and against the source's own total
+  debt for Reliance Infrastructure (49,367, to the rupee). The borrowings come
+  out of the liability plugs, so no plug goes negative (one did before:
+  MercadoLibre at -1,907) and every reported year still balances. Because net
+  debt feeds the WACC weights as well as the bridge, adding debt moves value
+  twice and in opposite directions; the bridge effect is the larger for 43 of
+  the 62 companies valued on both sides. `api/company.js`,
   `src/data/deriveModel.js` (`debtLines`).
 
-- **L25. Each company pays its own cost of debt, and borrowing raises its cost
-  of equity.** The rate is that company's filed interest over its own average
-  borrowings, taken year by year and averaged across the reported years that
-  have both (the first reported year has no opening balance, so it is
-  skipped), and it is used in both places the old flat 4.5% was used: the cost
-  of debt in the cost of capital, and the forecast interest charge. The rate is
-  charged on the balance the forecast actually carries - the last reported one,
-  held flat - not on the average of the reported years, which made the forward
-  rate a figure the company never pays (Reliance Infrastructure came out paying
-  36.8% on a 22.7% rate). Across the sweep the rates run from 0.19% (Toyota,
-  borrowing in yen) to 22.7% (Reliance Infrastructure), median 4.49%, so the
-  old flat 4.5% was a fair guess at the middle and wrong about almost every
-  company individually.
-  **When the answer is not usable:** a rate above 25% is not a borrowing cost.
-  It is a bank paying depositors (JPMorgan 118%, HSBC 29%, ICBC 35%) or a
-  company that repaid its debt during the year and divides a full year's
-  interest by a balance that is no longer there (Accenture 36%). Those fall
-  back to 4.5% and the provenance says the rate is assumed rather than the
-  company's own. So does a company that reports no interest at all against its
-  borrowings (Arm, Caterpillar, GE, NextEra, T-Mobile, MercadoLibre - 3 of the
-  63 valued). Apple stopped tagging interest expense after FY2023 and is
-  carried by its earlier years.
-  **The structural half.** A cost of debt below the cost of equity means the
-  more a company borrows the lower its cost of capital goes, without limit:
-  that is what produced a 4.27% WACC, below the risk-free rate the model starts
-  from. The answer is not a floor on WACC, which would be a number picked to
-  hide the problem, but the half of the trade that was missing. Borrowing does
-  not make a business safer; it moves risk onto the shareholders, who rank
-  behind the lenders. So a derived company's beta of 1.0 is now its ASSET beta,
-  relevered onto its own capital structure before the cost of equity is taken
-  from it: equity beta = asset beta x (1 + (1 - tax) x debt / equity), the same
-  Hamada relation already used for the curated comparables. Cost of capital now
-  falls with leverage only by the tax shield. Measured: no valued company is
-  left below the risk-free rate (the range is 5.95% to 9.13%, against 4.27% to
-  8.73%), so no floor and no leverage refusal are needed, and none was added.
-  **What this costs.** A flat asset beta of 1.0 relevered will overstate the
-  cost of equity of a heavily borrowed company against a market whose average
-  EQUITY beta is 1.0; the honest reading is that 1.0 is a no-data default in
-  either place and a beta lookback is still missing (CONVENTIONS_AUDIT DCF 9).
-  Every valued company with borrowings is now worth less: 63 valued, 62 fall
-  and none rises, median -4.1%, 25 by more than 5% (Enbridge -33.9%, Vodafone
-  -32.8%, Toyota -25.4%, BP -19.6%, Nestle -19.3%, Reliance Industries -17.3%).
-  Reliance Infrastructure is no longer valued at 20x its price: at a 22.7% cost
-  of debt and a relevered beta of 3.43 its WACC is 21.29%, its enterprise value
-  no longer covers its net debt and its 112,156 of minority interests, and the
-  existing guard withholds the value and says so. `src/data/deriveModel.js`
-  (`costOfDebtRate`), `src/engine/model.js` (`computeWACC`).
+- **L25. A cost of debt that cannot be read falls back to 4.5%, an assumption.**
+  A rate above 25% is not a borrowing cost — a bank paying depositors (JPMorgan
+  118%, HSBC 29%, ICBC 35%), or debt repaid mid-year divided into a full year's
+  interest (Accenture 36%) — and some filers tag no interest at all against
+  their borrowings (Arm, Caterpillar, GE, NextEra, T-Mobile, MercadoLibre).
+  Those fall back to the old flat rate and the provenance says it is assumed
+  rather than the company's own. Where it can be read, the rates run from 0.19%
+  (Toyota, borrowing in yen) to 22.7% (Reliance Infrastructure), median 4.49%,
+  so the flat 4.5% was a fair guess at the middle and wrong about almost every
+  company. How the rate is measured, and why the beta is relevered so that a
+  cheap cost of debt cannot drag the cost of capital down without limit, are in
+  METHODOLOGY.md §9 and §14. Measured: no valued company is left below the
+  risk-free rate (the range is 5.95% to 9.13%, against 4.27% to 8.73% before),
+  so no WACC floor and no leverage refusal were needed, and none was added.
+  `src/data/deriveModel.js` (`costOfDebtRate`), `src/engine/model.js`
+  (`computeWACC`).
 
-- **L26. The two terminal values are published side by side and never
-  averaged.** A discounted cash flow ends with two answers: the perpetuity
-  value, built from this company's own cash flows, and the exit multiple, built
-  from what the market pays for businesses like it. Averaging them produced a
-  figure that is neither method's answer and buried the disagreement, which is
-  the most useful thing on the page. Both now stand on the headline with the
-  gap between them stated, which is the treatment the income, market and asset
-  approaches already had.
-  **Where the gap is wide** - more than a quarter, against the smaller of the
-  two - the page says in plain language what the divergence means, in whichever
-  direction it runs: an exit multiple above the perpetuity value means the
-  multiple is pricing in growth these cash flows do not produce, or the
-  forecast is too conservative for what the business earns; below it means the
-  cash flows are worth more than the market pays for businesses like this, so
-  either the forecast is too generous or the multiple prices in a risk the cash
-  flows do not show. A quarter is the cut because the median spread is 14.5%,
-  so it sits comfortably beyond ordinary disagreement: 18 of the 63 valued
-  companies are past it, 8 more than half apart, 3 more than double.
-  **Where one figure is genuinely needed it is the perpetuity value, named.**
-  That is the batch screen across companies (its method column now reads
-  "discounted cash flow, perpetuity growth"), the reverse DCF's solves for
-  revenue growth and cost of capital, the income approach's figure where the
-  three approaches are compared, and the premium against the share price in the
-  workbook. Not because it is more correct, but because it is built from this
-  company: the exit multiple is a flat 12x for every derived company, so a
-  figure resting on it moves with an assumption that is the same for a software
-  company and a steelmaker. The reverse DCF's terminal-growth solve already ran
-  against the perpetuity value alone and is unchanged.
-  **The workbook follows.** Rows 53 and 54 carry the two values, row 55 the
-  spread against the lower of them, row 56 names the perpetuity value as the
-  one figure anything downstream uses, and row 58 measures the premium against
-  that rather than against an average. No row was inserted or removed, so the
-  DCF sheet's hard-coded row numbers are undisturbed.
-  **The spread today:** median 14.5%, quartiles 7.7% and 31.7%, widest BP 128%
-  (5.00 against 11.39), MercadoLibre 120% (743.48 / 1638.07), TotalEnergies
-  104% (35.93 / 73.26), Vodafone 73%, Toyota 70%, Shell 68%, Equinor 57%,
-  Broadcom 54% (the only one of the widest where the perpetuity value is the
-  higher), Enbridge 48%, Rio Tinto 46%. The exit multiple is the higher figure
-  for 27 of the 63. No valuation changed: this is a presentation and a choice
-  of which figure downstream code reads, not a change to either method.
-  `src/data/terminalSpread.ts`, `src/components/TerminalDashboard.tsx`,
-  `src/components/howCalculated.tsx`, `src/data/excelExport.ts` (DCF rows
-  53-58), `src/data/reverseDcf.ts`, `src/data/batchRun.ts`.
+- **L26. The exit multiple is a flat 12x for every derived company.** The two
+  terminal values are published side by side and never averaged, and where one
+  figure is needed it is the perpetuity value, named — because the multiple is
+  the same assumption for a software company and a steelmaker. Why they are not
+  averaged, what a wide spread means in each direction, and where the quarter
+  cut comes from are in METHODOLOGY.md §13. **The spread as measured at
+  `933fc2c`:** median 14.5%, quartiles 7.7% and 31.7%, widest BP 128% (5.00
+  against 11.39), MercadoLibre 120%, TotalEnergies 104%, Vodafone 73%, Toyota
+  70%, Shell 68%, Equinor 57%, Broadcom 54% (the only one of the widest where
+  the perpetuity value is higher), Enbridge 48%, Rio Tinto 46%. The exit
+  multiple is the higher figure for 27 of the 63. No valuation changed when
+  averaging stopped: it is a presentation and a choice of which figure
+  downstream code reads. `src/data/terminalSpread.ts`,
+  `src/components/TerminalDashboard.tsx`, `src/components/howCalculated.tsx`,
+  `src/data/excelExport.ts` (DCF rows 53-58), `src/data/reverseDcf.ts`,
+  `src/data/batchRun.ts`.
 
 - **L27. The workbook reproduces the site exactly.** Every valued company's
   workbook now returns the site's value per share to nine decimal places on
@@ -818,96 +720,39 @@ for either.
   off the model sheet. `src/engine/model.js` (`balanceSheetNetDebt`),
   `src/data/excelExport.ts` (DCF row 34).
 
-- **L28. Depreciation is charged on the assets in service, not on the year's
-  purchases.** The forecast charge was capital spending times a rate, so a
-  company that cut its capital budget stopped depreciating plant it already
-  owned: Microsoft's forecast capital spending falls from 34.9% of revenue to
-  20.3%, and its forecast depreciation fell to 7.7% of revenue against the
-  10.3% it files. The base is now the opening balance plus half the year's
-  additions.
-  **Why half.** A machine bought during the year is in service for part of it.
-  Charging the opening balance alone would depreciate nothing on a year's
-  additions; charging the closing balance would take a full year from a
-  machine installed in December. Half is the convention a hand-built schedule
-  uses when it cannot see purchase dates, and it needs no iteration.
-  **Why not vintages.** Depreciating each year's capital spending over its own
-  life is more faithful, and it needs a useful life per vintage. No filing
-  gives one, and inferring it from net PP&E over depreciation would produce
-  the same single rate this uses, dressed as something more precise.
-  CONVENTIONS_AUDIT Dep 1 records the absence of useful lives; this does not
-  close it.
-  **The numerator is unchanged**, as the last fix left it: filed depreciation,
-  never the balance movement, which counts disposals, leases and acquisitions.
-  Only the base it is divided by, and applied to, has changed - in the engine,
-  in the derivation that measures it, and in the workbook's PP&E schedule,
-  which charges the same base so the two still agree to 4e-9%.
-  **Measured** at `48c95b6` against this change, on payloads refetched
-  2026-09-21: 82 companies valued on both sides, 18 move more than 5%, 27 up
-  and 38 down, median 0.0%. The largest: TotalEnergies -47.9%, Toyota -30.4%,
-  Shell -27.7%, Enbridge +23.0%, Texas Instruments -19.9%, BP -19.8%, Equinor
-  -15.3%, Siemens +14.1%. Forecast depreciation now lands near what these
+- **L28. One depreciation pool, one rate, no vintages or useful lives.**
+  Depreciation is charged on the assets in service — opening net PP&E plus half
+  the year's additions — at one rate read from filed depreciation, which is as
+  close to the convention's separate vintage stacks as a single pool allows.
+  The rate, its three sourcing steps and the fallbacks are in METHODOLOGY.md §7.
+  **Measured** at `48c95b6` against the change that introduced it, on payloads
+  refetched 2026-09-21: 82 companies valued on both sides, 18 move more than
+  5%, 27 up and 38 down, median 0.0%; the largest TotalEnergies -47.9%, Toyota
+  -30.4%, Shell -27.7%, Enbridge +23.0%, Texas Instruments -19.9%, BP -19.8%,
+  Equinor -15.3%, Siemens +14.1%. Forecast depreciation lands near what these
   companies file: Texas Instruments 7.2% of revenue to 10.8% against 10.8%
   filed, Microsoft 7.7% to 12.0% against 10.3%, Amazon 5.4% to 6.9% against
-  5.8%. Four companies gain a value (Sony, Naspers, Palantir, Shopify's Toronto
-  listing), whose rate on capital spending was not usable and whose rate on the
-  asset base is. `src/engine/model.js` (PP&E schedule),
-  `src/data/deriveModel.js` (`depreciationRates`), `src/data/excelExport.ts`.
+  5.8%. `src/engine/model.js` (PP&E schedule), `src/data/deriveModel.js`
+  (`depreciationRates`), `src/data/excelExport.ts`.
 
-- **L30. Capital spending is replacement plus growth, not a share of revenue.**
-  `CONVENTIONS.md` asks for capital spending taken off company guidance and
-  cross-checked against the historical share of revenue, "rather than relying
-  on a percent-of-revenue assumption in isolation", and warns that a
-  percent-of-sales-only projection is too mechanical for a business with lumpy
-  investment. The site reads filings and has no guidance to read, so it keeps
-  the half of the rule it can: the line is split, and only the growth half is
-  tied to revenue.
-  **Replacement equals depreciation**, which is what keeps a pooled asset base
-  standing, and the same treatment the terminal year already used. It follows
-  the depreciation conventions' intent (Dep 6, `CONVENTIONS.md`: existing PP&E
-  tracked apart from new vintages) as closely as a single pool allows; vintages
-  and useful lives remain absent, which is L28's limit, not this one's.
-  **Growth is the increase in revenue times this company's own net PP&E to
-  revenue ratio**, averaged across the reported years. That is "a percentage of
-  a related balance-sheet line", one of the projection methods the conventions
-  name, documented here as they require.
-  **It works in both directions.** A company whose revenue falls releases plant
-  in the same proportion. Flooring growth at nil was tried first and rejected
-  on the measurement: holding the whole base against a shrinking business sent
-  the oil majors' capital intensity past anything they have carried
-  (TotalEnergies to 126% of revenue against 62% across its reported years),
-  while their own filings show the symmetric behaviour - BP spent 0.74 to 0.92
-  times its depreciation over four reported years as its plant shrank. Total
-  spending is still never negative: the model does not sell plant for cash.
-  **Why not target the ratio directly.** Setting net PP&E to revenue times the
-  historical ratio each year was considered and rejected: it forces a one-off
-  correction in the first forecast year wherever a company's current intensity
-  differs from its own average, which for Microsoft (94% of revenue today
-  against a 61% average) would mean writing off a third of its plant in year
-  one. Adding at the margin leaves the company where its last filing left it.
-  **The circularity is solved, not iterated.** Replacement is depreciation, and
-  depreciation is charged on a base that includes half the year's additions, so
-  d = r(open + g/2) / (1 - r/2). The workbook carries the same solution, and the
-  rate and the ratio it uses are the engine's own constants rather than figures
-  re-derived per year: re-deriving them agreed everywhere except where total
-  spending floors at nil, where the base and the charge stop agreeing (Saudi
-  Aramco, caught by `verify:workbook` at 0.0127%).
-  **Measured** at `26d954c` against this change, on payloads fetched
-  2026-09-21. Capital intensity at the end of the forecast against each
-  company's own reported average: more than 10% away falls from 53 of 70 to 27
-  of 69, more than 25% from 33 to 5, and more than 50% from 11 to none. Of the
-  85 companies valued on both sides, 31 move more than 5%, 47 up and 21 down,
+- **L30. Capital spending is replacement plus growth, and the drift is reduced
+  rather than removed.** 27 of 69 valued companies still end the forecast more
+  than 10% from their own reported capital intensity, which follows from adding
+  at the margin: a company whose last filed intensity sits above or below its
+  own history keeps that position, and nothing pulls it back. That is the
+  intended behaviour — the alternative, targeting the historical ratio, forces
+  a one-off correction in year one — and the reasoning, the symmetric treatment
+  of a shrinking business and the solved circularity are in METHODOLOGY.md §7.
+  Where the treatment does not hold at all is KI-11. **Measured** at `26d954c`
+  against this change, on payloads fetched 2026-09-21: capital intensity more
+  than 10% from the company's own reported average falls from 53 of 70 to 27 of
+  69, more than 25% from 33 to 5, more than 50% from 11 to none. Of the 85
+  companies valued on both sides, 31 move more than 5%, 47 up and 21 down,
   median +0.4%: TotalEnergies +135.0%, Toyota +90.8%, Shell +57.7%, Enbridge
   -50.7%, BP +42.7%, Sony -34.9%, Texas Instruments +32.7%. Naspers loses its
-  value: its exit-multiple value was already negative (-12.13 against a
-  perpetuity value of 2.70), and with more plant to buy neither method now
-  covers the 30,514 of minority interests and the net debt the bridge takes
-  off, so the model refuses rather than showing one of them.
-  **The drift is reduced, not removed.** 27 of 69 are still more than 10% from
-  their own average, which follows from adding at the margin: a company whose
-  last filed intensity sits above or below its own history keeps that position,
-  and nothing pulls it back. That is the intended behaviour, not a residual
-  defect - the alternative is the year-one correction rejected above.
-  `src/engine/model.js` (PP&E schedule), `src/data/deriveModel.js`
+  value: its exit-multiple value was already negative, and neither method now
+  covers the 30,514 of minority interests and the net debt its bridge takes
+  off. `src/engine/model.js` (PP&E schedule), `src/data/deriveModel.js`
   (`ppeToRevenue`), `src/data/excelExport.ts`.
 
 - **L29. Two things the depreciation base exposed, both fixed here.**
@@ -941,17 +786,16 @@ for either.
 Deliberate choices that differ from a textbook convention. They are not
 defects: do not change them as a fix, only as a decision to change the design.
 
-- **D1. Forecast margins come from the last reported year.** Gross margin, R&D
-  and SG&A are the last reported year's share of revenue, held flat, and each
-  model's provenance says so. The checklist's conservative default (the lowest
-  of recent years) is a rule of thumb in the book, and the last reported year is
-  defensible: an average or a minimum taken across a company that has changed
-  shape describes no year it now operates in (Nvidia is the case the code
-  cites). Measured at `f1d9339` by moving the operating margin by the gap
-  between the lowest of the last three reported years and the last: median
-  value -11.5%; 23 of 42 valued companies fall by more than 10% and 10 by more
-  than 25% (AMD -95.9%, Gilead -85.0%, Seagate -80.3%, AbbVie -42.8%); Arm,
-  Marvell and Palantir would be refused; 11 are unchanged, their last year
+- **D1. Forecast margins come from the last reported year, not a conservative
+  average.** The checklist's conservative default (the lowest of recent years)
+  is a rule of thumb, and the last reported year is defensible: an average or a
+  minimum taken across a company that has changed shape describes no year it
+  now operates in. The choice, and which lines it applies to, are in
+  METHODOLOGY.md §5. Measured at `f1d9339` by moving the operating margin by
+  the gap between the lowest of the last three reported years and the last:
+  median value -11.5%; 23 of 42 valued companies fall by more than 10% and 10
+  by more than 25% (AMD -95.9%, Gilead -85.0%, Seagate -80.3%, AbbVie -42.8%);
+  Arm, Marvell and Palantir would be refused; 11 are unchanged, their last year
   already the lowest. `src/data/deriveModel.js` (margins). See
   CONVENTIONS_AUDIT.md, IS 7.
 
