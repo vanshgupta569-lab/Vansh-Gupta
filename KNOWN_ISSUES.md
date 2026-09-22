@@ -18,7 +18,7 @@ limitations that fixes have deliberately left behind.
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
   Limitations (`L1` and up) have always worked this way.
-- Taken so far: `KI-1` to `KI-10`, and `L1` to `L30`. **Next free: `KI-11`,
+- Taken so far: `KI-1` to `KI-13`, and `L1` to `L30`. **Next free: `KI-14`,
   `L31`.** Retired, meaning fixed and never to be reused: `KI-1` (forecast
   capital spending a flat share of revenue, fixed 2026-09-22, see `L30`).
 - Numbers used before 2026-09-22 — "#4" in a commit message, say — were
@@ -54,7 +54,9 @@ the basis for L24, for L25 re-measured at `e1e6cfc`, for L26 re-measured at
 `5ecd822` and for L27 re-measured at `933fc2c`, all on the same payloads. The
 depreciation work refetched every payload on 2026-09-21, with net PP&E read
 from the finance-lease-inclusive tag as well (L28), and both sides of its
-measurement were snapshotted on that set with `verify/`.
+measurement were snapshotted on that set with `verify/`. KI-11, KI-12 and
+KI-13 were measured at `e52cdc6` on the same 2026-09-21 payloads, over the 69
+companies that show a DCF value there.
 
 ---
 
@@ -62,6 +64,9 @@ measurement were snapshotted on that set with `verify/`.
 
 | ID | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
+| KI-12 | Most of the value is the terminal year, and the terminal year is a step change from the forecast | 56 of 69 over 75% of EV | Enbridge 100.4% of EV; its normalised cash flow flips sign | +-1pt of terminal growth: Enbridge -50.2%/+72.0%, Toyota -36.8%/+66.8% |
+| KI-13 | Revenue growth is a clamped trailing CAGR, then +2.5% forever at the join | 8 of 69 clamped; the join affects all | TotalEnergies and Shell shrink 10% a year for five years, then grow forever | holding revenue flat: TotalEnergies +74.9%, BP +51.7%, Shell +33.0% |
+| KI-11 | Forecast capital spending assumes revenue measures the size of the plant | 21 of 69 more than 50% from their own filed ratio | Saudi Aramco forecast to spend nothing against 1.82x depreciation filed | not isolated; sets the explicit-stage cash flow and the terminal asset base |
 | KI-2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | KI-3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | KI-4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
@@ -73,6 +78,111 @@ measurement were snapshotted on that set with `verify/`.
 | KI-10 | Stock compensation the filing does not break out is never added back, understating cash generation | 56 (20 valued) | Novo Nordisk Copenhagen +1.8% | not measured for 19 of the 20 |
 
 ---
+
+### KI-12. Most of the value is the terminal year, and the terminal year is a different company
+
+- **What is wrong.** Two things that compound. First, the terminal value is
+  most of the answer: across the 69 valued companies it is a median 77.9% of
+  enterprise value, more than 75% for 56 of them and more than 90% for three.
+  Second, the terminal year is not the steady state the explicit forecast
+  arrives at. Terminal capital spending is set equal to depreciation, while the
+  explicit years spend whatever the drivers give, so where the two differ the
+  normalised cash flow is a step away from the last forecast year rather than a
+  continuation of it. A five-year forecast that contributes a fifth of the
+  value, and whose last year does not resemble the year being capitalised, is a
+  one-year capitalisation wearing a DCF's clothes.
+- **Where.** `src/engine/model.js` (`buildDCF`, `terminalCapexTreatment` and
+  the normalised cash flow); the drivers that set the explicit years are in
+  `src/data/deriveModel.js`.
+- **How measured.** Present value of the explicit years against the present
+  value of the perpetuity terminal value, per company; and the normalised
+  terminal cash flow against the last explicit year's unlevered free cash flow.
+- **Affects.** 56 of 69 valued companies take more than 75% of enterprise value
+  from the terminal value, 3 more than 90%, and 1 more than 100% because its
+  explicit stage is worth less than nothing. 7 of 69 have a normalised cash
+  flow outside half to twice the last explicit year's.
+- **Worst example.** Enbridge: every explicit year's unlevered cash flow is
+  negative (-94 to -259 against capital spending of 16,160 to 21,305), so the
+  explicit stage is worth -707 against a terminal value of 168,150 — 100.4% of
+  enterprise value — and the normalised cash flow of 12,796 is the opposite
+  sign to the -259 it follows. Toyota: 98.2% of enterprise value, the
+  normalised cash flow 8.07 times the last explicit year's, because the
+  terminal year stops buying the plant the five forecast years bought at 1.72
+  times depreciation. Running the other way, TotalEnergies' normalised cash
+  flow is 0.40 of its last explicit year, Shell's 0.46 and BP's 0.52, because
+  the terminal year makes them pay for the replacement the forecast years did
+  not.
+- **Value moved.** Everything that touches the terminal year moves the whole
+  valuation. One point of terminal growth either side of 2.5%: Enbridge -50.2%
+  / +72.0%, Toyota -36.8% / +66.8%, BP -17.2% / +25.7%. Half a point of WACC:
+  Enbridge -31.8% / +37.0%, Toyota -25.4% / +28.2%. The exit-multiple method is
+  insensitive to all of it — its terminal value is EBITDA times a flat 12x,
+  which no capital-spending or depreciation change touches — which is why the
+  two methods now disagree by roughly a factor of two on these companies
+  (TotalEnergies 43.95 against 91.06, BP 5.74 against 12.52). L26 records the
+  spread as a fact to be shown; this entry is about what is behind it.
+
+### KI-13. Revenue growth is a clamped trailing average, capitalised at 2.5% forever
+
+- **What is wrong.** The forecast growth rate is the trailing compound growth
+  of the reported years, clamped to -10% and +25%, held flat for all five
+  forecast years. Two problems. The clamp binds for 8 of 69 valued companies,
+  and where it binds the figure is the clamp, not the company. And whatever the
+  rate, the terminal year capitalises the final forecast year at +2.5% growth
+  in perpetuity, so a company modelled as shrinking 10% a year for five years
+  becomes a company growing 2.5% a year forever at the instant the forecast
+  ends, with nothing in between. For a business whose reported window happens
+  to straddle a commodity peak, the whole valuation is an extrapolation of the
+  fall from that peak.
+- **Where.** `src/data/deriveModel.js` (`rawGrowth`, `clamp(rawGrowth, -0.10,
+  0.25, 0.03)`); `src/engine/model.js` (the perpetuity terminal value).
+- **How measured.** The clamp counted where the default sits exactly on -10% or
+  +25%; the join measured by holding revenue flat at 0% instead of the default
+  and re-reading the perpetuity value per share.
+- **Affects.** 8 of 69 are clamped: Arista, MercadoLibre, Nvidia, Palantir and
+  Shopify at +25%, Equinor, Shell and TotalEnergies at -10%. The
+  shrink-then-grow join affects every company whose forecast growth differs
+  from 2.5%, which is all of them.
+- **Worst example.** TotalEnergies: revenue peaked at 263,310 in 2022 and was
+  182,344 in 2025, a trailing compound rate of -11.5% that the clamp holds at
+  -10%. The forecast takes revenue down another 41% to 107,672, and then grows
+  it at 2.5% a year forever. Shell is the same shape.
+- **Value moved.** Holding revenue flat instead of the default, on the
+  perpetuity value: TotalEnergies +74.9%, BP +51.7%, Shell +33.0%. Two points
+  either side of the default moves TotalEnergies +11.8% / -10.8% and BP +11.3%
+  / -10.1%, so the sensitivity is not linear in the clamp — it is the level,
+  not the slope, that carries the value.
+
+### KI-11. Forecast capital spending assumes revenue measures the size of the plant
+
+- **What is wrong.** Growth capital spending is the change in revenue times the
+  company's own net PP&E over revenue (L30). That holds where revenue moves
+  with volume. It fails where revenue moves for another reason. An oil major
+  whose revenue falls with the crude price is modelled as releasing plant it
+  has not sold and will not sell, so it is forecast to spend almost nothing; a
+  pipeline that bought a gas utility has the acquired revenue treated as
+  organic growth and is forecast to build two units of plant for every unit of
+  it. The ratio is stable enough for a manufacturer and a utility, and not for
+  a price taker or a serial acquirer.
+- **Where.** `src/data/deriveModel.js` (`ppeToRevenue`); `src/engine/model.js`
+  (the PP&E schedule's `maintenancePlusGrowth` branch).
+- **How measured.** Forecast year-one capital spending over depreciation
+  against the same ratio averaged across the company's reported years.
+- **Affects.** 21 of 69 valued companies are more than 50% away from their own
+  filed ratio, and 6 are more than twice out.
+- **Worst example.** Saudi Aramco is forecast to spend nothing at all — total
+  spending floors at nil because the release exceeds replacement — against
+  1.82 times depreciation across its reported years. Shopify 3.95x against
+  0.70x filed, Broadcom 2.26x against 0.91x, Enbridge 2.62x against 1.28x;
+  running the other way, TotalEnergies 0.17x against 1.20x, Shell 0.21x against
+  0.93x, Texas Instruments 0.95x against 3.23x. In money, TotalEnergies is
+  forecast to spend 2.3bn a year against the 16.3bn a year it averaged over its
+  four reported years.
+- **Value moved.** Not isolated, and it cannot be: it sets both the explicit
+  years' cash flow and the size of the asset base that reaches the terminal
+  year, which are the two halves of KI-12. The predecessor defect, a flat share
+  of revenue, moved 31 of 85 valued companies by more than 5% when it was
+  replaced (L30); this is the part of that replacement that does not hold.
 
 ### KI-2. No stated discounting convention; timing runs from the fetch date
 
