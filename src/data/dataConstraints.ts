@@ -272,6 +272,59 @@ export function buildDataConstraints(
   }
 
   // ---------------------------------------------------------------------------
+  // 5a. What tax the non-operating income bore
+  // ---------------------------------------------------------------------------
+  // The forecast tax rate is filed tax over filed pretax income, and filed
+  // pretax is operating profit, plus interest, plus other non-operating income.
+  // The forecast now carries all three, so the rate is applied to the base it
+  // was measured on. What no filing separates in a readable form is how the tax
+  // was split between them — the rate reconciliation that would say so is a
+  // narrative note, not a tagged figure. Where the non-operating income is
+  // large, that unsplit tax is a real uncertainty in the rate the DCF applies
+  // to operating profit.
+  const nH: number = model?.nH ?? 0;
+  const lastIdx = nH - 1;
+  const opInc = model?.ebit?.[lastIdx];
+  const interest = (model?.interestExpense?.[lastIdx] ?? 0) + (model?.interestIncome?.[lastIdx] ?? 0);
+  const otherNonOp = model?.otherIncomeExpense?.[lastIdx] ?? 0;
+  const taxPaid = -(model?.taxes?.[lastIdx] ?? 0);
+  if (valued && isNum(opInc) && opInc !== 0 && isNum(taxPaid) && Math.abs(otherNonOp) > 0) {
+    // The two ends the filing leaves open: the non-operating income was taxed
+    // like everything else (today's rate), or it bore no tax at all and the
+    // operating profit carried the lot.
+    const operatingBase = opInc + interest;
+    const allOnOperating = operatingBase !== 0 ? taxPaid / operatingBase : null;
+    let bound: number | null = null;
+    if (allOnOperating !== null) {
+      const v = revalue(modelData, (d) => {
+        d.assumptions.taxRate = Math.min(Math.max(allOnOperating, 0), 0.5);
+      });
+      bound = v === null ? null : v / (v0 as number) - 1;
+    }
+    const share = Math.abs(otherNonOp) / Math.abs(opInc);
+    add({
+      code: 'taxOnNonOperatingIncomeUnknown',
+      label: 'The filing does not say what tax the non-operating income bore',
+      detail:
+        `In the last reported year this company earned ${Math.round(otherNonOp).toLocaleString()} outside its ` +
+        `operating profit of ${Math.round(opInc).toLocaleString()} — ${(share * 100).toFixed(0)}% of it — and paid ` +
+        `${Math.round(taxPaid).toLocaleString()} of tax on the two together. The forecast rate is that tax over that ` +
+        `combined pretax income, which is the rate the discounted cash flow then applies to operating profit alone. ` +
+        `Whether the non-operating income was taxed at the same rate, more lightly, or not at all is not something ` +
+        `${source} reports in a form that can be read.`,
+      source,
+      effect:
+        bound === null
+          ? 'the effect cannot be computed'
+          : `${pct(bound)} on the value per share between the two ends the filing leaves open — the non-operating ` +
+            `income taxed like everything else, which is the rate shown, and the operating profit having borne the ` +
+            `whole charge (${((allOnOperating as number) * 100).toFixed(1)}%)`,
+      bound,
+      severity: bySize(bound),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // 5b. Revenue growth that was bought rather than earned
   // ---------------------------------------------------------------------------
   // A year in which goodwill jumped is a year in which the company bought a

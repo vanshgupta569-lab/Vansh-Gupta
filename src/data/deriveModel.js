@@ -1197,19 +1197,81 @@ export function deriveModel(fetched) {
     'the margins above are as filed; depreciation and stock compensation are taken out of them at ' +
     'the share they took in the last reported year, then charged as their own lines';
 
+  // OTHER NON-OPERATING INCOME — forecast, not set to nil.
+  //
+  // This line is everything between operating profit and pretax income except
+  // interest: equity-method income from affiliates, investment income, currency.
+  // `CONVENTIONS.md` IS 11 treats it as its own section to be decided on, and
+  // IS 17 says NON-RECURRING items are not projected — two different things
+  // that were being read as one. Forecasting the whole residual at nil while
+  // measuring the tax rate on a base that included it is what made the rate and
+  // its base disagree (see TAXES below).
+  //
+  // The rule is the one other operating costs already use, for the same reason:
+  // the residual mixes something that recurs with something that may not, and
+  // nothing in the filing separates them. Where the last reported year shows a
+  // COST, its share of revenue is held flat, like every other cost line. Where
+  // it shows INCOME, the smaller of that year's and the median across the
+  // reported years is forecast, so a single large gain is not carried forward
+  // while an income that recurs every year is.
+  const otherNonOpShares = rows
+    .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 ? otherNonOperating[i] / r.revenue : null))
+    .filter(isNum);
+  const lastOtherNonOpShare = shareOfLastRevenue(otherNonOperating[rows.length - 1]) ?? 0;
+  const medianOtherNonOpShare = median(otherNonOpShares) ?? 0;
+  // Whichever of the two is closer to nil, in either direction. The median
+  // follows what recurs and the last reported year is the anchor every other
+  // margin uses; taking the smaller of them never forecasts more of a
+  // non-operating item than this company has shown consistently. It matters
+  // both ways: AbbVie's last year carries a charge of 9.1% of revenue against a
+  // 4.6% median, and projecting the 9.1% for ever turned its forecast pretax
+  // profit into a permanent loss (IS 17: a non-recurring item is not projected).
+  const otherNonOperatingMargin =
+    Math.abs(lastOtherNonOpShare) <= Math.abs(medianOtherNonOpShare)
+      ? lastOtherNonOpShare
+      : medianOtherNonOpShare;
+  provenance.otherIncome =
+    otherNonOperatingMargin === 0
+      ? 'no other non-operating income is forecast: the reported years show none'
+      : `${(Math.abs(otherNonOperatingMargin) * 100).toFixed(1)}% of revenue as ` +
+        `${otherNonOperatingMargin < 0 ? 'a cost' : 'income'} — the smaller in size of the last reported year ` +
+        `(${(lastOtherNonOpShare * 100).toFixed(1)}%) and the median across the reported years ` +
+        `(${(medianOtherNonOpShare * 100).toFixed(1)}%), so a single large charge or gain is not carried forward`;
+
   // TAXES — the cheat sheet is explicit: apply the last actual year's effective
   // rate. Previously this averaged the first and last years, which let a year
   // with a one-off charge sit in the forecast forever. Apple FY2024 is exactly
   // that case: a European State-aid charge pushed the effective rate to 24%.
+  //
+  // THE BASE. The rate is filed tax over filed pretax income, and filed pretax
+  // is operating profit, plus interest, plus everything else non-operating.
+  // Interest belongs in that denominator: an unlevered valuation taxes
+  // operating profit as though there were no borrowing, which is what an
+  // effective rate measured across a levered year gives (CONVENTIONS.md
+  // DCF 5). The other non-operating income does NOT belong there if the
+  // forecast never earns any — and it used to be forecast at nil, so the rate
+  // was measured on a base the forecast did not have. Alibaba is the extreme:
+  // its other non-operating income is 133% of its operating profit, so most of
+  // the denominator was something the model then threw away.
+  //
+  // Two things could fix that, and only one of them is derivable. Taking the
+  // non-operating income OUT of the denominator needs the tax it bore, which no
+  // filing separates in a form that can be read. Putting it INTO the forecast
+  // needs only a projection rule, and one already exists for exactly this kind
+  // of residual (see otherNonOperatingMargin below). So the base is matched by
+  // forecasting the income rather than by re-cutting the rate, and what remains
+  // — whether the non-operating income was taxed like everything else — is a
+  // data constraint with a measured bound, not an approximation.
   const effectiveTaxRates = rows.map((row) =>
     isNum(row.taxExpense) && isNum(row.pretaxIncome) && row.pretaxIncome !== 0
       ? row.taxExpense / row.pretaxIncome
       : null
   );
   const taxRate = clamp(latest(effectiveTaxRates), 0, 0.5, 0.21);
-  provenance.taxRate = `${(taxRate * 100).toFixed(
-    1
-  )}% — the last reported year's effective rate`;
+  provenance.taxRate =
+    `${(taxRate * 100).toFixed(1)}% — the last reported year's effective rate: filed tax over filed pretax income, ` +
+    'which is operating profit after interest and after other non-operating income. The forecast carries all three, ' +
+    'so the rate is applied to the base it was measured on';
 
   // CAPEX — "in line with historical trends as a % of sales". Capex is lumpy
   // year to year in a way margins are not, so this one stays an average: a
@@ -1338,14 +1400,27 @@ export function deriveModel(fetched) {
   // (common dividends / net income). This replaces a linear regression through
   // the payout history, which could trend the ratio somewhere the company has
   // never been, including above 100% of earnings.
+  // THE DENOMINATOR IS THE NET INCOME THE FORECAST ACTUALLY HAS.
+  //
+  // Filed net income is after non-controlling interests and discontinued
+  // operations; the forecast's net income is pretax less tax and has neither,
+  // because nothing in the filing says what either would be in a future year.
+  // Measuring the ratio on filed net income and applying it to the forecast's
+  // was the same mismatch as the tax rate's, in the other direction: 55 of 153
+  // companies differ by more than a point on the two bases and 23 by more than
+  // five, BP by 3,238 points on a year when its filed net income all but
+  // vanished. The denominator is now pretax income less tax, which is exactly
+  // what the forecast line it is applied to contains.
   const payoutRatios = rows.map((row) =>
-    isNum(row.dividendsPaid) && isNum(row.netIncome) && row.netIncome > 0
-      ? row.dividendsPaid / row.netIncome
+    isNum(row.dividendsPaid) && isNum(row.pretaxIncome) && isNum(row.taxExpense) &&
+    row.pretaxIncome - row.taxExpense > 0
+      ? row.dividendsPaid / (row.pretaxIncome - row.taxExpense)
       : null
   );
   const payoutRatio = clamp(mean(payoutRatios), 0, 1, 0);
   provenance.dividends = rows.some((r) => isNum(r.dividendsPaid))
-    ? `${(payoutRatio * 100).toFixed(1)}% of net income — average payout ratio across the reported years that report dividends`
+    ? `${(payoutRatio * 100).toFixed(1)}% of net income — average payout ratio across the reported years that report ` +
+      'dividends, measured on pretax income less tax, which is what the forecast\'s net income contains'
     : 'no dividends are reported in any year, so none are forecast';
 
   // INTEREST — the cheat sheet computes interest as average debt x an interest
@@ -1433,8 +1508,13 @@ export function deriveModel(fetched) {
     // a step behind.
     segmentGrowth: { 'Total revenue': { method: 'fadeToTerminal', start: growth } },
 
-    // Non-recurring items are forecast as 0, per the cheat sheet.
+    // Everything between operating profit and pretax income except interest,
+    // as a share of revenue. Forecast rather than set to nil, so the tax rate
+    // is applied to the base it was measured on (see above). The engine reads
+    // the margin where it is given and the amounts otherwise, so a hand-built
+    // file that carries amounts is unaffected.
     otherIncomeExpense: Array(FORECAST_YEARS).fill(0),
+    otherIncomeExpenseMargin: Array(FORECAST_YEARS).fill(otherNonOperatingMargin),
 
     capexRatio,
     ppeToRevenue: intensityUsable ? ppeToRevenue : null,

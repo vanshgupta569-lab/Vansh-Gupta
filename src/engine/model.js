@@ -737,7 +737,12 @@ export function buildModel(data) {
     S.interestIncome[t] = 0;              // zero while the breaker is ON
     S.revolver.interestExpense[t] = 0;    // zero while the breaker is ON
     S.interestExpense[t] = -(S.debt.interestExpense[t] + S.revolver.interestExpense[t]);
-    S.otherIncomeExpense[t] = a.otherIncomeExpense[t - nH];
+    // A share of revenue where the derivation gives one, so the line moves with
+    // the forecast and with the revenue slider; the amounts a hand-built file
+    // carries otherwise.
+    S.otherIncomeExpense[t] = isNum(a.otherIncomeExpenseMargin?.[t - nH])
+      ? S.revenue[t] * a.otherIncomeExpenseMargin[t - nH]
+      : a.otherIncomeExpense[t - nH];
     S.pretaxProfit[t] = S.ebit[t] + S.interestIncome[t] + S.interestExpense[t] + S.otherIncomeExpense[t];
     S.taxRate[t] = taxFcst;
     S.taxes[t] = -(S.pretaxProfit[t] * taxFcst);

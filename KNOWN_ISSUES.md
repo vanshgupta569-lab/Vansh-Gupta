@@ -32,8 +32,10 @@ mistakes and would never be fixed:
 - Taken so far: `KI-1` to `KI-16`. **Next free: `KI-17`.** Retired, meaning
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
-  average stepping into the terminal rate, fixed 2026-09-23) and `KI-14` (every
-  company discounted to a 31 December year end, fixed 2026-09-23). Moved out on 2026-09-22 and never to be
+  average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
+  company discounted to a 31 December year end, fixed 2026-09-23) and `KI-3`
+  (the forecast tax rate measured on a base the forecast did not have, fixed
+  2026-09-24; what the filing cannot separate moved to `DATA_CONSTRAINTS.md`). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -43,8 +45,9 @@ mistakes and would never be fixed:
 **Measurement basis, unless an entry says otherwise:** payloads for curated
 Apple, the first 100 issuers in the SEC ticker list and a set of non-US
 listings, refetched on 2026-09-23 when the fiscal period end date was added to
-the fetch; 176 files, 172 with statements, 169 modelled, 64 showing a DCF value
-(69 before the revenue-against-plant refusal of the same day). Values are the site's perpetuity value per share. "What if" figures come
+the fetch; 176 files, 172 with statements, 169 modelled, 63 showing a DCF value
+(69 before the revenue-against-plant refusal of 2026-09-23 and the tax-attribution
+refusal of 2026-09-24). Values are the site's perpetuity value per share. "What if" figures come
 from moving existing sliders or recomputing from the engine's own outputs; no
 source was changed to measure anything below. Entries that cite an earlier
 commit were measured on the payload set of that date and say so.
@@ -58,7 +61,6 @@ commit were measured on the payload set of that date and say so.
 | KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
 | KI-2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
-| KI-3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | KI-4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
 | KI-6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
@@ -246,24 +248,6 @@ intensity range.
   pro-rated: Shell -5.3%, AbbVie -5.1%, Gilead -4.6%, Apple -4.1%.
 - **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
   -1.5% (max -5.3%). Both depend on the fetch date.
-
-### KI-3. Forecast tax rate: a filed ratio on a different pretax figure
-
-- **What is wrong.** The forecast rate is filed tax over filed pretax income,
-  which includes non-operating items (investment gains, interest, one-offs) that
-  may be taxed differently. It is applied to a forecast pretax figure that
-  carries no other income and interest at an assumed rate, and in the DCF to
-  operating profit.
-- **Where.** `src/data/deriveModel.js` (`taxRate`); `src/engine/model.js`
-  (`taxFcst`, `buildDCF` EBIAT).
-- **How measured.** Non-operating share of filed pretax income; value per share
-  re-run at +1 point of tax rate.
-- **Affects.** 18 valued companies whose filed pretax income is more than 10%
-  non-operating.
-- **Worst example.** AbbVie, non-operating items -128.5% of filed pretax;
-  Reliance Infrastructure 65.2%; Marvell 56.6%; Alibaba 53.9%.
-- **Value moved.** One point of tax rate moves value by a median -1.2% (range
-  -3.0% to +6.3%); the misstatement in points is not yet measured.
 
 ### KI-4. Working capital drivers differ between site and workbook
 

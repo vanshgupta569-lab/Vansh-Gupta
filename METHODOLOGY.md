@@ -458,8 +458,23 @@ items — is pretax income less operating profit less that interest, so pretax
 income ties to the filing exactly.
 **Forecast:** interest expense is the debt schedule's charge (§9). **Interest
 income is zero** and revolver interest is zero, because the circuit breaker is
-on (§9). Other income is **zero**, per `IS 17` (non-recurring items are not
-projected forward).
+on (§9).
+
+**Other non-operating income is forecast, not set to nil.** This line is
+everything between operating profit and pretax income except interest:
+equity-method income from affiliates, investment income, currency. `IS 11`
+treats it as its own section to be decided on; `IS 17` says *non-recurring*
+items are not projected. Those are two different things, and reading them as one
+— forecasting the whole residual at nil — is what made the tax rate and its base
+disagree, because the rate is measured on a pretax figure that includes this
+line. It is now forecast as a share of revenue: **whichever of the last reported
+year's share and the median across the reported years is closer to nil**, in
+either direction. The median follows what recurs and the last year is the anchor
+every other margin uses, so the smaller of them never projects more of a
+non-operating item than the company has shown consistently. It matters both
+ways: AbbVie's last reported year carries a charge of 9.1% of revenue against a
+4.6% median, and projecting the 9.1% for ever turned its forecast pretax profit
+into a permanent loss.
 **Convention:** `IS 12` (the sign convention is confirmed against the company's
 own figures and carried consistently) — followed by construction: interest
 expense is forced negative, and everything else is a residual that must tie.
@@ -470,11 +485,31 @@ expense is forced negative, and everything else is a residual that must tie.
 pretax income.
 **Forecast:** the **last reported year's** effective rate, clamped to 0–50%,
 falling back to 21%.
+
+**The base.** The rate is filed tax over filed pretax income, and filed pretax is
+operating profit, *plus interest, plus other non-operating income*. Interest
+belongs in that denominator: an unlevered valuation taxes operating profit as
+though there were no borrowing, which is what an effective rate measured across
+a levered year gives (`DCF 5`). The other non-operating income belongs there
+only if the forecast also earns some — and until 2026-09-24 the forecast set it
+to nil, so the rate was measured on a base the model then threw away. Alibaba is
+the extreme: its other non-operating income is 133% of its operating profit, so
+most of the denominator was something the forecast did not have.
+
+Two things could have closed that. Taking the non-operating income **out** of the
+denominator needs the tax it bore, which no filing separates in a readable form —
+the rate reconciliation that would say so is a narrative note, not a tagged
+figure. Putting it **into** the forecast needs only a projection rule, and one
+already existed for this kind of residual. So the base is matched by forecasting
+the income (§5, other non-operating income) rather than by re-cutting the rate,
+and what remains — whether that income was taxed like everything else — is a
+**data constraint with a measured bound**, not an approximation: see
+`DATA_CONSTRAINTS.md`. It bounds 52 companies below 5%, warns 11 and refuses one.
+
 **Convention:** `IS 6`/`IS 7` — the checklist is explicit that the last actual
 effective rate is the one to use. Previously this averaged the first and last
 years, which let a one-off charge sit in the forecast for ever (Apple FY2024's
-European State-aid charge pushed the rate to 24%). The rate is a filed ratio
-applied in the DCF to operating profit, which is `KI-3`.
+European State-aid charge pushed the rate to 24%).
 
 ### Items after tax, and reported net income
 
@@ -801,6 +836,16 @@ forecast year) plus the stock-compensation charge.
 **average** across the reported years that report dividends, clamped to 0–100%;
 years that report none are left out rather than counted as nil. No dividends
 reported anywhere means none forecast.
+
+**Its denominator is the net income the forecast actually has.** Filed net income
+is after non-controlling interests and discontinued operations; the forecast's
+net income is pretax less tax and has neither, because nothing in the filing says
+what either would be in a future year. Measuring the ratio on filed net income
+and applying it to the forecast's was the same mismatch as the tax rate's: 55 of
+153 companies differ by more than a point on the two bases and 23 by more than
+five, BP by 3,238 points on a year when its filed net income all but vanished.
+The denominator is filed pretax income less filed tax, which is exactly what the
+line it is applied to contains.
 **Convention:** `CF 7` wants dividends projected as shares outstanding times an
 assumed dividend per share, not as a percentage of net income. This is a
 **departure**, made because no free source gives a forward dividend per share,

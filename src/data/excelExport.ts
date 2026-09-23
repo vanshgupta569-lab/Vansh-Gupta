@@ -698,9 +698,28 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       `-(${interestBasis('debtEnd', c, p)}*${c}${R.debtRate}+${c}${R.debtPik}+${interestBasis('revEnd', c, p)}*${c}${R.revRate})`,
     money()
   );
-  driver('other', 'Other income / (expense), net', null, (i) => at(M.otherIncomeExpense, i) ?? 0, money(), {
-    unit: UNIT,
-  });
+  // Everything between operating profit and pretax income except interest. A
+  // share of revenue rather than a typed amount, so it moves with the forecast
+  // the way every other line does, and so the tax rate below is applied to the
+  // base it was measured on.
+  driver(
+    'otherIncPct',
+    'Other income / (expense), % of revenue',
+    (c, _p, i) => (has(M.revenue, i) && has(M.otherIncomeExpense, i) ? `${c}${R.other}/${c}${R.rev}` : null),
+    (i) => {
+      const rev = at(M.revenue, i);
+      const other = at(M.otherIncomeExpense, i);
+      return isNum(rev) && isNum(other) && rev !== 0 ? other / rev : 0;
+    },
+    PCT1
+  );
+  line(
+    'other',
+    'Other income / (expense), net',
+    M.otherIncomeExpense,
+    (c) => `${c}${R.rev}*${c}${R.otherIncPct}`,
+    money()
+  );
   calc('pbt', 'Pretax profit', (c) => `${c}${R.ebit}+${c}${R.intInc}+${c}${R.intExp}+${c}${R.other}`, money(), {
     bold: true,
     indent: 0,

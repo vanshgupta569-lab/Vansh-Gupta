@@ -61,11 +61,10 @@ screen, the workbook and the verification harness — rather than each having to
 remember to check.
 
 **On the payload set of 2026-09-23 (176 files, 172 with statements, 169
-modelled, 64 valued) no company crosses 25% on a computed bound.** That is the honest result of applying
-the threshold, not an absence of machinery: the refusal path is wired and
-tested, and the constraints that could flatter a value are the ones the engine
-already refuses outright (below). Every other constraint measured either is
-small or runs only in the direction that understates.
+modelled, 63 valued) one company crosses 25% on a computed bound**: Enbridge, on
+what tax its non-operating income bore, at 31.8%. Every other constraint
+measured either is small, is bounded below 25%, or runs only in the direction
+that understates.
 
 ---
 
@@ -79,6 +78,7 @@ small or runs only in the direction that understates.
 | Total liabilities not tagged | both | 23 modelled | note; presentation only |
 | Bank dividends not split common/preferred | Yahoo | 18 modelled | **warn** |
 | How much of a year's growth an acquisition brought | both | 15 modelled | note or **warn** by bound; max 18.5% |
+| What tax the non-operating income bore | both | 64 modelled | note, **warn** or **refuse** by bound; max 31.8% |
 | Marketable securities not split short/long | both | 14 modelled | note or **warn** by bound; max 3.5% |
 | D&A that cannot be split from amortisation | both | 9 valued | note; max 3.8% |
 | A cost of debt that cannot be read | both | 5 modelled | note or **warn**; max 0.1% |
@@ -93,6 +93,7 @@ small or runs only in the direction that understates.
 | A reporting currency not stated, or stated two ways | both | 3 named | **refuse** |
 | A depreciation rate that cannot be measured | both | 3 named | **refuse** |
 | A claim on the group whose amount is not filed | both | 6 named | **refuse** |
+| The tax split between operating and non-operating income | both | 1 (ENB.TO) | **refuse** above 25% |
 | *Refused because the filing contradicts the model* | | | |
 | Revenue fell while the plant that produces it rose | both | 5 named | **refuse** (`KNOWN_ISSUES.md`, KI-11) |
 
@@ -135,6 +136,26 @@ against the filings.
 **Effect:** the payout ratio moves by roughly three points either way where the
 assumption is wrong. Residual income is not sensitive to it: the payout ratio
 changes how fast book equity compounds, not what it earns.
+
+### What tax the non-operating income bore
+
+**Source:** both. **Affects:** 64 of 169 modelled — 52 notes, 11 warnings and
+one refusal.
+
+The forecast tax rate is filed tax over filed pretax income, and filed pretax is
+operating profit, plus interest, plus other non-operating income. The forecast
+carries all three (`METHODOLOGY.md` §5), so the rate is applied to the base it
+was measured on. What no filing separates in a readable form is **how the tax
+was split between them** — the rate reconciliation that would say so is a
+narrative note, not a tagged figure. It matters because the discounted cash flow
+applies that rate to operating profit alone.
+
+**Bound:** the two ends the filing leaves open. At one end the non-operating
+income was taxed like everything else, which is the rate shown; at the other it
+bore no tax at all and the operating profit carried the whole charge. Enbridge
+31.8% (refused), Alibaba 23.8%, AbbVie 22.5%, Siemens 18.8%, Marvell 16.0%,
+Shell 15.8%, Toyota 11.3%. For 52 companies the non-operating income is small
+enough that the two ends are within 5% of each other.
 
 ### How much of a year's revenue growth was bought
 
