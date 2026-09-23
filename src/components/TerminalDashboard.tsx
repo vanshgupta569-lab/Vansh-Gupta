@@ -27,6 +27,8 @@ import { CompsPanel } from './compsPanel';
 import { AssetPanel } from './assetPanel';
 import { ResidualIncomePanel } from './residualIncomePanel';
 import { DataConstraintBanner, DataConstraintPanel } from './dataConstraintPanel';
+import { TerminalReliancePanel } from './terminalReliancePanel';
+import { terminalReliance } from '../data/terminalReliance';
 import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
@@ -1611,6 +1613,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             currencySymbol={company.currencySymbol}
           />
         )}
+        {/* HOW MUCH OF THE VALUE IS THE PART NOBODY MODELLED. Shown before the
+            working rather than buried inside it: a reader who stops here should
+            still know what the headline rests on. */}
+        {activeSource && dcfResult.applicable !== false && (
+          <TerminalReliancePanel
+            reliance={terminalReliance(buildFullModel(activeSource, drivers).dcf, activeSource)}
+            currencySymbol={company.currencySymbol}
+            value={isNum(dcfResult.targetPrice) && dcfResult.targetPrice > 0 ? dcfResult.targetPrice : null}
+          />
+        )}
+
         {/* The whole list, including what cannot move a value, next to the
             figures someone checking the model will be reading. */}
         <DataConstraintPanel constraints={company.dataConstraints ?? []} />

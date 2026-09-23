@@ -309,9 +309,12 @@ for (const sc of scenarios) {
     if (!close(v(R.ebit), filed)) problems.push(`reported ${FY(i)} EBIT ${v(R.ebit)} != revenue + filed costs ${filed}`);
   }
   {
-    const dRow = (label: string) => g.DCFModel.findIndex((r) => r[2] === label);
+    const dRow = (label: string | RegExp) =>
+      g.DCFModel.findIndex((r) =>
+        typeof label === 'string' ? r[2] === label : label.test(String(r[2] ?? ''))
+      );
     const ser = (label: string) => Array.from({ length: nT - nH }, (_, t) => num('DCFModel', dRow(label), FIRST + t));
-    const one = (label: string) => num('DCFModel', dRow(label), FIRST);
+    const one = (label: string | RegExp) => num('DCFModel', dRow(label), FIRST);
     const ebit = ser('EBIT'), tax = ser('Tax rate'), da = ser('Plus: depreciation & amortization'), sbc = ser('Plus: stock based compensation');
     const wcs = ser('Movements in working capital'), capex = ser('Less: capital expenditure'), period = ser('Discount period, years from the valuation date');
     const W = one('Weighted average cost of capital'), gr = one('Long term growth rate (g)');
@@ -340,6 +343,49 @@ for (const sc of scenarios) {
     const vps = (pv + ((norm * (1 + gr)) / (W - gr)) * (1 + W) ** -period[k] - one('Net debt') - one('Less: minority interests at the last reported date') - one('Less: preferred stock at the last reported date')) / one('Net diluted shares outstanding');
     if (!close(vps, one('Value per share, perpetuity growth'))) problems.push(`DCF value per share ${one('Value per share, perpetuity growth')} vs recomputed ${vps}`);
     console.log(`  DCF value per share: sheet ${one('Value per share, perpetuity growth').toFixed(4)}, recomputed from its cells ${vps.toFixed(4)}`);
+
+    // ---- what the sheet says rests on the terminal value -------------------
+    //
+    // The disclosure rows are live formulas, so they are checked the same way
+    // as the value itself: against the engine, not against each other.
+    const tvPv = ((norm * (1 + gr)) / (W - gr)) * (1 + W) ** -period[k];
+    const nF2 = nT - nH;
+    const share = pv + tvPv === 0 ? 0 : tvPv / (pv + tvPv);
+    if (!close(share, one('Share of enterprise value beyond the forecast'))) {
+      problems.push(`terminal share ${one('Share of enterprise value beyond the forecast')} vs recomputed ${share}`);
+    }
+    // The benchmark: the same two rates, the same window, a flat cash flow.
+    const annuity = (1 - (1 + W) ** -nF2) / W;
+    const tvUnit = ((1 + gr) / (W - gr)) * (1 + W) ** -nF2;
+    const bench = tvUnit / (annuity + tvUnit);
+    const sheetBench = one(/What any \d+-year forecast at this discount rate would put beyond it/);
+    if (!close(bench, sheetBench)) problems.push(`terminal benchmark ${sheetBench} vs recomputed ${bench}`);
+
+    // One assumption moved, everything else held — against the engine's own
+    // sensitivity grid, which is what the site shows.
+    // Only against the UNPERTURBED scenario: the engine's grid was built from
+    // the model as derived, and the sweeps deliberately move drivers in the
+    // sheet, so the two would rightly disagree there.
+    const axes = D.sensitivityAxes, grid = D.sensitivity?.perpetuity;
+    if (axes && grid && sc.name === 'A switch OFF') {
+      const midW = Math.floor((axes.wacc.length - 1) / 2);
+      const midG = Math.floor((axes.growth.length - 1) / 2);
+      const pairs: [string, number][] = [
+        ['Value per share, growth after the forecast 1 point lower', grid[midW][0]],
+        ['Value per share, growth after the forecast 1 point higher', grid[midW][axes.growth.length - 1]],
+        ['Value per share, discount rate half a point lower', grid[1][midG]],
+        ['Value per share, discount rate half a point higher', grid[axes.wacc.length - 2][midG]],
+      ];
+      for (const [label, expected] of pairs) {
+        const got = one(label);
+        if (!close(got, expected)) problems.push(`${label}: sheet ${got} vs engine grid ${expected}`);
+      }
+      console.log(
+        `  terminal share ${(share * 100).toFixed(1)}% against a ${(bench * 100).toFixed(1)}% benchmark; ` +
+          `growth 1pt either way ${grid[midW][0].toFixed(2)} to ${grid[midW][axes.growth.length - 1].toFixed(2)}, ` +
+          `WACC half a point either way ${grid[1][midG].toFixed(2)} to ${grid[axes.wacc.length - 2][midG].toFixed(2)} -- confirmed`
+      );
+    }
   }
   console.log(`  forecast years with PIK > 1: ${pikNonZero}`);
 

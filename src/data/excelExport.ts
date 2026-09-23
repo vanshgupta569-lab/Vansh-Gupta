@@ -1417,7 +1417,72 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
   vOne(58, 'Premium / (discount) to the perpetuity value', `${F}57/${F}56-1`, PCT1, { bold: true, indent: 0, unit: '%' });
 
+  // ---- HOW MUCH OF THIS RESTS ON THE TERMINAL VALUE -----------------------
+  //
+  // A five-year window at these rates leaves most of the value beyond it for
+  // any going concern; row 64 is what a company with a flat cash flow would
+  // show at the same discount rate and the same perpetual growth, so a reader
+  // can tell the ordinary shape of a DCF from a company where something else is
+  // going on. Rows 66 to 69 move one assumption at a time and hold everything
+  // else, computed live from the rows above rather than pasted from the site.
+  band(V, 60, 'How much of this rests on the terminal value', OXBLOOD, WHITE, fLast);
+  vOne(61, 'Present value of the modelled years', `${F}30`, money(), { cross: true });
+  vOne(62, 'Present value of the terminal value', `${F}36`, money(), { cross: true });
+  vOne(63, 'Share of enterprise value beyond the forecast', `${F}36/${F}37`, PCT1, {
+    bold: true,
+    indent: 0,
+    unit: '%',
+  });
+  vOne(
+    64,
+    `What any ${nF}-year forecast at this discount rate would put beyond it`,
+    `(((1+${F}33)/(${F}26-${F}33))*(1+${F}26)^-${nF})/((1-(1+${F}26)^-${nF})/${F}26+((1+${F}33)/(${F}26-${F}33))*(1+${F}26)^-${nF})`,
+    PCT1,
+    { unit: '%' }
+  );
+  vOne(65, 'Difference', `${F}63-${F}64`, PCT1, { unit: 'pts' });
+
+  // One assumption moved, everything else held. Not a margin of error: the two
+  // are not additive and the perpetuity formula is not symmetric, so each end
+  // is shown as the value it produces.
+  const perShareAtGrowth = (g: string) =>
+    `((${F}30+${F}34*(1+${g})/(${F}26-${g})*${L(fLast)}28)-${F}49-${F}50-${F}51)/${F}52`;
+  // Written out year by year rather than as SUMPRODUCT over a negated range,
+  // which does not evaluate: the forecast is five columns, so the explicit sum
+  // is both safe and readable in the cell.
+  const perShareAtWacc = (w: string) => {
+    const discounted = years
+      .slice(nH)
+      .map((_, i) => `${L(fCol(i))}16*(1+${w})^-${L(fCol(i))}27`)
+      .join('+');
+    return (
+      `((${discounted}+${F}34*(1+${F}33)/(${w}-${F}33)*(1+${w})^-${L(fLast)}27)` +
+      `-${F}49-${F}50-${F}51)/${F}52`
+    );
+  };
+  vOne(66, 'Value per share, growth after the forecast 1 point lower', perShareAtGrowth(`(${F}33-0.01)`), money2(currencySymbol), {
+    unit: `${currencySymbol}/sh`,
+  });
+  vOne(67, 'Value per share, growth after the forecast 1 point higher', perShareAtGrowth(`(${F}33+0.01)`), money2(currencySymbol), {
+    unit: `${currencySymbol}/sh`,
+  });
+  vOne(68, 'Value per share, discount rate half a point lower', perShareAtWacc(`(${F}26-0.005)`), money2(currencySymbol), {
+    unit: `${currencySymbol}/sh`,
+  });
+  vOne(69, 'Value per share, discount rate half a point higher', perShareAtWacc(`(${F}26+0.005)`), money2(currencySymbol), {
+    unit: `${currencySymbol}/sh`,
+  });
+
   [
+    'Row 63 is not a fault to be corrected. Five modelled years are a small annuity beside a perpetuity, so most of the',
+    'value of any going concern sits beyond the window: row 64 is what that share would be for a company whose cash flow',
+    'never changes, at this same discount rate. A figure close to it is the shape of a discounted cash flow; a figure well',
+    'above it means the modelled years are contributing less than they usually would, and is worth asking about.',
+    '',
+    'Rows 66 to 69 move one assumption and hold the rest. They are not a margin of error and the ends are not equally',
+    'likely; the two ranges are not additive, and a point off the growth rate does not move the answer as far as a point',
+    'on it, which is why each end is shown as a value rather than as a single plus-or-minus.',
+    '',
     'The two terminal methods are shown separately and never averaged. A wide spread (row 55) is information, not noise:',
     'an exit multiple well above the perpetuity value means the multiple prices in growth these cash flows do not produce,',
     'and one well below it means the cash flows are worth more than the market pays for businesses like this.',
@@ -1427,8 +1492,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'With the circularity switch off, interest is charged on opening balances rather than average balances, so nothing',
     'computes circularly. The difference to the answer is small. See Model settings on the 3-statement model sheet.',
   ].forEach((text, i) => {
-    V.getCell(60 + i, 3).value = text;
-    V.getCell(60 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
+    V.getCell(71 + i, 3).value = text;
+    V.getCell(71 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
   });
 
   // =========================================================================

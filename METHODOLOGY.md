@@ -1010,6 +1010,40 @@ Two five-by-five grids: WACC against terminal growth for the perpetuity method,
 WACC against the exit multiple for the other, each re-running the whole
 valuation rather than scaling the headline.
 
+### How much of the value is beyond the forecast
+
+`src/data/terminalReliance.ts`, shown on every valuation and carried in the
+workbook at DCF rows 60 to 69.
+
+**The level is arithmetic, not a judgement about the company.** Five discounted
+years are a small annuity beside a perpetuity: at an 8% discount rate and 2.5%
+perpetual growth, about three quarters of the value of *any* going concern sits
+beyond a five-year window. So the panel shows the share **and the benchmark** —
+what a company whose cash flow never changes would show at this company's own
+discount rate and terminal rate — because the share alone tells a reader nothing
+about whether this model is unusual. Measured on 2026-09-23: median share 76.5%
+against a median benchmark of 73.8%, and 52 of 64 companies within five points
+of their own benchmark. More than ten points above it is called unusual, which
+three companies are (`KI-12`).
+
+**The sensitivity is shown as values, not as a margin.** Terminal growth a point
+either way and the discount rate half a point either way, each read off the
+sensitivity grid the engine already builds so the two can never disagree. Each
+end is printed as the value it produces rather than as a plus-or-minus: the
+perpetuity formula is not symmetric, so a point off the growth rate and a point
+on it move the answer by different amounts, and the two ranges are not additive.
+Figures are deliberately coarse — whole percentages for the share, no decimals
+on the benchmark — because a terminal value is the least precise thing in a
+valuation and printing it finely would say otherwise.
+
+**The forecast stays at five years.** `DCF 2` treats the length as a judgment
+call balancing forecast reliability against how much rests on the terminal
+value. Stretching the fade to seven years takes the median share to 69.1% and to
+ten years 59.6%, but raises the value for 52 of 64 companies — a median 3.2% and
+7.9%, up to 53.7% for the growth companies. A smaller terminal share bought by
+assuming a company stays above its steady state for longer is not a better
+model, so it was rejected.
+
 ---
 
 ## 14. The cost of capital

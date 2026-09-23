@@ -55,7 +55,7 @@ commit were measured on the payload set of that date and say so.
 
 | ID | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
-| KI-12 | Most of the value is the terminal year | 57 of 69 over 75% of EV, median 76.4% | Enbridge, 100.4% of EV: its explicit stage is worth less than nothing | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, Toyota -29.5%/+54.1% |
+| KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
 | KI-2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | KI-3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
@@ -68,37 +68,58 @@ commit were measured on the payload set of that date and say so.
 
 ---
 
-### KI-12. Most of the value is the terminal year
+### KI-12. Three companies rest on the terminal value far more than the arithmetic explains
 
-- **What is wrong.** The terminal value is a median **76.4%** of enterprise
-  value across the 69 valued companies, more than 75% for 57 of them and more
-  than 90% for two. A five-year forecast that contributes a fifth of the answer
-  is a one-year capitalisation wearing a DCF's clothes, and every figure that
-  touches the terminal year moves the whole valuation while five years of
-  modelled trading barely register.
-- **Where.** `src/engine/model.js` (`buildDCF`, the perpetuity terminal value);
-  the drivers that set the explicit years are in `src/data/deriveModel.js`.
+- **What is wrong.** Not the level. Across the 64 valued companies the terminal
+  value is a median 76.5% of enterprise value, and **52 of them are within five
+  points of what the arithmetic of a five-year window requires**: five
+  discounted years are a small annuity beside a perpetuity, so a company with a
+  flat cash flow at the same discount rate and the same perpetual growth would
+  show a median 73.8%. The gap between actual and that benchmark has a median of
+  **2.0 points**. What is wrong is the tail — three companies sit more than ten
+  points above it, and one of those has an explicit stage worth less than
+  nothing, so its five modelled years contribute nothing at all to the answer.
+- **Where.** `src/engine/model.js` (`buildDCF`); the drivers that set the
+  explicit years are in `src/data/deriveModel.js`.
 - **How measured.** Present value of the explicit years against the present
-  value of the perpetuity terminal value, per company.
-- **Affects.** 57 of 69 valued companies take more than 75% of enterprise value
-  from the terminal value, 2 more than 90%, and 1 more than 100% because its
-  explicit stage is worth less than nothing.
+  value of the perpetuity terminal value, per company, each compared with the
+  benchmark a flat cash flow would give at that company's own WACC and terminal
+  rate. At `6e70dca` on the payloads of 2026-09-23.
+- **Affects.** 3 of 64: Enbridge (121.7% of enterprise value against a 75.7%
+  benchmark, 45.9 points), Micron (95.7% against 73.5%) and Reliance Industries
+  (84.0% against 73.8%). 52 of 64 are within five points of their benchmark.
 - **Worst example.** Enbridge: every explicit year's unlevered cash flow is
-  negative, so the explicit stage is worth less than nothing and the terminal
-  value is 100.4% of enterprise value.
-- **Value moved.** One point of terminal growth either side of 2.5%: Enbridge
-  -61.3% / +91.5%, Toyota -29.5% / +54.1%, BP -20.8% / +31.9%, TotalEnergies
-  -16.9% / +25.0%. Half a point of WACC: Enbridge -37.1% / +44.6%, Toyota
-  -19.7% / +26.4%.
-- **The other half of this entry is fixed.** Until 2026-09-23 the terminal year
-  was also a step change from the forecast — the normalised cash flow was
-  outside half to twice the last explicit year's for 7 of 69 companies, Enbridge
-  at -49.34x and Toyota at 8.07x. Fading the growth rate to the terminal rate
-  (`KI-13`, fixed) closed it: **no company is now outside that range**, and the
-  whole population sits between 0.83x and 1.65x. What remains is the dominance,
-  not the discontinuity. The sensitivity above is **larger** than it was, not
-  smaller, because the terminal growth rate now sets the shape of the forecast
-  as well as the value beyond it.
+  negative, so the modelled years are worth less than nothing and the terminal
+  value is more than the whole enterprise value. Its growth rate is
+  acquisition-inflated, which is warned about separately
+  (`DATA_CONSTRAINTS.md`).
+- **Value moved.** One point of terminal growth either side of 2.5% moves the
+  median company -13.8% / +19.5%, and Enbridge -61.3% / +91.5%. Half a point of
+  WACC moves the median -7.8% / +9.2%, Enbridge -37.1% / +44.6%. Three companies
+  move more than 25% on the growth rate alone.
+
+**The level is a fact and is now disclosed, not buried.** Every valuation
+carries a panel saying how much of it is what happens after the forecast, with
+the benchmark beside it so a reader can tell the ordinary shape of a DCF from a
+company where something else is going on, and with the value at each end of a
+stated range for the two assumptions that carry it — terminal growth a point
+either way, the discount rate half a point either way. The ranges are shown as
+values rather than as a plus-or-minus, because the perpetuity formula is not
+symmetric and the two are not additive. The workbook carries the same rows,
+computed live from its own cells (DCF sheet rows 60 to 69), and the scenario
+suite checks them against the engine's own sensitivity grid.
+
+**Running the forecast longer was measured and rejected.** `CONVENTIONS.md`
+DCF 2 treats the length as a judgment call balancing forecast reliability
+against how much weight rests on the terminal value, and five to seven is its
+usual range. Stretching the fade to seven years lowers the median terminal share
+from 76.5% to 69.1%, and to ten years 59.6% — but it **raises** the value for 52
+of the 64, by a median 3.2% at seven years and 7.9% at ten, and by up to 53.7%
+at ten (Novo Nordisk, Nvidia, MercadoLibre, Broadcom, Arista, Palantir, all
+growth companies). That is not rebalancing where the value sits; it is assuming
+the company stays above its steady state for longer, on no evidence, and
+handing the result a smaller terminal share as cover. The forecast stays at
+five years.
 
 ### KI-11. Revenue is a weak proxy for plant in a company whose revenue fell much faster than its plant
 
