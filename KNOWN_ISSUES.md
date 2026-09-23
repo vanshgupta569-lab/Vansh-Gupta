@@ -56,7 +56,7 @@ commit were measured on the payload set of that date and say so.
 | ID | Issue | Companies | Worst example | Value moved |
 |---|-------|-----------|---------------|-------------|
 | KI-12 | Most of the value is the terminal year | 57 of 69 over 75% of EV, median 76.4% | Enbridge, 100.4% of EV: its explicit stage is worth less than nothing | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, Toyota -29.5%/+54.1% |
-| KI-11 | Forecast capital spending assumes revenue measures the size of the plant | 23 of 69 more than 50% from their own filed ratio in year one | Shopify 3.95x against 0.70x filed; Saudi Aramco 0.06x against 1.82x | not isolated; sets the explicit-stage cash flow and the terminal asset base |
+| KI-11 | Capital spending follows the revenue forecast, which is what is wrong for a price taker or a serial acquirer | 23 of 69 more than 50% from their own filed ratio in year one | Shopify 3.95x against 0.70x filed; Saudi Aramco 0.06x against 1.82x | not isolated; six bounds measured and rejected, see the entry |
 | KI-2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | KI-3 | Forecast tax rate is a filed ratio applied to a different pretax figure | 18 valued with >10% non-operating pretax | AbbVie, non-operating items -128.5% of filed pretax | ~1.2% of value per point of tax rate |
 | KI-4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
@@ -100,43 +100,89 @@ commit were measured on the payload set of that date and say so.
   smaller, because the terminal growth rate now sets the shape of the forecast
   as well as the value beyond it.
 
-### KI-11. Forecast capital spending assumes revenue measures the size of the plant
+### KI-11. Capital spending follows the revenue forecast, and for a price taker or a serial acquirer the revenue forecast is what is wrong
 
 - **What is wrong.** Growth capital spending is the change in revenue times the
-  company's own net PP&E over revenue (`METHODOLOGY.md` §7). That holds where
-  revenue moves with volume. It fails where revenue moves for another reason: an
-  oil major whose revenue falls with the crude price is modelled as releasing
-  plant it has not sold, and a pipeline that bought a gas utility has the
-  acquired revenue treated as organic and builds two units of plant for every
-  unit of it. The ratio is stable enough for a manufacturer and a utility, and
-  not for a price taker or a serial acquirer.
-- **Where.** `src/data/deriveModel.js` (`ppeToRevenue`); `src/engine/model.js`
-  (the PP&E schedule's `maintenancePlusGrowth` branch).
+  company's own net PP&E over revenue (`METHODOLOGY.md` §7). Where the revenue
+  forecast is implausible, the capital spending it implies is implausible with
+  it: Saudi Aramco is modelled spending **0.06 times depreciation** in the first
+  forecast year against the 1.54 to 2.06 times it has filed, because its revenue
+  is modelled falling 7.2%; Enbridge spends **5.73 times** against a filed 1.06
+  to 1.62, because its revenue is modelled rising 21.9% off two acquisition
+  years. The rule is doing what it is told. What it is told is the problem.
+- **Where.** `src/data/deriveModel.js` (`ppeToRevenue`, and the revenue growth
+  rate that drives it); `src/engine/model.js` (the PP&E schedule's
+  `maintenancePlusGrowth` branch).
 - **How measured.** Forecast capital spending over depreciation against the same
-  ratio averaged across the company's reported years, in the **first** forecast
-  year and in the **last**. Both are quoted because the growth fade (`KI-13`,
-  fixed) acts on the later years only: year one still grows at the rate measured
-  from history.
-- **Affects.** In year one, 23 of 69 valued companies are more than 50% from
-  their own filed ratio and 6 are more than twice out. In the last forecast
-  year, 18 of 69 and **1**.
-- **Worst example.** Year one: Shopify 3.95x against 0.70x filed, Enbridge 5.73x
-  against 1.28x, Broadcom 2.21x against 0.91x; running the other way, Saudi
-  Aramco 0.06x against 1.82x and TotalEnergies 0.17x against 1.20x.
+  ratio averaged across the company's reported years, in the first forecast year
+  and the last.
+- **Affects.** 23 of 69 valued companies are more than 50% from their own filed
+  ratio in year one, 6 more than twice out, median gap 31%. In the last forecast
+  year, 18 of 69 and 1, median gap 32%. 40 of 69 sit outside the range they have
+  actually filed: 27 below the lowest, 13 above the highest.
+- **Worst example.** Under-spending: Saudi Aramco 0.06x against 1.82x filed,
+  TotalEnergies 0.17x against 1.20x, Shell 0.21x against 0.93x, Texas
+  Instruments 0.96x against 3.23x. Over-spending: Shopify 3.95x against 0.70x,
+  Enbridge 5.73x against 1.28x, Broadcom 2.21x against 0.91x.
 - **Value moved.** Not isolated, and it cannot be: it sets both the explicit
   years' cash flow and the size of the asset base that reaches the terminal
   year.
-- **The extremes are largely gone.** Fading the growth rate stopped the
-  companies whose revenue was modelled as collapsing from spending almost
-  nothing on plant. In the last forecast year, capital spending against
-  depreciation: TotalEnergies 0.23x to **1.19x** against 1.20x filed, Shell
-  0.25x to 1.18x against 0.93x, BP 0.50x to 1.15x against 0.85x, Equinor 0.53x
-  to 1.12x against 1.16x, and Saudi Aramco from spending **nothing at all** to
-  1.30x against 1.82x. Enbridge comes down from 2.58x to 1.57x. What the fade
-  does not fix is the anchor itself: the median gap to the filed ratio is
-  unchanged at about a third, because a faded forecast pushes every company
-  towards replacement-plus-a-little while the ratios they actually file vary
-  widely.
+
+**Six fixes were measured on 2026-09-23 and every one was rejected.** They are
+recorded here so none is proposed again. All were measured at `87ba00e` over the
+69 valued companies, against four tests: the year-one and final-year gap to the
+company's own filed capex-to-depreciation ratio, how far the asset base ends
+from its own average capital intensity, whether the normalised terminal cash
+flow stays within half to twice the last explicit year (`KI-12`), and — the test
+that decided it — whether the asset base ends **inside the capital intensity the
+company has actually filed**.
+
+| Rule | yr1 >50% | last >50% | drift >10% | drift >25% | step outside | outside own filed range |
+|---|---|---|---|---|---|---|
+| **today** | 23 | 18 | 27 | 5 | **0** | **0** |
+| floor at the lowest filed multiple | 14 | 8 | 37 | 18 | 5 | 22 |
+| bounded by the filed multiples | **2** | **2** | 41 | 26 | 5 | 32 |
+| bounded by filed capex / revenue | 8 | 12 | 41 | 23 | 2 | 19 |
+| the filed plant-to-revenue slope | 24 | 24 | 51 | 27 | 3 | 43 |
+| that slope, capped at intensity | 22 | 23 | 46 | 17 | 0 | 30 |
+| base held in the filed intensity band | 23 | 18 | 27 | **4** | 0 | 0 |
+| filed multiples, then that band | 15 | 18 | 31 | 9 | 0 | 0 |
+| filed floor fading to 1x depreciation | 14 | 24 | 34 | 10 | 0 | 10 |
+| filed band fading to 1x depreciation | **2** | 24 | 39 | 19 | 0 | 22 |
+
+**Why the last column decided it.** Under today's rule **every one of the 69
+companies ends the forecast inside the capital intensity it has actually
+carried**. Every rule that bounds the spending pushes 10 to 32 of them outside
+it. The asset base is what the terminal value is taken on, and the terminal
+value is three quarters of the answer (`KI-12`), so a rule that makes the annual
+spending look more familiar while putting the base somewhere the company has
+never been is a worse model, not a better one.
+
+**What the floor would have bought, and cost.** It fixes the named cases
+handsomely — Saudi Aramco from -97% to -15% of its filed ratio, TotalEnergies
+-86% to -5%, Shell -78% to -8%, BP -59% to -13%, Texas Instruments -70% to -27%
+— for 20 of 69 companies moving more than 5% in value, TotalEnergies -33%. But
+the worst capital-intensity drift goes from 38% to 238%, the normalised terminal
+cash flow leaves the half-to-twice band for 5 companies (range -2.27x to
+11.06x), and 22 companies end outside the intensity they have filed. It fails
+because a filed multiple of depreciation is what a company spent **while growing
+at the rate it was growing then**, and the forecast now fades to a 2.5% steady
+state where the multiple should be one. Fading the floor to 1x fixes the step
+and halves the drift cost, and still puts 10 companies outside their own range
+for a year-one gap no better than the plain floor.
+
+**Applying the intensity band after the floor**, so the base can never leave its
+filed range, was tried and makes the headline cases **worse**: Saudi Aramco and
+TotalEnergies go to -100%, because a falling revenue line drags the top of the
+band down faster than the floor pushes spending up.
+
+**Where that leaves it.** The capital spending rule is internally coherent and
+the asset base it produces is the one measurement that never leaves the
+company's own history. Both tails of this entry trace to the revenue forecast
+instead: Aramco's to the growth clamp still binding for a price taker whose
+window straddles a price peak, Enbridge's to a median that picks an
+acquisition-driven year. The fix belongs at the revenue line, not at the capital
+spending line, and it is not a bound — a bound was measured six ways.
 
 ### KI-2. No stated discounting convention; timing runs from the fetch date
 

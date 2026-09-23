@@ -632,6 +632,19 @@ year's capital spending.
 Where this treatment does not hold — a company whose revenue moves with a
 commodity price or an acquisition rather than with volume — is `KI-11`.
 
+**Bounding the spend was measured six ways and rejected**, on 2026-09-23: a
+floor at the lowest multiple of depreciation the company has filed, a symmetric
+bound on the same, a bound on capital spending over revenue, the company's own
+least-squares slope of plant against revenue in place of the levels ratio, that
+slope capped, and the filed bounds faded to one times depreciation. Each brings
+the annual spending closer to what the company files and each puts the asset
+base somewhere the company has never been: under the rule above, **all 69 valued
+companies end the forecast inside the capital intensity they have actually
+carried**, and every bound pushes 10 to 32 of them outside it. Three of the six
+also reopen the terminal step change (§13). The figures are in `KNOWN_ISSUES.md`
+under `KI-11`, which also records why the fault belongs to the revenue line
+rather than to this one.
+
 ### The depreciable base, and a missing opening balance
 
 The base is the solved base, not opening plus half of total spending: where
