@@ -440,6 +440,44 @@ function extractUSFact(facts, tagList, unitsSeen) {
   return merged;
 }
 
+/**
+ * The date each fiscal year actually ended, per year, read the same way the
+ * figures are.
+ *
+ * The fiscal YEAR is not the period end. Apple's 2025 ended on 27 September,
+ * Microsoft's on 30 June, Walmart's on 31 January 2026. Without the date every
+ * forecast year-end was assumed to be 31 December, so a non-calendar filer's
+ * cash flows were discounted over the wrong period, in the same direction every
+ * year.
+ *
+ * Read from the same tag list, in the same order of preference, so the date
+ * belongs to the figure that anchors the year.
+ */
+function extractPeriodEnds(facts, tagList) {
+  const merged = {};
+  for (const tag of tagList) {
+    const entry = facts['us-gaap']?.[tag];
+    if (!entry) continue;
+    const unitKey = Object.keys(entry.units || {})[0];
+    if (!unitKey) continue;
+    const thisTag = {};
+    for (const point of entry.units[unitKey]) {
+      if (!point.form?.startsWith('10-K') || !point.end) continue;
+      if (point.start) {
+        const days = (new Date(point.end) - new Date(point.start)) / 86400000;
+        if (days < 300 || days > 400) continue;
+      }
+      const year = Number(point.end.slice(0, 4));
+      if (!year) continue;
+      thisTag[year] = point.end;
+    }
+    for (const [year, end] of Object.entries(thisTag)) {
+      if (merged[year] === undefined) merged[year] = end;
+    }
+  }
+  return merged;
+}
+
 async function fetchFromSEC(ticker) {
   const match = await lookupCIK(ticker);
   if (!match) return null;
@@ -501,8 +539,11 @@ async function fetchFromSEC(ticker) {
 
   if (years.length === 0) return null;
 
+  // The date each of those years ended, from the same tags that anchored them.
+  const periodEnds = extractPeriodEnds(facts, US_TAGS.revenue);
+
   const statements = years.map((year) => {
-    const row = { fiscalYear: year };
+    const row = { fiscalYear: year, periodEnd: periodEnds[year] ?? null };
     for (const field of Object.keys(US_TAGS)) {
       const value = extracted[field][year];
       // Convert to millions — the engine and the Excel model both work in
@@ -708,6 +749,7 @@ async function fetchFromYahoo(symbol) {
   // date. Reshape that into { fieldName: { year: value } }, matching how the
   // SEC path already works.
   const byField = {};
+  const periodEnds = {};
   // Every currency code Yahoo stamps on a monetary figure, as a cross-check on
   // financialCurrency.
   const statementCurrencies = new Set();
@@ -719,6 +761,10 @@ async function fetchFromYahoo(symbol) {
       const raw = point.reportedValue?.raw;
       if (typeof raw !== 'number') continue;
       byField[ourName][Number(point.asOfDate.slice(0, 4))] = raw;
+      // asOfDate IS the period end date, not just its year. Kept for revenue,
+      // which is the field the year list is anchored on, so the forecast is
+      // timed from the date the company's year actually ends.
+      if (ourName === 'revenue') periodEnds[Number(point.asOfDate.slice(0, 4))] = point.asOfDate;
       if (!COUNT_FIELDS.has(ourName) && typeof point.currencyCode === 'string') {
         statementCurrencies.add(point.currencyCode);
       }
@@ -734,7 +780,7 @@ async function fetchFromYahoo(symbol) {
   if (years.length === 0) return null;
 
   const statements = years.map((year) => {
-    const row = { fiscalYear: year };
+    const row = { fiscalYear: year, periodEnd: periodEnds[year] ?? null };
     for (const field of Object.keys(YAHOO_FIELDS)) {
       const value = byField[field][year];
       if (typeof value !== 'number') {

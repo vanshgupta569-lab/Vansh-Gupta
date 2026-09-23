@@ -14,6 +14,10 @@
 // where each assumption came from rather than presenting it as fact.
 
 const FORECAST_YEARS = 5;
+// The rate the terminal value capitalises at, and the rate the forecast fades
+// to so it arrives there rather than stepping. One constant, because the two
+// have to be the same number or the join reopens.
+const TERMINAL_GROWTH = 0.025;
 
 // ---------------------------------------------------------------- helpers
 
@@ -30,6 +34,35 @@ function mean(values) {
 function clamp(value, low, high, fallback) {
   if (!isNum(value)) return fallback;
   return Math.min(high, Math.max(low, value));
+}
+
+// The middle of a set of figures. One unusual year cannot move it, which is
+// why the other-operating-costs line already used it and why the revenue growth
+// rate now does too.
+function median(values) {
+  const clean = values.filter(isNum).sort((a, b) => a - b);
+  if (!clean.length) return null;
+  const m = Math.floor(clean.length / 2);
+  return clean.length % 2 ? clean[m] : (clean[m - 1] + clean[m]) / 2;
+}
+
+// A straight line from `start` to `end` across n steps, inclusive at both ends:
+// the first forecast year grows at the rate measured from history and the last
+// at the rate the terminal value assumes for ever.
+function fadePath(start, end, n) {
+  if (n <= 1) return [end];
+  return Array.from({ length: n }, (_, k) => start + (end - start) * (k / (n - 1)));
+}
+
+// The same calendar date, n years on. A fiscal year that ended on 27 September
+// 2025 ends on 27 September 2026, give or take the few days a 52/53-week filer
+// shifts by, which nothing in the filing lets us predict.
+function advanceYears(iso, n) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  const year = y + n;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const day = m === 2 && d === 29 && !leap ? 28 : d;
+  return `${year}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 // Compound annual growth rate across the historical revenue line.
@@ -1061,13 +1094,31 @@ export function deriveModel(fetched) {
   // machine-readable from any free source. Capped either side: a company
   // growing 60% for three years will not do so for five more, and a shrinking
   // one should not be extrapolated into oblivion.
-  const rawGrowth = cagr(revenue);
+  //
+  // THE MIDDLE YEAR, NOT THE WHOLE PERIOD.
+  //
+  // It was the compound rate from the first reported year to the last, which is
+  // two observations however many years are in between: one unusual year at
+  // either end sets the entire forecast. TotalEnergies' window opens on the
+  // 2022 energy price spike and closes four years later, so its compound rate
+  // is -11.5% and the model took the clamp at -10% — a permanent decline read
+  // off one peak. The median of each year's growth is the same protection the
+  // other-operating-costs line already uses against a single year (the Boeing
+  // business-sale gain): a peak or a trough moves one observation of four
+  // rather than one endpoint of two.
+  const yearOnYear = revenue.map((rev, i) =>
+    i > 0 && isNum(rev) && isNum(revenue[i - 1]) && revenue[i - 1] > 0
+      ? rev / revenue[i - 1] - 1
+      : null
+  );
+  const rawGrowth = median(yearOnYear);
   const growth = clamp(rawGrowth, -0.10, 0.25, 0.03);
-  provenance.revenueGrowth = `${(growth * 100).toFixed(1)}% — trailing ${
-    revenue.filter(isNum).length
-  }-year compound growth${
-    isNum(rawGrowth) && rawGrowth !== growth ? ', capped' : ''
-  }`;
+  const measuredYears = yearOnYear.filter(isNum).length;
+  provenance.revenueGrowth =
+    `${(growth * 100).toFixed(1)}% in the first forecast year — the median of the ` +
+    `${measuredYears} year-on-year growth ${measuredYears === 1 ? 'rate' : 'rates'} in the reported history` +
+    `${isNum(rawGrowth) && rawGrowth !== growth ? ', capped' : ''}, then faded in a straight line to the ` +
+    `${(TERMINAL_GROWTH * 100).toFixed(1)}% the terminal value assumes for ever, reached in the last forecast year`;
 
   // MARGINS — the cheat sheet says to make a % margin assumption but does not
   // say which years to read it from. This model uses the LAST REPORTED YEAR,
@@ -1125,11 +1176,6 @@ export function deriveModel(fetched) {
     .filter(isNum);
   const lastOtherShare = shareOfLastRevenue(unexplainedOperatingCosts[rows.length - 1]) ?? 0;
   const otherIsIncome = lastOtherShare < 0;
-  const median = (xs) => {
-    const s = [...xs].sort((a, b) => a - b);
-    const m = Math.floor(s.length / 2);
-    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-  };
   const otherOperatingCostsMargin = !otherIsIncome
     ? lastOtherShare
     : Math.min(0, Math.max(lastOtherShare, median(otherShares)));
@@ -1282,7 +1328,20 @@ export function deriveModel(fetched) {
     otherOperatingCostsMargin: Array(FORECAST_YEARS).fill(otherOperatingCostsMargin),
     taxRate,
 
-    segmentGrowth: { 'Total revenue': Array(FORECAST_YEARS).fill(growth) },
+    // THE FORECAST ARRIVES AT THE STEADY STATE INSTEAD OF STEPPING INTO IT.
+    //
+    // Five years at one rate and then 2.5% for ever is two assumptions that
+    // contradict each other at the join: a company modelled as shrinking 10% a
+    // year became one growing 2.5% a year in the instant the forecast ended,
+    // with nothing in between. The rate now fades in a straight line from the
+    // measured one to the terminal one, so the last forecast year already grows
+    // at the rate the perpetuity continues.
+    //
+    // It is a rule rather than a list of rates because the terminal rate is a
+    // slider: the engine reads `dcf.longTermGrowthRate` when it builds the path,
+    // so moving that slider re-fades the forecast to meet it instead of leaving
+    // a step behind.
+    segmentGrowth: { 'Total revenue': { method: 'fadeToTerminal', start: growth } },
 
     // Non-recurring items are forecast as 0, per the cheat sheet.
     otherIncomeExpense: Array(FORECAST_YEARS).fill(0),
@@ -1345,10 +1404,25 @@ export function deriveModel(fetched) {
     interestRateOnCash: Array(FORECAST_YEARS).fill(0),
 
     consensusEPS: Array(FORECAST_YEARS).fill(null),
-    epsGrowth: Array(FORECAST_YEARS).fill(growth),
+    // The same fade, so the share price the buyback and issuance lines are
+    // struck at grows the way revenue does.
+    epsGrowth: fadePath(growth, TERMINAL_GROWTH, FORECAST_YEARS),
   };
 
   // ------------------------------------------------------------------- DCF
+
+  // THE DATE THE YEAR ACTUALLY ENDED, not the year it fell in.
+  //
+  // Every forecast year-end used to be 31 December, so a company whose year ends
+  // in June or September had its cash flows discounted over the wrong period, in
+  // the same direction every year. The fetcher now carries the period end
+  // (api/company.js); an older payload has none, and then the old assumption
+  // stands and says so.
+  const filedPeriodEnd = typeof rows[rows.length - 1]?.periodEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rows[rows.length - 1].periodEnd)
+    ? rows[rows.length - 1].periodEnd
+    : null;
+  const periodEndFiled = filedPeriodEnd !== null;
+  const lastPeriodEnd = filedPeriodEnd ?? `${lastYear}-12-31`;
 
   const price = fetched.quote?.price ?? null;
   const shares = isNum(rows[rows.length - 1]?.dilutedShares)
@@ -1531,7 +1605,7 @@ export function deriveModel(fetched) {
     // Reported beside net debt, never inside it (see netDebt above).
     longTermSecurities: lastLongTermSecurities,
 
-    longTermGrowthRate: 0.025,
+    longTermGrowthRate: TERMINAL_GROWTH,
     exitEbitdaMultiple: 12,
 
     terminalCapexTreatment: 'capexEqualsDepreciation',
@@ -1558,7 +1632,9 @@ export function deriveModel(fetched) {
     },
   };
 
-  provenance.terminalGrowth = '2.5% — a flat default, not company-specific';
+  provenance.terminalGrowth =
+    `${(TERMINAL_GROWTH * 100).toFixed(1)}% — a flat default, not company-specific. The forecast growth ` +
+    'rate fades to it, so the last forecast year and the perpetuity beyond it grow at the same rate';
   provenance.wacc = 'CAPM with a beta of 1.0 — no comparable set is derived';
   provenance.segments =
     'single combined revenue line — segment detail is not machine-readable from free sources';
@@ -1583,8 +1659,13 @@ export function deriveModel(fetched) {
       unitLabel: `${fetched.currencySymbol || '$'} millions`,
       historicalYears: years,
       forecastYears,
-      latestFiscalYearEnd: `${lastYear}-12-31`,
-      forecastYearEndDates: forecastYears.map((y) => `${y}-12-31`),
+      latestFiscalYearEnd: lastPeriodEnd,
+      forecastYearEndDates: forecastYears.map((_, i) => advanceYears(lastPeriodEnd, i + 1)),
+      // Whether those dates were read from the filing or assumed, so the screen
+      // and the data-constraint panel can say which.
+      fiscalYearEndSource: periodEndFiled
+        ? 'the last reported period end, as filed'
+        : 'assumed 31 December: the payload carries no period end date',
       daysInYear: 365,
       circuitBreaker: 'ON',
       sicCode: fetched.sicCode ? Number(fetched.sicCode) : null,

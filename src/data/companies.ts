@@ -198,11 +198,20 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
     const delta =
       (drivers.revenueGrowthPct - Number(defaults.revenueGrowthPct ?? 0)) / 100;
 
+    // A FADE IS RE-STRUCK FROM THE NEW STARTING RATE, NOT SHIFTED.
+    //
+    // Shifting every year of a fade by the same delta would move the last
+    // forecast year off the terminal rate and put back the step the fade exists
+    // to remove. The slider says what the company grows at NOW, so the fade is
+    // rebuilt from that rate to the same terminal rate.
+    const isFade = (rule: any) =>
+      rule && typeof rule === 'object' && !Array.isArray(rule) && rule.method === 'fadeToTerminal';
+
     // A segment can be set to a rule ('trailingTwoYearAverage') rather than a
-    // list of rates. There is nothing to shift in a rule, so the rule is run
+    // list of rates. There is nothing to shift in such a rule, so it is run
     // once on the untouched model and the rates it produces are shifted.
     const needsPath = Object.values(d.assumptions.segmentGrowth).some(
-      (rule) => !Array.isArray(rule)
+      (rule) => !Array.isArray(rule) && !isFade(rule)
     );
     const baseline: any = needsPath ? buildModel(source) : null;
     // forecastYears is the list of years being forecast, so its length is the
@@ -213,6 +222,10 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
 
     for (const seg of Object.keys(d.assumptions.segmentGrowth)) {
       const rule = d.assumptions.segmentGrowth[seg];
+      if (isFade(rule)) {
+        d.assumptions.segmentGrowth[seg] = { ...rule, start: rule.start + delta };
+        continue;
+      }
       const path: number[] = Array.isArray(rule)
         ? rule
         : (baseline.segmentGrowth?.[seg] ?? []).slice(

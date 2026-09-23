@@ -76,10 +76,33 @@ export function buildModel(data) {
     for (let t = 1; t < nH; t++) gr[t] = (rev[t] - rev[t - 1]) / rev[t - 1];
 
     const rule = a.segmentGrowth[name];
+    // A FADE ARRIVES AT THE STEADY STATE; A FLAT RATE STEPS INTO IT.
+    //
+    // Holding one rate for five years and then capitalising at the terminal
+    // rate makes two assumptions that contradict each other at the join: a
+    // company modelled as shrinking became one growing 2.5% a year in the
+    // instant the forecast ended. The fade runs in a straight line from the
+    // rate measured from history to the terminal rate, reaching it in the last
+    // forecast year, so the year being capitalised already grows at the rate
+    // the perpetuity continues.
+    //
+    // It reads the terminal rate from the DCF assumptions rather than carrying
+    // its own copy, so moving the terminal growth slider re-fades the forecast
+    // to meet it instead of leaving a step behind.
+    const fade =
+      rule && typeof rule === 'object' && !Array.isArray(rule) && rule.method === 'fadeToTerminal'
+        ? rule
+        : null;
+    const terminalGrowth = data.dcf?.longTermGrowthRate ?? 0.025;
     for (let t = nH; t < nH + nF; t++) {
-      gr[t] = rule === 'trailingTwoYearAverage'
-        ? avg([gr[t - 2], gr[t - 1]])
-        : rule[t - nH];
+      const k = t - nH;
+      gr[t] = fade
+        ? nF <= 1
+          ? terminalGrowth
+          : fade.start + (terminalGrowth - fade.start) * (k / (nF - 1))
+        : rule === 'trailingTwoYearAverage'
+          ? avg([gr[t - 2], gr[t - 1]])
+          : rule[k];
       rev[t] = rev[t - 1] * (1 + gr[t]);
     }
     S.segments[name] = rev;

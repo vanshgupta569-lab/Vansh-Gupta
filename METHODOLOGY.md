@@ -144,17 +144,23 @@ judgment call balancing forecast reliability against how much weight rests on
 the terminal value. How much weight actually rests there is in `KNOWN_ISSUES.md`
 (`KI-12`).
 
-**Forecast year-ends are assumed to be 31 December for every derived company.**
-The fetch does not carry the fiscal period end date, only the fiscal year, so
-the derivation writes `${year}-12-31` for each forecast year and for the last
-reported year-end. The curated Apple file carries its real dates (27 September
-2025, then 30 September 2026 and so on). For a non-December filer the discount
-periods in §13 are therefore wrong by up to a few months in the same direction
-every year. How many companies are affected cannot be counted from the frozen
-payloads, because the end date is not in them; the size of the error can be.
-Re-dating every forecast year-end to 30 September, a quarter earlier, raises the
-perpetuity value by a median 2.21% across the 69 valued companies (range 1.80%
-to 6.20%, 64 of them by more than 2%). That is `KI-14`.
+**Forecast year-ends come from the date the company's year actually ended.**
+The fetcher carries the period end of each reported year — the SEC's `end` on
+the fact that anchors the year, Yahoo's `asOfDate` — and the derivation takes
+the last reported one and advances it a year at a time, keeping the month and
+day. Apple's forecast years end on 27 September, Microsoft's on 30 June,
+Walmart's on 31 January. 59 of the 172 fetched companies have a non-calendar
+year end, so until 2026-09-23, when every one of them was discounted as though
+its year ended on 31 December, their cash flows were discounted over the wrong
+period in the same direction every year: correcting it raised the value of the
+30 affected valued companies by a median 6.1%, up to 9.5% (Home Depot, Dell,
+Walmart).
+
+A 52/53-week filer shifts by a few days each year and nothing in the filing
+predicts which, so the same month and day is as close as this gets — days,
+against the months it was out by before. A payload fetched before the date was
+carried has none, and then the old 31 December assumption stands and
+`meta.fiscalYearEndSource` says so.
 
 ---
 
@@ -289,18 +295,44 @@ net income, with a margin beside each subtotal, which is `IS 13`.
 ### Revenue
 
 **Reported:** as filed.
-**Forecast:** the last reported year grown at one rate, held flat for five
-years. The rate is the trailing compound growth across the reported years,
-**clamped to −10% and +25%**, falling back to 3% where it cannot be measured.
-The clamp exists because a company growing 60% for three years will not do so
-for five more, and a shrinking one should not be extrapolated into oblivion.
+**Forecast:** a starting rate that fades to the terminal rate.
+
+The **starting rate** is the **median of each year's growth**, clamped to −10%
+and +25%, falling back to 3% where it cannot be measured. The median rather than
+the compound rate across the whole period, because a compound rate is two
+observations however many years lie between them: one unusual year at either end
+sets the entire forecast. TotalEnergies' window opens on the 2022 energy price
+spike, so its compound rate was −11.5% and it took the clamp — a permanent
+decline read off a single peak. The median is the same protection the
+other-operating-costs line already uses against one freak year. It is not
+uniformly kinder: BP's median is −10.0% against a compound −7.8%, and Enbridge's
+is +21.9% against +6.9%, because the median follows the middle year rather than
+the endpoints.
+
+The rate then **fades in a straight line to the terminal growth rate**, reaching
+it in the last forecast year, so the year being capitalised already grows at the
+rate the perpetuity continues. Holding one rate flat and then capitalising at
+2.5% made two assumptions that contradicted each other at the join: a company
+modelled as shrinking 10% a year became one growing 2.5% a year in the instant
+the forecast ended. The engine reads the terminal rate from `dcf.longTermGrowthRate`
+when it builds the path, so moving that slider re-fades the forecast to meet it,
+and the revenue-growth slider re-strikes the fade from its new starting rate
+rather than shifting every year (§21).
+
+The clamp still exists because a company growing 60% for three years will not do
+so for five more, and a shrinking one should not be extrapolated into oblivion.
 **Convention:** `IS 3` (the growth assumption sits in its own cell and revenue
-is calculated off it) — followed. `IS 1` (revenue by stream) — **departed
+is calculated off it) — followed; the workbook carries one growth cell per
+forecast year, seeded with the faded rate. `IS 6` (the projection method is
+chosen from a defined menu and recorded) — followed; the median and the fade are
+both in `provenance.revenueGrowth`. `IS 1` (revenue by stream) — **departed
 from**: segment detail lives in filing footnotes and is not machine-readable
 from any free source, so a derived model runs on one combined revenue line and
 the dashboard says so. `IS 4` (sanity-check against an outside reference) —
-**not applicable**: there is no consensus or guidance feed. The clamp's effect
-is recorded as `KI-13`.
+**not applicable**: there is no consensus or guidance feed. The clamp still
+binds for the companies whose measured rate falls outside it, and for those the
+first forecast year is the clamp rather than the company; the fade means it no
+longer compounds for five years.
 
 ### Cost of sales
 
@@ -875,7 +907,11 @@ normalised FCF    = last year's unlevered CFO
 terminal value    = normalised FCF × (1 + g) / (WACC − g)
 ```
 
-with `g` a flat **2.5%** for every derived company.
+with `g` a flat **2.5%** for every derived company — and the same rate the
+explicit forecast fades to, so the last modelled year and the perpetuity beyond
+it grow at one rate rather than meeting at a step (§5). One consequence worth
+naming: because the terminal rate now shapes the forecast as well as the value
+beyond it, the valuation is *more* sensitive to it than before, not less.
 
 **Terminal capital spending equals depreciation of PP&E**, which is the steady
 state a pooled asset base sits in. The terminal year is normalised as though the
