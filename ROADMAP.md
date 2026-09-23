@@ -308,6 +308,9 @@ Engine and workbook work from September 2026, most recent first. Defect detail a
 
 | Commit | What |
 |---|---|
+| `5a2b858` | Forecast growth fades to the terminal rate from a median starting rate, and the forecast years run from the company's own fiscal year end. |
+| `ce0805f` | `METHODOLOGY.md` added: what the engine does, line by line. |
+| `7b5f7d8` | `DATA_CONSTRAINTS.md` added; KNOWN_ISSUES.md reduced to our own mistakes. |
 | `e52cdc6` | Capital spending split into replacement of what wears out and growth on the company's own capital intensity; `KNOWN_ISSUES.md` entries given permanent IDs. |
 | `4cdec07` | Forecast depreciation charged on the assets in service, not on the year's capital spending. |
 | `48c95b6` | The verification harness committed to `verify/`, runnable from a fresh checkout. |
