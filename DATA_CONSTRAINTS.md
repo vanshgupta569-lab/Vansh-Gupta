@@ -60,8 +60,8 @@ reaches every path that reads it — the dashboard on every slider move, the bat
 screen, the workbook and the verification harness — rather than each having to
 remember to check.
 
-**On the payload set of 2026-09-21 (176 fetched, 169 modelled, 69 valued) no
-company crosses 25% on a computed bound.** That is the honest result of applying
+**On the payload set of 2026-09-23 (176 files, 172 with statements, 169
+modelled, 64 valued) no company crosses 25% on a computed bound.** That is the honest result of applying
 the threshold, not an absence of machinery: the refusal path is wired and
 tested, and the constraints that could flatter a value are the ones the engine
 already refuses outright (below). Every other constraint measured either is
@@ -78,6 +78,7 @@ small or runs only in the direction that understates.
 | A price that must be converted | Yahoo | 46 modelled | note; no effect on value |
 | Total liabilities not tagged | both | 23 modelled | note; presentation only |
 | Bank dividends not split common/preferred | Yahoo | 18 modelled | **warn** |
+| How much of a year's growth an acquisition brought | both | 15 modelled | note or **warn** by bound; max 18.5% |
 | Marketable securities not split short/long | both | 14 modelled | note or **warn** by bound; max 3.5% |
 | D&A that cannot be split from amortisation | both | 9 valued | note; max 3.8% |
 | A cost of debt that cannot be read | both | 5 modelled | note or **warn**; max 0.1% |
@@ -92,6 +93,8 @@ small or runs only in the direction that understates.
 | A reporting currency not stated, or stated two ways | both | 3 named | **refuse** |
 | A depreciation rate that cannot be measured | both | 3 named | **refuse** |
 | A claim on the group whose amount is not filed | both | 6 named | **refuse** |
+| *Refused because the filing contradicts the model* | | | |
+| Revenue fell while the plant that produces it rose | both | 5 named | **refuse** (`KNOWN_ISSUES.md`, KI-11) |
 
 ---
 
@@ -132,6 +135,33 @@ against the filings.
 **Effect:** the payout ratio moves by roughly three points either way where the
 assumption is wrong. Residual income is not sensitive to it: the payout ratio
 changes how fast book equity compounds, not what it earns.
+
+### How much of a year's revenue growth was bought
+
+**Source:** both. **Affects:** 15 of 169 modelled, 5 of them above 5%.
+
+A year in which goodwill jumps is a year in which the company bought a business,
+and some of that year's revenue growth came with it. The forecast growth rate is
+the median of the company's year-on-year growth, and it reads an acquired year
+as an ordinary one.
+
+**The filing says the acquisition happened. It does not say how much revenue it
+brought**, and it says nothing at all about the following year, which carries
+twelve months of it against the first year's part year. Enbridge's FY2024 added
+4,752 of goodwill, 8.9% of that year's revenue, beside revenue growth of 22.5%;
+its FY2025 growth of 21.9% is the annualisation, with no goodwill jump to mark
+it. So the year is **not excluded** from the growth rate: excluding it would
+throw away the organic growth in that year too, and would still leave the
+annualisation in.
+
+**Bound:** what the value would be if the growth rate came from the years that
+carried no acquisition. That is an upper bound on the error, not an estimate,
+because it assumes none of the growth in those years was organic. Enbridge
+18.5%, Salesforce 10.5%, Siemens 3.5%, Broadcom 3.1%, Microsoft 0.8%. The bound
+is what separates them: Microsoft's Activision year barely moves its value and
+is a note; Enbridge's is a warning. A year is counted when the goodwill added is
+at least a twentieth of that year's revenue, below which an acquisition cannot
+have moved the growth rate much.
 
 ### Marketable securities the filing does not split
 
@@ -295,6 +325,6 @@ in figures rather than in principle.
 
 ---
 
-*Written against `e52cdc6` plus the constraint handling added 2026-09-22, on the
-payload set of 2026-09-21. Defects are in `KNOWN_ISSUES.md`; the engine is
+*Written against `e52cdc6` plus the constraint handling added 2026-09-22 and the
+acquisition constraint added 2026-09-23, on the payload set of 2026-09-23. Defects are in `KNOWN_ISSUES.md`; the engine is
 described in `METHODOLOGY.md`.*

@@ -321,6 +321,28 @@ rather than shifting every year (§21).
 
 The clamp still exists because a company growing 60% for three years will not do
 so for five more, and a shrinking one should not be extrapolated into oblivion.
+**A rate at the clamp is not the company's measurement**, it is the furthest this
+model will extrapolate, and `provenance.revenueGrowth` now says so and gives the
+measured figure beside it. It binds for 11 of the valued companies.
+
+**And the revenue line is checked against the plant that produces it.** Everything
+downstream assumes revenue measures the size of the business: growth capital
+spending is the change in revenue times the plant carried per unit of it (§7).
+Where the filing shows revenue **falling** across the reported years while net
+PP&E **rose**, that assumption is contradicted by the company's own balance
+sheet — it was visibly building while its revenue fell — and the model refuses
+(§16) rather than releasing plant the company is demonstrably buying, which
+would raise free cash flow and flatter the value. Five of 69 valued companies on
+the 2026-09-23 payloads: Saudi Arabian Oil, TotalEnergies, Equinor, Texas
+Instruments and Nestlé. The test has no threshold: it asks only whether the two
+moved opposite ways. Only that direction refuses — revenue rising while plant
+falls makes the model buy plant the company is shedding, which understates the
+value, and a conservative error is warned about rather than refused.
+
+How much of a company's growth was **bought** rather than earned is a data
+constraint, not a modelling choice: a goodwill jump says an acquisition
+happened, and nothing in the filing says how much revenue it brought. See
+`DATA_CONSTRAINTS.md`.
 **Convention:** `IS 3` (the growth assumption sits in its own cell and revenue
 is calculated off it) — followed; the workbook carries one growth cell per
 forecast year, seeded with the faded rate. `IS 6` (the projection method is
@@ -1139,18 +1161,19 @@ deepest one:
 | 5 | `nonCommonClaimNotReported` | a minority share of income with no readable balance, or preferred dividends with no preferred balance |
 | 6 | `filingMissingValuationInput` | cost of sales never reported, capital expenditure never reported, or fewer than two years of net PP&E |
 | 7 | `implausibleDepreciationRate` | no asset base in the last reported year; no measurable rate; a rate at or below zero; or a rate that depreciates the balance past nothing inside the forecast |
-| 8 | `dataConstraintTooLarge` | a figure the source never publishes whose absence could move the value per share by more than 25% (§23) |
-| 9 | `financialSector` | SIC 6000–6799, or a sector matching financial / bank / insurance / capital market / asset management / NBFC |
-| 10 | `negativeOperatingProfit` | operating profit at or below zero in any forecast year |
-| 11 | `terminalGrowthExceedsWACC` | terminal growth at or above the cost of capital |
-| 12 | `negativeTerminalCashFlow` | normalised terminal cash flow at or below zero |
-| 13 | *(no code)* | value per share not a positive finite number, or WACC not above terminal growth |
+| 8 | `revenueDoesNotMeasureTheBusiness` | revenue fell across the reported years while the net PP&E that produces it rose, so the assumption the forecast rests on is contradicted by the filing (§5) |
+| 9 | `dataConstraintTooLarge` | a figure the source never publishes whose absence could move the value per share by more than 25% (§23) |
+| 10 | `financialSector` | SIC 6000–6799, or a sector matching financial / bank / insurance / capital market / asset management / NBFC |
+| 11 | `negativeOperatingProfit` | operating profit at or below zero in any forecast year |
+| 12 | `terminalGrowthExceedsWACC` | terminal growth at or above the cost of capital |
+| 13 | `negativeTerminalCashFlow` | normalised terminal cash flow at or below zero |
+| 14 | *(no code)* | value per share not a positive finite number, or WACC not above terminal growth |
 
 Codes 1–5 are **integrity refusals**: no valuation of any kind is shown, not the
 DCF, not the market or asset approach, not residual income, not the reverse DCF.
 The rest refuse the DCF alone.
 
-A bank is refused by 9 and valued by residual income instead (§17), which is
+A bank is refused by 10 and valued by residual income instead (§17), which is
 gated separately on whether the **filed** balance sheet balances, because that
 is what residual income is built from. A bank's forecast usually cannot be
 computed at all — banks do not report cost of sales, capital expenditure or PP&E

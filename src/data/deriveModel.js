@@ -1114,10 +1114,14 @@ export function deriveModel(fetched) {
   const rawGrowth = median(yearOnYear);
   const growth = clamp(rawGrowth, -0.10, 0.25, 0.03);
   const measuredYears = yearOnYear.filter(isNum).length;
+  // A rate at the clamp is not this company's measurement, it is the furthest
+  // the model will extrapolate. Said plainly, because the figure on screen
+  // otherwise reads as something derived from the filing.
+  const atClamp = isNum(rawGrowth) && rawGrowth !== growth;
   provenance.revenueGrowth =
     `${(growth * 100).toFixed(1)}% in the first forecast year — the median of the ` +
     `${measuredYears} year-on-year growth ${measuredYears === 1 ? 'rate' : 'rates'} in the reported history` +
-    `${isNum(rawGrowth) && rawGrowth !== growth ? ', capped' : ''}, then faded in a straight line to the ` +
+    `${atClamp ? ` — capped: its own ${(rawGrowth * 100).toFixed(1)}% is beyond the furthest this model extrapolates, so the figure is the limit rather than the company's own` : ''}, then faded in a straight line to the ` +
     `${(TERMINAL_GROWTH * 100).toFixed(1)}% the terminal value assumes for ever, reached in the last forecast year`;
 
   // MARGINS — the cheat sheet says to make a % margin assumption but does not
@@ -1243,6 +1247,92 @@ export function deriveModel(fetched) {
         ? `. ${splitYears} of those years separate depreciation from amortisation of intangibles; the rest treat all D&A as depreciation`
         : '')
     : 'the filing reports no depreciation, so the rate is read from the movement in the PP&E balance instead, for the years that have an opening balance';
+
+  // ---- DOES REVENUE MEASURE THE SIZE OF THIS BUSINESS? --------------------
+  //
+  // Everything downstream of the revenue line assumes it does. Growth capital
+  // spending is the change in revenue times the plant this company carries per
+  // unit of it, so a revenue line that moves for some other reason — a
+  // commodity price, an acquisition — is read as the business changing size.
+  //
+  // THE FILING ANSWERS THE FIRST HALF OF THAT DIRECTLY. Where revenue FELL
+  // across the reported years while the net plant that produces it ROSE, the
+  // assumption is not approximately wrong for this company, it is contradicted
+  // by its own balance sheet: the company was visibly building while its
+  // revenue fell, so the fall was not a fall in the size of the business.
+  // Saudi Aramco's revenue fell 26.3% across its reported years while its net
+  // PP&E rose 22.0% and its capital spending rose 34.9%. Forecasting that
+  // revenue down releases plant the company is demonstrably buying, which
+  // raises free cash flow and flatters the value, so the model refuses.
+  //
+  // Only that direction is refused. Revenue rising while plant falls makes the
+  // model buy plant the company is shedding, which understates the value; an
+  // error that can only run conservative is warned about, not refused, which is
+  // the rule DATA_CONSTRAINTS.md applies throughout.
+  const firstReported = (field) => {
+    for (const r of rows) if (isNum(r[field])) return r[field];
+    return null;
+  };
+  const lastReported = (field) => {
+    for (let i = rows.length - 1; i >= 0; i--) if (isNum(rows[i][field])) return rows[i][field];
+    return null;
+  };
+  const revFirst = firstReported('revenue');
+  const revLast = lastReported('revenue');
+  const ppeFirst = firstReported('ppeNet');
+  const ppeLast = lastReported('ppeNet');
+  const revenueChange = isNum(revFirst) && revFirst > 0 && isNum(revLast) ? revLast / revFirst - 1 : null;
+  const plantChange = isNum(ppeFirst) && ppeFirst > 0 && isNum(ppeLast) ? ppeLast / ppeFirst - 1 : null;
+  const capexFirst = firstReported('capex');
+  const capexLast = lastReported('capex');
+  const spendChange = isNum(capexFirst) && capexFirst > 0 && isNum(capexLast) ? capexLast / capexFirst - 1 : null;
+  const pct = (v) => `${v >= 0 ? 'rose ' : 'fell '}${Math.abs(v * 100).toFixed(1)}%`;
+  const revenueNotAProxyRefusal =
+    revenueChange !== null && plantChange !== null && revenueChange < 0 && plantChange > 0
+      ? {
+          code: 'revenueDoesNotMeasureTheBusiness',
+          message:
+            `Across the reported years this company's revenue ${pct(revenueChange)} while the net property, plant ` +
+            `and equipment that produces it ${pct(plantChange)}` +
+            (spendChange !== null ? ` and its capital spending ${pct(spendChange)}` : '') +
+            `. The forecast reads a change in revenue as a change in the size of the business, and buys or releases ` +
+            `plant in proportion; this company's own balance sheet says the two moved opposite ways, so that reading ` +
+            `is contradicted for it. Forecasting the revenue down would release plant it is demonstrably building, ` +
+            `which raises free cash flow and would flatter the value, so none is shown. The reported figures below ` +
+            `are unaffected.`,
+          revenueChange,
+          plantChange,
+          spendChange,
+        }
+      : null;
+
+  // ---- AND HOW MUCH OF THE GROWTH WAS BOUGHT RATHER THAN EARNED? ----------
+  //
+  // A year in which goodwill jumps is a year in which the company bought a
+  // business, and some of that year's revenue growth came with it. The filing
+  // says an acquisition happened; it does not say how much revenue it brought,
+  // and it does not say anything at all about the following year, which carries
+  // twelve months of it against the first year's part-year. So the year is NOT
+  // excluded from the growth rate — excluding it would throw away the organic
+  // half too, and would still leave the annualisation in. It is named instead,
+  // and the reader is warned.
+  const acquisitionYears = [];
+  for (let i = 1; i < rows.length; i++) {
+    const before = rows[i - 1], now = rows[i];
+    if (!isNum(before.goodwill) || !isNum(now.goodwill) || !isNum(now.revenue) || !(now.revenue > 0)) continue;
+    const added = now.goodwill - before.goodwill;
+    // Material against the revenue it may have brought with it. Below a
+    // twentieth, an acquisition cannot have moved the growth rate much.
+    if (added > 0 && added / now.revenue >= 0.05) {
+      acquisitionYears.push({
+        year: now.fiscalYear,
+        goodwillAdded: added,
+        shareOfRevenue: added / now.revenue,
+        revenueGrowth:
+          isNum(before.revenue) && before.revenue > 0 ? now.revenue / before.revenue - 1 : null,
+      });
+    }
+  }
 
   // DIVIDENDS — the cheat sheet says to use the historical average payout ratio
   // (common dividends / net income). This replaces a linear regression through
@@ -1687,6 +1777,12 @@ export function deriveModel(fetched) {
       // from them (filedDepreciation above).
       depreciationBasis,
       filedDepreciationRate: isNum(filedDepreciationRate) ? filedDepreciationRate : null,
+      // Whether revenue measures the size of this business, and how much of its
+      // growth was bought. The first refuses the model; the second warns.
+      revenueNotAProxyRefusal,
+      revenueAgainstPlant: { revenueChange, plantChange, spendChange },
+      acquisitionYears,
+      revenueGrowthAtClamp: atClamp ? { measured: rawGrowth, used: growth } : null,
       // Minority interests and preferred stock, where each was read from, and
       // the refusal where the filing shows one exists but not its amount.
       otherClaims: { minorityInterest, minoritySource, preferredStock, preferredSource, year: claimsYear },

@@ -1282,6 +1282,14 @@ export function checkValuationApplicability(model, data, wacc) {
     };
   }
 
+  // 0b2. The filing contradicts the assumption the forecast rests on: revenue
+  //      fell across the reported years while the plant that produces it rose
+  //      (deriveModel.js). Releasing plant the company is visibly building
+  //      raises free cash flow and flatters the value, so no value is shown.
+  if (meta.revenueNotAProxyRefusal?.code) {
+    return { applicable: false, ...meta.revenueNotAProxyRefusal };
+  }
+
   // 0c. A figure the source never publishes, whose absence could move the value
   //     per share further than the two terminal methods ordinarily disagree.
   //     Set by src/data/dataConstraints.ts, which computes the bound from what

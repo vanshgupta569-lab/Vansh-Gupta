@@ -272,6 +272,69 @@ export function buildDataConstraints(
   }
 
   // ---------------------------------------------------------------------------
+  // 5b. Revenue growth that was bought rather than earned
+  // ---------------------------------------------------------------------------
+  // A year in which goodwill jumped is a year in which the company bought a
+  // business, and some of that year's revenue growth came with it. The filing
+  // says the acquisition happened; it does not say how much revenue it brought,
+  // and says nothing about the following year, which carries twelve months of
+  // it against the first year's part-year. The year is not excluded from the
+  // growth rate — that would throw away the organic half and still leave the
+  // annualisation in — so the bound is what the value would be if it were.
+  const acquisitions: any[] = Array.isArray(meta.acquisitionYears) ? meta.acquisitionYears : [];
+  if (acquisitions.length && valued) {
+    const rule: any = modelData?.assumptions?.segmentGrowth?.['Total revenue'];
+    let bound: number | null = null;
+    if (rule && rule.method === 'fadeToTerminal') {
+      // The same median, over the years that did not carry an acquisition.
+      const years = new Set(acquisitions.map((a) => a.year));
+      const kept: number[] = [];
+      for (let i = 1; i < rows.length; i++) {
+        if (years.has(rows[i]?.fiscalYear)) continue;
+        if (isNum(rows[i]?.revenue) && isNum(rows[i - 1]?.revenue) && rows[i - 1].revenue > 0) {
+          kept.push(rows[i].revenue / rows[i - 1].revenue - 1);
+        }
+      }
+      if (kept.length) {
+        const sorted = [...kept].sort((a, b) => a - b);
+        const m = Math.floor(sorted.length / 2);
+        const withoutThem = sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
+        const clamped = Math.min(Math.max(withoutThem, -0.10), 0.25);
+        const v = revalue(modelData, (d) => {
+          d.assumptions.segmentGrowth['Total revenue'] = { ...rule, start: clamped };
+        });
+        bound = v === null ? null : v / (v0 as number) - 1;
+      }
+    }
+    const named = acquisitions
+      .map(
+        (a) =>
+          `FY${a.year}, where goodwill rose by ${Math.round(a.goodwillAdded).toLocaleString()} ` +
+          `(${(a.shareOfRevenue * 100).toFixed(1)}% of that year's revenue) beside revenue growth of ` +
+          `${a.revenueGrowth === null ? 'an unknown amount' : (a.revenueGrowth * 100).toFixed(1) + '%'}`
+      )
+      .join('; ');
+    add({
+      code: 'growthPartlyAcquired',
+      label: 'Some of the reported growth was bought, not earned',
+      detail:
+        `${named}. The forecast growth rate is the median of this company's year-on-year growth, and it reads an ` +
+        `acquired year as an ordinary one. ${source} does not report how much revenue the acquisition brought, so ` +
+        `the year is named rather than removed: removing it would throw away the organic growth in that year too, ` +
+        `and would still leave the following year carrying twelve months of the acquisition against a part year.`,
+      source,
+      effect:
+        bound === null
+          ? 'the effect cannot be computed'
+          : `${pct(bound)} on the value per share, taking the growth rate from the years that carried no acquisition ` +
+            `instead. That is an upper bound on the error, not an estimate of it: it assumes none of the growth in ` +
+            `those years was organic`,
+      bound,
+      severity: bySize(bound),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // 6. Lines the filing does not report at all
   // ---------------------------------------------------------------------------
   const notReported: any[] = Array.isArray(meta.notReported) ? meta.notReported : [];
