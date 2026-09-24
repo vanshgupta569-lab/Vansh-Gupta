@@ -264,9 +264,20 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
               <p>
                 Valuing a company on its income means estimating the cash it
                 will produce in each future year, then asking what all of that is
-                worth today. Converting future money into today’s money is
-                called discounting, and the rate used is the return an investor
-                could get elsewhere for taking the same risk.
+                worth at one chosen moment. Converting future money into money at
+                that moment is called discounting, and the rate used is the return
+                an investor could get elsewhere for taking the same risk.
+              </p>
+              <p>
+                The moment chosen here is the date of the{' '}
+                <strong>last balance sheet the company filed</strong>, not today.
+                It has to be: the debt and cash subtracted at the end come from
+                that balance sheet, and a value struck on one date cannot be added
+                to a balance sheet struck on another. It also means these filings
+                give this answer on whatever day you open them, instead of drifting
+                with the date they happened to be fetched. Each year is discounted
+                half a year less than its end, because cash arrives through a year
+                rather than in a lump on its last day.
               </p>
             </>
           ),
@@ -297,9 +308,9 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                 note="the last forecast year, in millions"
               />
               <Figure
-                label="Worth today, after discounting"
+                label="Worth at the last balance sheet date, after discounting"
                 value={money(lastRow.pvUfcf)}
-                note="the same figure, translated into today's money"
+                note="the same figure, discounted back to the valuation date"
               />
             </>
           ) : undefined,

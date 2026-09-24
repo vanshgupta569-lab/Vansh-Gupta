@@ -1410,13 +1410,42 @@ export function buildDCF(model, data) {
     R.capex.push(-M.ppe.capex[i]);
     R.unleveredFCF.push(cfo - M.ppe.capex[i]);
 
-    const df = yearFrac(d.sharePriceDate, data.meta.forecastYearEndDates[t]);
+    // THE VALUATION DATE IS THE LAST REPORTED BALANCE SHEET DATE, AND THE
+    // CONVENTION IS MID-YEAR. Both are stated rather than implied, which is
+    // what CONVENTIONS.md DCF 1 asks for; the reasoning is in METHODOLOGY.md.
+    //
+    // The date, because the equity bridge subtracts net debt taken from that
+    // same balance sheet: an enterprise value struck at one instant and a
+    // balance sheet struck at another cannot be added together. It also means
+    // the same filings give the same answer on any day they are looked up,
+    // where discounting from the day the price was fetched made the answer
+    // drift by roughly the discount rate over a year for no reason connected
+    // to the company.
+    //
+    // Mid-year, because cash arrives through the year rather than in a lump on
+    // the last day of it, and because this model already says so everywhere
+    // else: depreciation is charged on the opening balance plus HALF the
+    // year's additions, and interest on average balances. Discounting as
+    // though every pound arrived on 31 December while depreciating as though
+    // the plant arrived evenly would be two answers to one question.
+    const wholeYears = yearFrac(data.meta.latestFiscalYearEnd, data.meta.forecastYearEndDates[t]);
+    const df = (isNum(wholeYears) && wholeYears > 0 ? wholeYears : t + 1) - 0.5;
     R.discountFactor.push(df);
     R.presentValue.push(R.unleveredFCF[t] / (1 + R.wacc) ** df);
   }
 
   R.pvStageOne = sum(R.presentValue);
+  // The terminal value is discounted over the LAST EXPLICIT YEAR'S period, not
+  // over a whole extra year, and that is the mid-year convention rather than a
+  // shortcut. The perpetuity formula values a stream arriving at the ends of
+  // years N+1, N+2, ... as at the end of year N. Under mid-year that stream
+  // arrives half a year earlier each time, which is worth (1 + wacc)^0.5 more
+  // at year N — exactly the half year that discounting over N - 0.5 instead of
+  // N gives back. So one convention runs through the explicit years and the
+  // terminal value alike, which is what DCF 1 requires.
   const lastDF = R.discountFactor[nF - 1];
+  R.valuationDate = data.meta.latestFiscalYearEnd;
+  R.discountConvention = 'mid-year, from the last reported balance sheet date';
   const last = idx(nF - 1);
 
   // ---- Terminal value: perpetuity ----

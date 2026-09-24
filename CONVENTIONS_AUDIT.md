@@ -60,7 +60,7 @@ come last, together.
 | 5 | Net debt covers all interest-bearing debt and all cash (DCF 15; Debt 2) | Hard rule | 15 valued (securities) | Alibaba | up to 39.7% of value (upper bound); fixed after this audit: cash now includes short-term marketable securities (KI L22); leases and short-term borrowings now in net debt (KI L24) |
 | 6 | A material gap between the exit-multiple and perpetuity values is investigated, not averaged (DCF 14) | Hard rule | 18 of 63 more than 25% apart; 8 more than 50% | BP 128% apart (5.00 against 11.39); MercadoLibre 120% | fixed after this audit: the two are published side by side, never averaged, and a wide gap is explained on screen (KI L26) |
 | 7 | WACC weights debt and equity at market value (DCF 7) | Hard rule | 63 valued; 27 had a *negative* debt weight | Toyota WACC 7.72% → 6.49% on gross debt | fixed after this audit: gross debt at book value, equity at market (KI L23); median +2.4%, Toyota +24.0%, BP +15.0%; no company falls |
-| 8 | Explicit end-of-year or mid-year discounting choice, applied consistently (DCF 1) | Judgment call | every company | first forecast year is a full year's cash flow discounted over 0.29 years | mid-year: median +4.3% (max +5.4%); pro-rating the first year: median −1.5% (max −5.3%) |
+| 8 | Explicit end-of-year or mid-year discounting choice, applied consistently (DCF 1) | Judgment call | every company | first forecast year was a full year's cash flow discounted over the fraction of the year left from the fetch date | **fixed after this audit** (2026-09-24): mid-year, stated, from the last reported balance sheet date. 63 of 79 valued companies moved, one by more than 5% |
 | 9 | Diluted shares by the treasury stock method; basic shares from the cover page (IS 18, 19; Comps 10) | Hard rule | every derived company | Apple (hand-built): cover 14,656.1 vs diluted 14,714.7 | not measured; value per share moves one-for-one with the count |
 | 10 | Consistent tenor for risk-free rate, beta and market risk premium; comparable betas unlevered and relevered (DCF 9, 10) | Preference | every derived company | beta 1.0 for all, so every derived company has the same cost of equity | not measured (no betas in payloads) |
 | 11 | Deferred taxes added back; DTL from tax depreciation; NOL carryforwards (CF 3; Dep 10, 11) | Hard rule | every company | — | not measured (deferred tax detail not fetched) |
@@ -87,7 +87,7 @@ depend on them.
 - FD 2: DCF sheet rows placed by number in the generator.
 
 **Recorded in KNOWN_ISSUES.md.** Row 6 is fixed (KI L26), row 7 is fixed (KI L23), row 8 is
-KI-2, the site-vs-workbook working capital drivers in row 12 are KI-4, and
+fixed after this audit (see DCF 1), the site-vs-workbook working capital drivers in row 12 are KI-4, and
 the undocumented minimum cash buffer (Debt 10) is KI-9. Row 1 is recorded
 there as design choice D1, with its measured effect, not as a defect: the last
 reported year is a defensible choice and the conservative default is a rule of
@@ -211,7 +211,7 @@ thumb.
 
 | # | Item | Verdict | Reason |
 |---|---|---|---|
-| DCF 1 | Explicit end-of-year vs mid-year choice, applied consistently | **Partly followed** (judgment call) | One convention is applied consistently to every year and both terminal values: each year's cash flow is discounted from the valuation date to its fiscal year-end (`model.js:1085`; `excelExport.ts` rows 27-28). But it is not stated as a choice. The first forecast year's *full* cash flow is discounted over the fraction of the year left (0.29 years at the frozen date), while net debt is taken at the last reported year-end, so the cash flows and the balance sheet are timed from different dates (KI-2). Mid-year would add a median 4.3%; pro-rating the first year would take off a median 1.5%. Failures #8. |
+| DCF 1 | Explicit end-of-year vs mid-year choice, applied consistently | **Fixed after this audit** (2026-09-24) | The convention is **mid-year**, stated in METHODOLOGY.md §13 and in the workbook's own row label, and applied to every explicit year and to the terminal value alike. The valuation date is the **last reported balance sheet date**, which is where the equity bridge already took net debt from, so the cash flows and the balance sheet are now timed from one instant; it also means the same filings give the same answer on any day they are opened, which the scenario suite checks. At the audit the cash flows were discounted from the day the price was fetched and the choice was unstated. Of 79 companies valued either side, 63 moved and one by more than 5%. Failures #8. |
 | DCF 2 | Projection length a judgment call | Followed | Five years, as a named constant (`deriveModel.js`, `FORECAST_YEARS`), within the common 5-7. |
 | DCF 3 | UFCF starts from EBIT | Followed | EBIAT = EBIT × (1 − tax) (`model.js:1056`; `excelExport.ts` row 11). |
 | DCF 4 | Adds D&A, deferred taxes, non-cash items and CF-statement WC; subtracts capex | Partly followed | D&A, SBC and working capital from the model's cash flow statement are added and capex subtracted (`model.js:1059-1083`; `excelExport.ts` rows 12-15). Deferred taxes are not a separate add-back (CF 3). |

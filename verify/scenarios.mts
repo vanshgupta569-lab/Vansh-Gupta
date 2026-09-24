@@ -313,10 +313,10 @@ for (const sc of scenarios) {
       g.DCFModel.findIndex((r) =>
         typeof label === 'string' ? r[2] === label : label.test(String(r[2] ?? ''))
       );
-    const ser = (label: string) => Array.from({ length: nT - nH }, (_, t) => num('DCFModel', dRow(label), FIRST + t));
+    const ser = (label: string | RegExp) => Array.from({ length: nT - nH }, (_, t) => num('DCFModel', dRow(label), FIRST + t));
     const one = (label: string | RegExp) => num('DCFModel', dRow(label), FIRST);
     const ebit = ser('EBIT'), tax = ser('Tax rate'), da = ser('Plus: depreciation & amortization'), sbc = ser('Plus: stock based compensation');
-    const wcs = ser('Movements in working capital'), capex = ser('Less: capital expenditure'), period = ser('Discount period, years from the valuation date');
+    const wcs = ser('Movements in working capital'), capex = ser('Less: capital expenditure'), period = ser(/^Discount period, years from /);
     const W = one('Weighted average cost of capital'), gr = one('Long term growth rate (g)');
     const ebiat = ebit.map((e, t) => e * (1 - tax[t]));
     const ufcf = ebiat.map((e, t) => e + da[t] + sbc[t] + wcs[t] + capex[t]);
@@ -460,6 +460,33 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     console.log(`  ${what}: EBIT moves by exactly the charge; CFO = change in net income + change in add-back; net income = charge after tax in ${nT - nH - financingMoved} of ${nT - nH} years (the rest also moved revolver or cash interest) -- ${bad ? bad + ' PROBLEMS' : 'confirmed'}`);
     totalProblems += bad;
   }
+}
+
+// ---- the same filings give the same answer on any day ---------------------
+//
+// The valuation date is the last reported balance sheet date, not the day the
+// price was fetched, so moving the fetch date must move nothing. It used to
+// move everything: the whole discount schedule slid with it.
+{
+  console.log('\n=== independence from the lookup date ===');
+  const base: any = JSON.parse(JSON.stringify({ ...SRC, rawStatements: undefined }));
+  const at = (when: string) => {
+    const d = JSON.parse(JSON.stringify(base));
+    d.dcf.sharePriceDate = when;
+    const m: any = buildModel(d), dd: any = buildDCF(m, d);
+    return dd?.perpetuity?.valuePerShare ?? null;
+  };
+  const a = at('2026-01-02'), b = at('2026-08-05'), c = at('2026-12-30');
+  let bad = 0;
+  if (!(typeof a === 'number' && a > 0)) { bad++; console.log('  PROBLEM: no value to compare'); }
+  for (const [label, v] of [['August', b], ['December', c]] as const) {
+    if (typeof v !== 'number' || Math.abs(v / (a as number) - 1) > 1e-12) {
+      bad++;
+      console.log(`  PROBLEM: the value moved when looked up in ${label}: ${a} vs ${v}`);
+    }
+  }
+  console.log(`  January ${Number(a).toFixed(4)}, August ${Number(b).toFixed(4)}, December ${Number(c).toFixed(4)} -- ${bad ? bad + ' PROBLEMS' : 'identical, confirmed'}`);
+  totalProblems += bad;
 }
 
 // ---- the data-constraint refusal fires, and refuses only the DCF ----------

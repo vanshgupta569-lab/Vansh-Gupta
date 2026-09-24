@@ -968,13 +968,62 @@ statement adds it back.
 
 ### Discounting
 
-Each year's cash flow is discounted from the **valuation date** to that fiscal
-year-end, using a 30/360 year fraction. The valuation date is the date the
-payload was fetched. There is one convention, applied to every year and to both
-terminal values, which is what `DCF 1` asks for — but it is not *stated* as a
-choice between end-of-year and mid-year, and the first forecast year's **full**
-cash flow is discounted over only the fraction of the year remaining while net
-debt is taken at the last reported year-end. That is `KI-2`.
+**The valuation date is the last reported balance sheet date. The convention is
+mid-year.** Both are choices, both are stated, and both are applied to every
+explicit year and to the terminal value alike, which is what `DCF 1` requires.
+
+**Why that date.** The equity bridge subtracts net debt taken from that same
+balance sheet (§15). An enterprise value struck at one instant cannot be added
+to a balance sheet struck at another, and until 2026-09-24 they were months
+apart: the cash flows were discounted from the day the price was fetched while
+the debt and cash came from the last filing. The second reason is that a
+valuation should not move for reasons unconnected to the company. Discounting
+from the fetch date meant the same filings gave a different answer every day,
+drifting by roughly the discount rate over a year — Apple's first forecast year
+was being discounted over 0.01 years because its filing happened to be eleven
+months old. The suite now checks that the same model valued in January, August
+and December returns the same figure.
+
+What that buys is honesty about what the number is: a value **as at the last
+balance sheet date**, compared with a price from today. The model knows nothing
+about what has happened since that filing, and dating the answer today would
+claim otherwise. The gap is stated on the page rather than closed by a guess.
+
+**Why mid-year.** `DCF 1` treats the choice as a judgment call and says the
+mid-year convention "exists specifically to better approximate cash flows
+arriving throughout the year rather than in one year-end lump sum". Two things
+decide it here. Cash does arrive through the year. And this model already says
+so everywhere else: depreciation is charged on the opening balance plus **half**
+the year's additions (§7), and interest on average balances when the circuit
+breaker is off (§9). Discounting as though every pound arrived on the last day
+of the year, while depreciating as though the plant arrived evenly through it,
+would be two answers to one question.
+
+So the discount period for forecast year *k* is *k* − 0.5, measured from the
+last reported year-end on a 30/360 basis, which for a company whose year-ends
+are a year apart is exactly 0.5, 1.5, 2.5, 3.5, 4.5.
+
+**The terminal value takes the last explicit year's period**, not a whole extra
+year, and that is the mid-year convention rather than a shortcut. The perpetuity
+formula values a stream arriving at the ends of years N+1, N+2, … as at the end
+of year N. Under mid-year that stream arrives half a year earlier each time,
+which is worth (1 + WACC)^0.5 more at year N — exactly the half year that
+discounting over N − 0.5 gives back. One convention runs through both.
+
+**What it cost.** Measured at `35114b3` on the payloads of 2026-09-23: of the 79
+companies valued on both sides, 63 move, **one by more than 5%** (Siemens
+−5.8%), median −1.7%, 13 up and 50 down. The direction depends on where the old
+fetch date happened to fall in the company's year, which is the artefact being
+removed: companies whose year had just ended were being discounted over too
+short a period and fall (Micron −4.8%, Accenture −4.4%, Costco −4.4%, Apple
+−4.1%), while those whose year-end was still months away were discounted over
+too long a period and rise (Microsoft +2.3%, Procter & Gamble +2.4%).
+
+**What still moves with the day.** The cost of equity is weighted on market
+capitalisation (§14), so a change in the share price changes the discount rate.
+That is `DCF 7` working as intended — the weights are meant to be at market
+value — and it is a change in what the market thinks, not an artefact of when
+the page was opened.
 
 ### Terminal value: perpetuity growth
 

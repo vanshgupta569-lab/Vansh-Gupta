@@ -33,9 +33,11 @@ mistakes and would never be fixed:
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
   average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
-  company discounted to a 31 December year end, fixed 2026-09-23) and `KI-3`
+  company discounted to a 31 December year end, fixed 2026-09-23), `KI-3`
   (the forecast tax rate measured on a base the forecast did not have, fixed
-  2026-09-24; what the filing cannot separate moved to `DATA_CONSTRAINTS.md`). Moved out on 2026-09-22 and never to be
+  2026-09-24; what the filing cannot separate moved to `DATA_CONSTRAINTS.md`)
+  and `KI-2` (no stated discounting convention, and timing that ran from the
+  day the price was fetched, fixed 2026-09-24). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -60,7 +62,6 @@ commit were measured on the payload set of that date and say so.
 |---|-------|-----------|---------------|-------------|
 | KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
-| KI-2 | No stated discounting convention; timing runs from the fetch date | every company | AbbVie, mid-year +5.4% | mid-year median +4.3%; pro-rated first year median -1.5% |
 | KI-4 | Working capital drivers differ between site and workbook | every derived company | payables: cost of sales on site, revenue in workbook | none at defaults; not measured after edits |
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
 | KI-6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
@@ -226,28 +227,6 @@ multiple should be one. After the refusal above, the four tests stand at 19 of
 64 in year one, 17 in the last year, 23 over 10% of drift and 3 over 25%, no
 company outside the half-to-twice terminal band, and none outside its own filed
 intensity range.
-
-### KI-2. No stated discounting convention; timing runs from the fetch date
-
-- **What is wrong.** Each forecast year's cash flow is discounted from the price
-  date to that fiscal year-end, as though all of it arrives at year-end, and no
-  end-of-year or mid-year choice is stated. The first forecast year's full cash
-  flow is discounted over only the part of the year left, while net debt is
-  taken at the last reported year-end. That is not double counting (cash earned
-  since that year-end is not in net debt), but the balance sheet is dated at one
-  point and the cash flows timed from another, and the whole discounting
-  schedule shifts with the day the price was fetched.
-- **Where.** `src/engine/model.js` (`buildDCF`, `yearFrac(sharePriceDate, ...)`);
-  `src/data/excelExport.ts` (DCF sheet rows 27-28).
-- **How measured.** Code at `f1d9339`, valuation date 2026-09-17 (0.29 years to a
-  December year-end): every discount period shortened by half a year (mid-year
-  convention); separately, the first year's cash flow scaled to the fraction of
-  the year remaining.
-- **Affects.** Every company with a DCF.
-- **Worst example.** Mid-year: AbbVie +5.4%, Home Depot +4.7%. First year
-  pro-rated: Shell -5.3%, AbbVie -5.1%, Gilead -4.6%, Apple -4.1%.
-- **Value moved.** Mid-year median +4.3% (max +5.4%); pro-rated first year median
-  -1.5% (max -5.3%). Both depend on the fetch date.
 
 ### KI-4. Working capital drivers differ between site and workbook
 

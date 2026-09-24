@@ -1344,9 +1344,16 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     unit: '%',
     indent: 0,
   });
-  vData(27, 'Discount period, years from the valuation date', Array.isArray(D.discountFactor) ? D.discountFactor : [], FACTOR, {
-    unit: 'yrs',
-  });
+  // The convention and the date it runs from are stated in the label rather
+  // than left for a reader to infer from the numbers, which is what
+  // CONVENTIONS.md DCF 1 asks for.
+  vData(
+    27,
+    `Discount period, years from ${D.valuationDate ?? 'the last reported balance sheet date'} (mid-year convention)`,
+    Array.isArray(D.discountFactor) ? D.discountFactor : [],
+    FACTOR,
+    { unit: 'yrs' }
+  );
   vRow(28, 'Discount factor', (c) => `(1+$${F}$26)^-${c}27`, FACTOR, { italic: true, indent: 2, unit: 'x' });
   vRow(29, 'Present value of unlevered free cash flow', (c) => `${c}16*${c}28`, money(currencySymbol), {
     bold: true,
@@ -1493,6 +1500,14 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   });
 
   [
+'The valuation date is the last reported balance sheet date, not today. The equity bridge takes net debt from that',
+    'same balance sheet, and an enterprise value struck at one instant cannot be added to a balance sheet struck at',
+    'another. It also means these filings give this answer on whatever day they are opened. The convention is mid-year:',
+    'each year is discounted half a year less than its end, because cash arrives through the year rather than in a lump',
+    'on the last day of it — the same reason depreciation is charged on the opening balance plus half the year additions.',
+    'The terminal value is discounted over the last explicit year period for the same reason, so one convention runs',
+    'through both. The value is therefore as at the last balance sheet date and is compared with a price from today.',
+    '',
     'Row 63 is not a fault to be corrected. Five modelled years are a small annuity beside a perpetuity, so most of the',
     'value of any going concern sits beyond the window: row 64 is what that share would be for a company whose cash flow',
     'never changes, at this same discount rate. A figure close to it is the shape of a discounted cash flow; a figure well',
