@@ -44,6 +44,9 @@ const DAYS_FMT = '#,##0.0';
 
 export interface SupportingSheetsContext {
   R: Record<string, number>;
+  // The label the model sheet gave each registered row, so a sheet that repeats
+  // a line can repeat its name too instead of keeping a second copy (KI-4).
+  RL: Record<string, string>;
   modelSheetName: string;
   years: number[];
   nH: number;
@@ -761,7 +764,7 @@ function buildCashFlowSheet(ctx: SupportingSheetsContext) {
 // =============================================================================
 
 function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
-  const { companyName, newSheet, title, fmt, colors } = ctx;
+  const { companyName, newSheet, title, fmt, colors, R, RL } = ctx;
   const ws = newSheet('Annexures', colors.OXBLOOD);
   title(
     ws,
@@ -777,26 +780,32 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   const end = (name: string, key: string) => bal(name, key, { bold: true });
 
   b.group('Annexure A - working capital & other balance sheet schedules');
+  // The driver row each schedule actually has, and the name the model sheet
+  // gave it, are read from the registry rather than repeated here. Naming them
+  // twice is how the workbook came to describe drivers the engine does not use
+  // (KI-4); a line whose basis the model chooses cannot be labelled by hand in
+  // two files and stay true in both.
   (
     [
-      ['ar', 'Accounts receivable', 'Receivables as % of revenue'],
-      ['inv', 'Inventory', 'Inventory as % of cost of sales'],
-      ['ap', 'Accounts payable', 'Payables as % of revenue'],
-      ['acc', 'Accrued expenses & deferred revenue', 'Accrued expenses as % of revenue'],
-      ['oca', 'Other current assets', 'Other current assets as % of revenue'],
-      ['dta', 'Deferred tax assets', 'Deferred tax assets as % of revenue'],
-      ['oa', 'Other assets', 'Additions / (disposals), excluding amortisation of intangibles'],
-      ['oncl', 'Other non-current liabilities', 'Other non-current liabilities as % of revenue'],
-    ] as [string, string, string][]
-  ).forEach(([k, name, driverName]) => {
+      ['ar', 'Accounts receivable'],
+      ['inv', 'Inventory'],
+      ['ap', 'Accounts payable'],
+      ['acc', 'Accrued expenses & deferred revenue'],
+      ['oca', 'Other current assets'],
+      ['dta', 'Deferred tax assets'],
+      ['oa', 'Other assets'],
+      ['oncl', 'Other non-current liabilities'],
+    ] as [string, string][]
+  ).forEach(([k, name]) => {
     b.sub(name);
-    // Other assets are held flat apart from amortisation of intangibles, so
-    // their driver is a movement in money, not a percentage.
-    if (k === 'oa') {
-      bal(driverName, 'oaMove');
-      bal('Less: amortisation of intangibles', 'amort');
-    } else {
+    const driverName = RL[`${k}Pct`] ?? RL[`${k}Move`] ?? 'Driver';
+    if (R[`${k}Pct`]) {
       pct(driverName, `${k}Pct`);
+    } else {
+      bal(driverName, `${k}Move`);
+      // Other assets are the one held-flat line that also carries the
+      // intangible amortisation charge.
+      if (k === 'oa') bal('Less: amortisation of intangibles', 'amort');
     }
     bal('Beginning of period', `${k}Bop`);
     bal('Increase / (decrease)', `${k}Chg`);
@@ -805,11 +814,26 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
   });
 
   b.group('Annexure B - property, plant & equipment');
-  pct('Capital expenditure as % of revenue', 'capexPct');
-  pct('Depreciation as % of capital expenditure', 'depPct');
+  // Names and rows come from the registry: the capital spending row is named
+  // for whichever rule the engine used, and where spending is split into
+  // replacement and growth both parts are shown (KI-4). This sheet said
+  // "% of revenue" and "% of capital expenditure" for years after the model
+  // sheet had stopped saying either.
+  const named = (key: string) => pct(RL[key] ?? key, key);
+  if (R.capexPct) named('capexPct');
+  named('depPct');
+  if (R.ppeIntensity) named('ppeIntensity');
   bal('Beginning of period', 'ppeBop');
-  bal('Plus: capital expenditures', 'ppeCapex');
-  bal('Less: depreciation', 'ppeDep', { notReported: true });
+  // The model sheet's own order: where spending is split, replacement is the
+  // depreciation charge and is struck before the total it feeds.
+  if (R.ppeGrowthCapex) {
+    bal(RL.ppeGrowthCapex ?? 'Plus: growth capital expenditures', 'ppeGrowthCapex');
+    bal('Less: depreciation', 'ppeDep', { notReported: true });
+    bal(RL.ppeCapex ?? 'Plus: capital expenditures', 'ppeCapex');
+  } else {
+    bal(RL.ppeCapex ?? 'Plus: capital expenditures', 'ppeCapex');
+    bal('Less: depreciation', 'ppeDep', { notReported: true });
+  }
   bal('Plus: other movements in the balance', 'ppeOther', { notReported: true });
   end('End of period', 'ppeEnd');
   b.blank();

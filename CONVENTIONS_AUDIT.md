@@ -87,7 +87,8 @@ depend on them.
 - FD 2: DCF sheet rows placed by number in the generator.
 
 **Recorded in KNOWN_ISSUES.md.** Row 6 is fixed (KI L26), row 7 is fixed (KI L23), row 8 is
-fixed after this audit (see DCF 1), the site-vs-workbook working capital drivers in row 12 are KI-4, and
+fixed after this audit (see DCF 1), the site-vs-workbook working capital drivers in row 12 were KI-4 (fixed 2026-09-25:
+the workbook now reads the engine's declared drivers instead of naming its own), and
 the undocumented minimum cash buffer (Debt 10) is KI-9. Row 1 is recorded
 there as design choice D1, with its measured effect, not as a defect: the last
 reported year is a defensible choice and the conservative default is a rule of

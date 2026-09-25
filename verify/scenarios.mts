@@ -52,6 +52,11 @@ const SRC = CO
   : AAPL;
 const M = buildModel(SRC);
 const D = buildDCF(M, SRC);
+// Some companies in the sweep set are refused a valuation, correctly: the
+// checks below that need a value say so and skip rather than compare against
+// nothing (Exxon's depreciation rate, Toyota's listing).
+const REFUSED = (D as any).applicable !== true;
+if (REFUSED) console.log(`the engine refuses this company: ${(D as any).code} -- value checks will be skipped`);
 const wb = await buildWorkbook({
   model: M, dcf: D,
   source: { meta: { source: 'SEC EDGAR 10-K' }, rawStatements: [{ fiscalYear: 2025, revenue: 416161 }] },
@@ -462,6 +467,134 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 
+// ---- the workbook and the engine agree AFTER AN EDIT ----------------------
+//
+// Every driver row in the workbook is seeded from the engine's own figures, so
+// the two agree at rest whatever their formulas say. That is what hid KI-4:
+// the engine drove payables off cost of sales and the workbook off revenue, and
+// nobody could tell until something moved. So things are moved here.
+//
+// Two edits, because one is not enough to separate everything. The gross margin
+// moves cost of sales without moving revenue, which parts any driver that
+// confuses the two. Revenue growth moves revenue, which parts any driver that
+// asserts a share of it — that is how the workbook was found writing capital
+// spending as a percentage of revenue for a model that compounds it at a growth
+// rate instead.
+{
+  // Anchored on each schedule's driver row, by pattern, so the check survives
+  // the relabelling it exists to verify.
+  const endOf = (driver: RegExp) => need('End of period', need(driver));
+  const rows = {
+    ar: endOf(/^Receivables as %/),
+    inv: endOf(/^Inventory as %/),
+    ap: endOf(/^Payables as %/),
+    acc: endOf(/^Accrued expenses as %/),
+    oca: endOf(/^Other current assets as %/),
+    dta: endOf(/^Deferred tax assets as %/),
+    oncl: endOf(/^Other non-current liabilities/),
+    gm: need('Gross margin before D&A and SBC'),
+    revGrowth: need('Revenue growth'),
+    capex: need(/^Plus: capital expenditures(,|$)/),
+    ppeEnd: need('End of period', need(/^(Capital expenditure as|Growth in capital expenditure)/)),
+  };
+  const lastF = nT - 1;
+  const tol = (a: number, b: number) => Math.abs(a - b) <= 1e-6 + 1e-9 * Math.max(Math.abs(a), Math.abs(b), SCALE);
+
+  // The sheet with an edit applied, switch off so nothing iterates.
+  const withEdit = (mut: (g: Record<string, any[][]>) => void) => {
+    const g: Record<string, any[][]> = JSON.parse(JSON.stringify(base));
+    g[MODEL][R.circ][FIRST] = 0;
+    mut(g);
+    for (const grid of Object.values(g)) for (const row of grid) for (let c = 0; c < row.length; c++)
+      if (typeof row[c] === 'string' && row[c].startsWith('=')) row[c] = takeBranch(row[c], false);
+    const hf2 = HyperFormula.buildFromSheets(g, { licenseKey: 'gpl-v3' });
+    const sid2 = (name: string) => hf2.getSheetId(name)!;
+    return {
+      cell: (r: number, c: number) => {
+        const v = hf2.getCellValue({ sheet: sid2(MODEL), row: r, col: c });
+        return typeof v === 'number' ? v : 0;
+      },
+      dcf: (label: string) => {
+        const r = g.DCFModel.findIndex((x) => x[2] === label);
+        const v = hf2.getCellValue({ sheet: sid2('DCFModel'), row: r, col: FIRST });
+        return typeof v === 'number' ? v : 0;
+      },
+    };
+  };
+
+  const compare = (what: string, EM: any, ED: any, mut: (g: Record<string, any[][]>) => void) => {
+    const sheet = withEdit(mut);
+    const checks: [string, number, number][] = [
+      ['receivables', sheet.cell(rows.ar, FIRST + lastF), EM.wc.accountsReceivable.ending[lastF]],
+      ['inventory', sheet.cell(rows.inv, FIRST + lastF), EM.wc.inventory.ending[lastF]],
+      ['payables', sheet.cell(rows.ap, FIRST + lastF), EM.wc.accountsPayable.ending[lastF]],
+      ['accrued expenses', sheet.cell(rows.acc, FIRST + lastF), EM.wc.accruedExpenses.ending[lastF]],
+      ['other current assets', sheet.cell(rows.oca, FIRST + lastF), EM.wc.otherCurrentAssets.ending[lastF]],
+      ['deferred tax assets', sheet.cell(rows.dta, FIRST + lastF), EM.wc.deferredTaxAssets.ending[lastF]],
+      ['other non-current liabilities', sheet.cell(rows.oncl, FIRST + lastF), EM.wc.otherNonCurrentLiabilities.ending[lastF]],
+      ['stock based compensation', sheet.cell(R.sbc, FIRST + lastF), EM.stockBasedCompensation[lastF]],
+      ['capital expenditure', sheet.cell(rows.capex, FIRST + lastF), EM.ppe.capex[lastF]],
+      ['property, plant & equipment', sheet.cell(rows.ppeEnd, FIRST + lastF), EM.ppe.ending[lastF]],
+      ['depreciation & amortisation', sheet.cell(R.da, FIRST + lastF), EM.depreciationAmortisation[lastF]],
+      ['operating profit', sheet.cell(R.ebit, FIRST + lastF), EM.ebit[lastF]],
+    ];
+    if (!REFUSED)
+      checks.push(['value per share', sheet.dcf('Value per share, perpetuity growth'), ED.perpetuity?.valuePerShare ?? 0]);
+    let bad = 0;
+    // A line the filing never reports has no engine figure to compare against:
+    // Enbridge tags no accounts payable in any year and the engine forecasts it
+    // as NaN (KI-15). Counted and named, never quietly passed.
+    const missing = checks.filter(([, , ev]) => !Number.isFinite(ev)).map(([label]) => label);
+    for (const [label, sv, ev] of checks) {
+      if (!Number.isFinite(ev)) continue;
+      if (tol(sv, ev)) continue;
+      bad++;
+      const gap = ev !== 0 ? ` (${((sv / ev - 1) * 100).toFixed(2)}%)` : '';
+      console.log(`  PROBLEM: ${label} after the edit: sheet ${sv.toFixed(2)}, engine ${ev.toFixed(2)}${gap}`);
+    }
+    console.log(
+      `  ${what}: ${checks.length - missing.length} lines compared in the last forecast year -- ` +
+        `${bad ? bad + ' DIVERGE' : 'all agree'}` +
+        (missing.length ? `; not reported by the filing, so not compared: ${missing.join(', ')}` : '')
+    );
+    totalProblems += bad;
+  };
+
+  console.log('\n=== workbook against engine, after an edit ===');
+
+  // The margin. The sheet's row is the model-basis margin and the assumption is
+  // the filed-basis one; they differ by a constant (the share D&A and SBC took
+  // of cost of sales), so the same delta moves both by the same amount.
+  {
+    const DELTA = -0.02;
+    const edited: any = JSON.parse(JSON.stringify({ ...SRC, rawStatements: undefined }));
+    edited.assumptions.grossMargin = edited.assumptions.grossMargin.map((x: number) => x + DELTA);
+    const EM: any = buildModel(edited);
+    compare('gross margin -2 points', EM, buildDCF(EM, edited), (g) => {
+      for (let i = nH; i < nT; i++)
+        g[MODEL][rows.gm][FIRST + i] = (base[MODEL][rows.gm][FIRST + i] as number) + DELTA;
+    });
+  }
+
+  // Revenue growth. Every segment gains the same three points; the sheet is then
+  // given the edited model's own total growth, so both forecast the same revenue
+  // and only the rules beneath it can differ.
+  {
+    const DELTA = 0.03;
+    const edited: any = JSON.parse(JSON.stringify({ ...SRC, rawStatements: undefined }));
+    for (const name of Object.keys(edited.assumptions.segmentGrowth)) {
+      edited.assumptions.segmentGrowth[name] = Array.from(
+        { length: nT - nH },
+        (_, k) => (M.segmentGrowth[name][nH + k] as number) + DELTA
+      );
+    }
+    const EM: any = buildModel(edited);
+    compare('revenue growth +3 points a year', EM, buildDCF(EM, edited), (g) => {
+      for (let i = nH; i < nT; i++) g[MODEL][rows.revGrowth][FIRST + i] = EM.revenueGrowth[i];
+    });
+  }
+}
+
 // ---- the same filings give the same answer on any day ---------------------
 //
 // The valuation date is the last reported balance sheet date, not the day the
@@ -478,6 +611,13 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   };
   const a = at('2026-01-02'), b = at('2026-08-05'), c = at('2026-12-30');
   let bad = 0;
+  if (REFUSED) {
+    // A refused company still has to be refused on every date, which is the
+    // same property: nothing about the answer may follow the fetch date.
+    if (a !== null || b !== null || c !== null) { bad++; console.log('  PROBLEM: a refused company valued on some date'); }
+    console.log(`  refused on every date -- ${bad ? bad + ' PROBLEMS' : 'confirmed'}`);
+    totalProblems += bad;
+  } else {
   if (!(typeof a === 'number' && a > 0)) { bad++; console.log('  PROBLEM: no value to compare'); }
   for (const [label, v] of [['August', b], ['December', c]] as const) {
     if (typeof v !== 'number' || Math.abs(v / (a as number) - 1) > 1e-12) {
@@ -487,6 +627,7 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
   console.log(`  January ${Number(a).toFixed(4)}, August ${Number(b).toFixed(4)}, December ${Number(c).toFixed(4)} -- ${bad ? bad + ' PROBLEMS' : 'identical, confirmed'}`);
   totalProblems += bad;
+  }
 }
 
 // ---- the data-constraint refusal fires, and refuses only the DCF ----------
@@ -505,12 +646,18 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   };
   const after: any = buildDCF(buildModel(probe), probe);
   let bad = 0;
+  // Only a company the engine would otherwise value can show that the flag
+  // refuses it; one already refused for another reason proves nothing here.
+  if (REFUSED) {
+    console.log(`  skipped: the engine already refuses this company as ${(D as any).code}`);
+  } else {
   if (before.applicable !== true) { bad++; console.log('  PROBLEM: the model does not value without the flag'); }
   if (after.applicable !== false) { bad++; console.log('  PROBLEM: the flag does not refuse the discounted cash flow'); }
   if (after.code !== 'dataConstraintTooLarge') { bad++; console.log(`  PROBLEM: refusal code is ${after.code}`); }
   if (after.perpetuity !== undefined) { bad++; console.log('  PROBLEM: a value per share survives the refusal'); }
   console.log(`  flag off: value ${before.perpetuity?.valuePerShare?.toFixed(2)}; flag on: refused as ${after.code} -- ${bad ? bad + ' PROBLEMS' : 'confirmed'}`);
   totalProblems += bad;
+  }
 }
 
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);

@@ -421,12 +421,25 @@ amortisation run-off (§8).
 Charged as its own line, and **it stays a cost** — EBITDA is before D&A only
 (§13).
 **Reported:** as filed; null where not reported.
-**Forecast:** its share of **total operating costs on the filed basis** in the
-last reported year, held flat. Where the last reported year reports none, nil,
-and `provenance.notReported` says so rather than leaving a silent zero.
+**Forecast:** its share of **revenue** in the last reported year, held flat.
+Where the last reported year reports none, nil, and `provenance.notReported`
+says so rather than leaving a silent zero.
 **Convention:** `CF 3` (material non-cash items added back and documented) —
-followed. The checklist offers SBC over revenue or over operating expense; the
-second is implemented and both are sanctioned.
+followed. The checklist offers SBC over revenue or over operating expense, and
+sanctions both; revenue is implemented. It was the operating-expense basis until
+2026-09-25, when it moved for two reasons. The workbook wrote this row as a
+share of revenue whatever the engine did, which is the `KI-4` pattern (§22), and
+the operating-expense basis could not be shown there without rebuilding four
+filed-basis cost lines the workbook carries for reported years only. And a
+filing that reports no cost lines at all — Wells Fargo, Union Pacific, eight
+others in the sweep set — has nil operating expense on the filed basis, so the
+old ratio was a division by zero and the charge came out infinite.
+
+The level is unchanged for every company that has both. Each forecast cost line
+is a fixed share of revenue, so filed operating costs are a fixed multiple of
+revenue, and a ratio measured on either basis and applied on the same basis
+gives the same charge: no valued company moved a cent (sweep of 2026-09-25,
+79 companies compared, none moved).
 
 ### Taking D&A and SBC out of the cost lines
 
@@ -583,6 +596,20 @@ schedule use the **period-end** balance, not the average, and are presentational
 
 **Convention `WC 7` and `WC 8` are followed**: the change in each asset line
 reaches the cash flow sign-flipped, each liability line without a flip.
+
+**The drivers are declared, not asserted twice.** The engine carries the table
+above on the model as `workingCapitalDriversUsed`, and the workbook builds each
+schedule — its formula, its basis and its row label — from it. This is not
+decoration: the workbook used to name a basis in its own code, said payables and
+other current assets were a percentage of revenue where the engine grows them
+with cost of sales, and because every driver row is seeded from the engine's own
+balances the two agreed at rest and parted on the first edit (`KI-4`, fixed
+2026-09-25). A rule stated once cannot drift from its own workbook.
+
+The cost-of-sales lines divide by **cost of sales as filed**, which is the line
+the engine grows them with (`cogsGrowth`), not the model-basis line that
+excludes D&A and SBC. The two differ by the share D&A and SBC took of cost of
+sales, which is constant at rest and not constant once a margin moves.
 
 ---
 
@@ -1553,14 +1580,43 @@ which flows are driving a net change. A note on the sheet says so. This is
 `KI-7`; 78 of 97 companies differ by more than 10%, and it moves no valuation,
 because the DCF reads forecast years only.
 
-**Three working-capital lines are driven off a different base.** The workbook
-drives payables and other current assets off **revenue** where the engine drives
-them off **cost of sales**, and drives other non-current liabilities off revenue
-where the engine holds them flat. Receivables, inventory, accrued expenses,
-deferred tax assets and other assets are driven the same way on both. At default
-drivers the two agree exactly, because each driver row is seeded with that
-year's own ratio from the model. They part company the moment the reader edits
-one. This is `KI-4`.
+**Every driver row is the engine's rule, written out.** A row that asserts a
+rule of its own is the defect `KI-4` was: each assumption is seeded with the
+model's own figure for that year, so an asserted rule agrees to the cent at rest
+and only parts when the reader edits something — which is exactly when the
+workbook is being used. Three rules were being asserted, and all three now come
+from the model:
+
+- the **working capital** bases, from `workingCapitalDriversUsed` (§6). The
+  workbook had payables and other current assets on revenue where the engine
+  grows them with cost of sales, and other non-current liabilities on revenue
+  where the engine holds them flat;
+- the **capital spending** rule, from `capexMethodUsed`. The workbook wrote
+  capital spending as a percentage of revenue whatever the engine did, including
+  for the curated Apple file, which compounds it at a growth rate (§7);
+- **stock compensation**, which the workbook wrote as a share of revenue while
+  the engine took a share of operating expense. The engine moved to revenue
+  (§5); both are sanctioned, and only one can be shown here.
+
+The row labels follow, because they are built from the same declaration: the
+model sheet and the annexures read one registry of rows and the names given to
+them, rather than each naming the line again.
+
+What that was worth, measured on 170 companies by editing the workbook and the
+engine the same way and comparing thirteen lines in the last forecast year
+(`npm run verify`'s "workbook against engine, after an edit"): before the fix,
+**170 of 170 parted after three points on revenue growth** and 147 after two
+points off the gross margin, the worst on the curated Apple file being capital
+spending 15.1% apart and value per share 1.5% apart. After it, none — save one
+refused company whose reported PP&E series has a gap (`KI-18`).
+
+**The cost-line drivers carry their sign.** R&D and SG&A as a percentage of
+revenue used to be seeded with the size of the line and written as a charge.
+Where a filing reports no cost lines at all the engine moves the whole D&A and
+SBC charge out of SG&A, which leaves that line **positive**, and the workbook
+then charged it twice: operating profit 60% below the engine's on Union Pacific,
+54% on Wells Fargo. Both rows now take the signed figure, as other operating
+costs already did.
 
 **Interest is charged on opening balances by default.** Average balances are
 circular in Excel: interest changes profit, which changes cash, the revolver

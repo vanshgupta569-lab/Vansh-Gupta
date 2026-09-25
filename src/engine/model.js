@@ -225,6 +225,19 @@ export function buildModel(data) {
     S.wc[key] = { beginning: beg, change: chg, ending: end };
   }
 
+  // WHICH LINE IS DRIVEN BY WHAT, carried on the model so the workbook can read
+  // it rather than asserting its own answer. The workbook used to name a driver
+  // per line in its own code: it said payables were a percentage of revenue
+  // while the engine grew them with cost of sales, and because every driver row
+  // is seeded from the engine's own balances the two agreed until someone
+  // edited something. A model that states its rule once cannot drift from its
+  // own workbook.
+  S.workingCapitalDriversUsed = {
+    ...a.workingCapitalDrivers,
+    otherAssets: a.otherAssetsHeldFlat ? 'flat' : 'priorYear',
+    otherNonCurrentLiabilities: a.otherNonCurrentLiabilitiesHeldFlat ? 'flat' : 'priorYear',
+  };
+
   // Ratios that make the working capital schedule readable
   S.dso = blank(); S.dpo = blank(); S.inventoryTurnover = blank();
   for (let t = 0; t < nH + nF; t++) {
@@ -439,6 +452,13 @@ export function buildModel(data) {
     a.capexMethod === 'maintenancePlusGrowth' && typeof a.ppeToRevenue === 'number' && isFinite(a.ppeToRevenue)
       ? a.ppeToRevenue
       : null;
+  // WHICH RULE BOUGHT THE PLANT, for the same reason the working capital
+  // drivers are carried: the workbook wrote capital spending as a percentage
+  // of revenue whatever this said, and because that percentage is seeded from
+  // the figures below it agreed until someone moved revenue growth (KI-4).
+  S.capexMethodUsed = a.capexMethod ?? 'growth';
+  S.capexRatioUsed = isNum(a.capexRatio) ? a.capexRatio : null;
+  S.capexScaleUsed = capexScale;
   S.depreciationRateUsed = typeof depPct === 'number' && isFinite(depPct) ? depPct : null;
   const noAssetBase = !isNum(S.ppe.ending[nH - 1]);
   S.depreciationRateProblem =
@@ -558,8 +578,18 @@ export function buildModel(data) {
     }
   }
 
-  // SBC as a share of total operating costs on the filed basis, which is the
-  // basis the ratio is observed on.
+  // STOCK COMPENSATION AS A SHARE OF REVENUE.
+  //
+  // The cheat sheet gives two formulas for this line, SBC over revenue and SBC
+  // over operating expense, and sanctions both. This used to take the second
+  // while the workbook took the first, so the two agreed until a margin was
+  // edited and then quietly parted (KI-4). One of them had to go, and revenue
+  // wins on two counts: every other cost driver in this model is a share of
+  // revenue, so a second basis for one line buys nothing; and the workbook
+  // carries filed-basis cost lines for reported years only, so the operating
+  // expense basis could not be shown there without rebuilding four lines the
+  // workbook has no other use for. A driver the reader cannot see or edit in
+  // the workbook is worse than the other sanctioned basis.
   // Total operating costs on the filed basis: every cost line, other operating
   // costs included. A named line the filing does not report adds nothing here,
   // because its cost is already inside other operating costs.
@@ -569,8 +599,8 @@ export function buildModel(data) {
   S.sbcPercentOfOpex = blank();
   for (let t = 0; t < nH; t++) {
     // Null in a year stock compensation is not reported.
-    S.sbcPercentOfOpex[t] = isNum(S.stockBasedCompensation[t])
-      ? -S.stockBasedCompensation[t] / operatingCostsFiled(t)
+    S.sbcPercentOfOpex[t] = isNum(S.stockBasedCompensation[t]) && S.revenue[t]
+      ? S.stockBasedCompensation[t] / S.revenue[t]
       : null;
   }
   // A rule that finds no reported year gives nil; the derivation already sets
@@ -583,7 +613,7 @@ export function buildModel(data) {
 
   for (let t = nH; t < nH + nF; t++) {
     S.sbcPercentOfOpex[t] = sbcPct;
-    S.stockBasedCompensation[t] = -sbcPct * operatingCostsFiled(t);
+    S.stockBasedCompensation[t] = sbcPct * S.revenue[t];
   }
 
   // ------------------------- 4b. COST LINES EXCLUDING D&A AND SBC, AND EBIT

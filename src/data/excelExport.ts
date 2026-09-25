@@ -327,6 +327,9 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // ---- the two-pass machinery --------------------------------------------
   let r = 8;
   const R: Record<string, number> = {};
+  // The name each registered row was given, so the annexures can repeat the
+  // model sheet's own label instead of keeping a second copy of it (KI-4).
+  const RL: Record<string, string> = {};
   const pending: (() => void)[] = [];
 
   const header = (text: string) => {
@@ -362,6 +365,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   ) => {
     const row = r++;
     R[key] = row;
+    RL[key] = name;
     pending.push(() => {
       label(S, row, name, o.unit ?? UNIT, { indent: o.indent ?? 1, bold: o.bold, italic: o.italic });
       for (let i = 0; i < nT; i++) {
@@ -389,6 +393,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   ) => {
     const row = r++;
     R[key] = row;
+    RL[key] = name;
     pending.push(() => {
       label(S, row, name, o.unit ?? UNIT, { indent: o.indent ?? 1, bold: o.bold, italic: o.italic });
       for (let i = o.from ?? 0; i < nT; i++) {
@@ -428,6 +433,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   ) => {
     const row = r++;
     R[key] = row;
+    RL[key] = name;
     pending.push(() => {
       label(S, row, name, o.unit ?? '%', { indent: o.indent ?? 2, italic: true });
       for (let i = 0; i < nT; i++) {
@@ -456,6 +462,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   const bopRow = (key: string, name: string, openingValue: number | null, endKey: string) => {
     const row = r++;
     R[key] = row;
+    RL[key] = name;
     pending.push(() => {
       label(S, row, name, UNIT, { indent: 1 });
       for (let i = 0; i < nT; i++) {
@@ -491,6 +498,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   ) => {
     const row = r++;
     R[key] = row;
+    RL[key] = name;
     pending.push(() => {
       label(S, row, name, UNIT, { indent: 1, bold: true });
       for (let i = 0; i < nT; i++) {
@@ -584,10 +592,16 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'rndPct',
     'Research & development, % of revenue',
     (c, _p, i) => (has(M.revenue, i) && has(M.rnd, i) ? `-${c}${R.rnd}/${c}${R.rev}` : null),
+    // SIGNED, as other operating costs below already are. Taking the size and
+    // assuming the direction turned a line the engine carries as a credit into
+    // a charge: where a filing reports no cost lines at all the engine moves
+    // the whole D&A and SBC charge out of SG&A, which leaves that line
+    // positive, and the workbook then charged it twice — 60% of operating
+    // profit on Union Pacific, 54% on Wells Fargo (KI-4).
     (i) => {
       const rev = at(M.revenue, i);
       const rnd = at(M.rnd, i);
-      return isNum(rev) && isNum(rnd) && rev !== 0 ? Math.abs(rnd) / rev : 0;
+      return isNum(rev) && isNum(rnd) && rev !== 0 ? -rnd / rev : 0;
     },
     PCT1
   );
@@ -599,7 +613,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     (i) => {
       const rev = at(M.revenue, i);
       const sga = at(M.sga, i);
-      return isNum(rev) && isNum(sga) && rev !== 0 ? Math.abs(sga) / rev : 0.1;
+      return isNum(rev) && isNum(sga) && rev !== 0 ? -sga / rev : 0.1;
     },
     PCT1
   );
@@ -781,6 +795,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   const asFiled = (key: string, name: string, hist: any) => {
     const row = r++;
     R[key] = row;
+    RL[key] = name;
     pending.push(() => {
       label(S, row, name, UNIT, { indent: 1 });
       for (let i = 0; i < nH; i++) {
@@ -846,15 +861,28 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // ---- WORKING CAPITAL AND OTHER SCHEDULES --------------------------------
   header('Working capital & other balance sheet schedules');
 
+  // THE BASIS COMES FROM THE MODEL, NOT FROM HERE. Naming a driver in this file
+  // meant the workbook could describe a rule the engine does not use, and the
+  // seeded percentages hid it until someone edited something (KI-4). `held` is
+  // a line the engine holds flat that carries no amortisation, as distinct from
+  // `flat`, which is other assets and does.
   const schedule = (
     keyBase: string,
     name: string,
     hist: any,
-    driverName: string,
-    base: 'rev' | 'cogs' | 'flat'
+    driverFor: (basis: string) => string,
+    modelKey: string,
+    fallback: 'rev' | 'cogs' | 'flat' | 'held'
   ) => {
+    const declared = M.workingCapitalDriversUsed?.[modelKey];
+    const base: 'rev' | 'cogs' | 'flat' | 'held' =
+      declared === 'cogs' ? 'cogs'
+        : declared === 'revenue' ? 'rev'
+          : declared === 'flat' ? (modelKey === 'otherAssets' ? 'flat' : 'held')
+            : fallback;
+    const driverName = driverFor(base);
     sub(name);
-    if (base === 'flat') {
+    if (base === 'flat' || base === 'held') {
       // Held flat, as in the engine, apart from amortisation of intangibles:
       // end = beginning + additions / (disposals) - amortisation. The input is
       // the movement EXCLUDING amortisation, which is what operating cash flow
@@ -862,7 +890,10 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       driver(
         `${keyBase}Move`,
         driverName,
-        (c) => `${c}${R[`${keyBase}End`]}-${c}${R[`${keyBase}Bop`]}+${c}${R.amort}`,
+        (c) =>
+          base === 'flat'
+            ? `${c}${R[`${keyBase}End`]}-${c}${R[`${keyBase}Bop`]}+${c}${R.amort}`
+            : `${c}${R[`${keyBase}End`]}-${c}${R[`${keyBase}Bop`]}`,
         (i) => (i < nH ? null : 0),
         money(),
         { unit: UNIT }
@@ -873,10 +904,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
         driverName,
         base === 'rev'
           ? (c, _p, i) => (has(M.revenue, i) ? `${c}${R[`${keyBase}End`]}/${c}${R.rev}` : null)
-          : (c, _p, i) => (has(M.cogs, i) ? `${c}${R[`${keyBase}End`]}/-${c}${R.cogs}` : null),
+          // COST OF SALES AS FILED, which is what the engine grows these lines
+          // with. Dividing by the line that excludes D&A and SBC looked the
+          // same at rest and moved differently the moment a margin changed.
+          : (c, _p, i) => (has(M.cogsReportedBasis, i) ? `${c}${R[`${keyBase}End`]}/-${c}${R.cogsFiledBasis}` : null),
         (i) => {
           const end = at(hist?.ending, i);
-          const b = base === 'rev' ? at(M.revenue, i) : at(M.cogs, i);
+          const b = base === 'rev' ? at(M.revenue, i) : at(M.cogsReportedBasis, i);
           if (!isNum(end) || !isNum(b) || b === 0) return 0;
           return base === 'rev' ? end / b : end / Math.abs(b);
         },
@@ -893,33 +927,96 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     eopRow(`${keyBase}End`, 'End of period', hist?.ending, (c) =>
       base === 'flat'
         ? `${c}${R[`${keyBase}Bop`]}+${c}${R[`${keyBase}Move`]}-${c}${R.amort}`
-        : base === 'rev'
-          ? `${c}${R.rev}*${c}${R[`${keyBase}Pct`]}`
-          : `-${c}${R.cogs}*${c}${R[`${keyBase}Pct`]}`
+        : base === 'held'
+          ? `${c}${R[`${keyBase}Bop`]}+${c}${R[`${keyBase}Move`]}`
+          : base === 'rev'
+            ? `${c}${R.rev}*${c}${R[`${keyBase}Pct`]}`
+            : `-${c}${R.cogsFiledBasis}*${c}${R[`${keyBase}Pct`]}`
     );
     blank();
   };
 
   const wc = M.wc || {};
-  schedule('ar', 'Accounts receivable', wc.accountsReceivable, 'Receivables as % of revenue', 'rev');
-  schedule('inv', 'Inventory', wc.inventory, 'Inventory as % of cost of sales', 'cogs');
-  schedule('ap', 'Accounts payable', wc.accountsPayable, 'Payables as % of revenue', 'rev');
-  schedule('acc', 'Accrued expenses & deferred revenue', wc.accruedExpenses, 'Accrued expenses as % of revenue', 'rev');
-  schedule('oca', 'Other current assets', wc.otherCurrentAssets, 'Other current assets as % of revenue', 'rev');
-  schedule('dta', 'Deferred tax assets', wc.deferredTaxAssets, 'Deferred tax assets as % of revenue', 'rev');
-  schedule('oa', 'Other assets', wc.otherAssets, 'Additions / (disposals), excluding amortisation of intangibles', 'flat');
-  schedule('oncl', 'Other non-current liabilities', wc.otherNonCurrentLiabilities, 'Other non-current liabilities as % of revenue', 'rev');
+  // Each label names the basis the MODEL uses, so the row cannot describe a
+  // driver the engine does not have.
+  const of = (line: string) => (b: string) =>
+    b === 'cogs' ? `${line} as % of cost of sales, as filed`
+      : b === 'rev' ? `${line} as % of revenue`
+        : `${line}: additions / (disposals)`;
+  schedule('ar', 'Accounts receivable', wc.accountsReceivable, of('Receivables'), 'accountsReceivable', 'rev');
+  schedule('inv', 'Inventory', wc.inventory, of('Inventory'), 'inventory', 'cogs');
+  schedule('ap', 'Accounts payable', wc.accountsPayable, of('Payables'), 'accountsPayable', 'rev');
+  schedule('acc', 'Accrued expenses & deferred revenue', wc.accruedExpenses, of('Accrued expenses'), 'accruedExpenses', 'rev');
+  schedule('oca', 'Other current assets', wc.otherCurrentAssets, of('Other current assets'), 'otherCurrentAssets', 'rev');
+  schedule('dta', 'Deferred tax assets', wc.deferredTaxAssets, of('Deferred tax assets'), 'deferredTaxAssets', 'rev');
+  schedule(
+    'oa',
+    'Other assets',
+    wc.otherAssets,
+    () => 'Additions / (disposals), excluding amortisation of intangibles',
+    'otherAssets',
+    'flat'
+  );
+  schedule(
+    'oncl',
+    'Other non-current liabilities',
+    wc.otherNonCurrentLiabilities,
+    () => 'Other non-current liabilities: additions / (disposals)',
+    'otherNonCurrentLiabilities',
+    'held'
+  );
 
   // ---- PP&E ---------------------------------------------------------------
   header('Property, plant & equipment');
+  // THE RULE THAT BUYS THE PLANT IS THE ENGINE'S, not one asserted here. This
+  // row used to say capital spending was a percentage of revenue whatever the
+  // engine did, and the percentage is seeded from the engine's own spending, so
+  // the two agreed at rest and parted the moment revenue growth moved: on the
+  // curated Apple file, which compounds capital spending at a growth rate,
+  // three points of extra growth a year put the workbook 15.1% above the site
+  // on capital spending and 1.5% below it on value per share (KI-4).
+  const capexMethod = M.capexMethodUsed ?? 'growth';
+  const capexRatio = isNum(M.capexRatioUsed) ? M.capexRatioUsed : 0;
+  const capexScale = isNum(M.capexScaleUsed) ? M.capexScaleUsed : 1;
+  const capexOf = (i: number) => {
+    const cap = at(M.ppe?.capex, i);
+    return isNum(cap) ? Math.abs(cap) : null;
+  };
   driver(
     'capexPct',
-    'Capital expenditure as % of revenue',
-    (c, _p, i) => (has(M.revenue, i) ? `${c}${R.ppeCapex}/${c}${R.rev}` : null),
+    capexMethod === 'percentOfRnD'
+      ? 'Capital expenditure as % of research & development, as filed'
+      : capexMethod === 'growth'
+        ? 'Growth in capital expenditure, year on year'
+        : 'Capital expenditure as % of revenue',
+    capexMethod === 'percentOfRnD'
+      ? (c, _p, i) => (has(M.rndReportedBasis, i) ? `${c}${R.ppeCapex}/-${c}${R.rndFiled}` : null)
+      : capexMethod === 'growth'
+        ? (c, p, i) => (i > 0 && has(M.ppe?.capex, i - 1) ? `${c}${R.ppeCapex}/${p}${R.ppeCapex}-1` : null)
+        : (c, _p, i) => (has(M.revenue, i) ? `${c}${R.ppeCapex}/${c}${R.rev}` : null),
     (i) => {
+      const cap = capexOf(i);
+      // Forecast years carry the one constant the engine used, not a ratio
+      // re-derived per year, which is the same rule the depreciation rate and
+      // the PP&E intensity below already follow.
+      if (i >= nH) {
+        if (capexMethod === 'growth') {
+          // capexScale lifts the whole line once, without compounding, so it
+          // lands in the first forecast year's step and nowhere else.
+          return i === nH ? (1 + capexRatio) * capexScale - 1 : capexRatio;
+        }
+        return capexRatio * capexScale;
+      }
+      if (capexMethod === 'percentOfRnD') {
+        const rnd = at(M.rndReportedBasis, i);
+        return isNum(rnd) && rnd !== 0 && cap !== null ? cap / Math.abs(rnd) : 0;
+      }
+      if (capexMethod === 'growth') {
+        const prev = capexOf(i - 1);
+        return cap !== null && prev ? cap / prev - 1 : 0;
+      }
       const rev = at(M.revenue, i);
-      const cap = at(M.ppe?.capex, i);
-      return isNum(rev) && isNum(cap) && rev !== 0 ? Math.abs(cap) / rev : 0.04;
+      return isNum(rev) && rev !== 0 && cap !== null ? cap / rev : 0.04;
     },
     PCT1
   );
@@ -975,8 +1072,19 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     );
   } else {
     // A model that projects capital spending as one line: a percentage of
-    // revenue, of R&D, or a growth rate (the curated Apple file).
-    line('ppeCapex', 'Plus: capital expenditures', M.ppe?.capex, (c) => `${c}${R.rev}*${c}${R.capexPct}`, money());
+    // revenue, of R&D, or a growth rate (the curated Apple file). Each writes
+    // the rule the engine used, so the row moves with the site under an edit.
+    line(
+      'ppeCapex',
+      'Plus: capital expenditures',
+      M.ppe?.capex,
+      capexMethod === 'percentOfRnD'
+        ? (c) => `-${c}${R.rndFiled}*${c}${R.capexPct}`
+        : capexMethod === 'growth'
+          ? (c, p) => `${p}${R.ppeCapex}*(1+${c}${R.capexPct})`
+          : (c) => `${c}${R.rev}*${c}${R.capexPct}`,
+      money()
+    );
   }
   // Charged on the plant already owned plus half of what is bought during the
   // year, not on the year's purchases (see the engine's PP&E schedule).
@@ -1537,6 +1645,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // rebuilding the model. See src/data/excelSheets.ts.
   addSupportingSheets({
     R,
+    RL,
     modelSheetName: '3-StatementModel',
     years,
     nH,
