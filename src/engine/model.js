@@ -181,10 +181,16 @@ export function buildModel(data) {
     S.otherOperatingCostsReportedBasis[t] = -(S.revenue[t] * S.otherOperatingCostsMarginReportedBasis[t]);
   }
 
+  // NULL WHERE EITHER YEAR IS MISSING. A filing that stops tagging cost of
+  // sales leaves nulls here, and null arithmetic in JavaScript is zero: the
+  // subtraction gave a number and the division by nothing gave infinity, which
+  // the lines below then multiplied a balance by (KI-17). Enbridge tags no cost
+  // of sales for its last two reported years.
   S.cogsGrowth = blank();
   for (let t = 1; t < nH + nF; t++) {
-    S.cogsGrowth[t] =
-      (S.cogsReportedBasis[t] - S.cogsReportedBasis[t - 1]) / S.cogsReportedBasis[t - 1];
+    S.cogsGrowth[t] = isNum(S.cogsReportedBasis[t]) && isNum(S.cogsReportedBasis[t - 1]) && S.cogsReportedBasis[t - 1] !== 0
+      ? (S.cogsReportedBasis[t] - S.cogsReportedBasis[t - 1]) / S.cogsReportedBasis[t - 1]
+      : null;
   }
 
   // Interest and tax need the debt / cash schedules, so they are filled in
@@ -212,9 +218,26 @@ export function buildModel(data) {
     const end = blank();
     for (let t = 0; t < nH; t++) end[t] = h.balanceSheet[key][t];
     const driver = a.workingCapitalDrivers[key];
+    // A LINE THE FILING DOES NOT TAG IN THE LAST REPORTED YEAR IS ABSENT, NOT
+    // NIL, and absent is what it stays.
+    //
+    // This grew the prior balance whatever that balance was. Where the filing
+    // never tagged the line, the prior balance was null, and `null * (1 + g)`
+    // is zero in JavaScript: Accenture's forecast carried no inventory because
+    // it reports none, which is right, but arrived at by accident. Where the
+    // filing tagged it and then stopped, the same accident was wrong: Alphabet
+    // reported 2,670 of inventory two years before the forecast starts and the
+    // forecast said nil. And where the DRIVER was missing, the growth rate was
+    // infinite or not-a-number, and the balance sheet came out unaddable.
+    //
+    // A line the filing stops tagging has not gone away: its amount is inside
+    // whichever line the filing does tag, which the balance sheet proves by
+    // balancing without it. So the forecast carries it as absent too, and the
+    // balance sheet omits it in the forecast exactly as the reported years do.
+    // Adding a figure back would count it twice.
     for (let t = nH; t < nH + nF; t++) {
       const g = driver === 'cogs' ? S.cogsGrowth[t] : S.revenueGrowth[t];
-      end[t] = end[t - 1] * (1 + g);
+      end[t] = isNum(end[t - 1]) && isNum(g) ? end[t - 1] * (1 + g) : null;
     }
     const beg = blank(), chg = blank();
     for (let t = 1; t < nH + nF; t++) {
@@ -244,9 +267,10 @@ export function buildModel(data) {
     const ar = S.wc.accountsReceivable.ending[t];
     const ap = S.wc.accountsPayable.ending[t];
     const inv = S.wc.inventory.ending[t];
-    if (ar != null) S.dso[t] = (ar / S.revenue[t]) * meta.daysInYear;
-    if (ap != null) S.dpo[t] = (ap / S.revenue[t]) * meta.daysInYear;
-    if (inv != null) S.inventoryTurnover[t] = -S.cogsReportedBasis[t] / inv;
+    if (isNum(ar) && S.revenue[t]) S.dso[t] = (ar / S.revenue[t]) * meta.daysInYear;
+    if (isNum(ap) && S.revenue[t]) S.dpo[t] = (ap / S.revenue[t]) * meta.daysInYear;
+    if (isNum(inv) && inv !== 0 && isNum(S.cogsReportedBasis[t]))
+      S.inventoryTurnover[t] = -S.cogsReportedBasis[t] / inv;
   }
 
   // Other assets / other non-current liabilities — held flat by assumption
@@ -352,7 +376,26 @@ export function buildModel(data) {
   const capexScale = a.capexScale ?? 1;
   let capexRaw = S.ppe.capex[nH - 1];
 
+  // NO OPENING PLANT, NO SCHEDULE. Where the filing does not tag net PP&E in
+  // the last reported year, the forecast used to open at nothing and build a
+  // plant out of its own capital spending: JPMorgan, which tags PP&E for 2021
+  // and 2022 and not since, opened the forecast with a yard worth nil and
+  // closed it with 9,268 (KI-18). The company is refused for the missing input
+  // (see forecastInputGaps), and the schedule it is refused over stays empty
+  // rather than being filled with an invented balance.
+  const noOpeningPlant = !isNum(S.ppe.ending[nH - 1]);
+
   for (let t = nH; t < nH + nF; t++) {
+    if (noOpeningPlant) {
+      S.ppe.beginning[t] = null;
+      S.ppe.capex[t] = null;
+      S.ppe.growthCapex[t] = null;
+      S.ppe.depreciation[t] = null;
+      S.ppe.depreciableBase[t] = null;
+      S.ppe.ending[t] = null;
+      S.depreciationPercentOfAssets[t] = depPct;
+      continue;
+    }
     S.ppe.otherMovements[t] = 0;
     S.ppe.beginning[t] = S.ppe.ending[t - 1];
     // Capex is carried as a POSITIVE outflow, the sign the filings, the data
@@ -753,8 +796,11 @@ export function buildModel(data) {
   }
   for (let t = nH - 1; t < nH + nF; t++) {
     if (S.debt.ending[t - 1] == null || S.debt.interestExpense[t] == null) continue;
-    S.debt.weightedAverageRate[t] =
-      S.debt.interestExpense[t] / avg([S.debt.ending[t - 1], S.debt.ending[t]]);
+    // A company that owes nothing has no rate, rather than a rate of nothing
+    // over nothing: Arista, Palantir and three others carried not-a-number here
+    // and showed it beside their cost of capital.
+    const owed = avg([S.debt.ending[t - 1], S.debt.ending[t]]);
+    S.debt.weightedAverageRate[t] = owed ? S.debt.interestExpense[t] / owed : null;
   }
 
   // ------------------------------------------------ 6. INCOME STATEMENT (rest)
@@ -1002,12 +1048,17 @@ export function buildModel(data) {
     S.basicShares[t] = h.incomeStatement.basicShares[t];
     S.dilutedShares[t] = h.incomeStatement.dilutedShares[t];
     S.dilutiveImpact[t] = S.dilutedShares[t] - S.basicShares[t];
-    S.basicEPS[t] = S.netIncome[t] / S.basicShares[t];
-    S.dilutedEPS[t] = S.netIncome[t] / S.dilutedShares[t];
+    // A YEAR WITH NO SHARE COUNT HAS NO EARNINGS PER SHARE. Alphabet's earliest
+    // reported year does not tag one, and dividing by it gave not-a-number,
+    // which the growth line below then carried forward.
+    S.basicEPS[t] = isNum(S.netIncome[t]) && S.basicShares[t] ? S.netIncome[t] / S.basicShares[t] : null;
+    S.dilutedEPS[t] = isNum(S.netIncome[t]) && S.dilutedShares[t] ? S.netIncome[t] / S.dilutedShares[t] : null;
     S.consensusEPS[t] = S.dilutedEPS[t];
   }
   for (let t = 1; t < nH; t++) {
-    S.epsGrowth[t] = (S.consensusEPS[t] - S.consensusEPS[t - 1]) / S.consensusEPS[t - 1];
+    S.epsGrowth[t] = isNum(S.consensusEPS[t]) && isNum(S.consensusEPS[t - 1]) && S.consensusEPS[t - 1] !== 0
+      ? (S.consensusEPS[t] - S.consensusEPS[t - 1]) / S.consensusEPS[t - 1]
+      : null;
   }
 
   for (let t = nH; t < nH + nF; t++) {
@@ -1038,10 +1089,14 @@ export function buildModel(data) {
   for (let t = 0; t < nH + nF; t++) {
     if (B.totalAssets[t] == null) continue;
     S.ratios.netDebt[t] = B.longTermDebt[t] - B.cashAndSecurities[t];
-    S.ratios.assetTurnover[t] = S.revenue[t] / B.totalAssets[t];
-    S.ratios.netMargin[t] = S.netIncome[t] / S.revenue[t];
-    S.ratios.roa[t] = S.netIncome[t] / B.totalAssets[t];
-    S.ratios.roe[t] = S.netIncome[t] / B.totalEquity[t];
+    // Presentational ratios, null rather than not-a-number where the year they
+    // describe has no denominator: a balance sheet with no total assets, or a
+    // company whose equity nets to nothing.
+    const over = (num, den) => (isNum(num) && isNum(den) && den !== 0 ? num / den : null);
+    S.ratios.assetTurnover[t] = over(S.revenue[t], B.totalAssets[t]);
+    S.ratios.netMargin[t] = over(S.netIncome[t], S.revenue[t]);
+    S.ratios.roa[t] = over(S.netIncome[t], B.totalAssets[t]);
+    S.ratios.roe[t] = over(S.netIncome[t], B.totalEquity[t]);
   }
 
   return { years, nH, nF, meta, ...S };
@@ -1634,9 +1689,16 @@ export function computeWACC(model, data) {
   for (let t = M.nH - 1; t <= lastFcst; t++) {
     if (M.debt.weightedAverageRate[t] != null) rates.push(M.debt.weightedAverageRate[t]);
   }
-  const costOfDebt = avg(rates);
+  // A COMPANY THAT OWES NOTHING HAS NO COST OF DEBT, and nothing is not zero.
+  // With no rate to average this used to read zero — `sum` counts a
+  // not-a-number as nought — and the figure was then shown as the rate Arista
+  // and Palantir borrow at. It is null instead, and the weighted average below
+  // leaves it out, which is the same arithmetic when the debt weight is nil and
+  // an honest blank on the screen. A company that DOES owe and reports no
+  // interest is a different case, handled as a data constraint.
+  const costOfDebt = rates.length ? avg(rates) : null;
   const taxRate = M.taxRate[lastFcst];
-  const afterTaxCostOfDebt = costOfDebt * (1 - taxRate);
+  const afterTaxCostOfDebt = isNum(costOfDebt) ? costOfDebt * (1 - taxRate) : null;
 
   // CAPITAL IS WEIGHTED ON GROSS DEBT, NOT NET DEBT.
   //
@@ -1677,9 +1739,19 @@ export function computeWACC(model, data) {
     const delevered = (k.equityBeta * marketCap) / ((k.debt * (1 - k.taxRate)) + marketCap);
     return { ...k, marketCap, delevered };
   });
-  const industryDelevered = avg(comps.map((k) => k.delevered));
+  // NULL WITH NO COMPARABLES TO AVERAGE. `avg` of an empty list is zero over
+  // zero, and every derived company carries an empty list, so both of these
+  // came out as not-a-number on every company in the sweep set — including the
+  // ones whose cost of capital is shown beside them (KI-17's cause, in the one
+  // place it reached a valued company's screen). The beta the model actually
+  // uses is the asset beta relevered below; these two describe the alternative
+  // route through an industry average, and say nothing when there is no
+  // industry average to describe.
+  const industryDelevered = comps.length ? avg(comps.map((k) => k.delevered)) : null;
 
-  const relevered = (industryDelevered * (grossDebt * (1 - taxRate) + marketCap)) / marketCap;
+  const relevered = isNum(industryDelevered) && marketCap
+    ? (industryDelevered * (grossDebt * (1 - taxRate) + marketCap)) / marketCap
+    : null;
 
   // BORROWING MAKES THE SHARES RISKIER, and the cost of equity has to say so.
   //
@@ -1726,7 +1798,7 @@ export function computeWACC(model, data) {
     debtToEquity,
     // netDebt is reported because the bridge uses it; the weights do not.
     marketCap, netDebt, grossDebt, weightEquity, weightDebt,
-    wacc: weightEquity * costOfEquity + weightDebt * afterTaxCostOfDebt,
+    wacc: weightEquity * costOfEquity + (weightDebt ? weightDebt * afterTaxCostOfDebt : 0),
   };
 }
 

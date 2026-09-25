@@ -37,8 +37,10 @@ mistakes and would never be fixed:
   (the forecast tax rate measured on a base the forecast did not have, fixed
   2026-09-24; what the filing cannot separate moved to `DATA_CONSTRAINTS.md`)
   `KI-2` (no stated discounting convention, and timing that ran from the
-  day the price was fetched, fixed 2026-09-24) and `KI-4` (the workbook
-  asserting drivers the engine does not use, fixed 2026-09-25). Moved out on 2026-09-22 and never to be
+  day the price was fetched, fixed 2026-09-24), `KI-4` (the workbook
+  asserting drivers the engine does not use, fixed 2026-09-25) and `KI-17`
+  with `KI-18` (a filed figure the company does not report carried into the
+  arithmetic, in the model and in the workbook, fixed 2026-09-25). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -66,8 +68,6 @@ commit were measured on the payload set of that date and say so.
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
 | KI-6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
 | KI-7 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| KI-17 | A working capital line the filing never reports is forecast as `NaN` | 1 of 64 valued (Enbridge: payables, inventory, other current assets) | Enbridge payables, `NaN` in every forecast year | none: the line is left out of the balance sheet, so no value reads it |
-| KI-18 | The workbook's PP&E schedule parts from the engine where the filed series has a gap | 1 of 169 modelled (JPMorgan, refused) | JPMorgan capital spending 27.8% apart, PP&E 39.0% | none: the company is refused, so no value is published |
 | KI-16 | Nothing checks that the dashboard renders what the engine produced | every screen | a component reading the wrong field would pass every check | not knowable until it is built |
 | KI-9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
 
@@ -281,45 +281,6 @@ intensity range.
   -64,914 against 12,613; Tesla -34,047 against 14,747.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
-
-### KI-17. A working capital line the filing never reports is forecast as `NaN`
-
-- **What is wrong.** Where a company tags no balance at all for a working
-  capital line in any reported year, the ratio that drives it is `NaN`, and the
-  forecast balances are `NaN` rather than nil or null. Enbridge reports no
-  accounts payable, no inventory and no other current assets; all three run
-  `NaN` through the forecast. Nothing downstream reads them — the balance sheet
-  leaves an unreported line out rather than adding it — so the value and the
-  balance check are unaffected, but a model carrying `NaN` in a line it will
-  print is wrong on its face.
-- **Where.** `src/engine/model.js`, the working capital schedule; the ratio is
-  `null` and the multiplication propagates.
-- **How measured.** Found on 2026-09-25 by the workbook-against-engine check,
-  which now names the lines it cannot compare instead of passing them.
-- **Affects.** 1 of 64 valued companies (Enbridge); any company whose filing
-  omits a working capital line entirely.
-- **Worst example.** Enbridge accounts payable: `NaN` in all five forecast
-  years.
-- **Value moved.** None.
-
-### KI-18. The workbook's PP&E schedule parts from the engine where the filed series has a gap
-
-- **What is wrong.** The workbook chains its PP&E balance forward from the first
-  reported year — opening plus capital spending less depreciation — while the
-  engine takes each reported year's filed closing balance. Where the filed
-  series has a hole, the two schedules part, and the forecast that starts from
-  the last reported balance starts from a different number on each side.
-  JPMorgan's filed PP&E is missing for a year in the middle of the window.
-- **Where.** `src/data/excelExport.ts` (the PP&E schedule's `bopRow`/`eopRow`
-  chain) against `src/engine/model.js` section on PP&E.
-- **How measured.** The workbook-against-engine check on 2026-09-25, across 170
-  payload companies; JPMorgan is the only one affected, at rest and after both
-  edits.
-- **Affects.** 1 of 169 modelled companies, which the site refuses for an
-  unbalanced balance sheet, so no workbook is offered for it.
-- **Worst example.** JPMorgan, last forecast year: capital spending 27.8% above
-  the engine's, PP&E 39.0%, depreciation 39.9%.
-- **Value moved.** None: the company is refused.
 
 ### KI-16. Nothing checks that the dashboard renders what the engine produced
 

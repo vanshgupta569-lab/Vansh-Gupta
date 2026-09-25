@@ -595,6 +595,42 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 
+// ---- nothing the model produces is not-a-number ---------------------------
+//
+// A filed figure the company does not report is null. Null in JavaScript
+// arithmetic is zero, so a line built from one used to come out as nil, or as
+// infinity where it was divided by, and the not-a-number then travelled: into
+// the balance sheet, which stopped adding up, and into the refusal, which
+// blamed the balance sheet for a line the filing never tagged (KI-17, KI-18).
+// Absence now stays absence, and this is what keeps it that way.
+{
+  console.log('\n=== no figure is not-a-number ===');
+  const bad: string[] = [];
+  const seen = new Set<any>();
+  const walk = (node: any, path: string, depth = 0) => {
+    if (node == null || depth > 4) return;
+    if (typeof node === 'number') {
+      if (!Number.isFinite(node)) bad.push(path);
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((v, i) => {
+        if (typeof v === 'number' && !Number.isFinite(v)) bad.push(`${path}[${i}]`);
+      });
+      return;
+    }
+    if (typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    for (const k of Object.keys(node)) walk(node[k], path ? `${path}.${k}` : k, depth + 1);
+  };
+  walk(M, 'model');
+  walk(D, 'dcf');
+  for (const where of bad.slice(0, 12)) console.log(`  PROBLEM: ${where} is not a number`);
+  if (bad.length > 12) console.log(`  ...and ${bad.length - 12} more`);
+  console.log(`  every figure on the model and the valuation is a number or absent -- ${bad.length ? bad.length + ' PROBLEMS' : 'confirmed'}`);
+  totalProblems += bad.length;
+}
+
 // ---- the same filings give the same answer on any day ---------------------
 //
 // The valuation date is the last reported balance sheet date, not the day the

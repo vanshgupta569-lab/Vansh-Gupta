@@ -961,10 +961,22 @@ export function deriveModel(fetched) {
   // refuses the model, and names these when it does.
   const forecastInputGaps = [];
   const reportedYears = (field) => rows.filter((r) => isNum(r[field])).length;
-  if (reportedYears('cogs') === 0) {
+  // THE FORECAST STARTS AT THE LAST REPORTED YEAR, so a line the filing stopped
+  // tagging before then is as absent as one it never tagged. Without this the
+  // gap was carried into the arithmetic instead: JPMorgan tags net property,
+  // plant & equipment for 2021 and 2022 and not since, and the forecast opened
+  // with a yard worth nothing and built one out of its own capital spending;
+  // Enbridge tags no cost of sales for its last two years, and the growth rate
+  // its working capital is driven by came out infinite (KI-17, KI-18).
+  const lastFiledRow = rows[rows.length - 1] || {};
+  const missingInLastYear = (field) => !isNum(lastFiledRow[field]);
+  if (reportedYears('cogs') === 0 || missingInLastYear('cogs')) {
     forecastInputGaps.push({
       field: 'cogs',
-      label: 'cost of sales',
+      label:
+        reportedYears('cogs') === 0
+          ? 'cost of sales'
+          : 'cost of sales for its last reported year',
       drives: 'inventory, payables and other current assets are forecast from its growth, and the gross margin is read from it',
     });
   }
@@ -975,11 +987,17 @@ export function deriveModel(fetched) {
       drives: 'the PP&E schedule and depreciation are built from it',
     });
   }
-  if (reportedYears('ppeNet') < 2) {
+  if (reportedYears('ppeNet') < 2 || missingInLastYear('ppeNet')) {
     forecastInputGaps.push({
       field: 'ppeNet',
-      label: 'net property, plant & equipment for two or more years',
-      drives: 'the depreciation rate is read from its roll-forward',
+      label:
+        reportedYears('ppeNet') < 2
+          ? 'net property, plant & equipment for two or more years'
+          : 'net property, plant & equipment for its last reported year',
+      drives:
+        reportedYears('ppeNet') < 2
+          ? 'the depreciation rate is read from its roll-forward'
+          : 'the forecast plant opens at the last reported balance, and the depreciation rate is charged on it',
     });
   }
 

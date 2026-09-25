@@ -218,6 +218,37 @@ so.
 The workbook's statement totals read "not reported" cells through `N()`, which
 its notes state.
 
+### A balance sheet line the filing stops tagging
+
+**Source:** both. **Affects:** 13 valued, 61 modelled. **Bound:** 0.0% on every
+one of the 13.
+
+Alphabet reported inventory until 2022 and stopped. Alibaba tags no accounts
+payable at all. Accenture has never reported inventory, because it holds none.
+In each case the forecast has no balance to start the line from.
+
+**Not tagged is not nil, and it is not missing either.** The amount is inside
+whichever line the filing *does* tag, and the filing proves it: the reported
+balance sheet adds up without the line. So the forecast carries the line as
+absent, exactly as the last reported year does, and the balance sheet omits it
+on both sides. Putting a figure back — a stale balance rolled forward, or the
+nil the arithmetic used to produce by accident — would count the same money
+twice.
+
+What is lost is not an amount but a **pairing**: the money is forecast at the
+driver of the line that absorbed it rather than at its own. That is what the
+bound prices, by moving every working capital line to the other base
+`CONVENTIONS.md` sanctions. It comes to **0.0% for all 13 valued companies**,
+because forecast cost of sales is a fixed share of revenue, so the two bases
+grow at the same rate for as long as the margin is held where the filing put it.
+A reader who edits the margin in the workbook parts them, which the workbook's
+own driver rows show.
+
+Recorded per company as `workingCapitalLineNotTagged` and listed beside the
+model. Where the line the filing stops tagging is one the **forecast itself** is
+built from — cost of sales, capital expenditure, or net PP&E — there is nothing
+to absorb it and no value is shown at all; see *Already refused, and why*.
+
 ### Total liabilities the filing does not tag
 
 **Source:** both. **Affects:** 23 modelled.

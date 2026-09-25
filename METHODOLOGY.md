@@ -597,6 +597,18 @@ schedule use the **period-end** balance, not the average, and are presentational
 **Convention `WC 7` and `WC 8` are followed**: the change in each asset line
 reaches the cash flow sign-flipped, each liability line without a flip.
 
+**A line the filing stops tagging is absent, not nil.** The forecast starts at
+the last reported balance, so a line the filing does not tag in that year has
+nothing to start from. Its amount is inside whichever line the filing does tag —
+the reported balance sheet adds up without it — so the forecast carries it as
+absent too and the balance sheet omits it on both sides. It used to be grown
+anyway: `null * (1 + g)` is nought in JavaScript, so Alphabet, which reported
+2,670 of inventory two years before its forecast starts, was forecast to hold
+none, and where the *driver* was the missing line the growth rate came out
+infinite and the balance sheet unaddable (`KI-17`, fixed 2026-09-25). Recorded
+per company in `DATA_CONSTRAINTS.md` as `workingCapitalLineNotTagged`; the bound
+is 0.0% for all 13 valued companies that carry it.
+
 **The drivers are declared, not asserted twice.** The engine carries the table
 above on the model as `workingCapitalDriversUsed`, and the workbook builds each
 schedule — its formula, its basis and its row label — from it. This is not
@@ -740,6 +752,17 @@ tag net PP&E under the plain name; treating that as an empty yard charged it
 depreciation on half a year's capital spending alone — 3,138 against the 21,136
 it filed. The base stays null and the company is refused rather than valued off
 an asset base that was never reported.
+
+**And no opening balance means no schedule.** The refusal above stopped the
+value; it did not stop the arithmetic. JPMorgan tags net PP&E for 2021 and 2022
+and not since, so the forecast opened at nothing, spent its own capital
+expenditure, and closed the fifth year holding 9,268 of plant the filing never
+reported — a number the workbook then reproduced, differently, by chaining its
+own schedule through the gap (`KI-18`, fixed 2026-09-25). The whole forecast
+schedule is now absent where the last reported year has no plant: no opening
+balance, no spending, no charge, no closing balance, in the model and in the
+workbook alike. The derivation records the gap as a missing forecast input, so
+the refusal names it.
 
 ---
 
@@ -1206,6 +1229,16 @@ so. Equity is at **market value**, which is the price the model is comparing
 itself against anyway. Both come off the same balance sheet the bridge uses, so
 the weights and the bridge cannot describe different capital structures.
 
+### A cost of debt with no debt behind it
+
+A company that owes nothing has **no** cost of debt, and no is not zero. The
+average of an empty list is nought over nought, which the sum helper read back
+as a clean `0.0%` and the screen showed as the rate Arista and Palantir borrow
+at. It is null instead, and the weighted average leaves it out — the same
+arithmetic, since the debt weight is nil, and an honest blank on the screen. A
+company that *does* owe and reports no interest is a different case, handled as
+a data constraint (§23).
+
 ### Beta
 
 For a derived company the carried beta is **1.0 and it is an asset beta** — the
@@ -1216,6 +1249,14 @@ relation:
 ```
 equity beta = asset beta × (1 + (1 − tax rate) × debt / equity)
 ```
+
+**The industry route is not taken, and now says so.** A curated file may carry
+comparables, delever each one's equity beta and average them. A derived company
+carries none, and the average of an empty list is nought over nought: both the
+industry delevered beta and the beta relevered from it came out as not-a-number
+on every company in the sweep set, beside the cost of capital they are shown
+with. They are null where there is no industry average to describe. The beta the
+model actually uses is the asset beta above; neither figure ever entered it.
 
 **Why.** Debt is cheaper than equity, so weighting capital on gross debt means a
 company that borrows more gets a lower cost of capital. Left there, that runs
@@ -1314,7 +1355,7 @@ deepest one:
 | 3 | `filingMissingIncomeStatementLine` | filed operating income, pretax income, tax or net income missing in any reported year |
 | 4 | `listingNotComparable` | any of the three gates in §3 |
 | 5 | `nonCommonClaimNotReported` | a minority share of income with no readable balance, or preferred dividends with no preferred balance |
-| 6 | `filingMissingValuationInput` | cost of sales never reported, capital expenditure never reported, or fewer than two years of net PP&E |
+| 6 | `filingMissingValuationInput` | cost of sales or net PP&E missing **in the last reported year**, which is where the forecast starts; cost of sales or capital expenditure never reported; or fewer than two years of net PP&E |
 | 7 | `implausibleDepreciationRate` | no asset base in the last reported year; no measurable rate; a rate at or below zero; or a rate that depreciates the balance past nothing inside the forecast |
 | 8 | `revenueDoesNotMeasureTheBusiness` | revenue fell across the reported years while the net PP&E that produces it rose, so the assumption the forecast rests on is contradicted by the filing (§5) |
 | 9 | `dataConstraintTooLarge` | a figure the source never publishes whose absence could move the value per share by more than 25% (§23) |
@@ -1327,6 +1368,17 @@ deepest one:
 Codes 1–5 are **integrity refusals**: no valuation of any kind is shown, not the
 DCF, not the market or asset approach, not residual income, not the reverse DCF.
 The rest refuse the DCF alone.
+
+**Code 1 used to answer for code 6.** A filed line the company stops reporting
+was carried into the arithmetic, where null is nought and division by it is
+infinity, and the not-a-number reached the forecast balance sheet. So 45
+companies — every large bank in the sweep set among them — were told their
+balance sheet did not add up, when what had happened was that their filing does
+not tag a line this forecast is built from. With absence kept as absence
+(§6, §7), those 45 now refuse at 3, 6 or 4 instead, naming the line: 34 for an
+operating income the filing does not report, 10 for a forecast input, one for a
+currency that cannot be established. **No company's status changed** — all 45
+were refused before and are refused now — and no valued company moved a cent.
 
 A bank is refused by 10 and valued by residual income instead (§17), which is
 gated separately on whether the **filed** balance sheet balances, because that

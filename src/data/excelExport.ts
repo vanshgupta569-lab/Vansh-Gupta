@@ -375,7 +375,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
           if (v !== null) cell.value = v;
           styleHard(cell, fmt, o);
         } else {
-          cell.value = { formula: build(L(cOf(i)), L(cOf(i) - 1), i) } as any;
+          // A NULL FORMULA IS AN EMPTY CELL, not a formula over nothing. Where
+          // the model could not build a line — no opening plant to depreciate,
+          // a driver the filing stopped reporting — the sheet leaves the cell
+          // blank rather than computing a schedule out of blanks, which Excel
+          // reads as zeros (KI-18).
+          const f = build(L(cOf(i)), L(cOf(i) - 1), i);
+          if (f != null) cell.value = { formula: f } as any;
           styleCalc(cell, fmt, o);
         }
       }
@@ -459,7 +465,14 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   };
 
   /** Beginning of period, linked to the prior closing balance. */
-  const bopRow = (key: string, name: string, openingValue: number | null, endKey: string) => {
+  const bopRow = (
+    key: string,
+    name: string,
+    openingValue: number | null,
+    endKey: string,
+    // True for a year the model could not compute, whose cell stays empty.
+    absent?: (i: number) => boolean
+  ) => {
     const row = r++;
     R[key] = row;
     RL[key] = name;
@@ -471,7 +484,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
           if (isNum(openingValue)) cell.value = openingValue;
           styleHard(cell, money());
         } else {
-          cell.value = { formula: `${L(cOf(i) - 1)}${R[endKey]}` } as any;
+          if (!absent?.(i)) cell.value = { formula: `${L(cOf(i) - 1)}${R[endKey]}` } as any;
           styleCalc(cell, money());
         }
       }
@@ -508,7 +521,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
           if (v !== null) cell.value = v;
           styleHard(cell, money(), { bold: true });
         } else {
-          cell.value = { formula: build(L(cOf(i)), i) } as any;
+          const f = build(L(cOf(i)), i);
+          if (f != null) cell.value = { formula: f } as any;
           styleCalc(cell, money(), { bold: true });
         }
       }
@@ -1061,13 +1075,18 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       PCT1
     );
   }
-  bopRow('ppeBop', 'Beginning of period', at(M.ppe?.beginning, 0), 'ppeEnd');
+  // Where the filing does not report net PP&E in the last reported year, the
+  // engine builds no forecast schedule at all (see its PP&E section), and
+  // neither does this. JPMorgan's sheet used to open the forecast at nil and
+  // close it at 9,268 of plant the engine never had.
+  const plantForecast = (i: number) => i < nH || has(M.ppe?.ending, i);
+  bopRow('ppeBop', 'Beginning of period', at(M.ppe?.beginning, 0), 'ppeEnd', (i) => !plantForecast(i));
   if (splitCapex) {
     line(
       'ppeGrowthCapex',
       'Plus: capital expenditures to add plant, on the increase in revenue',
       M.ppe?.growthCapex,
-      (c, p) => `(${c}${R.rev}-${p}${R.rev})*${c}${R.ppeIntensity}`,
+      (c, p, i) => (plantForecast(i) ? `(${c}${R.rev}-${p}${R.rev})*${c}${R.ppeIntensity}` : null),
       money()
     );
   } else {
@@ -1079,10 +1098,10 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       'Plus: capital expenditures',
       M.ppe?.capex,
       capexMethod === 'percentOfRnD'
-        ? (c) => `-${c}${R.rndFiled}*${c}${R.capexPct}`
+        ? (c, _p, i) => (plantForecast(i) ? `-${c}${R.rndFiled}*${c}${R.capexPct}` : null)
         : capexMethod === 'growth'
-          ? (c, p) => `${p}${R.ppeCapex}*(1+${c}${R.capexPct})`
-          : (c) => `${c}${R.rev}*${c}${R.capexPct}`,
+          ? (c, p, i) => (plantForecast(i) ? `${p}${R.ppeCapex}*(1+${c}${R.capexPct})` : null)
+          : (c, _p, i) => (plantForecast(i) ? `${c}${R.rev}*${c}${R.capexPct}` : null),
       money()
     );
   }
@@ -1098,8 +1117,11 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'Less: depreciation',
     M.ppe?.depreciation,
     splitCapex
-      ? (c) => `-(${c}${R.depPct}*(${c}${R.ppeBop}+${c}${R.ppeGrowthCapex}/2))/(1-${c}${R.depPct}/2)`
-      : (c) => `-(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)*${c}${R.depPct}`,
+      ? (c, _p, i) =>
+          plantForecast(i)
+            ? `-(${c}${R.depPct}*(${c}${R.ppeBop}+${c}${R.ppeGrowthCapex}/2))/(1-${c}${R.depPct}/2)`
+            : null
+      : (c, _p, i) => (plantForecast(i) ? `-(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)*${c}${R.depPct}` : null),
     money()
   );
   if (splitCapex) {
@@ -1107,7 +1129,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       'ppeCapex',
       'Plus: capital expenditures, replacement plus growth',
       M.ppe?.capex,
-      (c) => `MAX(0,-${c}${R.ppeDep}+${c}${R.ppeGrowthCapex})`,
+      (c, _p, i) => (plantForecast(i) ? `MAX(0,-${c}${R.ppeDep}+${c}${R.ppeGrowthCapex})` : null),
       money()
     );
   }
@@ -1120,10 +1142,12 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'ppeOther',
     'Plus: other movements in the balance (disposals, acquisitions, leases, currency)',
     M.ppe?.otherMovements,
-    () => '0',
+    (_c, _p, i) => (plantForecast(i) ? '0' : null),
     money()
   );
-  eopRow('ppeEnd', 'End of period', M.ppe?.ending, (c) => `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}+${c}${R.ppeOther}`);
+  eopRow('ppeEnd', 'End of period', M.ppe?.ending, (c, i) =>
+    plantForecast(i) ? `${c}${R.ppeBop}+${c}${R.ppeCapex}+${c}${R.ppeDep}+${c}${R.ppeOther}` : null
+  );
   blank();
 
   // As in the engine: the part of filed D&A the depreciation above does not

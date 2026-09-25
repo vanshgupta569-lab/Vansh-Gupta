@@ -478,6 +478,61 @@ export function buildDataConstraints(
   }
 
   // ---------------------------------------------------------------------------
+  // 10. A balance sheet line the filing does not tag in the last reported year
+  // ---------------------------------------------------------------------------
+  // Not tagged is not nil, and it is not missing either: the amount is inside
+  // whichever line the filing DOES tag, which its balance sheet proves by
+  // adding up without it. Alphabet reported inventory until 2022 and stopped;
+  // Alibaba tags no payables. The forecast carries such a line as absent, so
+  // nothing is counted twice, and what the reader loses is not an amount but a
+  // pairing: the money is forecast at the driver of the line that absorbed it,
+  // not at its own.
+  //
+  // The bound is that pairing, priced: every working capital line moved to the
+  // other base the conventions sanction. It comes out at nothing while the
+  // margin is held where the filing put it, because forecast cost of sales is
+  // a fixed share of revenue and the two bases then grow at the same rate.
+  const WC_LINES: [string, string][] = [
+    ['accountsReceivable', 'receivables'],
+    ['inventory', 'inventory'],
+    ['accountsPayable', 'payables'],
+    ['accruedExpenses', 'accrued expenses'],
+    ['otherCurrentAssets', 'other current assets'],
+    ['deferredTaxAssets', 'deferred tax assets'],
+  ];
+  const lastFiled = (model?.nH ?? 0) - 1;
+  const untagged = WC_LINES.filter(
+    ([key]) => !isNum(modelData?.historical?.balanceSheet?.[key]?.[lastFiled])
+  );
+  if (untagged.length && valued) {
+    const v = revalue(modelData, (d) => {
+      for (const [key] of WC_LINES) {
+        d.assumptions.workingCapitalDrivers[key] =
+          d.assumptions.workingCapitalDrivers[key] === 'cogs' ? 'revenue' : 'cogs';
+      }
+    });
+    const bound = v === null ? null : v / (v0 as number) - 1;
+    const names = untagged.map(([, label]) => label).join(', ');
+    add({
+      code: 'workingCapitalLineNotTagged',
+      label: `The filing does not tag ${names}`,
+      detail:
+        `${source} reports no ${names} for this company's last reported year, so there is no balance for the ` +
+        `forecast to start from. The amount is inside another line the filing does tag — its balance sheet adds up ` +
+        `without it — so the forecast leaves the line out rather than inventing a nil balance, and the money is ` +
+        `carried at the driver of the line that holds it.`,
+      source,
+      effect:
+        bound === null
+          ? 'the effect cannot be computed'
+          : `at most ${pct(bound)} on the value per share, moving every working capital line to the other base the ` +
+            `conventions allow`,
+      bound,
+      severity: bySize(bound),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   const refusing = out.filter((c) => c.severity === 'refusal');
   const warnings = out.filter((c) => c.severity === 'warning' || c.severity === 'refusal');
 
