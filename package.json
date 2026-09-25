@@ -13,7 +13,8 @@
     "verify:payloads": "tsx verify/fetch-payloads.mts",
     "verify:sweep": "tsx verify/sweep.mts",
     "verify:compare": "tsx verify/compare.mts",
-    "verify:workbook": "tsx verify/workbook-vs-site.mts"
+    "verify:workbook": "tsx verify/workbook-vs-site.mts",
+    "verify:dashboard": "tsx verify/dashboard.mts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

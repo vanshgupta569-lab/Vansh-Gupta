@@ -38,9 +38,11 @@ mistakes and would never be fixed:
   2026-09-24; what the filing cannot separate moved to `DATA_CONSTRAINTS.md`)
   `KI-2` (no stated discounting convention, and timing that ran from the
   day the price was fetched, fixed 2026-09-24), `KI-4` (the workbook
-  asserting drivers the engine does not use, fixed 2026-09-25) and `KI-17`
+  asserting drivers the engine does not use, fixed 2026-09-25), `KI-17`
   with `KI-18` (a filed figure the company does not report carried into the
-  arithmetic, in the model and in the workbook, fixed 2026-09-25). Moved out on 2026-09-22 and never to be
+  arithmetic, in the model and in the workbook, fixed 2026-09-25) and `KI-16`
+  (nothing checked that the screen showed what the engine produced, fixed
+  2026-09-26 by `npm run verify:dashboard`). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -68,7 +70,6 @@ commit were measured on the payload set of that date and say so.
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
 | KI-6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
 | KI-7 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
-| KI-16 | Nothing checks that the dashboard renders what the engine produced | every screen | a component reading the wrong field would pass every check | not knowable until it is built |
 | KI-9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
 
 ---
@@ -281,22 +282,6 @@ intensity range.
   -64,914 against 12,613; Tesla -34,047 against 14,747.
 - **Value moved.** None (reported years do not enter the DCF), but the reported
   column is not the filed one.
-
-### KI-16. Nothing checks that the dashboard renders what the engine produced
-
-- **What is wrong.** The suite in `verify/` covers the engine, the derivation
-  and the workbook, and `verify:workbook` proves the workbook reproduces the
-  engine to 4e-9%. No check stands between the engine's output and the React
-  screens: a component reading the wrong field, or a label naming a figure it is
-  not showing, would pass everything.
-- **Where.** `src/components/` (every screen); `verify/` (what it does not
-  cover).
-- **How measured.** By inspection of what the harness runs.
-- **Affects.** Every screen.
-- **Worst example.** Not knowable until the check exists, which is the point.
-- **Value moved.** Unknown. `playwright` is already a dev dependency, so a check
-  that loads a company, reads the headline figures off the page and compares
-  them with a direct engine run would close it. Not built.
 
 ### KI-9. The 50% minimum cash buffer has no documented basis
 

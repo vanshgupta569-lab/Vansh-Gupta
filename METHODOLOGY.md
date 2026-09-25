@@ -1662,6 +1662,19 @@ points off the gross margin, the worst on the curated Apple file being capital
 spending 15.1% apart and value per share 1.5% apart. After it, none — save one
 refused company whose reported PP&E series has a gap (`KI-18`).
 
+**A refused company's workbook refuses too.** The site declines to value some
+companies and says why; the workbook built the whole discounted cash flow
+anyway, so the reader who pressed Download got a value per share for a company
+the page had just told them could not be valued, with nothing in the file to
+say so. Twelve cells carried one. Found by the dashboard check on 2026-09-26
+and fixed with it: where the valuation is refused, the DCF sheet is replaced by
+the engine's own reason and the cover states it, while the three-statement
+model, the filed statements and the annexures stay — they are built from what
+the company reported, which the refusal does not touch. The sheet is built and
+then discarded rather than blanked cell by cell, because a blanked schedule
+still carries the formulas that made it, and one typed assumption would bring
+the value back.
+
 **The cost-line drivers carry their sign.** R&D and SG&A as a percentage of
 revenue used to be seeded with the size of the line and written as a charge.
 Where a filing reports no cost lines at all the engine moves the whole D&A and
@@ -1752,11 +1765,12 @@ measured bound, and which ones a primary-filings data layer would remove.
 
 ## 24. What is verified, and what is not
 
-`verify/`, four commands, runnable from a fresh checkout.
+`verify/`, five commands, runnable from a fresh checkout.
 
 | Command | What it proves |
 |---|---|
 | `npm run verify` | ten scenarios over the engine and the derivation, plus a sweep; every check must come out zero |
+| `npm run verify:dashboard` | the rendered page shows what the engine produced, and a refused company shows no value anywhere |
 | `npm run verify:workbook` | the workbook reproduces the site's value per share on both terminal methods, for every valued company |
 | `npm run verify:sweep` | snapshots what the site would show for every fetched company, for measuring a change |
 | `npm run verify:compare` | two snapshots against each other |
@@ -1780,8 +1794,26 @@ model:
   every kind: depositary receipts and cross-listings, 10-K filers based abroad,
   and home listings on 22 exchanges quoted in 19 currencies.
 
-What nothing checks is that the dashboard renders what the engine produced,
-which is `KI-16` and is a gap to be closed rather than a limit to be accepted.
+**The page agrees with the engine too**, since 2026-09-26. Everything above
+runs below the screen, so all of it would pass with a dashboard that read the
+wrong field or printed a value for a company the engine refused (`KI-16`).
+`npm run verify:dashboard` starts the site with Vite, drives it in a real
+Chromium through the screens a reader clicks through, and compares the page
+with the engine's own output for the same company: the headline value and both
+terminal methods, every line of each method, the equity bridge, the cost of
+capital, and the statements year by year — compared **as formatted**, so a
+figure printed to the wrong precision fails as loudly as a wrong one.
+
+It also drives the refusal, which is the path a reader is likeliest to meet on
+an awkward filer: a refused company must show the engine's reason and no value
+**anywhere** — no premium against the price, no football-field bar, no reverse
+DCF, no terminal-reliance panel, and none in the batch screen or the downloaded
+workbook. It found one: the workbook (§22).
+
+It runs against a paper company invented in `verify/fixtures/`, with every
+`/api/*` call answered from that fixture, so it needs no payloads, no API keys
+and no network — the fetched payloads are vendor data and are not in the
+repository (§23).
 
 ## 25. What is not modelled at all
 

@@ -202,6 +202,23 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     return ws;
   };
 
+  // A sentence broken into lines a column can hold, so a refusal reads as
+  // prose rather than running off the edge of the sheet.
+  const wrapText = (text: string, width = 108): string[] => {
+    const lines: string[] = [];
+    let line = '';
+    for (const word of text.split(/\s+/)) {
+      if ((line + ' ' + word).trim().length > width) {
+        lines.push(line.trim());
+        line = word;
+      } else {
+        line = `${line} ${word}`;
+      }
+    }
+    if (line.trim()) lines.push(line.trim());
+    return lines;
+  };
+
   const title = (ws: Sheet, a: string, b: string) => {
     ws.getCell('B2').value = a;
     ws.getCell('B2').font = { ...FONT, size: 14, bold: true };
@@ -230,6 +247,21 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // =========================================================================
   // COVER
   // =========================================================================
+  // WHETHER THERE IS A VALUATION IN THIS FILE AT ALL.
+  //
+  // The site refuses to value some companies — a filing missing a line the
+  // forecast is built from, a balance sheet that does not add up, a listing
+  // whose currency cannot be established — and says so instead of showing a
+  // number. The workbook did not: it built the whole discounted cash flow
+  // anyway, so the reader who pressed Download got a value per share for a
+  // company the page had just told them could not be valued, with no hint that
+  // anything was wrong. A file that leaves with the reader has to carry the
+  // refusal with it.
+  const refusal: { code?: string; message?: string } | null =
+    (D as any)?.applicable === false
+      ? { code: (D as any).code, message: (D as any).message }
+      : null;
+
   const cover = wb.addWorksheet('Cover', {
     views: [{ showGridLines: false }],
     properties: { tabColor: { argb: OXBLOOD } },
@@ -254,6 +286,16 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     cover.getCell(6 + i, 4).value = v;
     cover.getCell(6 + i, 4).font = { ...FONT, color: { argb: BLUE } };
   });
+
+  if (refusal) {
+    band(cover, 13, 'No valuation in this file', OXBLOOD, WHITE, 4);
+    wrapText(String(refusal.message || 'This company cannot be valued from what its filing reports.')).forEach(
+      (text, i) => {
+        cover.getCell(14 + i, 3).value = text;
+        cover.getCell(14 + i, 3).font = { ...FONT, size: 10, color: { argb: BLACK } };
+      }
+    );
+  }
 
   band(cover, 14, 'How to read this file', OXBLOOD, WHITE, 4);
   ([
@@ -1661,6 +1703,25 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     V.getCell(71 + i, 3).value = text;
     V.getCell(71 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
   });
+
+  // NOTHING COMPUTED FOR A REFUSED COMPANY SURVIVES INTO THE FILE. The sheet
+  // above is built and then thrown away, rather than blanked cell by cell: a
+  // blanked schedule still carries the formulas that made it, and a reader who
+  // types one number into an assumption row would have a value per share back.
+  if (refusal) {
+    wb.removeWorksheet(V.id);
+    const X = newSheet('DCFModel', OXBLOOD, false);
+    title(X, `${companyName} - no discounted cash flow`, 'The reported figures in this file are unaffected.');
+    band(X, 5, 'Why there is no valuation here', OXBLOOD, WHITE, 6);
+    wrapText(String(refusal.message || '')).forEach((text, i) => {
+      X.getCell(6 + i, 3).value = text;
+      X.getCell(6 + i, 3).font = { ...FONT, size: 10, color: { argb: BLACK } };
+    });
+    X.getCell(14, 3).value =
+      'The three-statement model, the filed statements and the annexures in this file are built from what the ' +
+      'company reported and are unaffected by this. What cannot be built is the forecast valuation.';
+    X.getCell(14, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
+  }
 
   // =========================================================================
   // STATEMENTS, ANNEXURES, RATIOS, CHECKS & SOURCES

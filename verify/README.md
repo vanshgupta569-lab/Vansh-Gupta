@@ -19,11 +19,12 @@ Excel, which is how the suite checks formulas rather than the values the
 generator happened to write. It is GPL-3.0 (dual-licensed), used only in
 verification and never bundled into the site.
 
-## The four commands
+## The five commands
 
 | Command | What it does | Needs payloads |
 |---|---|---|
 | `npm run verify` | The scenario suite: ten scenarios over one model. | No |
+| `npm run verify:dashboard` | Drives the real site in a browser and checks the page against the engine. | No |
 | `npm run verify:sweep -- <tag>` | Snapshots what the site would show for every fetched company. | Yes |
 | `npm run verify:compare -- <a> <b>` | Measures two snapshots against each other. | No (reads snapshots) |
 | `npm run verify:workbook` | Checks the workbook reproduces the site, company by company. | Optional |
@@ -35,6 +36,7 @@ npm run verify:payloads            # once; ~15 minutes, then reused
 npm run verify:sweep -- before     # before touching anything
 #   ...make the change...
 npm run verify                     # scenario suite: every Checks row zero
+npm run verify:dashboard           # the page still shows what the engine produced
 npm run verify:workbook            # workbook still equals the site
 npm run verify:sweep -- after
 npm run verify:compare -- before after
@@ -102,6 +104,60 @@ CO=BP.L npm run verify
 `npm run verify:workbook` covers curated Apple **and every fetched company
 with a DCF value** (63 of the 176 on the September 2026 set).
 
+## What the dashboard check checks
+
+Every other command here runs **below the screen**. They would all pass with a
+dashboard that read the wrong field, dropped a minus sign, or printed a value
+for a company the engine refused. That gap was `KI-16`.
+
+`npm run verify:dashboard` starts the site with Vite, drives it in a real
+Chromium through the screens a reader clicks through — search, the figures, the
+questions, the analysis — and compares what is on the page with what the engine
+returns for the same company **in the same process**. The engine is the
+authority; the page is the thing under test.
+
+Figures are compared **as formatted**, not as numbers: the engine's figure goes
+through the same rule the component uses (`$1,234`, `9.159%`, `20.4x`) and the
+strings must match. A check that parsed the page back into a number would pass a
+page that printed a value per share to the nearest million.
+
+Three companies, and no network:
+
+| | |
+|---|---|
+| **Apple** | the curated model, which the site renders without fetching anything |
+| **Fenwick Paper Mills** | a paper company invented in `verify/fixtures/`, reached the way a reader reaches a real one: the fetch, the figures screen, the questions |
+| **the same company, refused** | the same fixture with no operating income filed, which is the commonest real refusal in the sweep set |
+
+What it compares, on each valued company: the headline value per share and both
+terminal methods and the spread between them; every line of both terminal
+methods; the equity bridge from enterprise value through net debt to a share;
+the cost of capital and its parts; and the reported and forecast income
+statement and balance sheet, year by year.
+
+On the refused company it checks the opposite — that **no value appears
+anywhere**: not a premium against the price, not a football-field bar, not a
+reverse DCF, not a terminal-reliance panel, and not in the batch screen or the
+downloaded workbook, each of which must carry the engine's own reason instead.
+
+```
+npm run verify:dashboard              # headless
+npm run verify:dashboard -- --headed  # watch it
+```
+
+It needs the Chromium that Playwright downloads separately from the npm
+package. On a clean checkout:
+
+```
+npx playwright install chromium
+```
+
+Nothing leaves the machine: every call the site makes to `/api/*` is answered
+from the fixture, which is why this needs no payloads and no API keys. When it
+fails it writes the screen it stopped on to `verify/out/dashboard-failure.png`
+and `.txt`, because a timeout on a button says nothing about where the browser
+had got to.
+
 ## Payloads: where they live, and why they are not in the repository
 
 `npm run verify:payloads` fetches them into `verify/payloads/`, which is
@@ -136,6 +192,8 @@ and skipped.
 | `sweep.mts` | One snapshot of what the site would show, per company. |
 | `compare.mts` | Two snapshots measured against each other. |
 | `workbook-vs-site.mts` | The workbook's value per share against the engine's. |
+| `dashboard.mts` | The rendered page against the engine, in a real browser. |
+| `fixtures/paperCompany.mts` | Five years of statements for a company that does not exist. |
 | `fetch-payloads.mts` | Fetches the sweep set through the site's own API handler. |
 | `tickers.txt` | The sweep set. |
 | `payloads/`, `snapshots/`, `out/` | Working directories, all ignored by git. |
