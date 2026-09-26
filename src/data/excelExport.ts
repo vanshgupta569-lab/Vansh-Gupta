@@ -1259,14 +1259,15 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // from the engine's own excess-cash line (opening cash less excess cash).
   driver(
     'minCash',
-    'Minimum cash balance',
+    // The basis, on the row, because a floor that sizes every revolver movement
+    // should not be a number nobody can account for (KI-9). The engine carries
+    // the figure it actually used, so this reads it rather than recovering it
+    // by subtracting the excess-cash line from the opening balance.
+    M.minimumCashPercentOfRevenue
+      ? `Minimum cash balance — ${(M.minimumCashPercentOfRevenue * 100).toFixed(1)}% of revenue, the least this company has operated on`
+      : 'Minimum cash balance',
     null,
-    (i) => {
-      if (i < nH) return null;
-      const bop = at(M.cash?.beginning, i);
-      const excess = at(M.revolverAnalysis?.excessCash, i);
-      return isNum(bop) && isNum(excess) ? bop - excess : 0;
-    },
+    (i) => (i < nH ? null : at(M.minimumCashUsed, i) ?? 0),
     money(),
     { unit: UNIT }
   );

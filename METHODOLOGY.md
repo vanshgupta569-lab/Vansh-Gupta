@@ -895,10 +895,37 @@ is `Debt 12`'s minimum function — pay down whichever of cash available and the
 outstanding balance is smaller, draw when cash available is negative. `Debt 13`
 (a stated facility cap) is **not followed**: no cap is known, so none is applied.
 
-**The minimum cash balance is 50% of the last reported cash balance.** `Debt 10`
-requires the cushion to be documented rather than left as an unexplained number;
-it is documented here and in the provenance, but its *basis* is a judgment with
-nothing behind it, which is why it is also recorded as `KI-9`.
+**The minimum cash balance is the least cash the company has operated on,
+relative to its own size**: the lowest cash-to-revenue ratio across its reported
+years, applied to each forecast year's revenue. It was half the last reported
+balance for every derived company until 2026-09-26 — a number with no filing and
+no convention behind it, which nonetheless sized every revolver movement in the
+model (`KI-9`).
+
+A ratio rather than a level, because the need for working cash grows with the
+business and a level does not: a floor set at the lowest balance of the last
+five years is a real cushion in year one and a thinning one by year five. The
+company's own low-water mark rather than a view about how much cash a business
+of this kind ought to hold, because the second is not something a filings-only
+site can know. Microsoft's comes out at 6.3% of revenue, Walmart's at 1.3%.
+
+`Debt 10` asks for the size and the basis of the cushion to be documented rather
+than left unexplained, and treats the amount as a judgement call rather than a
+formula. The basis is now in `provenance.minimumCash`, on the Sources sheet, and
+in the workbook's own row label, which names the percentage on the row it drives.
+It is an assumption row like any other: a reader who knows of a covenant minimum
+can type it in, year by year. The curated Apple file keeps the 100,000 its own
+source workbook uses.
+
+**What it changed.** Tighter than the flat half, so the model borrows sooner:
+across the 172 modelled companies, 54 draw on the revolver in at least one
+forecast year against 39 before, over 242 forecast years against 142. Almost all
+of that is in companies the site refuses to value, where cash is a balance-sheet
+item rather than a working balance — of the 64 valued companies, the same two
+draw as before (Micron and Novartis), over 8 forecast years against 4. With the
+circularity switch on, Micron's interest expense over the five forecast years
+rises from 3,587 to 5,318. No valuation moved: the revolver reaches neither
+unlevered free cash flow nor the equity bridge.
 
 ---
 

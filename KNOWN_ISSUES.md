@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-18`. **Next free: `KI-19`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-19`. **Next free: `KI-20`.** Retired, meaning
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
   average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
@@ -43,9 +43,10 @@ mistakes and would never be fixed:
   arithmetic, in the model and in the workbook, fixed 2026-09-25), `KI-16`
   (nothing checked that the screen showed what the engine produced, fixed
   2026-09-26 by `npm run verify:dashboard`), `KI-7` (a reported cash flow
-  statement rebuilt rather than filed, fixed 2026-09-26) and `KI-6` (a filer
+  statement rebuilt rather than filed, fixed 2026-09-26), `KI-6` (a filer
   the SEC's XBRL has no facts for could not be loaded at all, fixed
-  2026-09-26). Moved out on 2026-09-22 and never to be
+  2026-09-26) and `KI-9` (a cash cushion with no basis, fixed 2026-09-26;
+  the other constants it turned up are `KI-19`). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -71,7 +72,7 @@ commit were measured on the payload set of that date and say so.
 | KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
-| KI-9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
+| KI-19 | Valuation constants with no stated basis | every derived company | the exit multiple, a flat 12x, which produces one of the two headline values | the exit multiple moves one of the two values directly; not yet isolated |
 
 ---
 
@@ -254,24 +255,35 @@ intensity range.
   reads it on the basis it was built with. It is the inconsistency that is the
   defect, not the figure.
 
-### KI-9. The 50% minimum cash buffer has no documented basis
+### KI-19. Valuation constants with no stated basis
 
-- **What is wrong.** Derived models set the minimum cash balance at half the
-  last reported cash. Every other derived assumption states its basis in
-  `provenance`, shown on the Sources sheet; this one does not, and the workbook
-  shows the figure without saying where it comes from. (Apple's hand-built
-  100,000 comes from its source workbook.)
-- **Where.** `src/data/deriveModel.js` (`minimumCashDesired`);
-  `src/data/excelExport.ts` (`minCash` driver, recovered from the engine's
-  excess-cash line).
-- **How measured.** Code review during the conventions audit.
+- **What is wrong.** `KI-9` was one number with nothing behind it. Fixing it
+  meant looking for the others, and there are five. Each is a constant the
+  engine applies to every derived company with no filing and no convention
+  cited for its size:
+  - **the exit multiple, a flat 12×**, which is not a default hiding in a
+    schedule but one of the two headline values on the page. `METHODOLOGY.md`
+    records that it is flat; nothing records why 12.
+  - **the risk-free rate, 4.5%, and the market risk premium, 4.23%**, flat for
+    every company with no tenor and no source attached. `METHODOLOGY.md` §14
+    already says `DCF 9` is "not demonstrable" for this reason.
+  - **terminal growth, 2.5%**, flat for every company. 2.5% is a conventional
+    long-run nominal growth proxy, but nothing here cites it.
+  - **the share-count tolerance, 1.5**, the band inside which a listing's
+    share count and its filing's must agree before `shareCountMismatch`
+    refuses the company. Half the count either way, chosen for nothing.
+- **Where.** `src/data/deriveModel.js`: `exitEbitdaMultiple`, `costOfCapital`,
+  `TERMINAL_GROWTH`, `SHARE_COUNT_TOLERANCE`.
+- **How measured.** Read out of the derivation while fixing `KI-9`
+  (2026-09-26); each was checked against `CONVENTIONS.md` and against what
+  `METHODOLOGY.md` claims for it.
 - **Affects.** Every derived company.
-- **Worst example.** —
-- **Value moved.** None. It sizes forecast revolver draws and, with the
-  circularity switch on, revolver interest; neither reaches unlevered free cash
-  flow or the equity bridge.
-
----
+- **Worst example.** The exit multiple: the whole exit-multiple value per share
+  is the last forecast year's EBITDA times this number.
+- **Value moved.** Not isolated. The exit multiple moves one of the two
+  headline values proportionally; the cost-of-capital constants move the
+  discounted value of everything. Each needs its own measurement, and its own
+  job.
 
 ## Where the rest went
 

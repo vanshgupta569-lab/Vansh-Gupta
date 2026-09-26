@@ -1039,6 +1039,44 @@ export function buildModel(data) {
 
   S.revolverAnalysis = { excessCash: blank(), freeCashFlow: blank(), available: blank() };
 
+  // THE CASH CUSHION, PER YEAR AND ON THE MODEL.
+  //
+  // The floor the forecast will not let the cash balance fall below: what is
+  // above it can pay the revolver down, and a year that ends below it draws.
+  // It sizes every revolver movement in the model, and with the circularity
+  // switch on it sizes the interest on them too.
+  //
+  // It may be one figure (the curated Apple file carries the 100,000 its own
+  // workbook uses) or one per forecast year, which is what a derived company
+  // now gets: the least cash it has actually operated on, relative to its own
+  // size, applied to each forecast year's revenue (deriveModel.js). It used to
+  // be half the last reported balance for every derived company, a number with
+  // nothing behind it (`KI-9`), and `CONVENTIONS.md` asks for the size and the
+  // basis of the cushion to be documented rather than left unexplained.
+  //
+  // Carried on the model so the workbook can show the figure it is actually
+  // using instead of recovering it by subtraction from the excess-cash line.
+  S.minimumCashUsed = blank();
+  // The share of revenue the cushion was struck at, where that is the rule, so
+  // the workbook and the screen can name the basis on the row.
+  S.minimumCashPercentOfRevenue =
+    a.minimumCashDesired && typeof a.minimumCashDesired === 'object' && !Array.isArray(a.minimumCashDesired)
+      ? a.minimumCashDesired.percentOfRevenue ?? null
+      : null;
+  const cushionFor = (t) => {
+    const rule = a.minimumCashDesired;
+    // A share of that year's revenue: the least the company has ever operated
+    // on, relative to its own size, so the floor grows with the business the
+    // way the need for working cash does.
+    if (rule && typeof rule === 'object' && !Array.isArray(rule)) {
+      return isNum(rule.percentOfRevenue) && isNum(S.revenue[t])
+        ? rule.percentOfRevenue * S.revenue[t]
+        : 0;
+    }
+    if (Array.isArray(rule)) return isNum(rule[t - nH]) ? rule[t - nH] : 0;
+    return isNum(rule) ? rule : 0;
+  };
+
   for (let t = nH; t < nH + nF; t++) {
     // Financing lines other than the revolver
     const financingExRevolver = sum([
@@ -1048,7 +1086,8 @@ export function buildModel(data) {
 
     S.cash.beginning[t] = S.cash.ending[t - 1];
     S.revolver.beginning[t] = S.revolver.ending[t - 1];
-    S.revolverAnalysis.excessCash[t] = S.cash.beginning[t] - a.minimumCashDesired;
+    S.minimumCashUsed[t] = cushionFor(t);
+    S.revolverAnalysis.excessCash[t] = S.cash.beginning[t] - S.minimumCashUsed[t];
     S.revolverAnalysis.freeCashFlow[t] =
       S.cashFlow.operating[t] + S.cashFlow.investing[t] + financingExRevolver;
     S.revolverAnalysis.available[t] =

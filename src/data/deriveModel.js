@@ -959,6 +959,50 @@ export function deriveModel(fetched) {
   // Inputs the forecast is built from that the filing never reports at all.
   // Without them the forecast balance sheet cannot be computed, so the engine
   // refuses the model, and names these when it does.
+  // THE CASH CUSHION, DERIVED FROM THE COMPANY'S OWN FILINGS.
+  //
+  // The floor the forecast will not let cash fall below. It used to be half the
+  // last reported balance for every derived company — a number with no filing
+  // and no convention behind it, which nonetheless sized every revolver
+  // movement in the model (`KI-9`). `CONVENTIONS.md` (Debt 10) treats the size
+  // of a cushion as a judgement call rather than a formula, and asks that its
+  // size and basis be documented rather than left unexplained.
+  //
+  // So it is measured: the LEAST CASH THIS COMPANY HAS OPERATED ON, relative to
+  // its own size — the lowest cash-to-revenue ratio in the reported years —
+  // applied to each forecast year's revenue. A level would have done as well in
+  // year one and worse by year five, because the need for working cash grows
+  // with the business and a level does not.
+  //
+  // It is the company's own low-water mark, not a view about how much cash a
+  // business of this kind ought to hold, and it is an assumption row in the
+  // workbook like any other: a reader who knows about a covenant minimum can
+  // type it in.
+  const cashToRevenue = rows
+    .map((r) => (isNum(r.cash) && isNum(r.revenue) && r.revenue !== 0 ? r.cash / r.revenue : null))
+    .filter(isNum);
+  const lowestCashToRevenue = cashToRevenue.length ? Math.min(...cashToRevenue) : null;
+  const minimumCashRule =
+    lowestCashToRevenue !== null ? { percentOfRevenue: lowestCashToRevenue } : 0;
+  const lowestCashYear = cashToRevenue.length
+    ? rows[
+        rows.findIndex(
+          (r) =>
+            isNum(r.cash) && isNum(r.revenue) && r.revenue !== 0 && r.cash / r.revenue === lowestCashToRevenue
+        )
+      ]?.fiscalYear
+    : null;
+
+  provenance.minimumCash =
+    lowestCashToRevenue !== null
+      ? `${(lowestCashToRevenue * 100).toFixed(1)}% of each forecast year's revenue — the least cash this company ` +
+        `has operated on relative to its own size, measured across ${cashToRevenue.length} reported ` +
+        `year${cashToRevenue.length === 1 ? '' : 's'}${lowestCashYear ? ` and struck in FY${lowestCashYear}` : ''}. ` +
+        `The cushion is what the forecast will not spend: above it, cash pays the revolver down; below it, the ` +
+        `revolver is drawn. CONVENTIONS.md treats the size of a cushion as a judgement call, so this is the ` +
+        `company's own low-water mark rather than a view about how much cash a business of this kind should hold`
+      : 'no cushion: the filing reports no cash balance to measure one from';
+
   const forecastInputGaps = [];
   const reportedYears = (field) => rows.filter((r) => isNum(r[field])).length;
   // THE FORECAST STARTS AT THE LAST REPORTED YEAR, so a line the filing stopped
@@ -1594,9 +1638,7 @@ export function deriveModel(fetched) {
     },
     repurchasePercentOfCeiling: 'avgOfHistory',
 
-    minimumCashDesired: isNum(rows[rows.length - 1]?.cash)
-      ? Math.round(rows[rows.length - 1].cash * 0.5)
-      : 0,
+    minimumCashDesired: minimumCashRule,
     interestRateOnCash: Array(FORECAST_YEARS).fill(0),
 
     consensusEPS: Array(FORECAST_YEARS).fill(null),

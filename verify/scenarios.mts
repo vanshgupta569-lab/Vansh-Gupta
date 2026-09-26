@@ -153,7 +153,9 @@ const R = {
   pik: need('PIK interest accrued to the balance'),
   debtBop: need('Beginning of period', borrow),
   debtEnd: need('End of period', borrow),
-  minCash: need('Minimum cash balance'),
+  // The row names its own basis for a derived company (KI-9), so it is found
+  // by pattern rather than by the whole label.
+  minCash: need(/^Minimum cash balance/),
   revBop: need('Revolver, beginning of period'),
   revDraw: need('Revolver draw / (repayment)'),
   revEnd: need('Revolver, end of period'),
