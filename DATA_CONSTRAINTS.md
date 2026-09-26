@@ -249,6 +249,64 @@ model. Where the line the filing stops tagging is one the **forecast itself** is
 built from — cost of sales, capital expenditure, or net PP&E — there is nothing
 to absorb it and no value is shown at all; see *Already refused, and why*.
 
+### A forward multiple nobody publishes
+
+**Source:** neither. **Affects:** every company with a discounted cash flow.
+**Bound:** the exit-multiple value moves in proportion; noted rather than
+refused, for the reason below.
+
+The exit-multiple method needs the multiple the market would pay for this
+business at the end of the forecast. No free source publishes a forward
+EV/EBITDA. The peer sets that can be fetched are two to five companies one
+vendor associates with this one, on trailing figures — "a starting point, not a
+comp set someone would sign off", in the fetcher's own words.
+
+**Deriving the multiple from them was measured and rejected** (2026-09-26). A
+peer median comes back for **36 of the 64 valued companies** — not for Apple,
+Alphabet, Amazon, BP, GSK, AstraZeneca, BHP, Sony or Tencent, which return no
+peers at all — and where it does, it runs from **7.2× to 455.8×**. Applying it
+moved the exit-multiple value per share for all 36, by more than 5% for all 36,
+by a **median 50%**: Tata Consultancy +2,752% on two peers at 455.8×, Arista
++591% on four at 123×, Micron +371%. The spread between the two terminal
+methods, which this site treats as a signal and refuses above 25%, would go from
+a median **12% to 45%**. A trailing median of three companies cannot carry a
+headline value five years out.
+
+So the multiple stays a flat **12×**, and the site says that rather than
+claiming it came from somewhere: `provenance.exitMultiple` states it beside the
+value it produces, the football field no longer describes a derived company's
+multiple as "taken from the market", and the row carries its own control.
+
+**Why this is noted and not refused.** By the bound alone a figure that moves a
+value by a median 50% is a refusal. That rule is for figures the model must
+guess and then presents as computed. This one is declared: it is on the page as
+an assumption with its own adjuster, its basis is stated next to the number, and
+an independent second method — the perpetuity value, built from the company's
+own cash flows — is published beside it and does not use the multiple at all.
+Withholding a valuation over a number the reader can see and change would be
+refusing over a disclosure rather than over a gap in the data.
+
+**What would remove it:** a forward EV/EBITDA consensus, or a comp set chosen
+by someone accountable for it.
+
+### A market risk premium and a long-run growth rate, neither of them published
+
+**Source:** neither. **Affects:** every derived company. **Bound:** not
+isolated; both move every discounted figure.
+
+The cost of equity needs an equity risk premium, and the perpetuity needs a rate
+the economy grows at for ever. The site uses **4.23%** and **2.5%**, flat for
+every company. Neither is published as a fact by any free source: an equity risk
+premium is an estimate that reputable people disagree about by two points, and a
+perpetual growth rate is a judgement about the next century.
+
+They are shown as what they are — assumption rows with their own controls, moved
+on the row they sit on, with the sensitivity grid beside the value showing what
+happens when they move. What is *not* claimed is that either was derived.
+
+**What would remove it:** nothing a free source publishes. These are judgements,
+and the honest treatment is to show them and let the reader move them.
+
 ### Total liabilities the filing does not tag
 
 **Source:** both. **Affects:** 23 modelled.

@@ -18,6 +18,10 @@ const FORECAST_YEARS = 5;
 // to so it arrives there rather than stepping. One constant, because the two
 // have to be the same number or the join reopens.
 const TERMINAL_GROWTH = 0.025;
+// The assumed exit multiple, applied to the last forecast year's EBITDA. See
+// the note where it is used: it is an assumption the reader can move, not a
+// figure derived from this company or its peers.
+const EXIT_MULTIPLE = 12;
 
 // ---------------------------------------------------------------- helpers
 
@@ -593,6 +597,20 @@ function selectComparablePeriods(statements) {
 // Returns { refusal, basis }: refusal is null when the comparison holds.
 const US_MARKET_EXCHANGES = new Set(['NYQ', 'NMS', 'NGM', 'NCM', 'NAS', 'NYS', 'ASE', 'PCX', 'BTS', 'PNK', 'OQX', 'OQB', 'OEM', 'OBB', 'CXI']);
 const DEPOSITARY_VENUES = new Set(['IOB']);
+// HOW FAR A LISTING'S SHARE COUNT MAY SIT FROM THE FILING'S before the price
+// and the statements are treated as describing different securities.
+//
+// It has to separate two things. Below it: the ordinary difference between a
+// spot count of shares outstanding and a weighted-average diluted count for a
+// fiscal year — timing, issuance, dilution. Above it: a depositary receipt,
+// whose smallest real ratio is 2:1 or 1:2, a factor of two.
+//
+// Measured on the sweep set (2026-09-26): 92 listings report both counts, and
+// every one of them lies between 0.91 and 1.06 — the 5th percentile is 0.92,
+// the 95th 1.02, the furthest from parity Toyota's New York line at 0.909. So
+// the ordinary difference runs to about a tenth, and the thing this must catch
+// is a doubling. 1.5 sits between them, near the geometric midpoint of 1.1 and
+// 2.0, and nothing observed comes close to it from either side.
 const SHARE_COUNT_TOLERANCE = 1.5;
 
 export function listingComparability(fetched) {
@@ -992,6 +1010,13 @@ export function deriveModel(fetched) {
         )
       ]?.fiscalYear
     : null;
+
+  provenance.exitMultiple =
+    `${EXIT_MULTIPLE.toFixed(1)}x the last forecast year's EBITDA — an assumption, not a figure taken from this ` +
+    `company's market. No free source publishes a forward EV/EBITDA for a company or a comp set worth signing off, ` +
+    `and the peer medians that can be fetched run from 7x to over 400x on two to five associated companies, which ` +
+    `is why one is not used (DATA_CONSTRAINTS.md). Move it on the row it sits on: the perpetuity value beside it is ` +
+    `built from this company's own cash flows and does not use it`;
 
   provenance.minimumCash =
     lowestCashToRevenue !== null
@@ -1844,7 +1869,30 @@ export function deriveModel(fetched) {
     longTermSecurities: lastLongTermSecurities,
 
     longTermGrowthRate: TERMINAL_GROWTH,
-    exitEbitdaMultiple: 12,
+    // AN ASSUMPTION, AND IT SAYS SO. `CONVENTIONS.md` (DCF 11) describes the
+    // exit-multiple method as "an assumed multiple, commonly EBITDA-based",
+    // which is what this is: a flat 12x for every derived company, not a
+    // figure read off this company's market.
+    //
+    // Deriving it from the peer set the market approach already fetches was
+    // measured and rejected (KI-19, 2026-09-26). A peer median comes back for
+    // 36 of the 64 valued companies — not for Apple, Alphabet, Amazon, BP,
+    // GSK, AstraZeneca, BHP, Sony or Tencent, which return no peers at all —
+    // and where it does come back it is a trailing median of two to five
+    // companies Yahoo happens to associate, running from 7.2x to 455.8x.
+    // Applying it moved the exit-multiple value per share for all 36, by more
+    // than 5% for all 36 and by a median 50%: Tata Consultancy +2,752% on two
+    // peers at 455.8x, Arista +591%, Micron +371%. The spread between the two
+    // terminal methods — which this site treats as a signal, and refuses
+    // above 25% — would go from a median 12% to 45%. A comp set the fetcher
+    // itself calls "a starting point, not a comp set someone would sign off"
+    // cannot carry a headline value five years out.
+    //
+    // So it stays an assumption, and the site says that rather than claiming
+    // the number came from somewhere. It is on the model sheet, on the screen
+    // beside the value it produces, and in DATA_CONSTRAINTS.md with what the
+    // source would have to publish to replace it.
+    exitEbitdaMultiple: EXIT_MULTIPLE,
 
     terminalCapexTreatment: 'capexEqualsDepreciation',
     terminalExclusions: ['deferredTaxAssets', 'otherNonCurrentLiabilities'],

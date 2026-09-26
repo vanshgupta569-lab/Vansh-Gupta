@@ -581,13 +581,19 @@ export function valuationBandsFor(
         low: Math.min(...multipleValues),
         high: Math.max(...multipleValues),
         point: r(D.exitMultipleValuation.valuePerShare, 2),
-        // Worth naming plainly: the exit multiple is observed in the market,
-        // so this bar is an income approach carrying a market assumption. The
-        // five forecast years are discounted cash flow; only the terminal value
-        // is a multiple. Calling it purely one or the other would be wrong.
+        // Worth naming plainly, and naming honestly: for the curated Apple
+        // file the multiple came from the workbook it was built from, which
+        // took it off the market. For a derived company it is a flat
+        // assumption, and saying "taken from the market" of a number nobody
+        // read off any market was a claim this model could not support
+        // (KI-19). The bar is an income approach either way — the five
+        // forecast years are discounted cash flow and only the terminal value
+        // is a multiple — but where the multiple came from is now stated.
         detail: `exit multiple ${(multiple - step).toFixed(1)}x to ${(
           multiple + step
-        ).toFixed(1)}x, taken from the market`,
+        ).toFixed(1)}x, ${source.meta?.source === 'analyst model' || !source.provenance?.exitMultiple
+          ? 'taken from the market'
+          : 'an assumption, not read off this company\'s market'}`,
       });
     }
 

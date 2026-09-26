@@ -1199,7 +1199,30 @@ The last forecast year's EBITDA times a flat **12×** for every derived company.
 The implied exit multiple from the perpetuity value, and the implied perpetual
 growth from the multiple, are both computed and shown.
 
-**Convention:** `DCF 10` (both methods computed) — followed.
+**It is an assumption, and the site says so.** `CONVENTIONS.md` describes this
+method as "an assumed multiple, commonly EBITDA-based", which is exactly what
+this is — not a figure read off this company's market. Until 2026-09-26 the
+number sat in the derivation with nothing behind it while the football field
+described it as "taken from the market" (`KI-19`). It now carries its basis in
+`provenance.exitMultiple`, shown beside the value it produces, and the football
+field says what it is for a derived company.
+
+**Deriving it from the peer set was measured and rejected.** The market approach
+already fetches comparables, so a peer median EV/EBITDA looked derivable. It is
+not sound on this data: a median comes back for **36 of the 64 valued
+companies** — none for Apple, Alphabet, Amazon, BP, GSK, AstraZeneca, BHP, Sony
+or Tencent — and where it does it runs from **7.2× to 455.8×** on two to five
+companies one vendor associates, on trailing figures. Applying it moved the
+exit-multiple value per share for all 36, by more than 5% for all 36, by a
+median **50%**: Tata Consultancy +2,752%, Arista +591%, Micron +371%. The spread
+between the two terminal methods would go from a median **12% to 45%**, so the
+signal `DCF 12` asks to investigate would be swamped by the noise in a three-company
+peer median. Recorded in `DATA_CONSTRAINTS.md`, which also says why it is noted
+rather than refused.
+
+**Convention:** `DCF 10` (both methods computed) — followed. `DCF 11` (an
+assumed multiple, commonly EBITDA-based) — followed, and now stated as an
+assumption rather than presented as an observation.
 
 ### They are never averaged
 
@@ -1281,6 +1304,18 @@ WACC           = weight of equity × cost of equity
 Risk-free rate **4.5%**, market risk premium **4.23%**, both flat defaults for
 every derived company. The tax rate is the last forecast year's.
 
+The two are not the same kind of number, which `KI-19` separated on 2026-09-26.
+A **risk-free rate** stands for something a source publishes: the same Yahoo
+chart endpoint the site already takes prices from returns the 10-year Treasury
+yield under `^TNX`, with a year of daily closes, and it answered 5.184% on
+2026-09-26 against a year's range of 3.95% to 5.18%. So 4.5% is not a judgement
+that cannot be grounded; it is an ungrounded number standing in for one that
+can be fetched, which keeps it in `KNOWN_ISSUES.md` rather than moving it to
+`DATA_CONSTRAINTS.md`. Changing it moves every valuation, so it is its own job.
+A **market risk premium** is not published as a fact by anyone; nor is a
+perpetual growth rate. Those two are in `DATA_CONSTRAINTS.md`, shown as
+assumptions with their own controls and their own sensitivity grid.
+
 **Convention:** `DCF 8` (CAPM) — followed. `DCF 7` (an after-tax cost of debt and
 a cost of equity, each weighted at market value, with the debt component
 tax-effected) — partly followed, see the weights below. `DCF 9` (risk-free rate,
@@ -1316,6 +1351,21 @@ at. It is null instead, and the weighted average leaves it out — the same
 arithmetic, since the debt weight is nil, and an honest blank on the screen. A
 company that *does* owe and reports no interest is a different case, handled as
 a data constraint (§23).
+
+### The share-count tolerance, and where it comes from
+
+A listing is refused as `shareCountMismatch` when its shares outstanding and its
+filing's diluted count differ by more than **1.5×** either way. The band has to
+separate two things: the ordinary difference between a spot count and a
+weighted-average diluted count for a fiscal year, and a depositary receipt,
+whose smallest real ratio is 2:1 or 1:2.
+
+Measured on the sweep set (2026-09-26): **92 listings report both counts, and
+every one lies between 0.91 and 1.06** — 5th percentile 0.92, 95th 1.02, the
+furthest from parity being Toyota's New York line at 0.909. So the ordinary
+difference runs to about a tenth and the thing the band must catch is a
+doubling. 1.5 sits between them, near the geometric midpoint of 1.1 and 2.0, and
+nothing observed comes within a third of it from either side.
 
 ### Beta
 

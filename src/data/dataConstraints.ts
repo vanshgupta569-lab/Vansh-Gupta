@@ -533,6 +533,47 @@ export function buildDataConstraints(
   }
 
   // ---------------------------------------------------------------------------
+  // 11. A forward multiple nobody publishes
+  // ---------------------------------------------------------------------------
+  // The exit-multiple method needs a multiple the market would pay for this
+  // business at the end of the forecast. No free source publishes a forward
+  // EV/EBITDA, and the peer sets that can be fetched are two to five companies
+  // one vendor happens to associate, on trailing figures — a starting point,
+  // as that fetcher says of itself, not a comp set anyone would sign off.
+  //
+  // SEVERITY IS SET HERE, NOT BY THE BOUND, and the reason matters. Moving the
+  // multiple moves this value proportionally: at the peer medians that do come
+  // back, the exit-multiple value per share moved by a median 50% across the
+  // 36 valued companies that have one. By the ordinary rule that is a refusal.
+  // But the rule exists for figures the model must GUESS and then presents as
+  // computed. This one is declared: it sits on the page as an assumption with
+  // its own adjuster, it is stated in the provenance beside the value it
+  // produces, and an independent second method — the perpetuity value, built
+  // from this company's own cash flows — is published next to it. Refusing
+  // every company over a number the reader can see and change, and which is
+  // already shown against an alternative, would withhold a valuation over a
+  // disclosure rather than over a gap in the data. So it is noted.
+  if (valued) {
+    add({
+      code: 'exitMultipleAssumed',
+      label: 'The exit multiple is an assumption, not a market figure',
+      detail:
+        `No free source publishes a forward EV/EBITDA multiple, so the exit-multiple method uses a flat assumption ` +
+        `rather than a figure read off this company's market. The peer medians that can be fetched cover 36 of the ` +
+        `64 valued companies and run from 7x to over 400x on two to five associated companies, which is why one is ` +
+        `not used. The perpetuity value shown beside it is built from this company's own cash flows and does not ` +
+        `use the multiple at all.`,
+      source: 'no source publishes it',
+      effect:
+        'the exit-multiple value per share moves in proportion to it: at the peer medians that do come back it ' +
+        'moved by a median 50%. It is an assumption on the page with its own control, and the perpetuity value ' +
+        'beside it is independent of it',
+      bound: null,
+      severity: 'note',
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   const refusing = out.filter((c) => c.severity === 'refusal');
   const warnings = out.filter((c) => c.severity === 'warning' || c.severity === 'refusal');
 

@@ -970,6 +970,14 @@ export const DCFView: React.FC<ViewProps> = ({
               </span>
             </div>
           ))}
+          {/* Where the multiple came from, beside the value it produces. A
+              number that sets one of the two headline values should not be the
+              one number on the page with nothing behind it (KI-19). */}
+          {source?.provenance?.exitMultiple && (
+            <p className="font-mono text-[11px] leading-relaxed text-[#8A8A8F] mt-3">
+              {source.provenance.exitMultiple}.
+            </p>
+          )}
         </div>
       </section>
 
