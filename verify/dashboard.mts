@@ -335,6 +335,13 @@ async function checkValued(page: Page, label: string, source: any, symbol: strin
     ['Total assets', M.balanceSheet.totalAssets, (v) => fmt(v)],
     ['Total liabilities', M.balanceSheet.totalLiabilities, (v) => fmt(v)],
     ['Total equity', M.balanceSheet.totalEquity, (v) => fmt(v)],
+    // The cash flow statement: reported years are the filing's, forecast years
+    // this model's, and the line between them carries the difference (KI-7).
+    ['Cash from operating activities', M.cashFlow.operating, (v) => fmt(v)],
+    ['of which items in the filing this model does not carry', M.cashFlow.otherOperatingItems, (v) => fmt(v)],
+    ['Cash from investing activities', M.cashFlow.investing, (v) => fmt(v)],
+    ['Cash from financing activities', M.cashFlow.financing, (v) => fmt(v)],
+    ['Net change in cash', M.cashFlow.netChangeInCash, (v) => fmt(v)],
   ];
   for (const [label, values, format] of statementLines) {
     const cells = await rowCells(page, label);

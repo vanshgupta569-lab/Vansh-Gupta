@@ -934,10 +934,32 @@ increment flat thereafter.
 
 ## 11. The cash flow statement
 
-`model.js` section 8. **Forecast years only.** Reported-year cash flows are not
-built by the engine at all; the site shows filed operating cash flow straight
-from the statements, and the workbook derives them by differencing balance
-sheets (§22, and `KI-7`).
+`model.js` section 8. **Two bases, and the line between them is stated.**
+
+**Reported years are the filing's.** The three totals of the company's own cash
+flow statement (`operatingCashFlow`, `investingCashFlow`, `financingCashFlow`),
+and the change in cash as the movement in the filed cash balance, which is a
+filed fact at both ends. Null where the filing does not report them, and null
+stays null: a total this model cannot vouch for is shown as not reported, never
+as the sum of the pieces it happens to carry. They used to be rebuilt from net
+income and balance sheet movements, which differed from the filed figure for
+every company in the sweep set (`KI-7`, fixed 2026-09-26; §22 has the measure
+and what the workbook shows).
+
+**Forecast years are this model's**, built below — nobody files a forecast.
+
+**The difference between the two bases is carried**, per section, as
+`cashFlow.otherOperatingItems` and its investing and financing counterparts: in
+a reported year it is what the filed section holds that this model does not
+(deferred tax, provisions, other non-cash charges, movements in lines the filing
+does not tag), and it is nil in every forecast year. So the reported total is
+the filing's and what the model does not carry is visible rather than absorbed,
+and `cashFlow.reportedAsFiled` marks which years came from the filing.
+
+**Convention:** `CF 1` (three sections, each with its own subtotal, plus the
+change in cash) — followed. `BS 2`, which names deriving the cash flow statement
+by differencing successive balance sheets as the alternative with a specific
+drawback, is no longer relied on for the reported years.
 
 Operating activities, in order, which is `CF 3`:
 
@@ -1624,13 +1646,39 @@ where the reader changes something. That is the whole point.
 
 ### Where the workbook does something different
 
-**Reported-year cash flows are derived, not filed.** The site shows the filed
-operating cash flow from the statements. The workbook builds the reported years
-by differencing successive balance sheets, which `BS 2` names as the alternative
-to the checklist's preference and warns has a specific drawback — it obscures
-which flows are driving a net change. A note on the sheet says so. This is
-`KI-7`; 78 of 97 companies differ by more than 10%, and it moves no valuation,
-because the DCF reads forecast years only.
+**Reported-year cash flows are the filing's, since 2026-09-26.** They used to be
+rebuilt: net income, D&A, stock compensation and the movements in the balance
+sheet lines this model carries — the indirect method with most of its lines
+missing, which `BS 2` names as the alternative to the checklist's preference and
+warns obscures which flows drive a net change. It differed from the filed figure
+for all 169 companies in the sweep set, by more than 10% for 127 and by a median
+24.7%: Morgan Stanley's rebuild came to 30,134 against 1,086 filed, Royal Bank
+of Canada's to −72,426 against 55,220, Toyota's to 462,613 against 5,472,920
+(`KI-7`). It moved no valuation — the DCF reads forecast years only — but a
+column headed with a year the company has already reported is meant to be what
+the company reported.
+
+Now, in both the workbook and on the screen (§5 has the engine's side):
+
+- **Cash from operations** in a reported year is the filed figure, and the
+  indirect build-up stays beneath it with the difference on its own line —
+  *other items in the filed statement, not carried by this model*: deferred tax,
+  provisions, other non-cash charges, and movements in lines the filing does not
+  tag. It is a median 24.7% of the filed figure and more than 25% of it for 84
+  of the 169. Keeping the build-up is the point of a working model: it is how a
+  reader sees the forecast's mechanics against the company's own history. Naming
+  the difference rather than absorbing it is what makes the total the filing's.
+- **Investing and financing** show the filed total where the data carries it and
+  **nothing** where it does not. They are not rebuilt from the lines this model
+  holds: capital expenditure is not investing, and a company that bought a
+  business or a portfolio of securities moved cash this model never sees. Apple
+  filed +15,195 of investing cash flow in FY2025 against capital expenditure of
+  12,715. The two totals are fetched from `NetCashProvidedByUsedIn…Activities`
+  as of this commit, so a payload fetched before it shows them blank.
+- **The net change in cash** in a reported year is the movement in the filed
+  cash balance, which is a filed fact at both ends.
+- **The basis change is stated** rather than left to be inferred: a note under
+  the statement in the workbook, and a subtitle on the screen's schedule.
 
 **Every driver row is the engine's rule, written out.** A row that asserts a
 rule of its own is the defect `KI-4` was: each assumption is seeded with the

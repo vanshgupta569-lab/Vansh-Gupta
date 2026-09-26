@@ -1063,6 +1063,14 @@ export function deriveModel(fetched) {
     },
 
     cashFlow: {
+      // THE FILED TOTALS, so the reported years of the cash flow statement can
+      // be what the company reported rather than what this model rebuilds from
+      // the lines it carries (KI-7). Null where the filing does not give them,
+      // and null stays null: a total this model cannot vouch for is shown as
+      // not reported, never as the sum of the pieces we happen to have.
+      operatingCashFlow: pick('operatingCashFlow'),
+      investingCashFlow: pick('investingCashFlow'),
+      financingCashFlow: pick('financingCashFlow'),
       depreciationAmortisation: pick('depreciation'),
       // As filed; null where the filing does not report the line (see NOT_REPORTED).
       stockBasedCompensation: pick('stockComp'),

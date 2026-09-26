@@ -114,7 +114,12 @@ function statementFor(i: number) {
     equityIncludingMinority: null,
     amortisationOfIntangibles: null,
     capex: 80 * scale,
+    // The three totals of the filed cash flow statement. A reported year shows
+    // the filing's own figures, so a fixture without them would leave the
+    // dashboard check looking at blanks where the site shows the filing (KI-7).
     operatingCashFlow: netIncome + 60 * scale,
+    investingCashFlow: -80 * scale,
+    financingCashFlow: -(40 + 20) * scale,
     stockComp: 10 * scale,
     dividendsPaid: 40 * scale,
     commonDividendsPaid: 40 * scale,

@@ -67,6 +67,13 @@ const AAPL = {
     },
 
     cashFlow: {
+      // As filed in Apple's own cash flow statement, FY2023-FY2025. The
+      // reported years of a cash flow statement are the filing's, not a
+      // rebuild of it from the lines this model carries (KI-7). Apple's 10-K
+      // does not break the investing and financing totals out in the data
+      // this file was built from, so those two stay absent rather than being
+      // rebuilt from capital expenditure, dividends and buybacks alone.
+      operatingCashFlow: [110543, 118254, 111482],
       depreciationAmortisation: [11519, 11445, 11698],
       stockBasedCompensation: [10833, 11688, 12863],
       capex: [null, 9447, 12715],

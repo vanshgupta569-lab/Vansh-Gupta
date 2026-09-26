@@ -313,7 +313,13 @@ for (const sc of scenarios) {
     const filed = v(R.rev) + v(R.cogsFiled) + v(R.rndFiled) + v(R.sgaFiled) + v(R.otherFiled);
     if (!close(v(R.ebit), filed)) problems.push(`reported ${FY(i)} EBIT ${v(R.ebit)} != revenue + filed costs ${filed}`);
   }
-  {
+  // A REFUSED COMPANY HAS NO DCF SHEET TO CHECK. Since the workbook started
+  // refusing with the site (0f58b97), the sheet is replaced by the reason, so
+  // every link into it reads nothing — which is the right file and the wrong
+  // check. Skipped here and reported as skipped.
+  if (REFUSED) {
+    console.log('  DCF sheet: replaced by the refusal, so nothing to link to -- skipped');
+  } else {
     const dRow = (label: string | RegExp) =>
       g.DCFModel.findIndex((r) =>
         typeof label === 'string' ? r[2] === label : label.test(String(r[2] ?? ''))

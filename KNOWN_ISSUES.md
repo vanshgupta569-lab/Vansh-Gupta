@@ -40,9 +40,10 @@ mistakes and would never be fixed:
   day the price was fetched, fixed 2026-09-24), `KI-4` (the workbook
   asserting drivers the engine does not use, fixed 2026-09-25), `KI-17`
   with `KI-18` (a filed figure the company does not report carried into the
-  arithmetic, in the model and in the workbook, fixed 2026-09-25) and `KI-16`
+  arithmetic, in the model and in the workbook, fixed 2026-09-25), `KI-16`
   (nothing checked that the screen showed what the engine produced, fixed
-  2026-09-26 by `npm run verify:dashboard`). Moved out on 2026-09-22 and never to be
+  2026-09-26 by `npm run verify:dashboard`) and `KI-7` (a reported cash flow
+  statement rebuilt rather than filed, fixed 2026-09-26). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -69,7 +70,6 @@ commit were measured on the payload set of that date and say so.
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
 | KI-6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
-| KI-7 | Workbook reported-year operating cash flow is derived, not filed | 78 of 97 differ by >10% | Morgan Stanley 30,253 vs filed 1,086 | none on value; breaks "reported = filed" |
 | KI-9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
 
 ---
@@ -266,22 +266,6 @@ intensity range.
 - **Worst example.** ICICI Bank: "Could not retrieve data for that ticker right
   now", on every attempt.
 - **Value moved.** No page at all for these companies.
-
-### KI-7. Workbook reported-year operating cash flow is derived, not filed
-
-- **What is wrong.** The workbook's reported-year cash from operations is built
-  from net income, D&A, SBC and balance sheet movements, not taken from the
-  filing. The site's "as reported" panel uses the filed figure; the workbook's
-  model and Cash Flow sheets do not.
-- **Where.** `src/data/excelExport.ts` (`cfo` and its components for reported
-  years); `src/data/excelSheets.ts` (Cash Flow sheet).
-- **How measured.** The workbook's derivation recomputed from engine outputs for
-  the last reported year, against filed operating cash flow.
-- **Affects.** 78 of 97 companies differ by more than 10%, 54 by more than 25%.
-- **Worst example.** Morgan Stanley 30,253 against filed 1,086; Bank of America
-  -64,914 against 12,613; Tesla -34,047 against 14,747.
-- **Value moved.** None (reported years do not enter the DCF), but the reported
-  column is not the filed one.
 
 ### KI-9. The 50% minimum cash buffer has no documented basis
 

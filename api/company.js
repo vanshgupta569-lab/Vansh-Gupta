@@ -362,6 +362,20 @@ const US_TAGS = {
     'NetCashProvidedByUsedInOperatingActivities',
     'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
   ],
+  // The other two totals of the filed cash flow statement. The reported
+  // column of a cash flow statement is meant to be what the company filed,
+  // and without these two the model could only rebuild them from the lines it
+  // happens to carry — capital expenditure, dividends and buybacks — which
+  // leaves out acquisitions, securities, debt raised and repaid, and every
+  // other movement (KI-7).
+  investingCashFlow: [
+    'NetCashProvidedByUsedInInvestingActivities',
+    'NetCashProvidedByUsedInInvestingActivitiesContinuingOperations',
+  ],
+  financingCashFlow: [
+    'NetCashProvidedByUsedInFinancingActivities',
+    'NetCashProvidedByUsedInFinancingActivitiesContinuingOperations',
+  ],
   stockComp: ['ShareBasedCompensation', 'AllocatedShareBasedCompensationExpense'],
   dividendsPaid: [
     'PaymentsOfDividendsCommonStock',
@@ -687,6 +701,8 @@ const YAHOO_FIELDS = {
   equityIncludingMinority: 'annualTotalEquityGrossMinorityInterest',
   capex: 'annualCapitalExpenditure',
   operatingCashFlow: 'annualOperatingCashFlow',
+  investingCashFlow: 'annualInvestingCashFlow',
+  financingCashFlow: 'annualFinancingCashFlow',
   dividendsPaid: 'annualCashDividendsPaid',
   commonDividendsPaid: 'annualCommonStockDividendPaid',
   buybacks: 'annualRepurchaseOfCapitalStock',

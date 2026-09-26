@@ -638,10 +638,20 @@ export const ThreeStatementView: React.FC<ViewProps> = ({
 
       <Schedule
         title="Cash flow statement"
+        subtitle="reported years as filed; forecast years this model's own"
         years={years}
         firstForecast={nH}
         rows={[
+          // A reported year is the company's filed statement, a forecast year
+          // is this model's. The line between them carries what the filed
+          // operating section holds that the model does not (KI-7).
           { label: 'Cash from operating activities', values: M.cashFlow?.operating, bold: true },
+          {
+            label: 'of which items in the filing this model does not carry',
+            values: M.cashFlow?.otherOperatingItems,
+            indent: true,
+            muted: true,
+          },
           { label: 'Cash from investing activities', values: M.cashFlow?.investing, bold: true },
           { label: 'Cash from financing activities', values: M.cashFlow?.financing, bold: true },
           { label: 'Net change in cash', values: M.cashFlow?.netChangeInCash, accent: true },

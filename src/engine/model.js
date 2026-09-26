@@ -939,11 +939,44 @@ export function buildModel(data) {
   }
 
   // ------------------------------------------------- 8. CASH FLOW STATEMENT
+  //
+  // THE REPORTED YEARS ARE THE FILING'S. The forecast years are necessarily
+  // this model's own — nobody files a forecast — but a column headed with a
+  // fiscal year the company has already reported is meant to be what the
+  // company reported, and this was the last place it was not (KI-7).
+  //
+  // It used to be rebuilt from net income, D&A, stock compensation and the
+  // movements in the balance sheet lines this model carries. That is the
+  // indirect method with most of its lines missing: no deferred tax, no
+  // provisions, no other non-cash charges, and no movement in any working
+  // capital line the filing does not tag. Across the 169 companies in the
+  // sweep set it differed from the filed figure for every single one, by more
+  // than 10% for 127 of them and by a median 24.7%: Morgan Stanley's rebuild
+  // came to 30,134 against 1,086 filed, Toyota's to 462,613 against 5,472,920.
+  //
+  // So the filed total is shown, and the build-up is kept beside it with the
+  // difference on its own line — deleting the build-up would lose the one
+  // thing it is good for, which is seeing how the forecast's mechanics compare
+  // with the company's own history.
   S.cashFlow = {
     operating: blank(), investing: blank(), financing: blank(), netChangeInCash: blank(),
+    // What each filed section holds that this model does not carry: deferred
+    // tax and provisions in the operating section, acquisitions and securities
+    // in the investing one, debt raised and repaid in the financing one. Nil
+    // in the forecast, where there is nothing outside the model to hold.
+    otherOperatingItems: blank(),
+    otherInvestingItems: blank(),
+    otherFinancingItems: blank(),
+    // Whether each reported year's figure came from the filing. The screen and
+    // the workbook both say where the basis changes rather than leaving a
+    // reader to infer it from a column heading.
+    reportedAsFiled: blank(),
   };
-  for (let t = nH; t < nH + nF; t++) {
-    S.cashFlow.operating[t] = sum([
+
+  // The indirect build-up, the same lines in the reported years and in the
+  // forecast, so the two columns can be read against each other.
+  const indirectOperating = (t) =>
+    sum([
       S.netIncome[t],
       S.depreciationAmortisation[t],
       S.stockBasedCompensation[t],
@@ -957,6 +990,46 @@ export function buildModel(data) {
       S.wc.otherNonCurrentLiabilities.change[t],
       S.debt.pikAccrual[t],
     ]);
+
+  for (let t = 0; t < nH; t++) {
+    const filedOperating = h.cashFlow.operatingCashFlow?.[t];
+    const filedInvesting = h.cashFlow.investingCashFlow?.[t];
+    const filedFinancing = h.cashFlow.financingCashFlow?.[t];
+    S.cashFlow.operating[t] = isNum(filedOperating) ? filedOperating : null;
+    // A TOTAL THIS MODEL CANNOT VOUCH FOR IS NOT REPORTED, not the sum of the
+    // pieces it happens to carry. Capital expenditure is not investing: a
+    // company that bought a business or a portfolio of securities in the year
+    // spent cash this model never sees. Same for financing, where only
+    // dividends and buybacks are fetched.
+    S.cashFlow.investing[t] = isNum(filedInvesting) ? filedInvesting : null;
+    S.cashFlow.financing[t] = isNum(filedFinancing) ? filedFinancing : null;
+    S.cashFlow.reportedAsFiled[t] = isNum(filedOperating);
+    S.cashFlow.otherOperatingItems[t] = isNum(filedOperating)
+      ? filedOperating - indirectOperating(t)
+      : null;
+    // Capital expenditure is the only investing line fetched, and dividends
+    // and buybacks the only financing ones, so each section's remainder is
+    // whatever the filed total says it is — and is null, not nil, where the
+    // filing's total is not in the data.
+    S.cashFlow.otherInvestingItems[t] = isNum(filedInvesting)
+      ? filedInvesting + (isNum(S.ppe.capex[t]) ? S.ppe.capex[t] : 0)
+      : null;
+    S.cashFlow.otherFinancingItems[t] = isNum(filedFinancing)
+      ? filedFinancing - sum([S.dividends[t], S.shareRepurchases[t]])
+      : null;
+    // The movement in the cash balance is a filed fact at both ends.
+    const cashNow = h.balanceSheet.cashAndSecurities[t];
+    const cashBefore = t > 0 ? h.balanceSheet.cashAndSecurities[t - 1] : null;
+    S.cashFlow.netChangeInCash[t] =
+      isNum(cashNow) && isNum(cashBefore) ? cashNow - cashBefore : null;
+  }
+
+  for (let t = nH; t < nH + nF; t++) {
+    S.cashFlow.otherOperatingItems[t] = 0;
+    S.cashFlow.otherInvestingItems[t] = 0;
+    S.cashFlow.otherFinancingItems[t] = 0;
+    S.cashFlow.reportedAsFiled[t] = false;
+    S.cashFlow.operating[t] = indirectOperating(t);
     S.cashFlow.investing[t] = -S.ppe.capex[t];
   }
 

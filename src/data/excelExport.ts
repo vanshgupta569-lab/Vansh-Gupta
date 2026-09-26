@@ -1358,6 +1358,14 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   blank();
 
   // ---- CASH FLOW ----------------------------------------------------------
+  //
+  // THE REPORTED YEARS ARE THE FILING'S (KI-7). Every total here used to be a
+  // formula in every column, so the reported years showed this model's rebuild
+  // of the company's cash flow rather than the company's own: it differed for
+  // all 169 companies in the sweep set and by more than 10% for 127 of them.
+  // The build-up stays — it is how a reader sees the forecast's mechanics
+  // against the company's own history — and the difference between it and the
+  // filed figure is shown on its own line rather than absorbed.
   header('Cash flow statement');
   calc('cfNi', 'Net income', (c) => `${c}${R.ni}`, money(currencySymbol));
   calc('cfDa', 'Depreciation & amortization', (c) => `${c}${R.da}`, money());
@@ -1371,27 +1379,80 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     money()
   );
   calc('cfPik', 'Non-cash PIK interest added back', (c) => `${c}${R.debtPik}`, money());
-  calc(
+  // Reported years: what the filed operating section holds that the lines above
+  // do not — deferred tax, provisions, other non-cash charges, and movements in
+  // lines the filing does not tag. Nil in the forecast, where the model holds
+  // everything it knows about.
+  driver(
+    'cfOther',
+    'Other items in the filed statement, not carried by this model',
+    (c, _p, i) => (i < nH && has(M.cashFlow?.operating, i)
+      ? `${c}${R.cfoFiled}-(${c}${R.cfNi}+${c}${R.cfDa}+${c}${R.cfSbc}+${c}${R.cfWc}+${c}${R.cfPik})`
+      : null),
+    (i) => (i < nH ? at(M.cashFlow?.otherOperatingItems, i) ?? 0 : 0),
+    money(),
+    { unit: UNIT }
+  );
+  // The filed total, hard-coded in the reported years the way every other
+  // reported figure in this workbook is, and blank where the filing does not
+  // report it.
+  line(
+    'cfoFiled',
+    'Cash from operating activities, as filed',
+    M.cashFlow?.operating,
+    () => null,
+    money(),
+    { italic: true }
+  );
+  line(
     'cfo',
     'Cash from operating activities',
-    (c) => `${c}${R.cfNi}+${c}${R.cfDa}+${c}${R.cfSbc}+${c}${R.cfWc}+${c}${R.cfPik}`,
+    M.cashFlow?.operating,
+    (c) => `${c}${R.cfNi}+${c}${R.cfDa}+${c}${R.cfSbc}+${c}${R.cfWc}+${c}${R.cfPik}+${c}${R.cfOther}`,
     money(currencySymbol),
     { bold: true, indent: 0 }
   );
-  calc('cfi', 'Cash from investing activities', (c) => `-${c}${R.ppeCapex}`, money(), { bold: true, indent: 0 });
-  calc(
+  // Investing and financing: the filed total in the reported years, blank where
+  // the filing's total is not in the data. It is NOT rebuilt from the lines
+  // this model carries — capital expenditure is not investing, and a company
+  // that bought a business spent cash this model never sees.
+  line(
+    'cfi',
+    'Cash from investing activities',
+    M.cashFlow?.investing,
+    (c) => `-${c}${R.ppeCapex}`,
+    money(),
+    { bold: true, indent: 0 }
+  );
+  line(
     'cff',
     'Cash from financing activities',
+    M.cashFlow?.financing,
     (c) => `${financingExRevolver(c)}+${c}${R.revDraw}`,
     money(),
     { bold: true, indent: 0 }
   );
-  calc('netChange', 'Net change in cash', (c) => `${c}${R.cfo}+${c}${R.cfi}+${c}${R.cff}`, money(), {
-    bold: true,
-    indent: 0,
-  });
+  // Reported years: the movement in the filed cash balance, which is a filed
+  // fact at both ends. Forecast years: the three sections above.
+  line(
+    'netChange',
+    'Net change in cash',
+    M.cashFlow?.netChangeInCash,
+    (c) => `${c}${R.cfo}+${c}${R.cfi}+${c}${R.cff}`,
+    money(),
+    { bold: true, indent: 0 }
+  );
   bopRow('cashBop', 'Cash, beginning of period', at(M.cash?.beginning, 0), 'cashEnd');
   eopRow('cashEnd', 'Cash, end of period', M.cash?.ending, (c) => `${c}${R.cashBop}+${c}${R.netChange}`);
+  note([
+    'REPORTED YEARS ARE THE FILING\'S, FORECAST YEARS ARE THIS MODEL\'S. Cash from operations in a reported year is the',
+    'figure the company filed; the lines above it are this model\'s build-up of it, and the difference between the two',
+    'sits on its own line rather than being absorbed into a total. Investing and financing show the filed total where',
+    'the data carries it and nothing where it does not: capital expenditure is not investing, and a company that bought',
+    'a business or a portfolio of securities spent cash this model never sees. The net change in cash in a reported year',
+    'is the movement in the filed cash balance. From the first forecast year every line is this model\'s own, the',
+    'difference line is nil, and the three sections add to the movement in cash exactly.',
+  ]);
   blank();
 
   // ---- BALANCE SHEET ------------------------------------------------------
