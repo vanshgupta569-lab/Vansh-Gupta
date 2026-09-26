@@ -48,8 +48,9 @@ mistakes and would never be fixed:
   2026-09-26), `KI-9` (a cash cushion with no basis, fixed 2026-09-26) and
   `KI-19` (valuation constants with no stated basis: the exit multiple and the
   share-count tolerance settled 2026-09-26, the risk-free rate fetched the same
-  day, and the market risk premium and terminal growth moved to
-  `DATA_CONSTRAINTS.md` because nothing publishes them). Moved out on 2026-09-22 and never to be
+  day and widened on 2026-09-27 to the five currencies whose central banks and
+  finance ministries publish one, and the market risk premium and terminal
+  growth moved to `DATA_CONSTRAINTS.md` because nothing publishes them). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.

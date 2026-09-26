@@ -1302,12 +1302,19 @@ WACC           = weight of equity × cost of equity
 ```
 
 **The risk-free rate is fetched, dated and currency-matched** (since
-2026-09-26). It is the **mean daily yield of the 10-year US Treasury over the
-year ending at the company's own balance sheet date** — `^TNX` on the same chart
-endpoint the site already takes prices from, typically 250 closes. Apple's
-FY2025 model discounts at 4.33%, the average over the year to 2025-09-26, where
-the last close in that window was 4.18%. Across the 46 companies that have one
-the rates run 4.22% to 4.33%, against the flat 4.5% they replaced.
+2026-09-26; five currencies since 2026-09-27). It is the **mean daily yield of
+the 10-year government bond of the currency the statements are in, over the year
+ending at the company's own balance sheet date**, taken from the institution
+that publishes it: the US Treasury, the European Central Bank, Japan's Ministry
+of Finance, the Bank of England and the Riksbank. Each returns 245 to 255
+observations for a year's window.
+
+So Apple discounts at 4.33% and Toyota at 1.74%, because those are the rates
+their cash flows are in. SAP 2.72%, GSK 4.62%, Volvo 2.48%. A single vendor's
+chart endpoint publishes only the US curve, which is what this model read first;
+that was a fact about the vendor rather than about the data, and the US rate has
+moved onto the Treasury's own feed so that every rate now comes from the body
+that sets it.
 
 **An average, not a close.** A single day's close makes every valuation move
 with one day's bond market, which is the artefact the discounting convention
@@ -1335,24 +1342,34 @@ asset beta of 1.0, not measured over any period. So the horizon is consistent
 between two of the three terms and undefined for the third, and `DCF 9` is still
 not demonstrable — for a different and smaller reason than before.
 
-**A currency without a yield is refused, not approximated.** No source this site
-reads publishes a government yield for any currency but the dollar, so a company
-reporting in euros, yen, rupees, won, kronor, pounds or renminbi has no
-risk-free rate and is refused with `riskFreeRateUnavailable` rather than
-discounted at a US Treasury yield. It costs 18 of the 66 companies that had a
-value, and 6 of the 16 residual income values. See `DATA_CONSTRAINTS.md`.
+**A currency without a yield is still refused, not approximated.** Five
+publishers were reached; five currencies were not. A company reporting in won,
+renminbi, Taiwan dollars, kroner or rupees has no risk-free rate and is refused
+with `riskFreeRateUnavailable` rather than discounted at another country's rate
+— Samsung, Tencent, Alibaba, TSMC, Novo Nordisk, Reliance and Tata Consultancy.
+`DATA_CONSTRAINTS.md` sets out what was tried for each, and why the rupee is a
+licensing and access problem rather than a gap in what exists.
 
 **A fetch that fails is absent, not 4.5%.** The rate is null, the reason is
 carried, and the company is refused. A rate this important does not quietly
 become a constant.
 
-**What it moved.** Measured on the same payloads with the rate forced back to
-4.5%: the cost of equity falls from a median 8.92% to 8.71%; all 46 valued
-companies move, **none by more than 5%**; the perpetuity value per share moves a
-median **+3.5%** (45 up, 1 down) and the exit-multiple value **+0.8%**, which is
-smaller because only the discounting changes and not the terminal figure.
-Medtronic +4.7%, Walmart +4.5%, Procter & Gamble +4.5%, Microsoft +4.4% are the
-largest.
+**What it moved, for a dollar reporter.** Measured on the same payloads with the
+rate forced back to 4.5%: the cost of equity falls from a median 8.92% to 8.71%;
+all 46 valued companies move, **none by more than 5%**; the perpetuity value per
+share moves a median **+3.5%** (45 up, 1 down) and the exit-multiple value
+**+0.8%**, smaller because only the discounting changes and not the terminal
+figure.
+
+**What it moved for everyone else is much larger**, because those companies had
+been carrying a foreign country's rate. Against what they showed at the flat
+4.5%, the eleven restored companies move: Toyota's cost of equity 12.32% to
+9.60% and its value per share **+96.8%**, Sony **+75.2%**, Siemens +57.8%, Volvo
++56.2%, Unilever +41.8%, LVMH +40.6%, ASML +38.1%, SAP +37.6%, Inditex +36.2%,
+Vodafone +34.2%. GSK moves **−1.6%**, because the UK ten-year averaged 4.62%,
+slightly above the 4.5% it replaced — the one company of the eleven to move less
+than 5%, and the one whose own rate was nearest the number the model used to
+assume.
 
 A **market risk premium** is not published as a fact by anyone; nor is a
 perpetual growth rate. Those two are in `DATA_CONSTRAINTS.md`, shown as

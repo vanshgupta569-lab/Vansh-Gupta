@@ -1051,86 +1051,239 @@ async function fetchProfile(symbol) {
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// THE RISK-FREE RATE
+// THE RISK-FREE RATE, PER CURRENCY, FROM THE BODY THAT PUBLISHES IT
 // ---------------------------------------------------------------------------
-// The first term of the cost of equity, and until now a flat 4.5% with no date,
-// no tenor and no source (KI-19). It is fetched from the same chart endpoint
-// the site already takes prices from.
+// The first term of the cost of equity. A risk-free rate belongs to a currency:
+// discounting a yen cash flow at a US Treasury yield is not an approximation,
+// it is a different country's rate.
 //
-// ONLY US TREASURY YIELDS ARE PUBLISHED THERE. ^IRX, ^FVX, ^TNX and ^TYX all
-// answer; every symbol convention for a German, Japanese, British, Indian,
-// Korean, Canadian, Australian, Swiss, Brazilian, Singaporean or Hong Kong
-// government yield returns 404, and Yahoo's own search returns no bond-yield
-// instrument for any of them (checked 2026-09-26). Equity indices for those
-// markets are published; their government yields are not.
+// One vendor's chart endpoint publishes only the US curve, which is what this
+// site read at first — but that is a fact about one vendor, not about the data.
+// The institutions that set these rates publish them themselves, and four of
+// them answer a plain HTTP request with a full daily history:
 //
-// So a company reporting in dollars gets a dollar risk-free rate, and a company
-// reporting in yen gets none — because a US Treasury yield is not the risk-free
-// rate for a yen cash flow, it is a different currency's, and the gap between
-// the two is not a rounding difference. The engine refuses rather than
-// discounting a rupee at a dollar rate (see meta.riskFreeRefusal).
+//   USD  US Treasury, daily par yield curve (BC_10YEAR). Public domain as a
+//        work of the US government.
+//   EUR  European Central Bank Data Portal, euro-area AAA government bond spot
+//        rate, 10-year (YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y). The ECB allows
+//        reuse of its statistics with the source acknowledged.
+//   JPY  Japan's Ministry of Finance, JGB daily interest rates, 10Y column,
+//        published back to 1974. Japanese government standard terms of use,
+//        which permit free reuse with attribution.
+//   GBP  Bank of England, IADB series IUDMNZC, daily 10-year nominal par yield.
+//        The Bank permits reuse of its statistical data with acknowledgement.
+//   SEK  Sveriges Riksbank SWEA API, SEGVB10YC, daily 10-year government
+//        benchmark. Published as open data.
+//
+// Checked and fetched on 2026-09-27; each returned a complete year for a window
+// ending eighteen months in the past, which is what this model asks of it.
+//
+// WHAT IS STILL MISSING, and why each company stays refused: no reachable
+// publisher was found for the Indian rupee, the Korean won, the new Taiwan
+// dollar, the renminbi or the Danish krone. India is the sharpest case and is
+// set out in DATA_CONSTRAINTS.md: the published Indian benchmark is FBIL's, a
+// licensed commercial benchmark, and the Reserve Bank republishes only its
+// latest observations on a page that carries no history, while the Bank's own
+// historical database does not answer from outside India.
 //
 // THE TEN-YEAR, not the thirty. The rate is added to a market risk premium, and
 // an equity risk premium is quoted against the ten-year benchmark by
 // convention; pairing a thirty-year yield with a premium measured against the
 // ten would be the inconsistency CONVENTIONS.md's horizon test is about.
 //
-// AN AVERAGE OVER A YEAR, NOT A CLOSE. One day's close makes every valuation
-// move with one day's bond market, which is the artefact the discounting
-// convention removed when the valuation date stopped being the day the page
-// was opened. The window ENDS AT THE VALUATION DATE — the last reported balance
-// sheet date, which is what everything else in the model is struck at — so the
-// same filings give the same rate for ever, not a rate that drifts daily.
-const RISK_FREE = {
-  USD: { symbol: '^TNX', tenorYears: 10, name: '10-year US Treasury' },
-};
+// AN AVERAGE OVER A YEAR, NOT A CLOSE, and the window ENDS AT THE VALUATION
+// DATE — the last reported balance sheet date, which is what everything else in
+// the model is struck at. One day's close would make every valuation move with
+// one day's bond market; a window anchored to the filing means the same filings
+// give the same rate for ever.
 const RISK_FREE_WINDOW_DAYS = 365;
 
+const ymd = (d) => d.toISOString().slice(0, 10);
+const asRate = (v) => {
+  const n = Number(v);
+  return typeof n === 'number' && isFinite(n) ? n : null;
+};
+
+// Each source returns [{ date: 'YYYY-MM-DD', percent: number }] covering at
+// least the window asked for. Anything it cannot answer, it throws.
+const RISK_FREE_SOURCES = {
+  USD: {
+    name: '10-year US Treasury par yield',
+    publisher: 'US Treasury',
+    terms: 'a work of the US government, in the public domain',
+    url: 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve',
+    async read(from, to) {
+      const years = [];
+      for (let y = from.getUTCFullYear(); y <= to.getUTCFullYear(); y++) years.push(y);
+      const out = [];
+      for (const year of years) {
+        const res = await fetch(
+          'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml' +
+            `?data=daily_treasury_yield_curve&field_tdr_date_value=${year}`,
+          { headers: { 'User-Agent': SEC_CONTACT } }
+        );
+        if (!res.ok) throw new Error(`Treasury ${year} ${res.status}`);
+        const xml = await res.text();
+        const dates = [...xml.matchAll(/<d:NEW_DATE[^>]*>([^<]+)</g)].map((m) => m[1].slice(0, 10));
+        const tens = [...xml.matchAll(/<d:BC_10YEAR[^>]*>([^<]*)</g)].map((m) => asRate(m[1]));
+        dates.forEach((date, i) => {
+          if (tens[i] !== null) out.push({ date, percent: tens[i] });
+        });
+      }
+      return out;
+    },
+  },
+
+  EUR: {
+    name: '10-year euro area AAA government bond spot rate',
+    publisher: 'European Central Bank',
+    terms: 'ECB statistics, reusable with the source acknowledged',
+    url: 'https://data.ecb.europa.eu/data/datasets/YC',
+    async read(from, to) {
+      const res = await fetch(
+        'https://data-api.ecb.europa.eu/service/data/YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y' +
+          `?startPeriod=${ymd(from)}&endPeriod=${ymd(to)}&format=csvdata`,
+        { headers: { 'User-Agent': SEC_CONTACT } }
+      );
+      if (!res.ok) throw new Error(`ECB ${res.status}`);
+      const lines = (await res.text()).trim().split('\n');
+      const head = lines[0].split(',');
+      const dateAt = head.indexOf('TIME_PERIOD');
+      const valueAt = head.indexOf('OBS_VALUE');
+      if (dateAt < 0 || valueAt < 0) throw new Error('ECB: no TIME_PERIOD/OBS_VALUE column');
+      const out = [];
+      for (const line of lines.slice(1)) {
+        const cells = line.split(',');
+        const percent = asRate(cells[valueAt]);
+        if (percent !== null) out.push({ date: String(cells[dateAt]).slice(0, 10), percent });
+      }
+      return out;
+    },
+  },
+
+  JPY: {
+    name: '10-year Japanese government bond yield',
+    publisher: 'Ministry of Finance, Japan',
+    terms: 'Japanese government standard terms of use, free reuse with attribution',
+    url: 'https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/',
+    async read() {
+      // The archive runs from 1974; the current year sits in its own file.
+      const out = [];
+      for (const file of ['historical/jgbcme_all.csv', 'jgbcme.csv']) {
+        const res = await fetch(
+          `https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/${file}`,
+          { headers: { 'User-Agent': SEC_CONTACT } }
+        );
+        if (!res.ok) continue;
+        const lines = (await res.text()).trim().split('\n');
+        const header = lines.findIndex((l) => l.startsWith('Date,'));
+        if (header < 0) continue;
+        const tenAt = lines[header].split(',').findIndex((c) => c.trim() === '10Y');
+        if (tenAt < 0) continue;
+        for (const line of lines.slice(header + 1)) {
+          const cells = line.split(',');
+          const percent = asRate(cells[tenAt]);
+          const parts = String(cells[0]).trim().split('/');
+          if (percent === null || parts.length !== 3) continue;
+          const date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+          out.push({ date, percent });
+        }
+      }
+      if (!out.length) throw new Error('MOF: no rows');
+      return out;
+    },
+  },
+
+  GBP: {
+    name: '10-year UK government bond nominal par yield',
+    publisher: 'Bank of England',
+    terms: 'Bank of England statistics, reusable with acknowledgement',
+    url: 'https://www.bankofengland.co.uk/boeapps/database/',
+    async read(from, to) {
+      const uk = (d) =>
+        `${String(d.getUTCDate()).padStart(2, '0')}/${
+          ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]
+        }/${d.getUTCFullYear()}`;
+      const res = await fetch(
+        'https://www.bankofengland.co.uk/boeapps/iadb/fromshowcolumns.asp?csv.x=yes' +
+          `&Datefrom=${uk(from)}&Dateto=${uk(to)}&SeriesCodes=IUDMNZC&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N`,
+        { headers: { 'User-Agent': SEC_CONTACT } }
+      );
+      if (!res.ok) throw new Error(`BoE ${res.status}`);
+      const lines = (await res.text()).trim().split('\n');
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const out = [];
+      for (const line of lines.slice(1)) {
+        const [rawDate, rawValue] = line.split(',');
+        const percent = asRate(rawValue);
+        const bits = String(rawDate).trim().split(' ');
+        if (percent === null || bits.length !== 3) continue;
+        const month = months.indexOf(bits[1]);
+        if (month < 0) continue;
+        out.push({
+          date: `${bits[2]}-${String(month + 1).padStart(2, '0')}-${bits[0].padStart(2, '0')}`,
+          percent,
+        });
+      }
+      return out;
+    },
+  },
+
+  SEK: {
+    name: '10-year Swedish government benchmark bond yield',
+    publisher: 'Sveriges Riksbank',
+    terms: 'Riksbank open data',
+    url: 'https://www.riksbank.se/en-gb/statistics/',
+    async read(from, to) {
+      const res = await fetch(
+        `https://api.riksbank.se/swea/v1/Observations/SEGVB10YC/${ymd(from)}/${ymd(to)}`,
+        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'application/json' } }
+      );
+      if (!res.ok) throw new Error(`Riksbank ${res.status}`);
+      const body = await res.json();
+      if (!Array.isArray(body)) throw new Error('Riksbank: not a list');
+      return body
+        .map((row) => ({ date: String(row.date).slice(0, 10), percent: asRate(row.value) }))
+        .filter((row) => row.percent !== null);
+    },
+  },
+};
+
 async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
-  const spec = RISK_FREE[reportingCurrency];
+  const spec = RISK_FREE_SOURCES[reportingCurrency];
   if (!spec) {
     return {
       rate: null,
       currency: reportingCurrency || null,
       reason:
-        `No government bond yield is published for ${reportingCurrency || 'this currency'} by the source this site ` +
-        `reads. A US Treasury yield is not the risk-free rate for a ${reportingCurrency || 'non-dollar'} cash flow.`,
+        `No publisher of a ten-year government bond yield for ${reportingCurrency || 'this currency'} could be ` +
+        `reached. A US Treasury yield is not the risk-free rate for a ${reportingCurrency || 'non-dollar'} cash flow.`,
     };
   }
 
-  // The window ends at the valuation date where the filing gives one, and at
-  // today only when it does not.
   const end = valuationDate ? new Date(`${valuationDate}T00:00:00Z`) : new Date();
-  const endSec = Math.floor(end.getTime() / 1000);
-  const startSec = endSec - RISK_FREE_WINDOW_DAYS * 24 * 60 * 60;
+  const start = new Date(end.getTime() - RISK_FREE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(spec.symbol)}` +
-        `?period1=${startSec}&period2=${endSec}&interval=1d`,
-      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
-    );
-    if (!res.ok) throw new Error(`chart ${res.status}`);
-    const body = await res.json();
-    const result = body?.chart?.result?.[0];
-    const closes = (result?.indicators?.quote?.[0]?.close || []).filter(
-      (v) => typeof v === 'number' && isFinite(v) && v > 0
-    );
-    if (closes.length < 30) throw new Error(`only ${closes.length} closes in the window`);
-    const mean = closes.reduce((a, b) => a + b, 0) / closes.length;
-    const stamps = result?.timestamp || [];
-    const iso = (t) => (typeof t === 'number' ? new Date(t * 1000).toISOString().slice(0, 10) : null);
+    const all = await spec.read(start, end);
+    const from = ymd(start);
+    const to = ymd(end);
+    const window = all.filter((row) => row.date >= from && row.date <= to);
+    if (window.length < 30) throw new Error(`only ${window.length} observations in the window`);
+    window.sort((a, b) => (a.date < b.date ? -1 : 1));
+    const mean = window.reduce((t, row) => t + row.percent, 0) / window.length;
     return {
-      // The chart quotes these indices in percent.
       rate: mean / 100,
       currency: reportingCurrency,
-      symbol: spec.symbol,
       name: spec.name,
-      tenorYears: spec.tenorYears,
-      observations: closes.length,
-      windowFrom: iso(stamps[0]),
-      windowTo: iso(stamps[stamps.length - 1]),
-      latest: closes[closes.length - 1] / 100,
+      publisher: spec.publisher,
+      terms: spec.terms,
+      sourceUrl: spec.url,
+      tenorYears: 10,
+      observations: window.length,
+      windowFrom: window[0].date,
+      windowTo: window[window.length - 1].date,
+      latest: window[window.length - 1].percent / 100,
       reason: null,
     };
   } catch (error) {
@@ -1139,8 +1292,8 @@ async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
     return {
       rate: null,
       currency: reportingCurrency,
-      symbol: spec.symbol,
-      reason: `The ${spec.name} yield could not be fetched (${String(error.message).slice(0, 60)}).`,
+      publisher: spec.publisher,
+      reason: `The ${spec.name} could not be fetched from the ${spec.publisher} (${String(error.message).slice(0, 60)}).`,
     };
   }
 }

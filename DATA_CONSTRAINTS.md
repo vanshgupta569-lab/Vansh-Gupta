@@ -249,37 +249,54 @@ model. Where the line the filing stops tagging is one the **forecast itself** is
 built from — cost of sales, capital expenditure, or net PP&E — there is nothing
 to absorb it and no value is shown at all; see *Already refused, and why*.
 
-### A government bond yield in any currency but the dollar
+### A government bond yield for the rupee, the won, the renminbi, the Taiwan dollar and the krone
 
-**Source:** neither. **Affects:** 18 of the 66 companies that had a discounted
-cash flow, and 6 of the 16 with a residual income value. **Bound:** not
-computable, and the error runs both ways — **refused**.
+**Source:** the institutions that publish these rates, where they can be
+reached. **Affects:** 7 companies. **Bound:** not computable, and the error runs
+both ways — **refused**.
 
 The cost of equity starts from a risk-free rate, and a risk-free rate belongs to
-a currency. The chart endpoint the site already reads publishes the US Treasury
-curve — `^IRX`, `^FVX`, `^TNX`, `^TYX` all answer — and **nothing else**. Every
-symbol convention for a German, Japanese, British, Indian, Korean, Canadian,
-Australian, Swiss, Brazilian, Singaporean or Hong Kong government yield returns
-404, and the vendor's own search returns no bond-yield instrument for any of
-them (checked 2026-09-26). Equity indices for all of those markets are
-published; their government yields are not.
+a currency: a yen cash flow discounted at a US Treasury yield is not an
+approximation, it is a different country's rate. Toyota's cost of equity was
+12.32% on a US rate and is 9.60% on a Japanese one.
 
-A US Treasury yield is not a substitute. It is a different currency's rate, and
-the gap is not a rounding difference: discounting a yen cash flow at a dollar
-rate overstates the discount rate by whatever the two economies differ by, and a
-rupee cash flow understates it. The error has no bound this site can compute and
-no known direction, which by the rule above is a refusal rather than a warning.
+**Five currencies are now fetched from the body that publishes them.** One
+vendor's chart endpoint carries only the US curve, which is where this file
+first left the matter; that was a fact about one vendor, not about the data.
 
-So a company whose statements are not in US dollars is **refused a valuation**,
-with the reason stated, rather than discounted at another country's rate. It
-loses 18 of the 66 companies that had a value: Samsung, Tencent, TSMC, Sony,
-Toyota, Alibaba, ASML, GSK, Inditex, LVMH, Novo Nordisk, Reliance, SAP, Siemens,
-TCS, Unilever, Vodafone and Volvo. Their reported figures are unaffected and
-still shown.
+| Currency | Publisher | Series | History | Terms |
+|---|---|---|---|---|
+| USD | US Treasury | daily par yield curve, 10-year | by calendar year, daily | a work of the US government, public domain |
+| EUR | European Central Bank | euro-area AAA government bond spot rate, 10-year | daily, any window | ECB statistics, reusable with the source acknowledged |
+| JPY | Ministry of Finance, Japan | JGB daily interest rates, 10Y | daily, from 1974 | Japanese government standard terms, free reuse with attribution |
+| GBP | Bank of England | IADB series IUDMNZC, 10-year nominal par yield | daily, any window | Bank statistics, reusable with acknowledgement |
+| SEK | Sveriges Riksbank | SWEA SEGVB10YC, 10-year benchmark | daily, any window | open data |
 
-**What would remove it:** any source that publishes a ten-year government yield
-per currency. This is the single largest coverage item on the list, and it is a
-data problem rather than a modelling one (`ROADMAP.md`, section 1).
+Each was fetched for a full year ending eighteen months in the past on
+2026-09-27 and returned 245 to 255 observations. The US moved off the vendor's
+index onto the Treasury's own feed at the same time, so every rate in the model
+now comes from the institution that sets it: Apple's rate changed by half a
+basis point in the move.
+
+**Five currencies could not be reached, and those companies stay refused**:
+Samsung (won), Tencent and Alibaba (renminbi), TSMC (Taiwan dollar), Novo
+Nordisk (krone), Reliance and Tata Consultancy (rupee).
+
+**India is the sharpest case**, and worth setting out because it is the market
+this site is built for. The published Indian benchmark is the **FBIL** 10-year
+G-Sec par yield — a commercial benchmark administrator, whose rates are licensed
+rather than open, so republishing them needs a licence this site does not have.
+The Reserve Bank republishes FBIL's latest observations on its NSDP page (6.58%
+to 7.08% across the columns shown on 2026-09-27), but that page carries a
+handful of recent figures and no history, and a year's average is what this
+model asks for. The Bank's own historical database, `dbie.rbi.org.in`, resolves
+but does not complete a connection from outside India. So the rupee is a
+licensing and access problem rather than a gap in what exists, and it is the
+first thing a data layer with an Indian presence should close.
+
+**What would remove it:** an open daily history for each of those five
+currencies — for the rupee, either an FBIL licence or the Reserve Bank's own
+database reachable from where this site runs.
 
 ### A forward multiple nobody publishes
 
