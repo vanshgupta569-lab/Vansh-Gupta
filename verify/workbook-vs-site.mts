@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 import { createRequire } from 'node:module';
 import { HyperFormula } from 'hyperformula';
 
@@ -82,7 +83,7 @@ if (fs.existsSync(PAYLOADS)) {
   for (const file of files) {
     const t = file.replace('.json', '');
     if (asked.length && !asked.includes(t)) continue;
-    const payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    const payload = readPayload(file);
     if (payload.error || !payload.statements) continue;
     let rec: any;
     try { rec = buildCompanyFrom(payload); } catch { continue; }

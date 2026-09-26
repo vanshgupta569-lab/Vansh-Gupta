@@ -1977,6 +1977,48 @@ on the forecast and are unaffected.
 `DATA_CONSTRAINTS.md` lists every constraint, the source it comes from, the
 measured bound, and which ones a primary-filings data layer would remove.
 
+## 23a. Which shape of payload this code reads
+
+`src/data/payloadVersion.ts`, `api/company.js`, `verify/payloadSet.mts`.
+
+An answer from `/api/company` is cached — six hours at the edge for everyone who
+asks, and indefinitely on disk for the verification set. The key was the ticker
+alone, so for six hours after any change to what is fetched, code that expected
+a new field was handed a payload built before that field existed and read it as
+a figure the company does not report: a currency that could not be established,
+a cash flow total not filed, a risk-free rate absent. Nothing failed. The page
+simply said something untrue, and a sweep over a mixed set produced numbers that
+looked valid (`KI-15`, fixed 2026-09-27).
+
+**The version is part of the request.** The browser asks for the shape it knows
+how to read (`?v=4`), the answer stamps the shape it is (`fetcherVersion`), and
+the two are compared rather than assumed. A bumped version is a different URL,
+so no cache anywhere can serve the old shape to new code — that is the fix; the
+rest is what to do if it happens anyway:
+
+- **the answer is older than the page** — unreachable through the URL, so if it
+  happens something else is wrong, and the page says so rather than reading the
+  gap as data;
+- **the answer is newer than the page** — the site was deployed while the tab
+  was open. The page is the stale thing, and it says to reload.
+
+**The verification set refuses to be measured while it is stale.** Every tool in
+`verify/` reads payloads through `payloadSet.mts`, which stamps each run with
+what the set is — `payload set: 176 payloads, 176 built by the current fetcher
+(v4)` — and stops a sweep, a scenario run or a workbook comparison outright when
+any payload predates the fetcher, naming the command that fixes it. It refuses
+rather than refetching on its own: a refetch takes a quarter of an hour and hits
+live sources, so it is the operator's call, and two runs either side of an
+implicit refetch would not be comparable anyway. The fetcher reports the state
+of the set it leaves behind, so a partial refetch by ticker is visible at once
+rather than at the next measurement.
+
+The version numbers and what each one added are listed in
+`src/data/payloadVersion.ts`. **Bump it whenever the fetcher changes what a
+payload contains.**
+
+---
+
 ## 24. What is verified, and what is not
 
 `verify/`, five commands, runnable from a fresh checkout.

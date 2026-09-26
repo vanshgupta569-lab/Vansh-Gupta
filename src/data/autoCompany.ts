@@ -21,6 +21,7 @@ import {
 } from './corrections';
 import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
 import { buildDataConstraints } from './dataConstraints';
+import { payloadQuery, payloadVersionProblem } from './payloadVersion';
 
 const r = (n: number | null | undefined, dp = 0): number => {
   if (n == null || !isFinite(n)) return 0;
@@ -34,12 +35,18 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 // so the reader can be shown the figures BEFORE a model is built from them:
 // the correction screen needs the payload, not a finished record.
 export async function fetchCompanyPayload(ticker: string): Promise<any> {
-  const response = await fetch(`/api/company?ticker=${encodeURIComponent(ticker)}`);
+  // The shape this code reads is in the URL, so no cache can answer with
+  // another one (KI-15).
+  const response = await fetch(`/api/company?${payloadQuery(ticker)}`);
   const fetched = await response.json();
 
   if (!response.ok || fetched.error) {
     throw new Error(fetched.error || `Could not load ${ticker}`);
   }
+  // And if one somehow did, or this page has been open across a deploy, say so
+  // instead of reading a field that was never fetched as a reported absence.
+  const wrongShape = payloadVersionProblem(fetched);
+  if (wrongShape) throw new Error(wrongShape);
   if (!fetched.statements || fetched.statements.length < 2) {
     throw new Error(
       `${ticker} does not have enough reported history to model. At least two full years are needed.`
@@ -94,8 +101,10 @@ export async function loadCompany(ticker: string): Promise<CompanyData> {
 // Fetch a company and derive ONLY its model data — used when a curated company
 // (Apple) also needs its derived counterpart, so the two can be compared.
 export async function loadDerivedModelData(ticker: string): Promise<any> {
-  const response = await fetch(`/api/company?ticker=${encodeURIComponent(ticker)}`);
+  const response = await fetch(`/api/company?${payloadQuery(ticker)}`);
   const fetched = await response.json();
+  const wrongShape = payloadVersionProblem(fetched);
+  if (wrongShape) throw new Error(wrongShape);
   if (!response.ok || fetched.error || !fetched.statements) {
     throw new Error(fetched.error || `Could not load ${ticker}`);
   }

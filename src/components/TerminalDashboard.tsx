@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel, isIntegrityRefusal } from '../data/companies';
+import { payloadQuery } from '../data/payloadVersion';
 import { FootballField, RatioBand } from './valuationSections';
 import type { FieldBand } from './valuationSections';
 import { ImpliedByPrice } from './valuationExtras';
@@ -187,7 +188,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     let cancelled = false;
     setLiveQuote(null);
 
-    fetch(`/api/company?ticker=${encodeURIComponent(company.ticker)}`)
+    fetch(`/api/company?${payloadQuery(company.ticker)}`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled && data?.quote?.price) {

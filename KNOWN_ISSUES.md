@@ -50,7 +50,9 @@ mistakes and would never be fixed:
   share-count tolerance settled 2026-09-26, the risk-free rate fetched the same
   day and widened on 2026-09-27 to the five currencies whose central banks and
   finance ministries publish one, and the market risk premium and terminal
-  growth moved to `DATA_CONSTRAINTS.md` because nothing publishes them). Moved out on 2026-09-22 and never to be
+  growth moved to `DATA_CONSTRAINTS.md` because nothing publishes them) and
+  `KI-15` (a payload cache keyed to the ticker alone, so new code read old
+  payloads, fixed 2026-09-27). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -75,7 +77,6 @@ commit were measured on the payload set of that date and say so.
 |---|-------|-----------|---------------|-------------|
 | KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
-| KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
 
 ---
 
@@ -235,28 +236,6 @@ multiple should be one. After the refusal above, the four tests stand at 19 of
 64 in year one, 17 in the last year, 23 over 10% of drift and 3 over 25%, no
 company outside the half-to-twice terminal band, and none outside its own filed
 intensity range.
-
-### KI-15. The payload cache is not keyed to the code that reads it
-
-- **What is wrong.** The API response is cached for up to six hours, so for that
-  long after a change the code reads payloads built by the code before it. A
-  Yahoo payload cached before the currency evidence was fetched carries none and
-  is refused until it refreshes; an SEC payload cached before it is read as US
-  dollars, as it was built; one cached before dividends to common shareholders
-  were fetched has none, so residual income falls back to dividends paid less
-  preferred dividends, which understates the payout ratio for a filer whose
-  dividends paid is already common only (Wells Fargo). The cache key is the
-  ticker alone, so nothing invalidates it when the shape of what is fetched
-  changes.
-- **Where.** `api/company.js` (the response cache).
-- **How measured.** Observed after each fetch-layer change; not swept.
-- **Affects.** Every company, for up to six hours after any change to what is
-  fetched.
-- **Worst example.** A company refused for a missing currency it does in fact
-  report, until its cache entry expires.
-- **Value moved.** None directly: a stale payload either refuses the company or
-  reads it on the basis it was built with. It is the inconsistency that is the
-  defect, not the figure.
 
 ## Where the rest went
 

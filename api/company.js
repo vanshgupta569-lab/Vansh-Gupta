@@ -1373,6 +1373,13 @@ async function fetchQuote(symbol) {
 // SECTION 4 — THE HANDLER
 // ===========================================================================
 
+// WHAT SHAPE THIS FETCHER BUILDS. It must equal PAYLOAD_VERSION in
+// src/data/payloadVersion.ts, which explains what each number means and when to
+// bump it. The two are separate constants on purpose: each file in this
+// directory is packaged on its own by the host, and a shared import that fails
+// to bundle takes the whole route down. They are compared at runtime instead.
+const FETCHER_VERSION = 4;
+
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;
 
@@ -1447,16 +1454,34 @@ export default async function handler(req, res) {
 
     // Cache for six hours. Financial statements change four times a year, so
     // this is generous, and it keeps us far inside every free tier.
+    //
+    // THE VERSION IS PART OF THE URL the caller asked for, so a cache can only
+    // ever answer for the shape it was filled with (KI-15). Before this, the
+    // key was the ticker alone: for six hours after any change to what is
+    // fetched, code expecting a new field was served a payload built before it
+    // existed and read the field as absent. `Vary` is set as well, so a proxy
+    // keying on something other than the query string cannot cross the streams
+    // either.
     res.setHeader(
       'Cache-Control',
       'public, s-maxage=21600, stale-while-revalidate=86400'
     );
+    res.setHeader('Vary', 'Accept-Encoding');
+
+    // What the caller asked for, if it said. A caller from before this was
+    // tracked sends nothing, and gets an answer stamped with the truth.
+    const asked = Number(req.query.v);
 
     res.status(200).json({
       ticker: raw,
       ...data,
       quote,
       profile,
+      // The shape this answer is in. The reader compares it with the shape it
+      // knows how to read and says so if they differ, rather than treating a
+      // missing field as a reported absence.
+      fetcherVersion: FETCHER_VERSION,
+      fetcherVersionAsked: Number.isFinite(asked) ? asked : null,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

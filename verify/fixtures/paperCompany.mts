@@ -22,6 +22,9 @@
 // in a screenshot — revenue 900 rising to 1,260, plant of 600, a hundred
 // million shares — and to satisfy the balance sheet identity in every year.
 
+// @ts-ignore — the version this fixture's shape matches.
+import { PAYLOAD_VERSION } from '../../src/data/payloadVersion';
+
 const YEARS = [2021, 2022, 2023, 2024, 2025];
 
 /** Revenue in millions, growing 10% a year off a round 900. */
@@ -199,6 +202,10 @@ export function paperPayload(variant: 'valued' | 'refused' = 'valued') {
       reason: null,
     },
     profile: { sector: 'Materials', industry: 'Paper Products' },
+    // The shape this payload is in. The browser asks for the shape it reads and
+    // refuses one it does not recognise, so a fixture without this is treated
+    // as a cached answer from before the field existed (KI-15).
+    fetcherVersion: PAYLOAD_VERSION,
     fetchedAt: '2026-09-25T00:00:00.000Z',
   };
 }

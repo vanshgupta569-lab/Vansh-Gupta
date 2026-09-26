@@ -22,6 +22,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
@@ -38,6 +39,9 @@ if (!fs.existsSync(PAYLOADS) || !fs.readdirSync(PAYLOADS).some((f) => f.endsWith
   console.error('No payloads. Fetch them first:  npm run verify:payloads');
   process.exit(2);
 }
+// A snapshot taken over payloads the current code cannot read is a set of
+// numbers that look valid and are not (KI-15). It stops rather than writing one.
+requireCurrentPayloads();
 
 const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
 const { calculateDCFFor, defaultDriversFor, buildFullModel } = await import(
@@ -50,7 +54,7 @@ const out: Record<string, any> = {};
 
 for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json')).sort()) {
   const t = file.replace('.json', '');
-  const payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+  const payload = readPayload(file);
   if (payload.error || !payload.statements) {
     out[t] = { fetchError: String(payload.error ?? 'no statements').slice(0, 80) };
     continue;

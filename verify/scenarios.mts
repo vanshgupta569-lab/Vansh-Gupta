@@ -24,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { HyperFormula, DetailedCellError } from 'hyperformula';
+import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 
 // Everything resolves from this file's own location, so the suite runs from a
 // fresh checkout with no configuration.
@@ -48,7 +49,7 @@ if (CO && !fs.existsSync(path.join(PAYLOADS, `${CO}.json`))) {
   process.exit(2);
 }
 const SRC = CO
-  ? (await import(`file:///${REPO}/src/data/autoCompany.ts`)).buildCompanyFrom(JSON.parse(fs.readFileSync(path.join(PAYLOADS, `${CO}.json`), 'utf8'))).modelData
+  ? (await import(`file:///${REPO}/src/data/autoCompany.ts`)).buildCompanyFrom(readPayload(`${CO}.json`)).modelData
   : AAPL;
 const M = buildModel(SRC);
 const D = buildDCF(M, SRC);

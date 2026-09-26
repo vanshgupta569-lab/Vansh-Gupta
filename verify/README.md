@@ -158,6 +158,29 @@ fails it writes the screen it stopped on to `verify/out/dashboard-failure.png`
 and `.txt`, because a timeout on a button says nothing about where the browser
 had got to.
 
+## The payload set has a version, and a stale one stops a run
+
+Every payload records the version of the fetcher that built it, and every tool
+here reads them through `payloadSet.mts`. Each run opens with what the set is:
+
+```
+payload set: 176 payloads, 176 built by the current fetcher (v4)
+```
+
+When any payload predates the fetcher, the run **stops** and says which command
+fixes it. That is deliberate. A payload fetched before a field existed is not
+obviously broken — the field is simply absent, the engine reads the absence as a
+figure the company does not report, and the sweep produces numbers that look
+valid. Refusing to measure is the only way to tell the difference (`KI-15`).
+
+It refuses rather than refetching on its own: a refetch takes a quarter of an
+hour and hits live sources, so it is your call, and two runs either side of an
+implicit refetch would not be comparable anyway.
+
+**Bump `PAYLOAD_VERSION` in `src/data/payloadVersion.ts` whenever you change
+what `api/company.js` puts in a payload**, and the matching `FETCHER_VERSION` in
+`api/company.js`. The file lists what each version added.
+
 ## Payloads: where they live, and why they are not in the repository
 
 `npm run verify:payloads` fetches them into `verify/payloads/`, which is
@@ -193,6 +216,7 @@ and skipped.
 | `compare.mts` | Two snapshots measured against each other. |
 | `workbook-vs-site.mts` | The workbook's value per share against the engine's. |
 | `dashboard.mts` | The rendered page against the engine, in a real browser. |
+| `payloadSet.mts` | What shape the payloads on disk are, and the refusal to measure a stale set. |
 | `fixtures/paperCompany.mts` | Five years of statements for a company that does not exist. |
 | `fetch-payloads.mts` | Fetches the sweep set through the site's own API handler. |
 | `tickers.txt` | The sweep set. |

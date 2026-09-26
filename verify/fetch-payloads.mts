@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { surveyPayloads, payloadSetLine } from './payloadSet.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
@@ -79,3 +80,16 @@ console.log(
   `\nfetched ${done}, failed ${failed}, already on disk ${tickers.length - done - failed}; ` +
     `payloads in ${OUT}`
 );
+
+// WHAT THE SET IS NOW, said here so the operator learns it from the tool that
+// filled it rather than from a measurement run that stops (KI-15). A partial
+// refetch — a few tickers by name — leaves the rest on whatever fetcher built
+// them, and that is exactly the mix that produces numbers which look valid.
+const survey = surveyPayloads();
+console.log(payloadSetLine(survey));
+if (survey.stale.length) {
+  console.log(
+    `  ${survey.stale.length} of them predate this fetcher. Nothing will measure over the set until they are ` +
+      'refetched:  npm run verify:payloads -- --force'
+  );
+}
