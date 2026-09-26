@@ -45,8 +45,11 @@ mistakes and would never be fixed:
   2026-09-26 by `npm run verify:dashboard`), `KI-7` (a reported cash flow
   statement rebuilt rather than filed, fixed 2026-09-26), `KI-6` (a filer
   the SEC's XBRL has no facts for could not be loaded at all, fixed
-  2026-09-26) and `KI-9` (a cash cushion with no basis, fixed 2026-09-26;
-  the other constants it turned up are `KI-19`). Moved out on 2026-09-22 and never to be
+  2026-09-26), `KI-9` (a cash cushion with no basis, fixed 2026-09-26) and
+  `KI-19` (valuation constants with no stated basis: the exit multiple and the
+  share-count tolerance settled 2026-09-26, the risk-free rate fetched the same
+  day, and the market risk premium and terminal growth moved to
+  `DATA_CONSTRAINTS.md` because nothing publishes them). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -72,7 +75,6 @@ commit were measured on the payload set of that date and say so.
 | KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
-| KI-19 | The risk-free rate is a flat 4.5% when the yield it stands for is fetchable | every derived company | 4.5% against the 10-year Treasury's 5.18% on 2026-09-26 | not isolated; 0.68 points on every cost of equity |
 
 ---
 
@@ -254,34 +256,6 @@ intensity range.
 - **Value moved.** None directly: a stale payload either refuses the company or
   reads it on the basis it was built with. It is the inconsistency that is the
   defect, not the figure.
-
-### KI-19. The risk-free rate is a flat 4.5% when the yield it stands for is fetchable
-
-- **What is wrong.** The cost of equity starts from a risk-free rate of 4.5%,
-  flat for every company and every day, with no tenor attached — and unlike the
-  other constants it stands for something a source does publish. The site
-  already fetches prices from Yahoo's chart endpoint; the same endpoint returns
-  the 10-year Treasury yield under `^TNX`, with a year of daily closes. It
-  answered 5.184% on 2026-09-26, against a year's range of 3.95% to 5.18%. The
-  model's 4.5% is 0.68 points below the current yield and was never anchored to
-  a date.
-- **Where.** `src/data/deriveModel.js`, `dcf.costOfCapital.riskFreeRate`; the
-  ticker guard in `api/company.js` would also have to accept an index symbol.
-- **How measured.** Fetched directly on 2026-09-26 while grounding the other
-  constants in `KI-19`'s first half.
-- **Affects.** Every derived company: it is the first term of the cost of
-  equity, so it moves the discount rate applied to every cash flow.
-- **Worst example.** —
-- **Value moved.** Not isolated. 0.68 points on the cost of equity is roughly
-  0.67 points on a typical WACC, which on a five-year forecast with most of the
-  value in the terminal year is worth more than 5% of it — which is exactly why
-  it needs its own measurement and its own commit rather than being changed
-  alongside a disclosure.
-- **What was done with the rest of the entry.** The exit multiple and the
-  share-count tolerance were settled on 2026-09-26 (`METHODOLOGY.md` §13 and
-  §3). The market risk premium and the terminal growth rate cannot be derived
-  from anything a free source publishes, so they moved to
-  `DATA_CONSTRAINTS.md` and are shown as the assumptions they are.
 
 ## Where the rest went
 

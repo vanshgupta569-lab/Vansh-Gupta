@@ -1503,6 +1503,14 @@ export function checkValuationApplicability(model, data, wacc) {
     return { applicable: false, ...meta.dataConstraintRefusal };
   }
 
+  // 0d. No risk-free rate for the currency the statements are in. The cost of
+  //     equity starts from it, so without one there is no discount rate — and
+  //     a US Treasury yield is not the risk-free rate for a yen cash flow
+  //     (deriveModel.js, riskFreeRefusal; KI-19).
+  if (meta.riskFreeRefusal?.code) {
+    return { applicable: false, ...meta.riskFreeRefusal };
+  }
+
   // 1. Financial-sector companies — unlevered FCF is not a meaningful concept
   const sicIsFinancial = sic != null && Number(sic) >= 6000 && Number(sic) <= 6799;
   const sectorIsFinancial = meta.sector != null && FINANCIAL_SECTOR.test(meta.sector);

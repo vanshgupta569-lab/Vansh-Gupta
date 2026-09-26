@@ -181,6 +181,23 @@ export function paperPayload(variant: 'valued' | 'refused' = 'valued') {
       rangeObservations: 251,
       asOf: '2026-09-22T20:00:00.000Z',
     },
+    // The risk-free rate the model discounts at, as the fetcher returns it: a
+    // mean of daily closes over the year ending at this company's own balance
+    // sheet date. Without it the engine refuses the valuation (KI-19), so a
+    // fixture without one would leave the dashboard check with nothing to
+    // compare.
+    riskFree: {
+      rate: 0.0425,
+      currency: 'USD',
+      symbol: '^TNX',
+      name: '10-year US Treasury',
+      tenorYears: 10,
+      observations: 250,
+      windowFrom: '2024-12-31',
+      windowTo: '2025-12-31',
+      latest: 0.0418,
+      reason: null,
+    },
     profile: { sector: 'Materials', industry: 'Paper Products' },
     fetchedAt: '2026-09-25T00:00:00.000Z',
   };

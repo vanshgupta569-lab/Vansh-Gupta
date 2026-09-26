@@ -249,6 +249,38 @@ model. Where the line the filing stops tagging is one the **forecast itself** is
 built from — cost of sales, capital expenditure, or net PP&E — there is nothing
 to absorb it and no value is shown at all; see *Already refused, and why*.
 
+### A government bond yield in any currency but the dollar
+
+**Source:** neither. **Affects:** 18 of the 66 companies that had a discounted
+cash flow, and 6 of the 16 with a residual income value. **Bound:** not
+computable, and the error runs both ways — **refused**.
+
+The cost of equity starts from a risk-free rate, and a risk-free rate belongs to
+a currency. The chart endpoint the site already reads publishes the US Treasury
+curve — `^IRX`, `^FVX`, `^TNX`, `^TYX` all answer — and **nothing else**. Every
+symbol convention for a German, Japanese, British, Indian, Korean, Canadian,
+Australian, Swiss, Brazilian, Singaporean or Hong Kong government yield returns
+404, and the vendor's own search returns no bond-yield instrument for any of
+them (checked 2026-09-26). Equity indices for all of those markets are
+published; their government yields are not.
+
+A US Treasury yield is not a substitute. It is a different currency's rate, and
+the gap is not a rounding difference: discounting a yen cash flow at a dollar
+rate overstates the discount rate by whatever the two economies differ by, and a
+rupee cash flow understates it. The error has no bound this site can compute and
+no known direction, which by the rule above is a refusal rather than a warning.
+
+So a company whose statements are not in US dollars is **refused a valuation**,
+with the reason stated, rather than discounted at another country's rate. It
+loses 18 of the 66 companies that had a value: Samsung, Tencent, TSMC, Sony,
+Toyota, Alibaba, ASML, GSK, Inditex, LVMH, Novo Nordisk, Reliance, SAP, Siemens,
+TCS, Unilever, Vodafone and Volvo. Their reported figures are unaffected and
+still shown.
+
+**What would remove it:** any source that publishes a ten-year government yield
+per currency. This is the single largest coverage item on the list, and it is a
+data problem rather than a modelling one (`ROADMAP.md`, section 1).
+
 ### A forward multiple nobody publishes
 
 **Source:** neither. **Affects:** every company with a discounted cash flow.

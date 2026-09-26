@@ -1011,6 +1011,15 @@ export function deriveModel(fetched) {
       ]?.fiscalYear
     : null;
 
+  const riskFree = fetched?.riskFree ?? null;
+  provenance.riskFreeRate = isNum(riskFree?.rate)
+    ? `${(riskFree.rate * 100).toFixed(2)}% — the mean daily yield of the ${riskFree.name}, ` +
+      `${riskFree.observations} closes over the year ending ${riskFree.windowTo}, which is this company's own ` +
+      `balance sheet date. An average rather than a close, so the value does not move with one day's bond market; ` +
+      `the ten-year rather than the thirty, because the market risk premium it is added to is quoted against the ` +
+      `ten-year benchmark. The last close in that window was ${(riskFree.latest * 100).toFixed(2)}%`
+    : `not established: ${riskFree?.reason || 'the rate could not be fetched'}`;
+
   provenance.exitMultiple =
     `${EXIT_MULTIPLE.toFixed(1)}x the last forecast year's EBITDA — an assumption, not a figure taken from this ` +
     `company's market. No free source publishes a forward EV/EBITDA for a company or a comp set worth signing off, ` +
@@ -1898,7 +1907,17 @@ export function deriveModel(fetched) {
     terminalExclusions: ['deferredTaxAssets', 'otherNonCurrentLiabilities'],
 
     costOfCapital: {
-      riskFreeRate: 0.045,
+      // FETCHED, DATED, AND ABSENT WHERE IT CANNOT BE ESTABLISHED (KI-19). The
+      // mean daily yield of the 10-year US Treasury over the year ending at
+      // this company's own balance sheet date, for a company reporting in
+      // dollars; null for every other currency, because no source this site
+      // reads publishes a government yield for them and a Treasury yield is
+      // not the risk-free rate for a yen or a rupee cash flow. A null refuses
+      // the valuation rather than falling back to a constant.
+      riskFreeRate: isNum(riskFree?.rate) ? riskFree.rate : null,
+      // Not fetchable in any currency: an equity risk premium is an estimate
+      // that reputable people disagree about by two points, not a published
+      // fact. Shown as the assumption it is (DATA_CONSTRAINTS.md).
       marketRiskPremium: 0.0423,
       // 1.0 is the no-data default, and for a derived company it is the
       // ASSET beta: the risk of the business before borrowing. The engine
@@ -2000,6 +2019,19 @@ export function deriveModel(fetched) {
       },
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
+      // No risk-free rate, no discount rate, and no valuation built on one
+      // borrowed from another currency (KI-19).
+      riskFreeRefusal: isNum(riskFree?.rate)
+        ? null
+        : {
+            code: 'riskFreeRateUnavailable',
+            message:
+              `${riskFree?.reason || 'The risk-free rate could not be fetched.'} The cost of equity starts from ` +
+              `that rate, so every discounted figure here would rest on it, and no value is shown rather than one ` +
+              `discounted at another currency's rate or at a number nobody chose. The reported figures below are ` +
+              `unaffected.`,
+          },
+      riskFree,
       // Why the figures came from this source rather than the one a US ticker
       // would suggest (KI-6). Null for everything reached the ordinary way.
       sourceNote: fetched.sourceNote ?? null,

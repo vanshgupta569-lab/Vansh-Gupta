@@ -1050,6 +1050,101 @@ async function fetchProfile(symbol) {
 // SECTION 3 — LIVE PRICE (works for every market, no key needed)
 // ===========================================================================
 
+// ---------------------------------------------------------------------------
+// THE RISK-FREE RATE
+// ---------------------------------------------------------------------------
+// The first term of the cost of equity, and until now a flat 4.5% with no date,
+// no tenor and no source (KI-19). It is fetched from the same chart endpoint
+// the site already takes prices from.
+//
+// ONLY US TREASURY YIELDS ARE PUBLISHED THERE. ^IRX, ^FVX, ^TNX and ^TYX all
+// answer; every symbol convention for a German, Japanese, British, Indian,
+// Korean, Canadian, Australian, Swiss, Brazilian, Singaporean or Hong Kong
+// government yield returns 404, and Yahoo's own search returns no bond-yield
+// instrument for any of them (checked 2026-09-26). Equity indices for those
+// markets are published; their government yields are not.
+//
+// So a company reporting in dollars gets a dollar risk-free rate, and a company
+// reporting in yen gets none — because a US Treasury yield is not the risk-free
+// rate for a yen cash flow, it is a different currency's, and the gap between
+// the two is not a rounding difference. The engine refuses rather than
+// discounting a rupee at a dollar rate (see meta.riskFreeRefusal).
+//
+// THE TEN-YEAR, not the thirty. The rate is added to a market risk premium, and
+// an equity risk premium is quoted against the ten-year benchmark by
+// convention; pairing a thirty-year yield with a premium measured against the
+// ten would be the inconsistency CONVENTIONS.md's horizon test is about.
+//
+// AN AVERAGE OVER A YEAR, NOT A CLOSE. One day's close makes every valuation
+// move with one day's bond market, which is the artefact the discounting
+// convention removed when the valuation date stopped being the day the page
+// was opened. The window ENDS AT THE VALUATION DATE — the last reported balance
+// sheet date, which is what everything else in the model is struck at — so the
+// same filings give the same rate for ever, not a rate that drifts daily.
+const RISK_FREE = {
+  USD: { symbol: '^TNX', tenorYears: 10, name: '10-year US Treasury' },
+};
+const RISK_FREE_WINDOW_DAYS = 365;
+
+async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
+  const spec = RISK_FREE[reportingCurrency];
+  if (!spec) {
+    return {
+      rate: null,
+      currency: reportingCurrency || null,
+      reason:
+        `No government bond yield is published for ${reportingCurrency || 'this currency'} by the source this site ` +
+        `reads. A US Treasury yield is not the risk-free rate for a ${reportingCurrency || 'non-dollar'} cash flow.`,
+    };
+  }
+
+  // The window ends at the valuation date where the filing gives one, and at
+  // today only when it does not.
+  const end = valuationDate ? new Date(`${valuationDate}T00:00:00Z`) : new Date();
+  const endSec = Math.floor(end.getTime() / 1000);
+  const startSec = endSec - RISK_FREE_WINDOW_DAYS * 24 * 60 * 60;
+
+  try {
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(spec.symbol)}` +
+        `?period1=${startSec}&period2=${endSec}&interval=1d`,
+      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
+    );
+    if (!res.ok) throw new Error(`chart ${res.status}`);
+    const body = await res.json();
+    const result = body?.chart?.result?.[0];
+    const closes = (result?.indicators?.quote?.[0]?.close || []).filter(
+      (v) => typeof v === 'number' && isFinite(v) && v > 0
+    );
+    if (closes.length < 30) throw new Error(`only ${closes.length} closes in the window`);
+    const mean = closes.reduce((a, b) => a + b, 0) / closes.length;
+    const stamps = result?.timestamp || [];
+    const iso = (t) => (typeof t === 'number' ? new Date(t * 1000).toISOString().slice(0, 10) : null);
+    return {
+      // The chart quotes these indices in percent.
+      rate: mean / 100,
+      currency: reportingCurrency,
+      symbol: spec.symbol,
+      name: spec.name,
+      tenorYears: spec.tenorYears,
+      observations: closes.length,
+      windowFrom: iso(stamps[0]),
+      windowTo: iso(stamps[stamps.length - 1]),
+      latest: closes[closes.length - 1] / 100,
+      reason: null,
+    };
+  } catch (error) {
+    // NEVER A SILENT CONSTANT. A rate that could not be fetched is absent, and
+    // the engine says so rather than discounting at a number nobody chose.
+    return {
+      rate: null,
+      currency: reportingCurrency,
+      symbol: spec.symbol,
+      reason: `The ${spec.name} yield could not be fetched (${String(error.message).slice(0, 60)}).`,
+    };
+  }
+}
+
 async function fetchQuote(symbol) {
   // A full year of daily closes rather than five days. Same endpoint, same
   // cost, no key: the extra range is what gives us the 52-week high and low
@@ -1180,10 +1275,17 @@ export default async function handler(req, res) {
 
     // Price and profile in parallel: neither depends on the other, and the
     // profile must never hold up the page if Yahoo is slow.
-    const [quotedPrice, profile] = await Promise.all([
+    // The valuation date: the last reported balance sheet date, which is what
+    // the discounting and the equity bridge are struck at.
+    const lastPeriodEnd =
+      [...(data.statements || [])].reverse().find((r) => r?.periodEnd)?.periodEnd ?? null;
+
+    const [quotedPrice, profile, riskFree] = await Promise.all([
       fetchQuote(raw),
       fetchProfile(raw).catch(() => null),
+      fetchRiskFreeRate(data.currencyEvidence?.reportingCurrency ?? null, lastPeriodEnd),
     ]);
+    data.riskFree = riskFree;
     const { quote, conversion } = await quoteInReportingCurrency(
       quotedPrice,
       data.currencyEvidence?.reportingCurrency ?? null

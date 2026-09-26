@@ -212,6 +212,11 @@ dataSource: fetched.source,
     residualIncome: isFinancialCompany(fetched)
       ? incomparableListing
         ? { applicable: false, message: incomparableListing.message }
+        // Residual income discounts at a cost of equity too, so a missing
+        // risk-free rate stops it for the same reason it stops the discounted
+        // cash flow (KI-19).
+        : modelData?.meta?.riskFreeRefusal
+        ? { applicable: false, message: modelData.meta.riskFreeRefusal.message }
         : filedBalanceSheetRefusal(M, modelData)
         ? { applicable: false, message: filedBalanceSheetRefusal(M, modelData).message }
         : buildResidualIncome(fetched, {

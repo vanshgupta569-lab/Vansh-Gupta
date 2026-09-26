@@ -1301,17 +1301,59 @@ WACC           = weight of equity × cost of equity
                + weight of debt × cost of debt × (1 − tax rate)
 ```
 
-Risk-free rate **4.5%**, market risk premium **4.23%**, both flat defaults for
-every derived company. The tax rate is the last forecast year's.
+**The risk-free rate is fetched, dated and currency-matched** (since
+2026-09-26). It is the **mean daily yield of the 10-year US Treasury over the
+year ending at the company's own balance sheet date** — `^TNX` on the same chart
+endpoint the site already takes prices from, typically 250 closes. Apple's
+FY2025 model discounts at 4.33%, the average over the year to 2025-09-26, where
+the last close in that window was 4.18%. Across the 46 companies that have one
+the rates run 4.22% to 4.33%, against the flat 4.5% they replaced.
 
-The two are not the same kind of number, which `KI-19` separated on 2026-09-26.
-A **risk-free rate** stands for something a source publishes: the same Yahoo
-chart endpoint the site already takes prices from returns the 10-year Treasury
-yield under `^TNX`, with a year of daily closes, and it answered 5.184% on
-2026-09-26 against a year's range of 3.95% to 5.18%. So 4.5% is not a judgement
-that cannot be grounded; it is an ungrounded number standing in for one that
-can be fetched, which keeps it in `KNOWN_ISSUES.md` rather than moving it to
-`DATA_CONSTRAINTS.md`. Changing it moves every valuation, so it is its own job.
+**An average, not a close.** A single day's close makes every valuation move
+with one day's bond market, which is the artefact the discounting convention
+removed when the valuation date stopped being the day the page was opened (§13).
+
+**The window ends at the valuation date**, not today, for the same reason: the
+last reported balance sheet date is what net debt, the discounting and the
+equity bridge are all struck at, so the same filings give the same rate for
+ever. Re-fetching the company a year later returns the same window and the same
+average.
+
+**The ten-year, not the thirty.** `^TYX` is published too and a perpetuity's
+natural match is the longest available, but the rate is added to a market risk
+premium, and an equity risk premium is quoted against the ten-year benchmark by
+convention. Pairing a thirty-year yield with a premium measured against the ten
+would be the inconsistency the horizon test is about.
+
+**Is the horizon consistent?** Partly, and here is where it is not. `DCF 9` asks
+that the risk-free rate, the beta lookback and the market risk premium come from
+one horizon. The rate now has a stated tenor (ten years) and a stated window
+(the year to the valuation date). The market risk premium is a flat 4.23% quoted
+against a ten-year benchmark, so the two agree by convention rather than by
+measurement. **Beta has no window at all** for a derived company: it is a flat
+asset beta of 1.0, not measured over any period. So the horizon is consistent
+between two of the three terms and undefined for the third, and `DCF 9` is still
+not demonstrable — for a different and smaller reason than before.
+
+**A currency without a yield is refused, not approximated.** No source this site
+reads publishes a government yield for any currency but the dollar, so a company
+reporting in euros, yen, rupees, won, kronor, pounds or renminbi has no
+risk-free rate and is refused with `riskFreeRateUnavailable` rather than
+discounted at a US Treasury yield. It costs 18 of the 66 companies that had a
+value, and 6 of the 16 residual income values. See `DATA_CONSTRAINTS.md`.
+
+**A fetch that fails is absent, not 4.5%.** The rate is null, the reason is
+carried, and the company is refused. A rate this important does not quietly
+become a constant.
+
+**What it moved.** Measured on the same payloads with the rate forced back to
+4.5%: the cost of equity falls from a median 8.92% to 8.71%; all 46 valued
+companies move, **none by more than 5%**; the perpetuity value per share moves a
+median **+3.5%** (45 up, 1 down) and the exit-multiple value **+0.8%**, which is
+smaller because only the discounting changes and not the terminal figure.
+Medtronic +4.7%, Walmart +4.5%, Procter & Gamble +4.5%, Microsoft +4.4% are the
+largest.
+
 A **market risk premium** is not published as a fact by anyone; nor is a
 perpetual growth rate. Those two are in `DATA_CONSTRAINTS.md`, shown as
 assumptions with their own controls and their own sensitivity grid.
@@ -1487,6 +1529,7 @@ deepest one:
 | 7 | `implausibleDepreciationRate` | no asset base in the last reported year; no measurable rate; a rate at or below zero; or a rate that depreciates the balance past nothing inside the forecast |
 | 8 | `revenueDoesNotMeasureTheBusiness` | revenue fell across the reported years while the net PP&E that produces it rose, so the assumption the forecast rests on is contradicted by the filing (§5) |
 | 9 | `dataConstraintTooLarge` | a figure the source never publishes whose absence could move the value per share by more than 25% (§23) |
+| 9a | `riskFreeRateUnavailable` | no government bond yield is published for the currency the statements are in, so the cost of equity has no first term (§14) |
 | 10 | `financialSector` | SIC 6000–6799, or a sector matching financial / bank / insurance / capital market / asset management / NBFC |
 | 11 | `negativeOperatingProfit` | operating profit at or below zero in any forecast year |
 | 12 | `terminalGrowthExceedsWACC` | terminal growth at or above the cost of capital |
