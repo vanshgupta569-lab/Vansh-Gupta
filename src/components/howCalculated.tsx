@@ -188,6 +188,12 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
               authority that regulates it. For this company the source is{' '}
               {sourceLabel}.
             </p>
+            {/* Why that source and not the one a US ticker would suggest: a
+                foreign private issuer files a 20-F, which the SEC's XBRL
+                company facts do not carry (KI-6). */}
+            {source?.meta?.sourceNote && (
+              <p className="text-[#A1A1AA]">{source.meta.sourceNote}</p>
+            )}
             <p>
               That is the reason the site can show you its working. A number you
               can trace back to a filing is a number you can argue with.

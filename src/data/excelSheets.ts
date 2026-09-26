@@ -943,6 +943,10 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
     r++;
   };
   metaRow('Filing source', meta.source || 'company filings');
+  // Why it is that source and not the one a US ticker would suggest: a foreign
+  // private issuer's 20-F is not in the SEC's XBRL company facts, so its
+  // figures come from the other source (KI-6).
+  if (meta.sourceNote) metaRow('Why this source', meta.sourceNote);
   if (meta.sourceUrl) metaRow('Source URL', meta.sourceUrl);
   if (source?.provenance?.currency) metaRow('Currency and share basis', source.provenance.currency);
   // What the cash in the bridge is made of, and where a securities balance

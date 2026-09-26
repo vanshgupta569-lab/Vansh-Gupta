@@ -83,6 +83,35 @@ field per line. Money leaving the company is filed negative there and positive
 here, so capital expenditure, dividends and buybacks have their sign flipped on
 the way in.
 
+**Which source, and when the first one has nothing.** A ticker with a dotted
+suffix (RELIANCE.NS, BP.L) is a foreign listing and goes straight to the second
+source. Everything else is asked of the SEC first — and the SEC's ticker list
+carries every registrant, including foreign private issuers that file a 20-F
+and ADR shells that file nothing but their registration form, none of which are
+in the XBRL company-facts API. ICICI Bank, Rio Tinto and the ADR registered
+under CYATY each have a CIK, have submissions, and answer **404** for facts.
+
+That 404 used to be thrown as an error, which took the whole request down with
+it: the company could not be loaded from anywhere, and the reader got "could
+not retrieve data for that ticker right now" on every attempt (`KI-6`, fixed
+2026-09-26). It is now read as what it is — *the SEC has nothing for this one* —
+and the request falls through to the second source, which carries **its own**
+name, currency evidence, listing and source URL. Nothing is borrowed from the
+first attempt, so the currency and listing gates (§3) apply exactly as they do
+to any other non-SEC company: all three of those companies load and all three
+are refused a valuation, two as depositary receipts and one for an income
+statement the source does not report.
+
+A **5xx or a network error still fails**, deliberately: that is the SEC being
+unavailable rather than empty, and a transient outage must not quietly change
+which source a US filer's figures came from. Where neither source has the
+company, the failure names what was tried rather than showing a blank page.
+
+**Why this source** travels with the model as `meta.sourceNote` where the
+fallback was used, and is shown in the working on screen and on the workbook's
+Sources sheet, so a reader is never left wondering why a US-listed company's
+figures are not the SEC's.
+
 Both paths take the **five most recent annual periods**, convert money to
 millions of the reporting currency, and leave share counts as counts.
 
@@ -1835,10 +1864,11 @@ model:
   outside Excel has no iterative calculation, so a switch-on scenario (§22) is
   verified with a hand-written fixed-point loop over the circular cells rather
   than by an Excel recalculation.
-- **The sweep covers 104 companies; the site reaches any listed ticker.** Three
-  payloads failed to fetch on the last full sweep: two whose SEC lookup fails
-  (`KI-6`) and TATAMOTORS.NS, which Yahoo no longer carries statements for after
-  its demerger. The currency sweep covers 101 non-US listings chosen to span
+- **The sweep covers 104 companies; the site reaches any listed ticker.** One
+  payload fails to fetch on the last full sweep: TATAMOTORS.NS, which Yahoo no
+  longer carries statements for after its demerger, and which says so naming
+  what was tried. The three that used to fail with it were `KI-6`, fixed
+  2026-09-26 (§1). The currency sweep covers 101 non-US listings chosen to span
   every kind: depositary receipts and cross-listings, 10-K filers based abroad,
   and home listings on 22 exchanges quoted in 19 currencies.
 

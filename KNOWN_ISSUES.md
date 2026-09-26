@@ -42,8 +42,10 @@ mistakes and would never be fixed:
   with `KI-18` (a filed figure the company does not report carried into the
   arithmetic, in the model and in the workbook, fixed 2026-09-25), `KI-16`
   (nothing checked that the screen showed what the engine produced, fixed
-  2026-09-26 by `npm run verify:dashboard`) and `KI-7` (a reported cash flow
-  statement rebuilt rather than filed, fixed 2026-09-26). Moved out on 2026-09-22 and never to be
+  2026-09-26 by `npm run verify:dashboard`), `KI-7` (a reported cash flow
+  statement rebuilt rather than filed, fixed 2026-09-26) and `KI-6` (a filer
+  the SEC's XBRL has no facts for could not be loaded at all, fixed
+  2026-09-26). Moved out on 2026-09-22 and never to be
   reused: `KI-5`, `KI-8` and `KI-10`, all to `DATA_CONSTRAINTS.md`. The
   limitation numbers `L1` to `L30` were retired with them; each is accounted
   for in `METHODOLOGY.md` or `DATA_CONSTRAINTS.md`.
@@ -69,7 +71,6 @@ commit were measured on the payload set of that date and say so.
 | KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
 | KI-11 | Revenue is a weak proxy for plant where revenue fell much faster than plant | 19 of 64 more than 50% from their own filed ratio in year one | Shell 0.21x against 0.93x filed; BP 0.35x against 0.85x | not isolated; the worse tail is now refused, see the entry |
 | KI-15 | The payload cache is not keyed to the code that reads it | every company for up to six hours after a change | a cached Yahoo payload has no currency evidence and is refused until it refreshes | none on value; a company is refused or read on the old basis until the cache expires |
-| KI-6 | An SEC lookup that fails stops the company loading, with no Yahoo fallback | 3 (IBN, CYATY, RTNTF) | ICICI Bank | no page at all |
 | KI-9 | 50% minimum cash buffer has no documented basis | every derived company | — | none on value |
 
 ---
@@ -252,20 +253,6 @@ intensity range.
 - **Value moved.** None directly: a stale payload either refuses the company or
   reads it on the basis it was built with. It is the inconsistency that is the
   defect, not the figure.
-
-### KI-6. An SEC lookup that fails stops the company loading at all
-
-- **What is wrong.** When the SEC's ticker list has a CIK for a ticker but its
-  company-facts file answers 404, the fetcher throws instead of falling back
-  to Yahoo, so the company cannot be loaded. This is what was recorded under
-  verification limits as "source unavailable".
-- **Where.** `api/company.js` (`fetchFromSEC` throws on a non-OK response; the
-  handler falls back to Yahoo only when it returns null).
-- **How measured.** Currency sweep, 2026-09-17: the handler's error for each.
-- **Affects.** 3 found: ICICI Bank (IBN), CyberAgent (CYATY), RTNTF.
-- **Worst example.** ICICI Bank: "Could not retrieve data for that ticker right
-  now", on every attempt.
-- **Value moved.** No page at all for these companies.
 
 ### KI-9. The 50% minimum cash buffer has no documented basis
 

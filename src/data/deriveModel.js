@@ -1910,6 +1910,9 @@ export function deriveModel(fetched) {
       },
       source: fetched.source,
       sourceUrl: fetched.sourceUrl,
+      // Why the figures came from this source rather than the one a US ticker
+      // would suggest (KI-6). Null for everything reached the ordinary way.
+      sourceNote: fetched.sourceNote ?? null,
       // Whether the price, the share count and the statements describe the same
       // security in the same currency (listingComparability above). A refusal
       // here withholds every valuation.

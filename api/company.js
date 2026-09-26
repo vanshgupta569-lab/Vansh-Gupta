@@ -500,6 +500,19 @@ async function fetchFromSEC(ticker) {
     `https://data.sec.gov/api/xbrl/companyfacts/CIK${match.cik}.json`,
     { headers: { 'User-Agent': SEC_CONTACT } }
   );
+  // A 404 HERE IS AN ANSWER, NOT A FAILURE. The SEC's ticker list carries every
+  // registrant, including foreign private issuers that file a 20-F and ADR
+  // shells that file nothing but their registration, and the XBRL company-facts
+  // API holds none of them: ICICI Bank (20-F), Rio Tinto (20-F) and the ADR
+  // registered under CYATY all have a CIK, submissions, and no facts at all.
+  // Throwing here took the whole request down with a 502, so the company could
+  // not be loaded from anywhere (KI-6). Returning null says "the SEC has
+  // nothing for this one" and lets the caller try the other source.
+  //
+  // A 5xx or a network error still throws: that is the SEC being unavailable
+  // rather than empty, and a transient outage must not silently change which
+  // source a US filer's figures came from.
+  if (res.status === 404) return null;
   if (!res.ok) throw new Error(`SEC filings unavailable (${res.status})`);
 
   const body = await res.json();
@@ -1125,25 +1138,42 @@ export default async function handler(req, res) {
 
   try {
     let data = null;
+    // What was asked, in order, so a company that cannot be found says which
+    // sources were tried rather than showing a blank page (KI-6).
+    const tried = [];
 
     // A ticker containing a dot and a suffix (RELIANCE.NS, BP.L) is a foreign
     // listing and will never be in the SEC's list, so skip straight to Yahoo.
     const looksForeign = /\.[A-Z]{1,3}$/.test(raw);
 
     if (!looksForeign) {
+      tried.push('the SEC\'s XBRL company facts');
       data = await fetchFromSEC(raw);
     }
 
-    // Not a US filer, or the SEC had nothing usable — fall back to Yahoo.
+    // Not a US filer, or the SEC had nothing usable — fall back to Yahoo. A
+    // company that files a 20-F reaches this point with a CIK and no facts,
+    // and is modelled from the other source with that source's own provenance,
+    // currency evidence and listing, which the engine gates on exactly as it
+    // does for any other non-SEC company.
     if (!data) {
+      tried.push('Yahoo Finance');
       data = await fetchFromYahoo(raw);
+      if (data && !looksForeign) {
+        // Say where it came from and why, so a reader is never left to wonder
+        // why a US-listed company's figures are not the SEC's.
+        data.sourceNote =
+          `The SEC's XBRL company facts hold no financial data for ${raw} — a foreign private issuer files a 20-F, ` +
+          `and an ADR registration files no statements at all — so these figures come from Yahoo Finance.`;
+      }
     }
 
     if (!data) {
       noStore(res);
       res.status(404).json({
         error:
-          'No financial statements found for that ticker. Check the spelling — foreign listings need a suffix, for example RELIANCE.NS for India or BP.L for London.',
+          `No financial statements found for ${raw}. Tried ${tried.join(' and ')}. ` +
+          'Check the spelling — foreign listings need a suffix, for example RELIANCE.NS for India or BP.L for London.',
       });
       return;
     }
