@@ -110,6 +110,26 @@ export function terminalReliance(dcf: any, data: any): TerminalReliance | null {
     };
   }
 
+  // WHERE THE MODELLED YEARS WENT. A company can sit far above the benchmark
+  // for one visible reason: it spends what it earns on plant, so the explicit
+  // years reach the discounting with little left and the perpetuity carries the
+  // answer. That is a fact about the forecast, not a judgement, and saying the
+  // figure is better than leaving the reader to infer a cause from a share.
+  //
+  // No threshold decides whether to say it: the number is quoted whenever the
+  // company is already flagged, and the number speaks for itself. Micron's five
+  // modelled years spend 86% of their EBITDA on plant, which is why 96% of its
+  // value is beyond them, and which is in line with the 72% to 92% of EBITDA it
+  // has actually spent across its reported years.
+  const capexShare = (() => {
+    const capex: number[] = Array.isArray(dcf.capex) ? dcf.capex.filter(isNum) : [];
+    const ebitda: number[] = Array.isArray(dcf.ebitda) ? dcf.ebitda.filter(isNum) : [];
+    if (!capex.length || !ebitda.length) return null;
+    const spend = capex.reduce((t, v) => t + Math.abs(v), 0);
+    const earned = ebitda.reduce((t, v) => t + v, 0);
+    return earned > 0 ? spend / earned : null;
+  })();
+
   const years: number[] = Array.isArray(data?.meta?.forecastYears) ? data.meta.forecastYears : [];
   const lastForecastYear = years.length ? years[years.length - 1] : null;
   const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -121,7 +141,11 @@ export function terminalReliance(dcf: any, data: any): TerminalReliance | null {
     : excess > UNUSUAL_EXCESS
       ? `${pct(share)} of this value is what happens after ${lastForecastYear ?? 'the forecast'}, against about ` +
         `${pct(benchmark)} for an ordinary five-year forecast at this discount rate. More rests on the part nobody ` +
-        `modelled than usual.`
+        `modelled than usual.` +
+        (isNum(capexShare)
+          ? ` The ${nF} modelled years spend ${pct(capexShare)} of their EBITDA on plant, so little of what they ` +
+            `earn reaches the discounting.`
+          : '')
       : `${pct(share)} of this value is what happens after ${lastForecastYear ?? 'the forecast'}. That is about what ` +
         `any ${nF}-year forecast at this discount rate would give (${pct(benchmark)}): the five modelled years are a ` +
         `small annuity beside a perpetuity, so the shape is arithmetic rather than a judgement about this company.`;

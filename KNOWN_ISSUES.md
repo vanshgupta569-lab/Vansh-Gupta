@@ -76,64 +76,34 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-| ID | Issue | Companies | Worst example | Value moved |
-|---|-------|-----------|---------------|-------------|
-| KI-12 | Three companies rest on the terminal value far more than the arithmetic explains | 3 of 64 more than 10 points above their benchmark; 52 within 5 | Enbridge, 121.7% of EV against a 75.7% benchmark | +-1pt of terminal growth: Enbridge -61.3%/+91.5%, median -13.8%/+19.5% |
+**None open.**
 
----
+The list reached zero on 2026-09-27. That is not a claim that the model is
+right — it is a claim that nothing on it is a mistake of ours that we know about
+and have not dealt with. Everything that was here has been fixed, or established
+as something the filings cannot settle and moved to `DATA_CONSTRAINTS.md` where
+the affected companies are named against the model.
 
-### KI-12. Three companies rest on the terminal value far more than the arithmetic explains
+The last entry, `KI-12`, is the one worth reading about before adding another.
+It asked why three companies rested on their terminal value far more than the
+arithmetic of a five-year window explains. The answer, in the end, was that two
+of them stopped being valued at all for unrelated reasons — Enbridge for a
+currency its data does not establish, Reliance for a rupee risk-free rate nobody
+publishes — and the third, Micron, is faithful to its own filings: its five
+modelled years spend 86% of their EBITDA on plant, against the 72% to 92% it has
+actually spent, so little of what it earns reaches the discounting and the
+perpetuity carries the answer. There was nothing to fix. What the entry produced
+instead is in `METHODOLOGY.md` §13: the share is measured against what an
+ordinary five-year forecast would give, shown on every valuation, and where a
+company sits far above it the panel now says **why** rather than only by how
+much.
 
-- **What is wrong.** Not the level. Across the 64 valued companies the terminal
-  value is a median 76.5% of enterprise value, and **52 of them are within five
-  points of what the arithmetic of a five-year window requires**: five
-  discounted years are a small annuity beside a perpetuity, so a company with a
-  flat cash flow at the same discount rate and the same perpetual growth would
-  show a median 73.8%. The gap between actual and that benchmark has a median of
-  **2.0 points**. What is wrong is the tail — three companies sit more than ten
-  points above it, and one of those has an explicit stage worth less than
-  nothing, so its five modelled years contribute nothing at all to the answer.
-- **Where.** `src/engine/model.js` (`buildDCF`); the drivers that set the
-  explicit years are in `src/data/deriveModel.js`.
-- **How measured.** Present value of the explicit years against the present
-  value of the perpetuity terminal value, per company, each compared with the
-  benchmark a flat cash flow would give at that company's own WACC and terminal
-  rate. At `6e70dca` on the payloads of 2026-09-23.
-- **Affects.** 3 of 64: Enbridge (121.7% of enterprise value against a 75.7%
-  benchmark, 45.9 points), Micron (95.7% against 73.5%) and Reliance Industries
-  (84.0% against 73.8%). 52 of 64 are within five points of their benchmark.
-- **Worst example.** Enbridge: every explicit year's unlevered cash flow is
-  negative, so the modelled years are worth less than nothing and the terminal
-  value is more than the whole enterprise value. Its growth rate is
-  acquisition-inflated, which is warned about separately
-  (`DATA_CONSTRAINTS.md`).
-- **Value moved.** One point of terminal growth either side of 2.5% moves the
-  median company -13.8% / +19.5%, and Enbridge -61.3% / +91.5%. Half a point of
-  WACC moves the median -7.8% / +9.2%, Enbridge -37.1% / +44.6%. Three companies
-  move more than 25% on the growth rate alone.
-
-**The level is a fact and is now disclosed, not buried.** Every valuation
-carries a panel saying how much of it is what happens after the forecast, with
-the benchmark beside it so a reader can tell the ordinary shape of a DCF from a
-company where something else is going on, and with the value at each end of a
-stated range for the two assumptions that carry it — terminal growth a point
-either way, the discount rate half a point either way. The ranges are shown as
-values rather than as a plus-or-minus, because the perpetuity formula is not
-symmetric and the two are not additive. The workbook carries the same rows,
-computed live from its own cells (DCF sheet rows 60 to 69), and the scenario
-suite checks them against the engine's own sensitivity grid.
-
-**Running the forecast longer was measured and rejected.** `CONVENTIONS.md`
-DCF 2 treats the length as a judgment call balancing forecast reliability
-against how much weight rests on the terminal value, and five to seven is its
-usual range. Stretching the fade to seven years lowers the median terminal share
-from 76.5% to 69.1%, and to ten years 59.6% — but it **raises** the value for 52
-of the 64, by a median 3.2% at seven years and 7.9% at ten, and by up to 53.7%
-at ten (Novo Nordisk, Nvidia, MercadoLibre, Broadcom, Arista, Palantir, all
-growth companies). That is not rebalancing where the value sits; it is assuming
-the company stays above its steady state for longer, on no evidence, and
-handing the result a smaller terminal share as cover. The forecast stays at
-five years.
+**How to add one.** An entry here is a thing the model does incorrectly that we
+could do correctly. If the filing does not carry what would be needed, it is a
+data constraint. If it is a choice we made and would defend, it is methodology.
+Both have their own file. The rules for an entry — a permanent ID, what is
+wrong, where, how it was measured, how many companies, the worst example, and
+how much it moves a valuation — are above, and they have not changed.
 
 ## Where the rest went
 

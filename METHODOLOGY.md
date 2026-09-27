@@ -170,8 +170,8 @@ are carried in `provenance.excludedPeriods` and shown on screen.
 
 The forecast is **five years** (`FORECAST_YEARS`), which `DCF 2` treats as a
 judgment call balancing forecast reliability against how much weight rests on
-the terminal value. How much weight actually rests there is in `KNOWN_ISSUES.md`
-(`KI-12`).
+the terminal value. How much weight actually rests there is measured, disclosed
+on every valuation and set out in §13.
 
 **Forecast year-ends come from the date the company's year actually ended.**
 The fetcher carries the period end of each reported year — the SEC's `end` on
@@ -1283,10 +1283,36 @@ perpetual growth, about three quarters of the value of *any* going concern sits
 beyond a five-year window. So the panel shows the share **and the benchmark** —
 what a company whose cash flow never changes would show at this company's own
 discount rate and terminal rate — because the share alone tells a reader nothing
-about whether this model is unusual. Measured on 2026-09-23: median share 76.5%
-against a median benchmark of 73.8%, and 52 of 64 companies within five points
-of their own benchmark. More than ten points above it is called unusual, which
-three companies are (`KI-12`).
+about whether this model is unusual. Measured on 2026-09-27 across the 57 valued
+companies: median share **77.3%** against a median benchmark of **74.7%**, a
+median excess of **1.8 points**, and **50 of 57 within five points** of their own
+benchmark.
+
+**One company sits more than ten points above it, and the panel now says why.**
+Micron: 95.8% against a 74.2% benchmark. Its five modelled years spend **86% of
+their EBITDA on plant** — against the 72% to 92% of EBITDA it has actually spent
+across its reported years — so little of what it earns reaches the discounting
+and the perpetuity carries the answer. Its capital intensity ends at 139% of
+revenue, inside the 120% to 244% it has carried. Nothing in that is a driver
+producing figures a reader would not recognise; it is what a memory manufacturer
+building fabs looks like when it is modelled faithfully. So the sentence beside
+the share quotes the figure rather than leaving the reader to infer a cause:
+*"The 5 modelled years spend 86% of their EBITDA on plant, so little of what they
+earn reaches the discounting."* No threshold decides whether to say it — the
+number is quoted whenever the company is already flagged.
+
+**An explicit stage worth less than nothing is shown, not refused.** When the
+tail was three companies, one of them — Enbridge — had five forecast years whose
+present value was negative, so more than the whole value sat beyond them. That
+is a real pattern, not an error: a business in a heavy building phase consumes
+cash for years and is worth what it produces afterwards. Refusing it would
+withhold a defensible valuation over its shape rather than over an input nobody
+can supply, which is not the bar the other refusals are held to (§16). It is
+disclosed instead, in its own sentence: *"The 5 forecast years are worth less
+than nothing on their own: the whole of this value, and more, is what the model
+assumes happens after 2030."* No company in the set is in that position today —
+Enbridge is refused for a currency its data does not establish — and the
+sentence stands ready for the next one.
 
 **The sensitivity is shown as values, not as a margin.** Terminal growth a point
 either way and the discount rate half a point either way, each read off the
