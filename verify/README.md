@@ -71,6 +71,20 @@ every formula in it with HyperFormula, and then checks, **in each scenario**:
   the amounts they should;
 - no formula reaches into the units column.
 
+It also checks two things that are not about a workbook at all, because there
+was nowhere better to put them and both are cheap:
+
+- **a driver moves the value the way it reads.** Twelve of the sliders are set
+  back to their own defaults, which must reproduce the untouched model to the
+  last decimal, and nudged a point each way, where the value must move in the
+  direction the driver's label implies. A handler that writes a level where it
+  should write a shift passes every other check here and still makes a verdict
+  of *this hurts* raise the valuation, which is what the research-spending
+  slider did until 2026-09-27.
+- **the loading-screen notes hold together.** No entry missing a field, no
+  duplicate key, and — over four hundred shuffles — every note shown once and
+  never three from the same part of the accounts inside the first twenty.
+
 ### The scenarios
 
 | | Scenario |
@@ -139,6 +153,14 @@ On the refused company it checks the opposite — that **no value appears
 anywhere**: not a premium against the price, not a football-field bar, not a
 reverse DCF, not a terminal-reliance panel, and not in the batch screen or the
 downloaded workbook, each of which must carry the engine's own reason instead.
+
+**And a fourth case with no company in it: a slow build.** The fixture is held
+open for seventeen seconds on purpose and the loading overlay is read while it
+waits. It must carry one of the notes from `didYouKnow.ts` — matched against the
+data file, so a truncated or invented line fails — and it must show **more than
+one**, because the thing being prevented is a reader waiting twenty seconds on a
+single sentence. It is the one screen every reader sees on every build and, in a
+fast harness, the one nothing could look at.
 
 ```
 npm run verify:dashboard              # headless

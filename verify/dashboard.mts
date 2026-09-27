@@ -42,7 +42,7 @@ import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { chromium, type Page, type Browser } from 'playwright';
+import { chromium, type Page, type Browser, type BrowserContext } from 'playwright';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
@@ -443,6 +443,85 @@ async function checkRefused(page: Page, source: any, company: any, symbol: strin
   else fail('the downloaded workbook', 'the refusal, in the engine’s words', '(not in the file)');
 }
 
+// ---- the loading screen, on a build slow enough to read --------------------
+//
+// The overlay is the one screen a reader sees on every single build and the one
+// screen nothing rendered checked, because in a fast harness it is gone before
+// anything can look at it. So the fetch is held open on purpose and the overlay
+// is read while it waits.
+//
+// Two things are asserted. A note is shown at all — one of the fifty-three in
+// the data file, with its belief, its correction and its mechanism, not a
+// truncated fragment. And it CHANGES: a reader who waits twenty seconds must not
+// spend twenty seconds on one sentence, which is the failure this exists to
+// prevent rather than a nicety.
+async function checkSlowBuild(context: BrowserContext, page: Page) {
+  console.log('\n=== the loading screen, on a slow build ===');
+  const { DID_YOU_KNOW } = await import(`file:///${REPO}/src/data/didYouKnow.ts`);
+  const facts: string[] = (DID_YOU_KNOW as any[]).map((n) => n.fact);
+
+  // Held for longer than two turns of the note so a second one is certain,
+  // then released; the route is put back afterwards so nothing later inherits
+  // a slow fetch.
+  const HOLD_MS = 17_000;
+  await context.unroute('**/api/company*');
+  await context.route('**/api/company*', async (route) => {
+    await new Promise((r) => setTimeout(r, HOLD_MS));
+    const url = new URL(route.request().url());
+    const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...paperPayload('valued'), ticker }),
+    });
+  });
+
+  const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
+  const shown = async (): Promise<string | null> => {
+    const text = (await overlay.textContent().catch(() => null)) || '';
+    return facts.find((f) => text.includes(f)) ?? null;
+  };
+
+  // Deliberately NOT awaited: the click starts a fetch that will not answer for
+  // seventeen seconds, and the overlay is read while it is outstanding.
+  const started = search(page, PAPER_TICKER);
+  await overlay.waitFor({ state: 'visible', timeout: 30_000 });
+
+  const seen: string[] = [];
+  for (let waited = 0; waited < HOLD_MS - 1000; waited += 1000) {
+    const fact = await shown();
+    if (fact && seen[seen.length - 1] !== fact) seen.push(fact);
+    await page.waitForTimeout(1000);
+  }
+  await started.catch(() => {});
+
+  if (!seen.length) {
+    fail('a note on the loading screen', 'one of the entries in didYouKnow.ts', 'none of them');
+  } else if (seen.length < 2) {
+    fail(
+      'the note changing during a slow build',
+      `at least 2 notes across ${Math.round(HOLD_MS / 1000)} seconds`,
+      `1: "${seen[0].slice(0, 60)}…" held the whole wait`
+    );
+  } else {
+    ok(`${seen.length} notes over ${Math.round(HOLD_MS / 1000)} seconds, the first "${seen[0].slice(0, 54)}…"`);
+    ok('a slow build does not leave one note on screen for the whole wait');
+  }
+
+  // Put the instant fixture back for anything that runs after this.
+  await context.unroute('**/api/company*');
+  await context.route('**/api/company*', async (route) => {
+    const url = new URL(route.request().url());
+    const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
+    if (ticker !== PAPER_TICKER && ticker !== REFUSED_TICKER) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: `No fixture for ${ticker}` }) });
+      return;
+    }
+    const payload = paperPayload(ticker === REFUSED_TICKER ? 'refused' : 'valued');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...payload, ticker }) });
+  });
+}
+
 // ------------------------------------------------------------------------ run
 let server: ChildProcess | null = null;
 let browser: Browser | null = null;
@@ -516,6 +595,10 @@ try {
   const refused: any = buildCompanyFrom(refusedPayload);
   await openFetched(page, REFUSED_TICKER);
   await checkRefused(page, refused.modelData, refused, refused.currencySymbol || '$');
+
+  // 4. A build slow enough to read: the loading screen must carry a note, and
+  //    must not hold the same one for the whole wait.
+  await checkSlowBuild(context, page);
 } catch (error: any) {
   problems++;
   console.log(`\n  PROBLEM: the check could not finish — ${error?.message || error}`);

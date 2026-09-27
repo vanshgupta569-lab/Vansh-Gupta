@@ -835,6 +835,59 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 
+// ---- the loading-screen notes hold together --------------------------------
+//
+// A content file, so most of what matters about it cannot be checked by a
+// machine — whether a note states mechanics rather than merit is a reading, not
+// a test. Three things can be: that no entry is missing a field a reader would
+// be shown, that no key is duplicated (React would then reuse one note's DOM for
+// another), and that the ordering rule the `group` field exists for actually
+// holds. The last is the one worth having: it is a greedy rule over a shuffle,
+// so it is exercised over many shuffles rather than reasoned about.
+{
+  console.log('\n=== the loading-screen notes ===');
+  const { DID_YOU_KNOW, noteOrder } = await import(`file:///${REPO}/src/data/didYouKnow.ts`);
+  let bad = 0;
+  const GROUPS = ['income', 'balance', 'cash', 'valuation', 'reading'];
+
+  const seen = new Set<string>();
+  for (const n of DID_YOU_KNOW as any[]) {
+    for (const field of ['key', 'group', 'belief', 'fact', 'why']) {
+      if (typeof n[field] !== 'string' || !n[field].trim()) {
+        bad++;
+        console.log(`  PROBLEM: ${n.key ?? '(no key)'} has no ${field}`);
+      }
+    }
+    if (!GROUPS.includes(n.group)) { bad++; console.log(`  PROBLEM: ${n.key} is in an unknown group "${n.group}"`); }
+    if (seen.has(n.key)) { bad++; console.log(`  PROBLEM: the key "${n.key}" appears twice`); }
+    seen.add(n.key);
+  }
+
+  // Every note must be shown once per pass, and no group three times running
+  // until the remainder leaves no choice. The tail of a fifty-three-note order
+  // can; the first twenty, which is over two minutes of waiting, must not.
+  const SHUFFLES = 400;
+  const HEAD = 20;
+  let runs = 0;
+  let incomplete = 0;
+  for (let s = 0; s < SHUFFLES; s++) {
+    const order: any[] = noteOrder();
+    if (order.length !== DID_YOU_KNOW.length || new Set(order.map((n) => n.key)).size !== order.length) incomplete++;
+    for (let i = 2; i < Math.min(HEAD, order.length); i++) {
+      if (order[i].group === order[i - 1].group && order[i].group === order[i - 2].group) runs++;
+    }
+  }
+  if (incomplete) { bad += incomplete; console.log(`  PROBLEM: ${incomplete} of ${SHUFFLES} orders drop or repeat a note`); }
+  if (runs) { bad += runs; console.log(`  PROBLEM: ${runs} runs of three from one group inside the first ${HEAD} notes`); }
+
+  const byGroup = GROUPS.map((g) => `${g} ${(DID_YOU_KNOW as any[]).filter((n) => n.group === g).length}`).join(', ');
+  console.log(
+    `  ${DID_YOU_KNOW.length} notes (${byGroup}); ${SHUFFLES} shuffles checked -- ` +
+      `${bad ? bad + ' PROBLEMS' : 'each shown once, never three from one group in the first ' + HEAD}`
+  );
+  totalProblems += bad;
+}
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {

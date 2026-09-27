@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, animate, useInView } from 'motion/react';
+import { motion, animate, AnimatePresence, useInView } from 'motion/react';
+import { noteOrder } from '../data/didYouKnow';
+import type { DidYouKnow } from '../data/didYouKnow';
 
 /**
  * Shared motion helpers for the dashboard.
@@ -156,9 +158,22 @@ const STAGES = [
   'Discounting cash flows',
 ];
 
+// HOW LONG ONE NOTE HOLDS THE SCREEN.
+//
+// Long enough to read a belief, a correction and the mechanism behind it
+// without hurrying, and short enough that a slow build does not become one
+// sentence stared at for half a minute. The five stages above take 4.5 seconds
+// to walk through, so a build that finishes normally shows one note and a build
+// that drags shows a new one roughly every stage-and-a-half after that.
+const NOTE_MS = 6500;
+
 export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
   const reduced = useReducedMotion();
   const [stage, setStage] = useState(0);
+  // A fresh order per build, drawn when the overlay opens rather than when the
+  // module loads, so the notes are not the same every time in one session.
+  const [notes, setNotes] = useState<DidYouKnow[]>([]);
+  const [noteIndex, setNoteIndex] = useState(0);
 
   useEffect(() => {
     if (!active) {
@@ -177,7 +192,28 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
     return () => clearInterval(timer);
   }, [active, reduced]);
 
+  useEffect(() => {
+    if (!active) {
+      setNoteIndex(0);
+      return;
+    }
+    setNotes(noteOrder());
+    setNoteIndex(0);
+    // Reduced motion suppresses movement, not information: the note still
+    // changes, it simply does not fade while it does. A reader who waits
+    // twenty seconds gets three notes either way.
+    const timer = setInterval(
+      () => setNoteIndex((i) => i + 1),
+      NOTE_MS
+    );
+    return () => clearInterval(timer);
+  }, [active]);
+
   if (!active) return null;
+
+  // Wraps rather than stopping, so a build slow enough to exhaust the order
+  // starts again rather than holding the last note for the rest of the wait.
+  const note = notes.length ? notes[noteIndex % notes.length] : null;
 
   // Rendered as a centred overlay rather than inline. Inline, it sits below the
   // suggestion list and lands off-screen exactly when the user has just picked
@@ -195,7 +231,10 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
         initial={{ opacity: 0, y: 12, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="w-full max-w-md border hairline-border bg-[#111114] p-7 shadow-2xl"
+        /* A note adds four lines to a card that was already five stages tall,
+           so a short phone viewport gets something to scroll rather than
+           losing the bottom of it. */
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto border hairline-border bg-[#111114] p-7 shadow-2xl"
       >
         <div className="flex items-center gap-2 mb-5">
           <span className="w-2 h-2 bg-[#8B1E1E]" />
@@ -241,6 +280,44 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
             </motion.div>
           );
         })}
+
+        {/* ---- something to read while it works ----------------------------
+            The wait is a few seconds of nothing, and a reader who has just
+            asked for a valuation is exactly the reader for whom one correction
+            about how accounts behave is worth having. Mechanics, never merit:
+            each note states a reasonable belief, what the accounting actually
+            says, and the mechanism. `aria-live` is off here deliberately — the
+            card announces its progress, and a note that changes every six
+            seconds would talk over it. */}
+        {note && (
+          <div
+            className="mt-5 pt-4 border-t hairline-border-t"
+            aria-live="off"
+          >
+            <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mb-2.5">
+              While you wait
+            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={note.key}
+                initial={reduced ? false : { opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? undefined : { opacity: 0, y: -4 }}
+                transition={{ duration: reduced ? 0 : 0.35, ease: 'easeOut' }}
+              >
+                <p className="text-[12px] leading-snug text-[#8A8A8F] italic">
+                  {note.belief}
+                </p>
+                <p className="font-serif text-[15px] leading-snug text-[#F2F0EA] mt-1.5">
+                  {note.fact}
+                </p>
+                <p className="text-[12px] leading-relaxed text-[#A1A1AA] mt-2">
+                  {note.why}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        )}
 
         <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 border-t hairline-border-t leading-relaxed">
           Reading the filings and running the same engine used for every company

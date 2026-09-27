@@ -80,8 +80,11 @@ In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this
    them, and `npm run verify` has a new section that nudges twelve drivers both
    ways and fails if any moves the value against its own label — the check that
    was missing, since at rest every driver reproduces the model exactly and that
-   was all anything tested. Did-you-know entries and the eight SEO explainer
-   pages follow, in that order.
+   was all anything tested. **The did-you-know notes are done** (2026-09-27):
+   fifty-three of them on the loading screen, shuffled per build, reordered so
+   that no three consecutive notes come from the same part of the accounts, and
+   rotated every 6.5 seconds so a slow build does not leave one sentence on
+   screen for the whole wait. The eight SEO explainer pages follow.
 5. **IDEA — A check that the dashboard renders what the engine produced.** The one hole the verification harness leaves, recorded under the verification limits in `KNOWN_ISSUES.md`. `playwright` is already a dev dependency.
 
 ---
@@ -237,7 +240,7 @@ Gated on the learning track (section 8). Nothing here starts before its hand mod
 | Buffett lens callouts | LIVE | Our summary of the questions Mary Buffett and David Clark ask. Their numeric thresholds are deliberately excluded; the book is credited instead. Never reproduce the thresholds. |
 | Margin Notes screen | LIVE | Paper palette; index plus article reader. |
 | SEO explainer pages, eight articles | QUEUED | What is a DCF, free cash flow, WACC, terminal value, EV/EBITDA, book value, why two analysts differ, the three-statement model. Outsourceable. |
-| Did you know, on the loading screen | QUEUED | Short insights while the model builds; `BuildPipeline` already exists. Entries outsourceable. Why negative working capital can be a strength is the first. |
+| Did you know, on the loading screen | LIVE | 53 notes, 2026-09-27. Shuffled per build and reordered so no three consecutive come from the same part of the accounts; one holds the screen for 6.5 seconds, so a slow build rotates rather than freezing on one line. Checked in `verify:dashboard` against a fetch held open for seventeen seconds. |
 | Naive investor section | QUEUED | Insights from the reported statements. Explain mechanics, not merit. |
 | Landing page rewrite | QUEUED | Less theory, a clearer statement of what the site does, and the basics of financial modelling for someone arriving cold. |
 | Explainer video | QUEUED | Record once, when nothing significant is left to add. Screen capture of the real product. |
