@@ -193,6 +193,7 @@ Each is a few lines of work and disproportionately useful.
 | Batch mode | LIVE | |
 | Terminal values shown separately | LIVE | `933fc2c` |
 | Systematic company sweep | LIVE | `verify/`, `48c95b6` |
+| The rendered page checked against the engine | LIVE | `verify:dashboard`, `43b6fee`. Drives the real site in a real browser and compares every figure a reader acts on against what the engine returns in the same process, as formatted rather than as numbers. Covers the refusal path — a refused company must show its reason and no value anywhere, including the football field, the batch screen and the downloaded workbook — and now also the loading screen and the contrast of every element holding text. **This was carried as an IDEA in the previous version of this file and had already shipped.** Restored 28 September 2026. |
 | Depreciation on the asset base | LIVE | `4cdec07` |
 | Company-specific beta | QUEUED | Asset beta of 1.0 relevered; a real lookback is missing (L25). Becomes a judgement (section 2). |
 | Monte Carlo simulation | IDEA | Thousands of runs, inputs drawn from ranges, a spread rather than one figure. Every range must come from the company's own filed history — never arbitrary assumptions, or it is false precision. Five years is a thin base, so show the width of the evidence beside the spread. Build after 9 + 12b. |
@@ -211,12 +212,12 @@ Each is a few lines of work and disproportionately useful.
 
 ### Asset approach
 
-| Item | Status |
-|---|---|
-| Book, tangible book and net current asset value | LIVE |
-| Liquidation value with user-set recovery rates | IN FLIGHT |
-| Method suitability stated on screen | QUEUED |
-| Three-approaches summary on the company screen | QUEUED |
+| Item | Status | Notes |
+|---|---|---|
+| Book, tangible book and net current asset value | LIVE | |
+| Liquidation value with user-set recovery rates | IN FLIGHT | |
+| Method suitability stated on screen | LIVE | `b8e7615`. **Already built, found on checking 28 September 2026** — it predates this file. Property, plant and inventory as a share of total assets decides it at a 20% threshold, and the sentence states which case the company is in rather than leaving the reader to assume: for an asset-light one, that these figures "are correct and largely beside the point. They are shown as a floor, not as a valuation." |
+| Three-approaches summary on the company screen | QUEUED | The football field already draws all three side by side. What does not exist is the summary block. |
 
 ### Committed backlog
 
@@ -340,7 +341,7 @@ The data layer makes this possible; this section is what to do with it. Internat
 | Privacy and terms footnotes | LIVE | |
 | `CLAUDE.md` house-rules file | QUEUED | The standing decisions, Inter and Playfair, costs-are-negative, verify-by-recalculating. The palette and the square no longer need writing down — the suite enforces them. |
 | README verdict badge | QUEUED | A public claim that isn't true. |
-| Commit `package.json` and lockfile | QUEUED | |
+| Commit the lockfile | QUEUED | `package.json` is tracked and was last committed in `239ccae`. Only `package-lock.json` is still untracked. |
 | Development in Cursor with Claude Code | LIVE | Planning and judgement in chat; code in Claude Code, one session per job; content jobs in other accounts. |
 | **n8n** | QUEUED | Build it as part of item 13 + 14, not before. It earns its place for work that is long-running, scheduled or calls paid APIs: AI document extraction, quarterly refresh, batch exports. **Not** for routing business logic — refusals and method selection belong in the engine, inside the verification harness. |
 | Antigravity for design | IDEA | Proposed split: Claude Code owns the engine and workbook; Antigravity takes screens. Nothing touching the engine or export ships without the suite and every Checks row at zero, whichever tool builds it. |
@@ -358,7 +359,7 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 | Standardised reported statements download | NEXT | Stage 2 of the data layer. |
 | Reclassification layer | NEXT | Section 2. |
 | **House template upload** | QUEUED | A firm uploads its Excel layout once; every export arrives in its format. Depends on stage 2 and the standard chart of accounts. Strongest retention feature on the list. |
-| Model versioning and freeze | QUEUED | Freeze a model with a date so it can be reproduced later. With the decision trail, this is the audit file. |
+| Model versioning and freeze | QUEUED | **Half of it is built** (`37c899e`): a set of drivers can be saved under a name with a note, dated, carrying the value per share at the time, and the whole set exports to a file and imports again — in the browser, per device, which is stated on screen. What is missing is the freeze. It stores the drivers, not the filings they ran on, so reopening it after a refresh will not reproduce the number. That missing half is what would make it an audit file, and it is why this stays QUEUED. |
 | Comparables justification sheet | QUEUED | Why each peer was included and each rejected — produced by the peer judgement in section 2 rather than built separately. |
 | Draft valuation report in Word | IDEA | The deliverable they are paid for, figures traced to workbook cells. |
 | Refresh on new results | IDEA | Turns a purchase into a subscription. |
@@ -416,6 +417,25 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 
 Most recent first. Defect detail and measurements are in the commit messages and in the history of `KNOWN_ISSUES.md`.
 
+**Read this log as incomplete by history, not as authoritative.** Every hash in
+this file was checked against `git log` on 28 September 2026. All of them
+resolve and all of them describe the right commit — but **thirteen shipped
+commits had never been entered at all**, and are added below. Two of them sat
+behind lines in section 4 that already said LIVE: the circularity switch and the
+Ratios, Checks and Sources sheets. Others were whole defects closed — the
+browser check against the engine, the filed cash flow statement, the SEC
+empty-answer fix, the workbook reading its own drivers.
+
+Eleven of the thirteen were missing before this rewrite too, so the gap is older
+than the file. And the log does not reach back past the roadmap: work shipped
+before 21 September 2026, when this file was created, is only partly here.
+"Method suitability stated on screen" was found that way — built on 9 September,
+still marked QUEUED nineteen days later. **Assume anything not below may still
+have shipped, and check the repository before trusting a status.**
+
+The rule that closes this is the first maintenance rule at the top of the file:
+an item ships with its hash, in the same commit as the work.
+
 | Commit | What |
 |---|---|
 | `3332cf7` | Shared design tokens; contrast fixed on both grounds; the red square in one component. |
@@ -427,6 +447,17 @@ Most recent first. Defect detail and measurements are in the commit messages and
 | `4745e58` | Terminal reliance explained where it is flagged; `KNOWN_ISSUES.md` reached empty. |
 | `b2b39eb` | Exit multiple and share-count tolerance grounded; two rates moved to constraints. |
 | `71892a1`, `6038f11` | Risk-free rate from each currency's own government, a year's average to the balance sheet date. |
+| `a061abc` | Cash cushion set at the least a company has actually run on, from its own filed history. |
+| `b8d4da0` | An empty answer from the SEC read as an answer, so a filer its XBRL holds no facts for loads instead of failing. |
+| `684a99f` | Reported cash flow statement taken from the filing rather than rebuilt from net income and balance sheet movements. |
+| `43b6fee` | The rendered page checked against the engine, in a real browser. |
+| `dbd6caa` | A figure the filing never reported kept out of the arithmetic, rather than carried into it as a number. |
+| `c60cb3a` | The workbook reads its drivers from the engine instead of asserting rules of its own. |
+| `6bd1c88` | Each company valued at the date of its own balance sheet, discounted mid-year. |
+| `35114b3` | The tax rate given the base it was actually measured on. |
+| `ebe5884` | How much of a valuation is the part nobody modelled, measured and shown on every valuation. |
+| `6e70dca` | A company whose revenue fell while its plant rose refused rather than valued. |
+| `f25a9c4` | Six bounds on capital spending measured, and all six rejected on the evidence. |
 | `5a2b858` | Growth fades to the terminal rate from a median start; forecast years run from the company's own year end. |
 | `ce0805f` | `METHODOLOGY.md`: what the engine does, line by line. |
 | `7b5f7d8` | `DATA_CONSTRAINTS.md`; `KNOWN_ISSUES.md` reduced to our own mistakes. |
@@ -452,4 +483,6 @@ Most recent first. Defect detail and measurements are in the commit messages and
 | `7d73857`, `1f8b8f1` | Depreciation and stock compensation charged as their own lines; capex sign corrected. |
 | `58f6fb4`, `7633302` | PIK interest charged; revolver as a proper roll-forward. |
 | `f746e7f`, `41bc482` | Statement sheets and annexures; first-year formula fixes. |
+| `2f3cd4e` | Accidental circularity fixed, and a circularity switch the user controls. |
+| `f4b7197` | Ratios, Checks and Sources sheets added to the Excel export. |
 | `2ce16ff`, `113f8e3`, `f1d9339` | The red square; the conventions files; `KNOWN_ISSUES.md` created. |
