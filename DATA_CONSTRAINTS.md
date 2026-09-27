@@ -298,6 +298,56 @@ first thing a data layer with an Indian presence should close.
 currencies — for the rupee, either an FBIL licence or the Reserve Bank's own
 database reachable from where this site runs.
 
+### How much plant a change in revenue is worth
+
+**Source:** neither. **Affects:** 3 of the 57 companies whose forecast buys
+plant this way. **Bound:** 2.9% at worst — **noted**.
+
+The forecast buys and releases plant in proportion to revenue: growth capital
+spending is the change in revenue times the plant this company carries per unit
+of it. For a company whose revenue and plant have moved together, that is a fair
+reading of what a bigger or smaller business needs. For one whose two have
+parted, it is wrong, and **nothing in the filings says by how much**.
+
+This was `KI-11`, carried as a defect for a fortnight and attacked twice. Six
+bounds on capital spending were measured and rejected on 2026-09-22, each
+putting the asset base somewhere the company had never been. The revenue line
+was fixed on 2026-09-23, which closed the worse tail — a company whose revenue
+fell while its plant rose is now refused outright.
+
+**What was left was a question of magnitude, and it cannot be answered from the
+filings.** The obvious candidate was the company's own filed elasticity of plant
+to revenue: Shell's revenue fell 30.0% across its reported years while its plant
+fell 6.8%, an elasticity of 0.23, so scale the proportion by that. Measured on
+2026-09-27 across the 57 companies on this rule, it is **worse than the rule it
+would replace**: companies ending outside the capital intensity they have
+actually carried go from **3 to 21**, and none of the three is fixed — Shell
+ends further out, not nearer. The elasticity does not even separate the three:
+Shell's is 0.23, Unilever's is 1.04, and Volvo's cannot be measured because its
+revenue barely moved. No threshold on it divides the three from the 54 that pass.
+
+So the site names the companies where it shows instead of pretending to a number
+it does not have. The test is the one established for the defect: **does the
+forecast end inside the band of capital intensity — net PP&E over revenue — that
+this company has actually carried?** Where it does not, the constraint is
+recorded with the size measured by taking the forecast to the nearest edge of
+that band:
+
+| | ends at | its own range | bound |
+|---|---|---|---|
+| Shell | 70.9% of revenue | 52.1%–69.3% | 2.9% |
+| Volvo | 26.1% | 20.0%–25.9% | 0.5% |
+| Unilever | 17.7% | 17.8%–22.2% | 0.1% |
+
+All three are marginally outside, and all three are below the 5% bar, so each is
+noted rather than warned — the severity follows the measurement, and a company
+that one day ends far outside will warn or refuse on the same rule without
+anything else changing.
+
+**What would remove it:** nothing a filing contains. How much plant a business
+needs when its revenue moves is a question about the business, and the accounts
+record only what it did hold.
+
 ### A forward multiple nobody publishes
 
 **Source:** neither. **Affects:** every company with a discounted cash flow.

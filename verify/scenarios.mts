@@ -24,7 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { HyperFormula, DetailedCellError } from 'hyperformula';
-import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
+import { checkVersionsAgree, readPayload } from './payloadSet.mts';
 
 // Everything resolves from this file's own location, so the suite runs from a
 // fresh checkout with no configuration.
@@ -38,6 +38,10 @@ const { buildWorkbook } = await import(`file:///${REPO}/src/data/excelExport.ts`
 const { enableIterativeCalculation } = await import(`file:///${REPO}/src/data/excelIterativeCalc.ts`);
 const AAPL = (await import(`file:///${REPO}/src/data/AAPL.js`)).default;
 const { buildModel, buildDCF } = await import(`file:///${REPO}/src/engine/model.js`);
+// The payload version constants are duplicated for a reason; this is what
+// stops them drifting apart in silence.
+checkVersionsAgree();
+
 const tag = process.argv[2] || 'run';
 const compareTag = process.argv[3];
 

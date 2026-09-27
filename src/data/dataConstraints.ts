@@ -574,6 +574,94 @@ export function buildDataConstraints(
   }
 
   // ---------------------------------------------------------------------------
+  // 12. How much plant a change in revenue is worth
+  // ---------------------------------------------------------------------------
+  // The forecast buys and releases plant in proportion to revenue: growth
+  // capital spending is the change in revenue times the plant this company
+  // carries per unit of it. Where revenue and plant have not moved together in
+  // the filings, that proportion is wrong, and nothing in the filings says by
+  // how much — which was `KI-11` for as long as it was treated as a defect.
+  //
+  // It was attacked twice. Six bounds on capital spending were measured and
+  // rejected in 2026-09-22, each putting the asset base somewhere the company
+  // had never been. The revenue line was fixed in 2026-09-23, which closed the
+  // worse tail. What was left was a question of magnitude, and the obvious
+  // answer — scale the proportion by the company's OWN filed elasticity of
+  // plant to revenue — was measured on 2026-09-27 and is worse than the rule it
+  // would replace: companies ending outside the capital intensity they have
+  // actually carried go from 3 of 57 to 21, and none of the three is fixed.
+  // The elasticity does not separate them either: of the three, one is 0.23,
+  // one is 1.04 and one cannot be measured at all.
+  //
+  // So it is not a defect to be fixed but a relationship the filings do not
+  // settle, and the companies where it shows are named rather than left silent.
+  // The test is the one that was established for it: does the forecast end
+  // inside the band of capital intensity — net PP&E over revenue — that this
+  // company has actually carried?
+  const reportedYears = model?.nH ?? 0;
+  const nT = model?.years?.length ?? 0;
+  const intensities: number[] = [];
+  for (let t = 0; t < reportedYears; t++) {
+    const rev = model?.revenue?.[t];
+    const plant = model?.ppe?.ending?.[t];
+    if (isNum(rev) && rev > 0 && isNum(plant)) intensities.push(plant / rev);
+  }
+  const endRevenue = model?.revenue?.[nT - 1];
+  const endPlant = model?.ppe?.ending?.[nT - 1];
+  const endIntensity = isNum(endRevenue) && endRevenue > 0 && isNum(endPlant) ? endPlant / endRevenue : null;
+  if (valued && intensities.length >= 2 && endIntensity !== null && modelData?.assumptions?.ppeToRevenue) {
+    const low = Math.min(...intensities);
+    const high = Math.max(...intensities);
+    const outside = endIntensity > high * 1.001 || endIntensity < low * 0.999;
+    if (outside) {
+      const target = endIntensity > high ? high : low;
+      // The bound: the value at the nearest edge of the band the company has
+      // carried, found by scaling the plant-per-unit-of-revenue ratio until the
+      // forecast ends there.
+      let best: { gap: number; value: number | null } = { gap: Infinity, value: null };
+      for (let k = 0; k <= 4.0001; k += 0.05) {
+        const v = revalue(modelData, (d) => {
+          d.assumptions.ppeToRevenue = (modelData.assumptions.ppeToRevenue ?? 0) * k;
+        });
+        if (v === null) continue;
+        const m: any = buildModel({
+          ...JSON.parse(JSON.stringify({ ...modelData, rawStatements: undefined })),
+          assumptions: {
+            ...modelData.assumptions,
+            ppeToRevenue: (modelData.assumptions.ppeToRevenue ?? 0) * k,
+          },
+        });
+        const rev = m?.revenue?.[nT - 1];
+        const plant = m?.ppe?.ending?.[nT - 1];
+        const reached = isNum(rev) && rev > 0 && isNum(plant) ? plant / rev : null;
+        if (reached === null) continue;
+        const gap = Math.abs(reached - target);
+        if (gap < best.gap) best = { gap, value: v };
+      }
+      const bound = best.value === null ? null : best.value / (v0 as number) - 1;
+      add({
+        code: 'capitalIntensityOutsideItsOwnRange',
+        label: 'The forecast ends holding plant this company has not carried',
+        detail:
+          `The forecast buys and releases plant in proportion to revenue. This company's revenue and plant have not ` +
+          `moved together in its filings, so the forecast ends at ${(endIntensity * 100).toFixed(1)}% of revenue in ` +
+          `net property, plant and equipment, against the ${(low * 100).toFixed(1)}% to ${(high * 100).toFixed(1)}% ` +
+          `it carried across its reported years. Nothing in the filings says how much plant a change in revenue is ` +
+          `worth for a company whose two have parted: measuring it from this company's own history was tried and is ` +
+          `worse than the rule it would replace.`,
+        source: 'no source publishes it',
+        effect:
+          bound === null
+            ? 'the effect cannot be computed'
+            : `${pct(bound)} on the value per share, taking the forecast to the nearest edge of the range this ` +
+              `company has actually carried`,
+        bound,
+        severity: bySize(bound),
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   const refusing = out.filter((c) => c.severity === 'refusal');
   const warnings = out.filter((c) => c.severity === 'warning' || c.severity === 'refusal');
 

@@ -754,8 +754,12 @@ the average capex share of revenue across the reported years, clamped to
 0.1%–40%. The curated Apple file uses a third method, a growth rate on the prior
 year's capital spending.
 
-Where this treatment does not hold — a company whose revenue moves with a
-commodity price or an acquisition rather than with volume — is `KI-11`.
+Where this treatment does not hold is a company whose revenue moves with a
+commodity price or an acquisition rather than with volume. **How much plant a
+change in revenue is worth for such a company is not in its filings**, which is
+where that question finally settled on 2026-09-27: it is in
+`DATA_CONSTRAINTS.md`, not `KNOWN_ISSUES.md`, and the companies where the
+forecast shows it are named.
 
 **Bounding the spend was measured six ways and rejected**, on 2026-09-23: a
 floor at the lowest multiple of depreciation the company has filed, a symmetric
@@ -763,12 +767,25 @@ bound on the same, a bound on capital spending over revenue, the company's own
 least-squares slope of plant against revenue in place of the levels ratio, that
 slope capped, and the filed bounds faded to one times depreciation. Each brings
 the annual spending closer to what the company files and each puts the asset
-base somewhere the company has never been: under the rule above, **all 69 valued
-companies end the forecast inside the capital intensity they have actually
-carried**, and every bound pushes 10 to 32 of them outside it. Three of the six
-also reopen the terminal step change (§13). The figures are in `KNOWN_ISSUES.md`
-under `KI-11`, which also records why the fault belongs to the revenue line
-rather than to this one.
+base somewhere the company has never been.
+
+**Scaling by the company's own filed elasticity was measured and rejected too**,
+on 2026-09-27, and it is the sharpest of the seven because it is the one a
+reader would reach for. Shell's revenue fell 30.0% across its reported years
+while its plant fell 6.8% — an elasticity of 0.23 — so buy and release plant at
+0.23 times the levels ratio. Across the 57 valued companies on this rule, the
+number ending outside the capital intensity they have actually carried goes from
+**3 to 21**, and not one of the three is fixed: Shell ends at 81.3% of revenue
+against its own 52.1%–69.3%, further out than the 70.9% it reaches now. The
+elasticity does not separate the three either — 0.23 for Shell, 1.04 for
+Unilever, and not measurable for Volvo, whose revenue barely moved — so no
+threshold on it divides them from the 54 that pass.
+
+**The test that stands** is the one the bounds were rejected against: does the
+forecast end inside the band of capital intensity this company has actually
+carried? Under the rule above, 54 of 57 do. The three that do not are each
+marginally outside, worth 2.9%, 0.5% and 0.1% of value per share to correct, and
+each is disclosed against the model rather than silently left.
 
 ### The depreciable base, and a missing opening balance
 

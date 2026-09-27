@@ -30,6 +30,41 @@ export const PAYLOADS = path.join(HERE, 'payloads');
 
 const { PAYLOAD_VERSION } = await import(`file:///${REPO}/src/data/payloadVersion.ts`);
 
+// THE TWO CONSTANTS MUST AGREE, and nothing else would notice if they stopped.
+//
+// `api/company.js` carries its own FETCHER_VERSION because each file in that
+// directory is packaged on its own by the host, and a shared import that fails
+// to bundle takes the route down. That reasoning is sound and the cost is two
+// copies of one number, which is exactly the kind of pair that drifts: bump one,
+// forget the other, and every answer is stamped with a shape the reader does not
+// expect — or worse, the reader asks for a shape the fetcher has never heard of
+// and the mismatch is silent because both sides think they are right.
+//
+// So the number is read out of the fetcher's source, here, on every verify run.
+// Reading the source rather than importing it is deliberate: importing
+// `api/company.js` would run a Vercel handler module for a constant.
+export function checkVersionsAgree(): void {
+  const file = path.join(REPO, 'api', 'company.js');
+  const source = fs.readFileSync(file, 'utf8');
+  const match = source.match(/const FETCHER_VERSION\s*=\s*(\d+)\s*;/);
+  if (!match) {
+    console.log('  PROBLEM: api/company.js has no FETCHER_VERSION to check against PAYLOAD_VERSION');
+    process.exit(2);
+  }
+  const fetcher = Number(match[1]);
+  if (fetcher !== PAYLOAD_VERSION) {
+    console.log(
+      `\n  STOPPING: the two payload version constants disagree.\n` +
+        `      api/company.js            FETCHER_VERSION = ${fetcher}\n` +
+        `      src/data/payloadVersion.ts PAYLOAD_VERSION = ${PAYLOAD_VERSION}\n\n` +
+        '  They are duplicated on purpose — each file in api/ is packaged on its own — but they have to\n' +
+        '  agree, or the browser asks for one shape and the fetcher stamps another. Set them both to the\n' +
+        '  new number, and say in payloadVersion.ts what it added.\n'
+    );
+    process.exit(2);
+  }
+}
+
 export interface StaleReport {
   total: number;
   current: number;
@@ -80,6 +115,7 @@ export function payloadSetLine(report = surveyPayloads()): string {
  * `allowStale` is for the tools whose job is to report on the set itself.
  */
 export function requireCurrentPayloads(allowStale = false): StaleReport {
+  checkVersionsAgree();
   const report = surveyPayloads();
   console.log(payloadSetLine(report));
   if (!report.stale.length || allowStale) return report;
@@ -112,4 +148,11 @@ export function readPayload(file: string): any {
   return body;
 }
 
-export default { PAYLOADS, surveyPayloads, payloadSetLine, requireCurrentPayloads, readPayload };
+export default {
+  PAYLOADS,
+  surveyPayloads,
+  payloadSetLine,
+  requireCurrentPayloads,
+  readPayload,
+  checkVersionsAgree,
+};
