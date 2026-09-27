@@ -31,6 +31,7 @@ import {
   FACTOR_GROUPS,
   applyVerdicts,
   DRIVER_LABELS,
+  driverSuffix,
 } from '../data/qualitativeFactors';
 import type { Verdict } from '../data/qualitativeFactors';
 
@@ -325,7 +326,9 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                   {driverLabels[String(change.key)] || String(change.key)}
                 </span>
                 <span className="text-[#F2F0EA]">
-                  {change.from}% → {change.to}%
+                  {change.from}
+                  {driverSuffix(String(change.key))} → {change.to}
+                  {driverSuffix(String(change.key))}
                 </span>
               </div>
             ))}

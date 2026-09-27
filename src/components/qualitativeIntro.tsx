@@ -29,6 +29,7 @@ import {
   FACTOR_GROUPS,
   adjustmentsFor,
   DRIVER_LABELS,
+  driverStepLabel,
 } from '../data/qualitativeFactors';
 import type { Verdict } from '../data/qualitativeFactors';
 
@@ -325,7 +326,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
                     </span>
                     <span className="font-mono text-[14px] text-[#F2F0EA] tabular-nums">
                       {Number(amount) > 0 ? '+' : ''}
-                      {Number(amount).toFixed(2)} points
+                      {Number(amount).toFixed(2)} {driverStepLabel(driver)}
                     </span>
                   </div>
                 ))}

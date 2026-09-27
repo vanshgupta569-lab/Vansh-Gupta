@@ -148,6 +148,14 @@ export function financialsFromStatements(statements: any[]): CompanyFinancials {
 //
 // With this change, an untouched dashboard reproduces the data file exactly,
 // and the sliders do what they appear to do: change one thing at a time.
+// How many years a data file forecasts. `forecastYears` is a LIST of years, so
+// its length is the count; reading it as a number is an easy mistake.
+function forecastCount(d: any): number {
+  return Array.isArray(d?.assumptions?.forecastYears)
+    ? d.assumptions.forecastYears.length
+    : Number(d?.assumptions?.forecastYears ?? 5);
+}
+
 function buildOverridden(source: any, drivers: ValuationDrivers): any {
   // Deep-clone so we never mutate the original data file
   const d = JSON.parse(JSON.stringify(source));
@@ -329,22 +337,53 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
       d.dcf.exitEbitdaMultiple = Number(drivers.exitMultipleX);
     }
   }
-  // The R&D and SG&A sliders read the model's margins, which exclude D&A and
-  // SBC; the assumptions they write are on the filed basis, which includes
-  // them. Adding back the share D&A and SBC took of each line in the last
-  // reported year makes the two agree, so a slider set to 12.0% gives a
-  // modelled margin of exactly 12.0% rather than 12.0% less the embedded share.
-  // That share depends only on reported history, which no slider changes.
-  let embedded: { rnd: number; sga: number } | null = null;
-  const embeddedMargin = () =>
-    (embedded ??= buildModel(source).embeddedNonCashMargin ?? { rnd: 0, sga: 0 }) as { rnd: number; sga: number };
+  // 8. Research and selling costs — SHIFTS, for the reason at the top of this
+  //    function, which these two did not follow until now.
+  //
+  //    Both used to write the slider's own value into every forecast year.
+  //    Apple's curated file forecasts R&D at 10% of revenue in the first
+  //    forecast year and 13% thereafter, and the slider's default is the FIRST
+  //    year, so any nudge flattened years two to five back DOWN to the first
+  //    year's level. Moving R&D from 9.3% to 9.7% — a reader saying the company
+  //    depends on research it cannot cut — took R&D spending from $56.7bn to
+  //    $44.8bn in 2027, raised operating profit, and raised the value from
+  //    $141.98 to $154.80 a share. A qualitative verdict of "this hurts" made
+  //    the company worth 9% MORE. Found on 2026-09-27, when the qualitative
+  //    factors began driving these two drivers; the fault was already here for
+  //    anyone who dragged the slider in the full-screen model view.
+  //
+  //    A shift also disposes of the basis problem the old code solved by hand.
+  //    The sliders read the model's margins, which exclude D&A and SBC, while
+  //    the assumptions are on the filed basis, which includes them. The
+  //    embedded share depends only on reported history, which no slider
+  //    changes, so a point on one basis is a point on the other and the
+  //    add-back cancels out of a difference. Setting a slider back to its own
+  //    default is exactly a no-op.
   if (drivers.rndMarginPct !== undefined && touchedNum('rndMarginPct', 1)) {
-    d.assumptions.researchDevelopmentMargin = Array(5).fill(
-      Number(drivers.rndMarginPct) / 100 + embeddedMargin().rnd
-    );
+    const delta =
+      (Number(drivers.rndMarginPct) - Number(defaults.rndMarginPct ?? 0)) / 100;
+    const path = d.assumptions.researchDevelopmentMargin;
+    d.assumptions.researchDevelopmentMargin = Array.isArray(path)
+      ? path.map((m: number) => Number(m) + delta)
+      : Array(forecastCount(d)).fill(Number(path ?? 0) + delta);
   }
   if (drivers.sgaMarginPct !== undefined && touchedNum('sgaMarginPct', 1)) {
-    d.assumptions.sellingGeneralAdminMargin = Number(drivers.sgaMarginPct) / 100 + embeddedMargin().sga;
+    const delta =
+      (Number(drivers.sgaMarginPct) - Number(defaults.sgaMarginPct ?? 0)) / 100;
+    const rule = d.assumptions.sellingGeneralAdminMargin;
+    if (Array.isArray(rule)) {
+      d.assumptions.sellingGeneralAdminMargin = rule.map((m: number) => Number(m) + delta);
+    } else if (typeof rule === 'number') {
+      d.assumptions.sellingGeneralAdminMargin = rule + delta;
+    } else {
+      // 'avgOfHistory' is a rule with no level to shift, so the level the
+      // engine would have computed from it is read off the untouched model and
+      // shifted. Apple's file uses this rule, so this is the path the slider
+      // actually takes there.
+      const baseline: any = buildModel(source);
+      const base = Number(baseline.sgaMarginReportedBasis?.[baseline.nH] ?? 0) || 0;
+      d.assumptions.sellingGeneralAdminMargin = base + delta;
+    }
   }
   if (
     drivers.depreciationPctOfAssets !== undefined &&

@@ -66,7 +66,22 @@ In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this
 
 2. **NEXT — Primary-filings data layer, India first.** Section 1 below. The largest planned piece of work, and the one that removes the Yahoo dependency behind the currency, ADR and share-count problems.
 3. **QUEUED — `CLAUDE.md` house-rules file.** Section 7.
-4. **QUEUED — Outsourceable content units.** Did-you-know entries, 10b qualitative factors, eight SEO explainer pages. None needs the repository.
+4. **IN FLIGHT — Outsourceable content units**, three of them, written outside
+   the repository and being installed one commit each. **The qualitative factors
+   are done** (2026-09-27): ten questions became twenty-three, and installing
+   them found a fault in the engine's driver layer rather than in the data file.
+   Six of the new factors reach drivers no factor had touched before, and two of
+   those — research spending and selling and admin costs — were applied by
+   REPLACING the model's forecast path with the slider's own value rather than
+   shifting it. Because a slider's default is the first forecast year, a verdict
+   of *hurts* on Apple's research dependence flattened years two to five from 13%
+   of revenue down to 9.7%, cut the R&D bill, and raised the value from $141.98 to
+   $154.80 a share. The two handlers now shift the path like the three beside
+   them, and `npm run verify` has a new section that nudges twelve drivers both
+   ways and fails if any moves the value against its own label — the check that
+   was missing, since at rest every driver reproduces the model exactly and that
+   was all anything tested. Did-you-know entries and the eight SEO explainer
+   pages follow, in that order.
 5. **IDEA — A check that the dashboard renders what the engine produced.** The one hole the verification harness leaves, recorded under the verification limits in `KNOWN_ISSUES.md`. `playwright` is already a dev dependency.
 
 ---
@@ -169,7 +184,7 @@ Availability and terms of use must be confirmed per source before building. Reco
 | 9 + 12b — scenario comparison side by side | QUEUED | Runs on the corrected figures and the flags. |
 | 13 + 14 — AI reads the filed documents | QUEUED | Related parties, contingent liabilities, litigation as disclosed, auditor qualifications, CARO remarks, segment revenue. Roughly ₹15–60 per company. Extraction with quote and page number only. |
 | 17.1 — debt capacity and covenant headroom | QUEUED | Shares machinery with the LBO module; building it first makes the LBO cheaper. |
-| 10b — more qualitative factors | QUEUED | Pure data file. Outsourceable to another account. |
+| 10b — more qualitative factors | LIVE | Twenty-three questions, from ten, as of 2026-09-27. Nine drivers reachable; every driver capped, and the caps now bind. Installing it exposed and fixed a driver-layer fault (see "Now and next", item 4). |
 | 17.4 — industry research, two to three page reports | QUEUED | Written, not computed. See "Industry research as a product" in section 9. |
 | 17.3 — FP&A, narrow version | QUEUED | Budget alongside actuals on the figures screen. Real FP&A needs monthly data the site cannot have. |
 | 11b — upload a financials file | BLOCKED | Waiting on evidence 11a gets used, paid hosting, a parsing budget and a written data policy. Partly superseded by the data layer. |

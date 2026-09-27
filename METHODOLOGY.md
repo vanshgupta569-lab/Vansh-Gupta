@@ -1809,7 +1809,7 @@ reason the two terminal values are not averaged.
 has moved that driver away from its default**, compared at the precision the
 slider works in. An untouched dashboard reproduces the data file exactly.
 
-Three of them **shift the model's own path** rather than replacing it with a
+Five of them **shift the model's own path** rather than replacing it with a
 flat number, because a hand-built model's path is a judgement worth keeping:
 
 - **Revenue growth** shifts every segment's growth path by the same delta.
@@ -1821,20 +1821,66 @@ flat number, because a hand-built model's path is a judgement worth keeping:
 - **Capital spending** scales the whole capex line by the ratio of where the
   slider sits to where it started, leaving the projection method alone. A model
   whose capex is a rising line stays a rising line.
+- **Research spending** and **selling and admin costs** shift their margin paths
+  by the same delta. These two replaced the path until 2026-09-27 and had exactly
+  the fault the other three were written to avoid: Apple's file forecasts R&D at
+  10% of revenue in the first forecast year and 13% after, and because a slider's
+  default is the first forecast year, any nudge flattened the other four back down
+  to it. Raising R&D by 0.4 of a point **cut** the R&D bill in years two to five,
+  raised operating profit and raised the value from $141.98 to $154.80 a share.
+  A shift also disposes of a basis problem the old handler solved by hand: these
+  two sliders read margins that exclude D&A and SBC while the assumptions they
+  write are on the filed basis, and since the embedded share depends only on
+  reported history, a point on one basis is a point on the other and the add-back
+  cancels out of a difference.
 
 Replacing the path instead was measurably wrong: Apple's file forecasts decaying
 growth and a margin falling from 28.9% to 24.4%, and marking its competitive
 position a *weakness* used to **raise** the value, because flattening four years
 of margin back up swamped the half point taken off.
 
-The R&D and SG&A sliders read margins that exclude D&A and SBC and write
-assumptions on the filed basis, so the embedded share is added back and a slider
-set to 12.0% gives a modelled margin of exactly 12.0%.
+**Both properties are now checked rather than assumed** (`verify/scenarios.mts`,
+"a driver moves the value the way it reads"). Twelve drivers are set back to their
+own defaults, which must reproduce the untouched model to the last decimal the
+engine carries, and nudged a point each way, where the value must move in the
+direction the driver's label implies. Nothing caught the R&D fault because at rest
+every driver reproduces the model exactly, and that was all anything tested. A
+nudge that pushes the engine into a refusal it is right to make — a discount rate
+cut below the terminal growth rate — is named and not counted. Depreciation as a
+share of assets and the dividend payout are left out because their direction is
+genuinely ambiguous, not because they pass.
 
 Beta, the risk-free rate and the market risk premium are adjustable directly,
 which is more honest than dragging the finished WACC: the reader can watch the
 figure they moved flow through the CAPM line. Setting any of them clears a WACC
 override that would otherwise win.
+
+### The reader's judgement, and what it may move
+
+`qualitativeFactors.ts`. A model reads accounts; it cannot read a management team,
+a regulator or a competitor. **Twenty-three questions** — ten on the business,
+five on the long run, eight on risk — each take a verdict of *helps*, *hurts* or
+nothing, and each moves the assumption it belongs in rather than the finished
+answer. Nine drivers are reachable this way: sales growth, operating margin, the
+tax rate, capital spending, research spending, selling and admin costs, the
+discount rate, growth after year five, and the exit multiple.
+
+**Every driver has a ceiling on the total a set of verdicts may move it.** With
+twenty-three questions the ceilings bind, which they did not with ten: somebody
+marking every question against a company would move the discount rate 2.10 points
+and terminal growth 1.05, and the caps hold those at 2.0 and 1.0. Operating margin
+reaches exactly its cap of 2.0; sales growth and capital spending stay inside
+theirs at 1.80 and 0.80. A reader who marks twenty-three questions against a
+company is expressing a general gloom, and a discount rate swung by an
+accumulation of impressions is an accident rather than a judgement. **Before a
+factor is added, the worst case for every driver it touches is recomputed and
+recorded in the file's own comment.**
+
+The verdicts are always applied to the model's **own defaults**, never to wherever
+the sliders happen to sit, so the same view applied twice is applied once. Both
+screens show what the answers would move before anything is applied, in the
+driver's own unit: the exit multiple is quoted in turns of EBITDA rather than in
+per cent, which both screens hard-coded until a factor first reached it.
 
 ---
 

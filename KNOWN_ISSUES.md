@@ -98,6 +98,26 @@ ordinary five-year forecast would give, shown on every valuation, and where a
 company sits far above it the panel now says **why** rather than only by how
 much.
 
+**A twentieth defect was found and fixed on the same day**, so it never got a
+number, and it is recorded here because the count above would otherwise be
+misleading. Installing thirteen new qualitative factors pointed six of them at
+drivers no factor had touched, and two of those drivers — research spending and
+selling and admin costs — were applied to the model by REPLACING its forecast
+path with the slider's own value. A slider's default is the first forecast year,
+so on Apple's curated file, whose R&D runs at 10% of revenue in the first
+forecast year and 13% after, a reader marking research dependence a weakness
+flattened years two to five down to 9.7%, cut the R&D bill by $12bn to $14bn a year,
+raised operating profit and raised the value from $141.98 to $154.80 a share.
+A judgement that the company is worse off made it worth 9% more. The three
+sliders beside these two had been converted to shifts months earlier for exactly
+this reason and these two were missed. Both now shift, no published number moved
+(the sweep compares 67 valued companies at 0.0% median change, because nothing
+changes until a driver is edited), and `npm run verify` now nudges twelve drivers
+a point each way and fails if any moves the value against its own label —
+`METHODOLOGY.md` §21. **What let it survive is worth more than the fix:** every
+driver reproduces the model exactly at rest, and at rest was the only place
+anything was tested.
+
 **How to add one.** An entry here is a thing the model does incorrectly that we
 could do correctly. If the filing does not carry what would be needed, it is a
 data constraint. If it is a choice we made and would defend, it is methodology.

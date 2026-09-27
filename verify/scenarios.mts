@@ -709,6 +709,132 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 
+// ---- a driver moves the value the way it reads -----------------------------
+//
+// Every slider is applied to the model by hand in `companies.ts`, and a handler
+// that writes a LEVEL where it should write a SHIFT moves the answer the wrong
+// way. Two of them did. The research and selling margin handlers replaced the
+// model's whole forecast path with the slider's own number, and because the
+// slider's default is the FIRST forecast year, any nudge flattened the other
+// four back to it. Apple's curated file forecasts R&D at 10% of revenue in the
+// first year and 13% after, so raising R&D by 0.4 of a point CUT the R&D bill in
+// years two to five, raised operating profit, and raised the value from $141.98
+// to $154.80 a share. Found on 2026-09-27, when a qualitative factor began
+// driving that slider; it had been true for anyone who dragged it by hand.
+//
+// Nothing caught it, because at rest every driver reproduces the model exactly
+// and that is all anything checked. Both properties are checked here: a driver
+// set back to its own default is an exact no-op, and a driver nudged the way
+// that should cost the company value costs it value.
+{
+  console.log('\n=== a driver moves the value the way it reads ===');
+  const { defaultDriversFor, buildFullModel } = await import(
+    `file:///${REPO}/src/data/companies.ts`
+  );
+
+  // +1 means a RISE in the driver should RAISE the value, -1 that it should cut
+  // it. Only the drivers whose direction is unambiguous are listed. More
+  // depreciation lowers taxable profit and is then added back, so its net sign
+  // depends on the tax rate against the asset base; a dividend only moves cash
+  // from the company to its owners. Neither has a direction to assert, so
+  // neither is claimed here.
+  const DIRECTION: [string, number, 'perpetuity' | 'exit'][] = [
+    ['revenueGrowthPct', +1, 'perpetuity'],
+    ['operatingMarginPct', +1, 'perpetuity'],
+    ['taxRatePct', -1, 'perpetuity'],
+    ['capexPctOfRev', -1, 'perpetuity'],
+    ['waccPct', -1, 'perpetuity'],
+    ['terminalGrowthPct', +1, 'perpetuity'],
+    ['rndMarginPct', -1, 'perpetuity'],
+    ['sgaMarginPct', -1, 'perpetuity'],
+    ['betaValue', -1, 'perpetuity'],
+    ['riskFreeRatePct', -1, 'perpetuity'],
+    ['marketRiskPremiumPct', -1, 'perpetuity'],
+    ['exitMultipleX', +1, 'exit'],
+  ];
+  // One point for a percentage, which clears the one-decimal threshold a slider
+  // counts as touched at. Beta is quoted to two decimals and is a ratio, not a
+  // percentage, so it moves by two tenths.
+  const NUDGE: Record<string, number> = { betaValue: 0.2 };
+
+  const defs: any = defaultDriversFor(SRC);
+  let bad = 0;
+  if (REFUSED) {
+    console.log(`  skipped: the engine refuses this company as ${(D as any).code}`);
+  } else {
+    // Straight off the engine rather than through the rounded, formatted result,
+    // so the no-op below is tested to the last decimal place the model carries.
+    const valueOf = (drivers: any, which: string): number | null => {
+      let out: any;
+      try {
+        out = buildFullModel(SRC, drivers);
+      } catch {
+        return null;
+      }
+      if (out?.dcf?.applicable !== true) return null;
+      const v =
+        which === 'exit'
+          ? out.dcf.exitMultipleValuation?.valuePerShare
+          : out.dcf.perpetuity?.valuePerShare;
+      return typeof v === 'number' && isFinite(v) ? v : null;
+    };
+
+    const tested = DIRECTION.filter(([k]) => defs[k] !== undefined && defs[k] !== null);
+
+    // THE NO-OP. Writing a driver back at its own default must reproduce the
+    // untouched model exactly, or a slider edits the model merely by being
+    // looked at. That is the fault the shift handlers were written to avoid.
+    for (const [driver, , which] of tested) {
+      const rest = valueOf(defs, which);
+      const again = valueOf({ ...defs, [driver]: defs[driver] }, which);
+      if (rest !== again) {
+        bad++;
+        console.log(`  PROBLEM: ${driver} at its own default changes the value: ${rest} -> ${again}`);
+      }
+    }
+
+    // THE DIRECTION, both ways round.
+    for (const [driver, sign, which] of tested) {
+      const step = NUDGE[driver] ?? 1;
+      const rest = valueOf(defs, which);
+      if (rest === null) {
+        console.log(`  ${driver}: no ${which} value at rest, so nothing to compare`);
+        continue;
+      }
+      for (const [label, want, moved] of [
+        [`+${step}`, sign, valueOf({ ...defs, [driver]: Number(defs[driver]) + step }, which)],
+        [`-${step}`, -sign, valueOf({ ...defs, [driver]: Number(defs[driver]) - step }, which)],
+      ] as [string, number, number | null][]) {
+        // A nudge can push a company past a refusal the engine is right to
+        // make — a discount rate cut below the terminal growth rate makes the
+        // perpetuity diverge. That is the engine working, so it is named and
+        // not counted.
+        if (moved === null) {
+          console.log(`  ${driver} ${label}: the engine refuses the nudged model, so the direction is not tested`);
+          continue;
+        }
+        if (Math.abs(moved - rest) <= 1e-9 * Math.max(1, Math.abs(rest))) {
+          bad++;
+          console.log(`  PROBLEM: ${driver} ${label} does not move the ${which} value at all (${rest.toFixed(4)})`);
+          continue;
+        }
+        if (Math.sign(moved - rest) !== want) {
+          bad++;
+          console.log(
+            `  PROBLEM: ${driver} ${label} moves the ${which} value THE WRONG WAY: ` +
+              `${rest.toFixed(2)} -> ${moved.toFixed(2)}`
+          );
+        }
+      }
+    }
+    console.log(
+      `  ${tested.length} drivers set back to their defaults and nudged both ways -- ` +
+        `${bad ? bad + ' PROBLEMS' : 'each is a no-op at its default and each moves the value the way it reads'}`
+    );
+    totalProblems += bad;
+  }
+}
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {
