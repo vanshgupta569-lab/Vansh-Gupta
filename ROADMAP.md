@@ -243,8 +243,8 @@ Gated on the learning track (section 8). Nothing here starts before its hand mod
 |---|---|---|
 | Margin Notes data file, 19 notes | LIVE | Written from general accounting knowledge. |
 | Buffett lens callouts | LIVE | Our summary of the questions Mary Buffett and David Clark ask. Their numeric thresholds are deliberately excluded; the book is credited instead. Never reproduce the thresholds. |
-| Margin Notes screen | LIVE | Paper palette; index plus article reader. |
-| SEO explainer pages, eight articles | LIVE | 2026-09-27, at `/learn/`. Static HTML written at build time from `content/explainers/`, not screens in the application: a crawler gets the whole text without executing anything, which a prerendered SPA route cannot promise outside Google. Paper palette shared with the Margin Notes screen through `paperPalette.ts`; linked from that screen's index; `sitemap.xml` and `robots.txt` added with them. |
+| Margin Notes screen | LIVE | Paper palette, from `src/design/tokens.ts`; index plus article reader. |
+| SEO explainer pages, eight articles | LIVE | 2026-09-27, at `/learn/`. Static HTML written at build time from `content/explainers/`, not screens in the application: a crawler gets the whole text without executing anything, which a prerendered SPA route cannot promise outside Google. Paper palette shared with the Margin Notes screen through `src/design/tokens.ts`; linked from that screen's index; `sitemap.xml` and `robots.txt` added with them. |
 | Did you know, on the loading screen | LIVE | 53 notes, 2026-09-27. Shuffled per build and reordered so no three consecutive come from the same part of the accounts; one holds the screen for 6.5 seconds, so a slow build rotates rather than freezing on one line. Checked in `verify:dashboard` against a fetch held open for seventeen seconds. |
 | Naive investor section | QUEUED | Insights from the reported statements. Explain mechanics, not merit. |
 | Landing page rewrite | QUEUED | Less theory, a clearer statement of what the site does, and the basics of financial modelling for someone arriving cold. |
@@ -292,11 +292,11 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 | Typography stylesheet, search box fix, brand assets | LIVE | |
 | How this was calculated, as a plain-English explainer | LIVE | |
 | Qualitative questions before the model is built | LIVE | Reported facts beside the questions; prominent skip. |
-| Red square with zero advance width on every screen | LIVE | `marginRight: -0.21em`. Fixed in `DirectoryScreen.tsx` (`2ce16ff`). |
+| Red square with zero advance width on every screen | LIVE | `marginRight: -0.21em`, now in one component, `src/design/Mark.tsx`, rather than five copies. Two more had drifted unnoticed: the header's had no negative margin at all, so it took real width, and the methodology grid's was 0.16em rather than 0.13em. Both are on the shared one, and `npm run verify` fails if the margin ever changes. |
 | Privacy and terms footnotes | LIVE | Footer modals on every screen. |
 | "Things to check" wording, never "anomaly" | LIVE | |
-| Contrast fix and shared tokens file | QUEUED | Dim grey at 3.5:1 and the eyebrow red at 3.9:1, both under 4.5:1. Declared as local constants in eight files and applied inline, so a stylesheet cannot reach them. One shared tokens file fixes it and stops the colours and the square drifting again. |
-| `CLAUDE.md` house-rules file | QUEUED | The standing decisions above, the palette, Inter and Playfair, the square, the costs-are-negative convention, verify-by-recalculating. Read by Claude Code every session. |
+| Contrast fix and shared tokens file | LIVE | 2026-09-27, `src/design/tokens.ts`. Eight files' local constants gone; the eyebrow red 3.90/3.74 dark and 4.43 paper, the quiet grey 3.47/3.33, the faint grey 4.19 — all now clear 4.5:1, measured before and after. Two colours were needed where there had been one: no single red can clear the floor on both a near-black and a near-white ground, so the dark and paper eyebrows are separate tokens. `paperPalette.ts` folded in. `npm run verify` measures every token against every ground it sits on and fails below 4.5:1; `verify:dashboard` reads the computed colour of every element on five screens and fails the same way. |
+| `CLAUDE.md` house-rules file | QUEUED | The standing decisions above, Inter and Playfair, the costs-are-negative convention, verify-by-recalculating. The palette and the square no longer need writing down here: they are `src/design/tokens.ts` and `src/design/Mark.tsx`, and the verification suite enforces them. |
 | README verdict badge | QUEUED | Flagged by Claude Code as contradicting the product. A public claim that isn't true. |
 | Commit `package.json` and lockfile | QUEUED | Left uncommitted across many jobs; commit on its own. |
 | Development in Claude Code | LIVE | Planning and judgement in chat; code in Claude Code, one job per session; small self-contained content jobs in other accounts. |

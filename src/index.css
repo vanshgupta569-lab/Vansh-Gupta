@@ -184,30 +184,64 @@
    a warm off-white, so the greys between them are warm too. That is the whole
    reason the zinc grey looked cheap next to it.
 
-     ink        #F2F0EA   headings, figures, anything being read closely
-     reading    #C6C1B7   body paragraphs — bright enough to actually read
-     muted      #A8A29A   labels, captions, secondary lines
-     faint      #7C766D   disclaimers and the smallest print
-     line       #262521   hairlines
-     panel      #111114   any raised surface
-     page       #0B0B0D   the ground
-     accent     #8B1E1E   one red, for emphasis and for negatives
-     positive   #5FA37B   one green, for positives
+     ink         #F2F0EA   headings, figures, anything being read closely
+     read        #C6C1B7   body paragraphs — bright enough to actually read
+     muted       #A8A29A   labels, captions, secondary lines
+     quiet       #85816F   disclaimers, placeholders, the smallest print
+     line        #262521   hairlines
+     panel       #111114   any raised surface
+     page        #0B0B0D   the ground
+     accent      #8B1E1E   the mark, rules and fills — NEVER text
+     accent text #D05E58   the oxblood where it carries words
+     positive    #5FA37B   one green, for positives
 
    The old greys were dark enough that paragraphs set in them were work to
    read, which was the complaint. Reading text is now three steps lighter.
+
+   THE VALUES BELOW ARE NOT THE SOURCE. `src/design/tokens.ts` is, because the
+   components need them as TypeScript and the explainer build script needs them
+   outside the application altogether. They are restated here because Tailwind
+   utilities and plain CSS need them as custom properties, and `npm run verify`
+   fails if the two ever disagree — the same arrangement as the payload
+   versions. Change a colour there, then here, and the check will tell you if
+   you forgot.
+
+   WHAT MOVED ON 2026-09-27, and why (measured, not judged by eye):
+
+     eyebrow red, dark    #C0453E  3.90 / 3.74  ->  #D05E58  5.08 / 4.87
+     eyebrow red, paper   #C0453E  4.43         ->  #A23A34  5.77
+     quiet grey, dark     #6B6759  3.47 / 3.33  ->  #85816F  5.03 / 4.82
+     faint grey, dark     #7C766D  4.37 / 4.19  ->  #85816F  (one step now)
+
+   4.5:1 is the WCAG AA floor for normal text, and the eyebrow sits at the top
+   of every section on the site. `faint` and `quiet` were a single step apart;
+   once both have to clear the floor there is no room for two, and two greys
+   0.9:1 apart were not a hierarchy anyway.
    =========================================================================== */
 
 :root {
+  /* The dark ground. Mirrors DARK in src/design/tokens.ts. */
+  --m-page: #0B0B0D;
+  --m-panel: #111114;
+  --m-line: #262521;
   --m-ink: #F2F0EA;
   --m-read: #C6C1B7;
   --m-muted: #A8A29A;
-  --m-faint: #7C766D;
-  --m-line: #262521;
-  --m-panel: #111114;
-  --m-page: #0B0B0D;
+  --m-quiet: #85816F;
   --m-accent: #8B1E1E;
+  --m-accent-text: #D05E58;
   --m-positive: #5FA37B;
+  --m-positive-line: #2F5C45;
+  --m-positive-fill: #12211A;
+  --m-amber: #C79A2E;
+
+  /* Paper: the Margin Notes screen and the explainer pages. Mirrors PAPER. */
+  --m-paper: #F2F0EA;
+  --m-paper-ink: #16150F;
+  --m-paper-read: #3A382F;
+  --m-paper-quiet: #6B6759;
+  --m-paper-line: #DAD6CC;
+  --m-paper-accent-text: #A23A34;
 
   /* One green, wherever a gain is shown. Three shades of emerald were in use;
      the tone of a positive number should not depend on which screen it is on. */
@@ -232,17 +266,17 @@
 .bg-emerald-950\/60 { background-color:#12281d99; }
 .bg-rose-950\/40 { background-color:#3a0c0c66; }
 .bg-rose-950\/60 { background-color:#3a0c0c99; }
-.text-\[\#6E6E73\] { color:#7c766d; }
+.text-\[\#6E6E73\] { color:var(--m-quiet); }
 .text-\[\#8A8A8F\] { color:#a8a29a; }
 .text-\[\#8A8A8F\]\/70 { color:#a8a29ab3; }
 .text-\[\#8A8A8F\]\/80 { color:#a8a29acc; }
-.text-\[\#52525B\] { color:#7c766d; }
+.text-\[\#52525B\] { color:var(--m-quiet); }
 .text-\[\#222228\] { color:#262521; }
 .text-\[\#A1A1AA\] { color:#c6c1b7; }
-.text-\[\#dfbfbc\] { color:#e3c7c2; }
-.group-hover\:text-\[\#ffb3ad\]:is(:where(.group):hover *) { color:#e3c7c2; }
+.text-\[\#dfbfbc\] { color:var(--m-accent-text); }
+.group-hover\:text-\[\#ffb3ad\]:is(:where(.group):hover *) { color:var(--m-accent-text); }
 .placeholder\:text-\[\#8A8A8F\]::placeholder { color:#a8a29a; }
-.placeholder\:text-\[\#52525B\]::placeholder { color:#7c766d; }
+.placeholder\:text-\[\#52525B\]::placeholder { color:var(--m-quiet); }
 .hover\:border-\[\#8A8A8F\]:hover { border-color:#a8a29a; }
 .hover\:border-\[\#222228\]:hover { border-color:#262521; }
 .hover\:border-l-\[\#222228\]:hover { border-left-color:#262521; }
@@ -252,18 +286,20 @@
 .hover\:bg-\[\#16161a\]:hover { background-color:#111114; }
 .hover\:bg-\[\#18181c\]:hover { background-color:#111114; }
 .hover\:bg-\[\#222228\]:hover { background-color:#262521; }
-.hover\:text-\[\#ffb3ad\]:hover { color:#e3c7c2; }
+.hover\:text-\[\#ffb3ad\]:hover { color:var(--m-accent-text); }
 
 /* Red as *text*. The accent is a deep brick that works as a border, a fill and
    a block of colour, and fails as small text: at 13px on the page black it is
-   barely legible, and a good deal of the site's labelling — forecast years,
-   section numbers, links — is set in it. Text gets a lighter cut of the same
-   red. Borders and fills keep the deep one, so nothing else on the page
-   changes. */
+   2.16:1, and a good deal of the site's labelling — forecast years, section
+   numbers, links — is set in it. Text gets a lighter cut of the same red.
+   Borders and fills keep the deep one, so nothing else on the page changes.
+
+   The lighter cut was #C0453E, which was 3.90:1 on the page and 3.74:1 on a
+   panel — better, and still under the floor. It is now --m-accent-text. */
 .text-\[\#8B1E1E\],
 .hover\:text-\[\#8B1E1E\]:hover,
 .group-hover\:text-\[\#8B1E1E\]:is(:where(.group):hover *) {
-  color: #C0453E;
+  color: var(--m-accent-text);
 }
 
 /* --- the type scale ------------------------------------------------------- *
@@ -409,43 +445,54 @@ header .font-mono {
 
 /* --- Text greys: one warm ramp ----------------------------------- */
 /* #8A8A8F was also the site's readability complaint: 4.4:1 on the
-   background, which is borderline. #A8A29A is warmer AND lighter. */
-[class*="text-[#8A8A8F]"] { color: #A8A29A; }
-[class*="text-[#A1A1AA]"] { color: #C6C1B7; }
-[class*="text-[#6E6E73]"] { color: #7C766D; }
-[class*="text-[#52525B]"] { color: #6B6759; }
+   background, which is borderline. #A8A29A is warmer AND lighter.
+
+   MATCHED CASE-INSENSITIVELY. An attribute selector compares its value
+   case-sensitively by default, so ten classes written in lowercase hex —
+   bg-[#18181c], text-[#dfbfbc], bg-[#1c1110] — slipped through this block
+   entirely and kept whatever colour they were written with. That is the
+   drift this file exists to stop, so every selector here now carries the
+   `i` flag. */
+[class*="text-[#8A8A8F]" i] { color: var(--m-muted); }
+[class*="text-[#A1A1AA]" i] { color: var(--m-read); }
+[class*="text-[#6E6E73]" i] { color: var(--m-quiet); }
+[class*="text-[#52525B]" i] { color: var(--m-quiet); }
 
 /* --- Panels: one black ------------------------------------------- */
-[class*="bg-[#1A1A1F]"],
-[class*="bg-[#18181C]"],
-[class*="bg-[#16161A]"],
-[class*="bg-[#1C1110]"] { background-color: #111114; }
+[class*="bg-[#1A1A1F]" i],
+[class*="bg-[#18181C]" i],
+[class*="bg-[#16161A]" i],
+[class*="bg-[#1C1110]" i] { background-color: var(--m-panel); }
 
 /* --- Hairlines: one warm line ------------------------------------ */
 /* #222228 carries a blue cast that reads as grey on grey. */
-[class*="border-[#222228]"] { border-color: #262521; }
+[class*="border-[#222228]" i] { border-color: var(--m-line); }
 .hairline-border,
 .hairline-border-t,
 .hairline-border-b,
 .hairline-border-l,
-.hairline-border-r { border-color: #262521; }
+.hairline-border-r { border-color: var(--m-line); }
 
 /* --- Reds: one accent, one readable text red ---------------------- */
-/* Three pale pinks were doing the job of one legible red. #C0453E
-   clears 4.5:1 on the page black; #DFBFBC and #FFB3AD read as pink. */
-[class*="text-[#DFBFBC]"],
-[class*="text-[#FFB3AD]"],
-[class*="text-[#E3C7C2]"] { color: #C0453E; }
+/* Three pale pinks were doing the job of one legible red. #DFBFBC and
+   #FFB3AD read as pink, so they come back to the house red.
+
+   The comment here used to claim #C0453E "clears 4.5:1 on the page
+   black". It does not, and never did: 3.90:1 on the page, 3.74:1 on a
+   panel. That is the whole reason this palette moved. */
+[class*="text-[#DFBFBC]" i],
+[class*="text-[#FFB3AD]" i],
+[class*="text-[#E3C7C2]" i] { color: var(--m-accent-text); }
 
 /* --- Greens: one ------------------------------------------------- */
 /* Four emerald shades marked "live". A status dot does not need four. */
 .text-emerald-300,
 .text-emerald-400,
-.text-emerald-500 { color: #5FA37B; }
-.bg-emerald-500 { background-color: #5FA37B; }
+.text-emerald-500 { color: var(--m-positive); }
+.bg-emerald-500 { background-color: var(--m-positive); }
 .border-emerald-700,
-.border-emerald-800 { border-color: #2F5C45; }
-.bg-emerald-950 { background-color: #12211A; }
+.border-emerald-800 { border-color: var(--m-positive-line); }
+.bg-emerald-950 { background-color: var(--m-positive-fill); }
 
 /* ================================================================== */
 /* SECTION RHYTHM ACROSS SCREENS                                       */

@@ -27,41 +27,19 @@ import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { MARGIN_NOTES } from '../data/marginNotes';
 import type { MarginNote } from '../data/marginNotes';
 import { EXPLAINERS, explainerPath, EXPLAINERS_PATH } from '../data/explainers';
-import {
-  RED,
-  RED_TEXT,
-  PAPER,
-  PAPER_INK,
-  PAPER_READ,
-  PAPER_DIM,
-  PAPER_LINE,
-  DISPLAY_FAMILY,
-} from '../data/paperPalette';
+import { PAPER as P, DISPLAY_HEADING } from '../design/tokens';
+import { Mark } from '../design/Mark';
 
-const DISPLAY: React.CSSProperties = {
-  fontFamily: DISPLAY_FAMILY,
-  fontWeight: 500,
-  letterSpacing: '-0.01em',
-  lineHeight: 1.04,
-};
+const RED = P.accent;
+const RED_TEXT = P.accentText;
+const PAPER = P.ground;
+const PAPER_INK = P.ink;
+const PAPER_READ = P.read;
+const PAPER_DIM = P.quiet;
+const PAPER_LINE = P.line;
 
-/* The full stop that is a square. Zero advance width — see the note on the
-   landing page's copy of this. Never write a literal full stop before it. */
-const Square: React.FC = () => (
-  <>
-    {'\u2060'}
-    <span
-      className="inline-block align-baseline"
-      style={{
-        width: '0.13em',
-        height: '0.13em',
-        background: RED,
-        marginLeft: '0.08em',
-        marginRight: '-0.21em',
-      }}
-    />
-  </>
-);
+const DISPLAY: React.CSSProperties = { ...DISPLAY_HEADING };
+
 
 const GROUPS: { key: MarginNote['group']; label: string }[] = [
   { key: 'income', label: 'The income statement' },
@@ -126,7 +104,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
           style={{ ...DISPLAY, color: PAPER_INK }}
         >
           Read any company&rsquo;s accounts
-          <Square />
+          <Mark on="paper" />
         </h1>
         <p className="text-[17px] lg:text-[19px] mb-16 max-w-[52ch]" style={{ color: PAPER_READ }}>
           {MARGIN_NOTES.length} short notes on what each line of a set of accounts
@@ -221,7 +199,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
               style={{ ...DISPLAY, color: PAPER_INK }}
             >
               {active.title}
-              <Square />
+              <Mark on="paper" />
             </h2>
 
             <p

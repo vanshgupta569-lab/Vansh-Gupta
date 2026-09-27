@@ -443,6 +443,79 @@ async function checkRefused(page: Page, source: any, company: any, symbol: strin
   else fail('the downloaded workbook', 'the refusal, in the engine’s words', '(not in the file)');
 }
 
+// ---- every word on the screen is legible against what is behind it --------
+//
+// The palette check in `npm run verify` measures the TOKENS. This measures what
+// the browser actually paints, which is not the same thing: a colour reaches an
+// element through a token, an inline style, a Tailwind arbitrary value, or one
+// of the legacy remapping rules in `index.css` — and those rules match on the
+// class attribute, which is case-sensitive, so ten classes written in lowercase
+// hex were slipping past them entirely and keeping whatever they were written
+// with. Nothing short of reading the computed style finds that.
+//
+// So: walk every element that holds text, take its computed colour and the
+// first solid background behind it, and compare. The threshold is WCAG AA —
+// 4.5:1 for normal text, 3:1 for large — and the floor per element is chosen
+// from its own measured size and weight rather than assumed.
+const CONTRAST_PROBE = `(() => {
+  const lum = (r,g,b) => { const f=[r,g,b].map(c=>{c/=255;return c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);}); return 0.2126*f[0]+0.7152*f[1]+0.0722*f[2]; };
+  const parse = (s) => { const m = s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(',').map(Number); return { r:p[0], g:p[1], b:p[2], a:p.length>3?p[3]:1 }; };
+  const hex = (c) => '#' + [c.r,c.g,c.b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase();
+  // The first ancestor with a solid fill. A translucent panel is skipped rather
+  // than guessed at, which errs towards the page black underneath it.
+  const bgOf = (el) => { let n = el; while (n && n !== document.documentElement) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0.85) return c; n = n.parentElement; } return { r:11, g:11, b:13, a:1 }; };
+  const out = [];
+  for (const el of document.querySelectorAll('*')) {
+    // Only elements holding their OWN text: a wrapper inherits its colour and
+    // would be reported once per level of nesting.
+    if (!Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim().length > 1)) continue;
+    const st = getComputedStyle(el);
+    if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) < 0.3) continue;
+    const box = el.getBoundingClientRect();
+    if (!box.width || !box.height) continue;
+    const fg = parse(st.color); if (!fg || fg.a < 0.5) continue;
+    const bg = bgOf(el);
+    const L1 = lum(fg.r,fg.g,fg.b), L2 = lum(bg.r,bg.g,bg.b);
+    const ratio = (Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
+    const size = parseFloat(st.fontSize), weight = Number(st.fontWeight) || 400;
+    const floor = (size >= 24 || (size >= 18.66 && weight >= 700)) ? 3 : 4.5;
+    if (ratio < floor) out.push({ fg: hex(fg), bg: hex(bg), ratio: Math.round(ratio*100)/100, floor, size: Math.round(size), text: (el.textContent||'').trim().slice(0,44) });
+  }
+  return out;
+})()`;
+
+const contrastSeen = new Map<string, any>();
+let contrastScreens = 0;
+let contrastElements = 0;
+
+async function readContrast(page: Page, where: string) {
+  const found: any[] = await page.evaluate(CONTRAST_PROBE);
+  contrastScreens++;
+  contrastElements += await page.evaluate(
+    `document.querySelectorAll('*').length`
+  ) as number;
+  for (const f of found) {
+    const key = `${f.fg} on ${f.bg} at ${f.size}px`;
+    if (!contrastSeen.has(key)) contrastSeen.set(key, { ...f, where, count: 0 });
+    contrastSeen.get(key).count++;
+  }
+}
+
+function reportContrast() {
+  console.log('\n=== every word against what is behind it ===');
+  if (!contrastSeen.size) {
+    ok(`${contrastScreens} screens, ${contrastElements.toLocaleString('en-GB')} elements: nothing below WCAG AA`);
+    return;
+  }
+  for (const r of [...contrastSeen.values()].sort((a, b) => a.ratio - b.ratio)) {
+    problems++;
+    console.log(
+      `  PROBLEM: ${r.fg} on ${r.bg} is ${r.ratio}:1, under the ${r.floor}:1 floor for ${r.size}px ` +
+        `(${r.count} on ${r.where}, e.g. "${r.text}")`
+    );
+  }
+}
+
 // ---- the loading screen, on a build slow enough to read --------------------
 //
 // The overlay is the one screen a reader sees on every single build and the one
@@ -581,24 +654,32 @@ try {
 
   // 1. The curated model, which the site renders without fetching anything.
   const apple: any = (COMPANIES_DATA as any).AAPL;
+  await readContrast(page, 'the landing page');
   await openCurated(page, 'AAPL');
+  await readContrast(page, 'the questions screen');
   await checkValued(page, 'Apple, the curated model', AAPL_SOURCE, apple.currencySymbol || '$');
+  await readContrast(page, 'the analysis screen, curated');
 
   // 2. A derived model, built through the fetch, the figures and the
   //    questions, the way a reader reaches one.
   const paper: any = buildCompanyFrom(paperPayload('valued'));
   await openFetched(page, PAPER_TICKER);
   await checkValued(page, `${PAPER_NAME}, derived`, paper.modelData, paper.currencySymbol || '$');
+  await readContrast(page, 'the analysis screen, derived');
 
   // 3. The same company, refused.
   const refusedPayload = { ...paperPayload('refused'), ticker: REFUSED_TICKER };
   const refused: any = buildCompanyFrom(refusedPayload);
   await openFetched(page, REFUSED_TICKER);
   await checkRefused(page, refused.modelData, refused, refused.currencySymbol || '$');
+  await readContrast(page, 'a refused company');
 
   // 4. A build slow enough to read: the loading screen must carry a note, and
   //    must not hold the same one for the whole wait.
   await checkSlowBuild(context, page);
+
+  // 5. Nothing anywhere on any of those screens is below WCAG AA.
+  reportContrast();
 } catch (error: any) {
   problems++;
   console.log(`\n  PROBLEM: the check could not finish — ${error?.message || error}`);

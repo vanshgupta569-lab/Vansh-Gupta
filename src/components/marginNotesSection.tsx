@@ -18,24 +18,20 @@
 
 import React from 'react';
 import { MARGIN_NOTES } from '../data/marginNotes';
+import { PAPER as P, DISPLAY_HEADING } from '../design/tokens';
 
-const RED = '#8B1E1E';
-const RED_TEXT = '#C0453E';
+/* "Kept local rather than imported so this file stands on its own" is what the
+   comment here used to say, and it is how the eyebrow red came to be 4.43:1 on
+   paper in seven files at once. It stands on the palette now. */
+const RED = P.accent;
+const RED_TEXT = P.accentText;
+const PAPER = P.ground;
+const PAPER_INK = P.ink;
+const PAPER_READ = P.read;
+const PAPER_DIM = P.quiet;
+const PAPER_LINE = P.line;
 
-/* Paper palette. Kept local rather than imported so this file stands on its
-   own; the values are the same ones the landing band has always used. */
-const PAPER = '#F2F0EA';
-const PAPER_INK = '#16150F';
-const PAPER_READ = '#3A382F';
-const PAPER_DIM = '#6B6759';
-const PAPER_LINE = '#DAD6CC';
-
-const DISPLAY: React.CSSProperties = {
-  fontFamily: "'Playfair Display', serif",
-  fontWeight: 500,
-  letterSpacing: '-0.01em',
-  lineHeight: 1.04,
-};
+const DISPLAY: React.CSSProperties = { ...DISPLAY_HEADING };
 
 /* Which three notes face the reader here. Chosen because they are the three
    questions somebody arrives with: what does the top line mean, what does a

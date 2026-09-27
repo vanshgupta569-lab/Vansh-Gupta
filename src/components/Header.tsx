@@ -17,6 +17,7 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Building2, Search, PencilLine, Table2 } from 'lucide-react';
 import { ScreenType } from '../types';
+import { Mark } from '../design/Mark';
 
 /* Four links, not six. A header with six choices is a header nobody reads,
    and the page below is built to be found by scrolling. These are the four
@@ -108,15 +109,11 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
               marginalia
             </span>
-            <span
-              className="inline-block group-hover:scale-125 transition-transform"
-              style={{
-                width: '0.13em',
-                height: '0.13em',
-                background: '#8B1E1E',
-                marginLeft: '0.09em',
-              }}
-            />
+            {/* This copy of the mark had drifted: a 0.09em left margin instead
+                of 0.08em, and no negative right margin at all, so unlike every
+                other one on the site it took real width and pushed the bar
+                along. It is the shared component now. */}
+            <Mark className="group-hover:scale-125 transition-transform" />
           </button>
 
           {/* The clocks are the first thing to go when the bar gets tight.

@@ -21,6 +21,7 @@
 import React, { useRef } from 'react';
 import { Database, Sliders, Cpu, Calculator, ArrowRight } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
+import { Mark } from '../design/Mark';
 
 interface MethodologyGridProps {
   onSelectStep: (stepNumber: number) => void;
@@ -94,11 +95,10 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
             lineHeight: 0.98,
           }}
         >
-          From a filing to a value{'\u2060'}
-          <span
-            className="inline-block align-baseline ml-[0.12em]"
-            style={{ width: '0.16em', height: '0.16em', background: '#8B1E1E' }}
-          />
+          {/* This copy of the mark had drifted too: 0.16em square with a
+              0.12em left margin and no negative right margin. */}
+          From a filing to a value
+          <Mark />
         </h2>
 
         <div ref={containerRef} className="relative space-y-px mb-16">

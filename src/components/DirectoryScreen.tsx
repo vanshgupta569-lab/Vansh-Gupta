@@ -27,13 +27,12 @@ import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
 import { BuildPipeline } from './motionPrimitives';
 import { Search, ArrowRight, FileSpreadsheet } from 'lucide-react';
+import { DARK } from '../design/tokens';
+import { Mark } from '../design/Mark';
 
-const RED = '#8B1E1E';
-const RED_TEXT = '#C0453E';
-const INK = '#F2F0EA';
-const READ = '#C6C1B7';
-const MUTED = '#A8A29A';
-const LINE = '#262521';
+// Colours come from the one palette. They used to be six local constants at
+// the top of this file, and six more at the top of four of its neighbours.
+const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, line: LINE } = DARK;
 
 const DISPLAY: React.CSSProperties = {
   fontFamily: "'Inter', sans-serif",
@@ -54,21 +53,6 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({ c
   </p>
 );
 
-const Square: React.FC = () => (
-  <>
-    {'⁠'}
-    <span
-      className="inline-block align-baseline"
-      style={{
-        width: '0.13em',
-        height: '0.13em',
-        background: RED,
-        marginLeft: '0.08em',
-        marginRight: '-0.21em',
-      }}
-    />
-  </>
-);
 
 interface DirectoryScreenProps {
   companies: Record<string, CompanyData>;
@@ -200,7 +184,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             style={{ ...DISPLAY, color: INK }}
           >
             Value any listed company
-            <Square />
+            <Mark />
           </h1>
           <p
             className="text-[17px] lg:text-[19px] leading-[1.6] mt-7 mx-auto max-w-[56ch]"
@@ -331,7 +315,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               style={{ ...DISPLAY, color: INK }}
             >
               The analyst&rsquo;s own models
-              <Square />
+              <Mark />
             </h2>
             <p className="text-[17px] leading-[1.6] mt-7 mx-auto max-w-[62ch]" style={{ color: READ }}>
               The workbooks below were prepared by the analyst himself, after a

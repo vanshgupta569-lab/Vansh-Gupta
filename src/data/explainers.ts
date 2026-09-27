@@ -36,7 +36,7 @@
 //
 // THE COST, STATED. The pages do not share React components with the Margin
 // Notes screen, so the two treatments could drift. Two things hold them
-// together: both read their colours from `paperPalette.ts`, and the build
+// together: both read their colours from `design/tokens.ts`, and the build
 // asserts that every title below matches the `# ` heading of its markdown file
 // and fails rather than publishing a page whose name in the index is not the
 // name on the page.

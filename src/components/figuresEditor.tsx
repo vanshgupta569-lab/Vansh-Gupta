@@ -41,15 +41,12 @@ import {
   correctionCount,
   yearChecks,
 } from '../data/corrections';
+import { DARK } from '../design/tokens';
+import { Mark } from '../design/Mark';
 
-const RED = '#8B1E1E';
-const RED_TEXT = '#C0453E';
-const INK = '#F2F0EA';
-const READ = '#C6C1B7';
-const MUTED = '#A8A29A';
-const DIM = '#6B6759';
-const LINE = '#262521';
-const PANEL = '#111114';
+// Colours come from the one palette. They used to be local constants at the
+// top of this file, and copies of the same values at the top of its neighbours.
+const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, quiet: DIM, line: LINE, panel: PANEL } = DARK;
 
 const DISPLAY: React.CSSProperties = {
   fontFamily: "'Inter', sans-serif",
@@ -58,21 +55,6 @@ const DISPLAY: React.CSSProperties = {
   lineHeight: 0.98,
 };
 
-const Square: React.FC = () => (
-  <>
-    {'⁠'}
-    <span
-      className="inline-block align-baseline"
-      style={{
-        width: '0.13em',
-        height: '0.13em',
-        background: RED,
-        marginLeft: '0.08em',
-        marginRight: '-0.21em',
-      }}
-    />
-  </>
-);
 
 const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
   children,
@@ -259,7 +241,7 @@ export const FiguresEditor: React.FC<Props> = ({
             style={{ ...DISPLAY, color: INK }}
           >
             Read the figures before the model does
-            <Square />
+            <Mark />
           </h1>
           <p
             className="text-[17px] lg:text-[19px] leading-[1.6] mt-7 mx-auto max-w-[62ch]"
@@ -329,7 +311,7 @@ export const FiguresEditor: React.FC<Props> = ({
           <div className="flex items-baseline justify-between gap-6 flex-wrap mb-6">
             <h2 className="text-[24px] lg:text-[30px]" style={{ ...DISPLAY, color: INK }}>
               {ticker} as filed
-              <Square />
+              <Mark />
             </h2>
             <div className="font-mono text-[12px] text-right" style={{ color: MUTED }}>
               Figures in millions of {currencySymbol} unless the row says otherwise

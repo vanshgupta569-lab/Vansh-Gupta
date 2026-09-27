@@ -979,6 +979,99 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   totalProblems += bad;
 }
 
+// ---- the palette is one palette, and it is legible ------------------------
+//
+// The colours used to be declared as local constants at the top of eight
+// components and applied as inline styles, and the same five or six hex codes
+// were written out in each. The eyebrow red was 3.90:1 on the dark ground and
+// 4.43:1 on paper — under the 4.5:1 floor for normal text, at the top of every
+// section on the site — and nobody could see that from inside any one file.
+//
+// Three things are checked. The TypeScript half of the palette and the CSS half
+// must agree, because a stylesheet cannot import a module and a component
+// cannot read a custom property, so there are necessarily two declarations.
+// Every token that carries words must clear the floor on every ground it is
+// used on. And no component may declare a palette colour of its own again,
+// which is the habit that produced the drift.
+{
+  console.log('\n=== the palette ===');
+  const T: any = await import(`file:///${REPO}/src/design/tokens.ts`);
+  let bad = 0;
+
+  // -- contrast, from the tokens themselves
+  const relLum = (hex: string) => {
+    const v = hex.replace('#', '');
+    const lin = [0, 2, 4]
+      .map((i) => parseInt(v.slice(i, i + 2), 16) / 255)
+      .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  };
+  const contrast = (a: string, b: string) => {
+    const [x, y] = [relLum(a), relLum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+
+  let worst = { ratio: Infinity, what: '' };
+  const measure = (token: string, colour: string, groundName: string, ground: string) => {
+    const r = contrast(colour, ground);
+    if (r < worst.ratio) worst = { ratio: r, what: `${token} on ${groundName}` };
+    if (r < T.CONTRAST_FLOOR) {
+      bad++;
+      console.log(
+        `  PROBLEM: ${token} (${colour}) is ${r.toFixed(2)}:1 on ${groundName} (${ground}), ` +
+          `under the ${T.CONTRAST_FLOOR}:1 floor for normal text`
+      );
+    }
+  };
+  for (const token of T.TEXT_ON_DARK)
+    for (const groundToken of T.DARK_GROUNDS)
+      measure(`DARK.${token}`, T.DARK[token], `DARK.${groundToken}`, T.DARK[groundToken]);
+  for (const token of T.TEXT_ON_PAPER)
+    measure(`PAPER.${token}`, T.PAPER[token], 'PAPER.ground', T.PAPER.ground);
+
+  // The mark is not text and is not expected to clear the floor; what it must
+  // not do is stop hanging in the gutter.
+  if (T.MARK.marginRight !== '-0.21em') {
+    bad++;
+    console.log(`  PROBLEM: the mark's right margin is ${T.MARK.marginRight}, not -0.21em, so it has advance width`);
+  }
+
+  // -- the two halves of the palette agree
+  const css = fs.readFileSync(path.join(REPO, 'src', 'index.css'), 'utf8');
+  const root = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')));
+  for (const [name, expected] of Object.entries(T.CSS_VARIABLES as Record<string, string>)) {
+    const found = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(root)?.[1]?.trim();
+    if (!found) {
+      bad++;
+      console.log(`  PROBLEM: src/index.css declares no ${name}; src/design/tokens.ts says it should be ${expected}`);
+    } else if (found.toUpperCase() !== expected.toUpperCase()) {
+      bad++;
+      console.log(`  PROBLEM: ${name} is ${found} in src/index.css and ${expected} in src/design/tokens.ts`);
+    }
+  }
+
+  // -- nobody declares their own again
+  const COMPONENTS = path.join(REPO, 'src', 'components');
+  const strays: string[] = [];
+  for (const file of fs.readdirSync(COMPONENTS).filter((f) => /\.tsx?$/.test(f))) {
+    const text = fs.readFileSync(path.join(COMPONENTS, file), 'utf8');
+    for (const m of text.matchAll(/^const\s+([A-Z][A-Z_0-9]*)\s*(?::[^=]+)?=\s*'(#[0-9A-Fa-f]{3,8})'/gm))
+      strays.push(`${file}: const ${m[1]} = '${m[2]}'`);
+  }
+  if (strays.length) {
+    bad += strays.length;
+    console.log('  PROBLEM: a component declares its own palette colour, which is how the last one drifted:');
+    for (const s of strays.slice(0, 10)) console.log(`           ${s}`);
+  }
+
+  const counted = T.TEXT_ON_DARK.length * T.DARK_GROUNDS.length + T.TEXT_ON_PAPER.length;
+  console.log(
+    `  ${counted} token-and-ground pairs measured, ${Object.keys(T.CSS_VARIABLES).length} custom properties compared ` +
+      `against src/index.css -- ${bad ? bad + ' PROBLEMS' : `all clear ${T.CONTRAST_FLOOR}:1, worst ${worst.ratio.toFixed(2)}:1 (${worst.what})`}`
+  );
+  totalProblems += bad;
+}
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {

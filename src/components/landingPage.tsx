@@ -27,6 +27,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ParticleField } from './particleField';
 import { MarginNotesSection } from './marginNotesSection';
+import { DARK, PAPER } from '../design/tokens';
+import { Mark } from '../design/Mark';
 
 /* The sections the object is bound to, in page order. Every id here must be
    rendered below, and the object holds one formation per entry. */
@@ -43,12 +45,9 @@ const OBJECT_SECTIONS = [
   'letgo',
 ];
 
-const RED = '#8B1E1E';
-const RED_TEXT = '#C0453E';
-const INK = '#F2F0EA';
-const READ = '#C6C1B7';
-const MUTED = '#A8A29A';
-const LINE = '#262521';
+// Colours come from the one palette. They used to be six local constants at
+// the top of this file, and six more at the top of four of its neighbours.
+const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, line: LINE } = DARK;
 
 const DISPLAY: React.CSSProperties = {
   fontFamily: "'Inter', sans-serif",
@@ -76,26 +75,6 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
   </p>
 );
 
-const Square: React.FC = () => (
-  <>
-    {'⁠'}
-    {/* Zero advance width, on purpose. Given real width, a heading that
-        exactly fills its measure pushes the full stop onto a line of its
-        own — which looks like a bug and loses the mark. With the negative
-        margin it hangs into the gutter instead, which is what optical
-        margin alignment does anyway. */}
-    <span
-      className="inline-block align-baseline"
-      style={{
-        width: '0.13em',
-        height: '0.13em',
-        background: RED,
-        marginLeft: '0.08em',
-        marginRight: '-0.21em',
-      }}
-    />
-  </>
-);
 
 /* The vertical mask every scrim wears, so no scrim ever ends on a hard edge.
    Transparent at both extremes, solid across the middle three fifths. */
@@ -432,7 +411,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             {/* No full stop here: the red square is the full stop. Written
                 out, the line ended on two of them. */}
             Real financials. Live models
-            <Square />
+            <Mark />
           </h1>
           <p className="text-[18px] leading-[1.6] mx-auto max-w-[38rem]" style={{ color: READ }}>
             Five years of income statements, balance sheets and cash flows, read
@@ -469,7 +448,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>01 &middot; What you can do</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
             Four ways in
-            <Square />
+            <Mark />
           </h2>
           <div className="grid gap-6">
             {ROUTES.map((r) => (
@@ -500,7 +479,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>02 &middot; Where the numbers come from</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Five years of accounts, exactly as filed
-            <Square />
+            <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             Type a ticker and the site reads the company&rsquo;s own annual
@@ -522,7 +501,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>03 &middot; The forecast</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every forecast line is one assumption you can move
-            <Square />
+            <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             Growth, margin, tax rate, capital spending. Each one named on the
@@ -543,7 +522,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>04 &middot; Profit becomes cash</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Profit and cash are not the same number
-            <Square />
+            <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             Tax comes off, depreciation goes back on, and capital spending and
@@ -566,7 +545,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>05 &middot; What it is worth today</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every future year, collapsed into one number
-            <Square />
+            <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             Cash a company will earn years from now is worth less than cash in
@@ -588,7 +567,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>06 &middot; Three approaches</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             They do not agree, and they are not supposed to
-            <Square />
+            <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             What a business earns, what buyers pay for businesses like it, and
@@ -611,7 +590,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>07 &middot; The model is yours</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Change anything on the page, then take the model with you
-            <Square />
+            <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             Nothing here is a picture of a model. Every assumption is editable
@@ -634,7 +613,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <Eyebrow>08 &middot; Being built next</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
             Three more things, and where each one has got to
-            <Square />
+            <Mark />
           </h2>
           <div className="grid gap-7">
             {NEXT.map((item) => (
@@ -719,7 +698,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           id="numbers"
           className="w-full"
           style={{
-            background: '#F2F0EA',
+            background: PAPER.ground,
             borderTopLeftRadius: 26,
             borderTopRightRadius: 26,
             overflow: 'hidden',
@@ -729,7 +708,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-10 lg:pb-12">
             <p
               className="font-mono text-[12px] tracking-[0.22em] uppercase mb-12 flex items-center gap-3"
-              style={{ color: RED_TEXT }}
+              style={{ color: PAPER.accentText }}
             >
               <span className="h-px w-8" style={{ background: RED }} />
               09 &middot; Coverage
@@ -737,16 +716,16 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-14 gap-x-8">
               {STATS.map((s) => (
                 <div key={s.label}>
-                  <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: '#16150F' }}>
+                  <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: PAPER.ink }}>
                     <CountUp to={s.to} suffix={s.suffix} />
                   </div>
                   <div
                     className="font-mono text-[12px] tracking-[0.2em] uppercase mt-4"
-                    style={{ color: '#16150F' }}
+                    style={{ color: PAPER.ink }}
                   >
                     {s.label}
                   </div>
-                  <div className="font-mono text-[12px] mt-2 leading-[1.5]" style={{ color: '#6B6759' }}>
+                  <div className="font-mono text-[12px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
                     {s.detail}
                   </div>
                 </div>
@@ -761,7 +740,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           id="in-the-margin"
           ref={marginRef}
           className="relative w-full"
-          style={{ background: '#F2F0EA', height: `calc(100vh + ${MARGIN_LINES.length * 62}vh)` }}
+          style={{ background: PAPER.ground, height: `calc(100vh + ${MARGIN_LINES.length * 62}vh)` }}
         >
           {/* Top-aligned, not centred. Centred in a full screen it left a
               blank run of cream between the coverage figures and this
@@ -771,25 +750,25 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <div className="w-full max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-24">
               <p
                 className="font-mono text-[12px] tracking-[0.22em] uppercase mb-5 flex items-center gap-3"
-                style={{ color: RED_TEXT }}
+                style={{ color: PAPER.accentText }}
               >
                 <span className="h-px w-8" style={{ background: RED }} />
                 10 &middot; In the margin
               </p>
               <h2
                 className="text-[26px] sm:text-[34px] lg:text-[46px] mb-10 lg:mb-14 max-w-[18ch]"
-                style={{ ...DISPLAY, color: '#16150F' }}
+                style={{ ...DISPLAY, color: PAPER.ink }}
               >
                 Every figure has a source
-                <Square />
+                <Mark />
               </h2>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-0">
                 <div>
-                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: '#6B6759' }}>
+                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: PAPER.quiet }}>
                     Sample output
                   </div>
-                  <div className="relative border-t" style={{ borderColor: '#DAD6CC' }}>
+                  <div className="relative border-t" style={{ borderColor: PAPER.line }}>
                     {MARGIN_LINES.map((item, i) => {
                       const on = i === activeMargin;
                       return (
@@ -799,17 +778,17 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                           onClick={() => chooseMargin(i)}
                           className="w-full text-left flex items-baseline justify-between border-b px-1 transition-colors"
                           style={{
-                            borderColor: '#DAD6CC',
+                            borderColor: PAPER.line,
                             height: ROW_H,
                             background: on ? 'rgba(139,30,30,0.05)' : 'transparent',
                           }}
                         >
-                          <span className="font-mono text-[14px]" style={{ color: on ? '#16150F' : '#6B6759' }}>
+                          <span className="font-mono text-[14px]" style={{ color: on ? PAPER.ink : PAPER.quiet }}>
                             {item.label}
                           </span>
                           <span
                             className="font-mono text-[19px] lg:text-[22px] tabular-nums"
-                            style={{ color: on ? RED_TEXT : '#16150F' }}
+                            style={{ color: on ? PAPER.accentText : PAPER.ink }}
                           >
                             {item.figure}
                           </span>
@@ -829,18 +808,18 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 </div>
 
                 <div className="lg:pl-28 lg:pt-16">
-                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: RED_TEXT }}>
+                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: PAPER.accentText }}>
                     {line.label}
                   </div>
                   <p
                     className="font-serif text-[22px] lg:text-[30px] leading-[1.32] max-w-[22ch]"
-                    style={{ color: '#16150F', letterSpacing: '-0.015em' }}
+                    style={{ color: PAPER.ink, letterSpacing: '-0.015em' }}
                   >
                     {line.note}
                   </p>
                   <div
                     className="font-mono text-[12px] mt-6 pt-4 border-t inline-block"
-                    style={{ color: '#6B6759', borderColor: '#DAD6CC' }}
+                    style={{ color: PAPER.quiet, borderColor: PAPER.line }}
                   >
                     {line.source}
                   </div>
@@ -868,7 +847,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-24 lg:py-32 flex flex-col items-center text-center">
             <h2 className="text-[38px] sm:text-[54px] lg:text-[70px]" style={{ ...DISPLAY, color: INK }}>
               Open a company
-              <Square />
+              <Mark />
             </h2>
             <div className="mt-12 flex flex-wrap gap-3 justify-center">
               <button

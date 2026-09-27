@@ -84,6 +84,16 @@ was nowhere better to put them and both are cheap:
 - **the loading-screen notes hold together.** No entry missing a field, no
   duplicate key, and — over four hundred shuffles — every note shown once and
   never three from the same part of the accounts inside the first twenty.
+- **the palette is one palette, and it is legible.** The colours live in
+  `src/design/tokens.ts` and are restated as custom properties in
+  `src/index.css`, because a stylesheet cannot import a module and a component
+  cannot read a custom property. The two are compared, so neither half can drift
+  from the other. Every token that carries words is measured against every
+  ground it sits on and must clear 4.5:1, the WCAG AA floor for normal text. The
+  mark's `-0.21em` right margin is checked, since that is the whole reason it
+  has zero advance width. And no component may declare a palette colour of its
+  own, which is the habit that produced eight copies of the same six hex codes
+  and an eyebrow at 3.90:1 on every screen.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in
@@ -161,6 +171,17 @@ On the refused company it checks the opposite — that **no value appears
 anywhere**: not a premium against the price, not a football-field bar, not a
 reverse DCF, not a terminal-reliance panel, and not in the batch screen or the
 downloaded workbook, each of which must carry the engine's own reason instead.
+
+**A fifth thing it reads is colour.** The palette check above measures the
+TOKENS; this measures what the browser paints, which is not the same. A colour
+reaches an element through a token, an inline style, a Tailwind arbitrary value
+or one of the legacy remapping rules in `index.css` — and those rules match on
+the class attribute, which is case-sensitive, so ten classes written in
+lowercase hex were slipping past them and keeping whatever they were written
+with. Nothing short of reading the computed style finds that. So every element
+holding text, on all five screens, has its computed colour compared with the
+first solid background behind it, against the floor its own measured size and
+weight call for. 2,285 elements, nothing below AA.
 
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it
