@@ -23,21 +23,23 @@
 // credit is there and the thresholds are not.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { MARGIN_NOTES } from '../data/marginNotes';
 import type { MarginNote } from '../data/marginNotes';
-
-const RED = '#8B1E1E';
-const RED_TEXT = '#C0453E';
-
-const PAPER = '#F2F0EA';
-const PAPER_INK = '#16150F';
-const PAPER_READ = '#3A382F';
-const PAPER_DIM = '#6B6759';
-const PAPER_LINE = '#DAD6CC';
+import { EXPLAINERS, explainerPath, EXPLAINERS_PATH } from '../data/explainers';
+import {
+  RED,
+  RED_TEXT,
+  PAPER,
+  PAPER_INK,
+  PAPER_READ,
+  PAPER_DIM,
+  PAPER_LINE,
+  DISPLAY_FAMILY,
+} from '../data/paperPalette';
 
 const DISPLAY: React.CSSProperties = {
-  fontFamily: "'Playfair Display', serif",
+  fontFamily: DISPLAY_FAMILY,
   fontWeight: 500,
   letterSpacing: '-0.01em',
   lineHeight: 1.04,
@@ -128,8 +130,9 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
         </h1>
         <p className="text-[17px] lg:text-[19px] mb-16 max-w-[52ch]" style={{ color: PAPER_READ }}>
           {MARGIN_NOTES.length} short notes on what each line of a set of accounts
-          actually measures. No prior finance required, and nothing here tells you
-          what to buy.
+          actually measures, and {EXPLAINERS.length} longer explainers on how a
+          valuation is built out of them. No prior finance required, and nothing
+          here tells you what to buy.
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-12 lg:gap-20 items-start">
@@ -167,6 +170,48 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
                 </div>
               );
             })}
+
+            {/* THE EXPLAINERS.
+                Eight longer articles on how a valuation is built, sitting
+                beside the notes on how accounts are read. They are static
+                pages at /learn/<slug>/ rather than screens in this
+                application — `src/data/explainers.ts` says why — so these are
+                ordinary links and leave the app. The arrow says so; a reader
+                who follows one and presses back returns to a fresh session,
+                which is the honest cost of making them findable. */}
+            <div className="mb-10">
+              <div
+                className="font-mono text-[11px] tracking-[0.2em] uppercase mb-4 pb-3 border-b"
+                style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
+              >
+                How a company is valued
+              </div>
+              {EXPLAINERS.map((article) => (
+                <a
+                  key={article.slug}
+                  href={explainerPath(article.slug)}
+                  className="group block w-full text-left text-[15px] leading-[1.4] py-2 transition-colors"
+                  style={{ color: PAPER_DIM }}
+                >
+                  <span
+                    className="inline-block w-[3px] h-[3px] align-middle mr-3"
+                    style={{ background: 'transparent' }}
+                  />
+                  <span className="group-hover:text-[#8B1E1E]">{article.title}</span>
+                  <ArrowUpRight
+                    size={12}
+                    className="inline-block align-middle ml-1.5 opacity-50"
+                  />
+                </a>
+              ))}
+              <a
+                href={EXPLAINERS_PATH}
+                className="block w-full text-left font-mono text-[11px] tracking-[0.16em] uppercase mt-3 pt-3 border-t transition-colors hover:text-[#8B1E1E]"
+                style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
+              >
+                All {EXPLAINERS.length} explainers
+              </a>
+            </div>
           </nav>
 
           {/* The article */}

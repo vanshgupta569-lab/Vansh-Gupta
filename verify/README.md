@@ -84,6 +84,14 @@ was nowhere better to put them and both are cheap:
 - **the loading-screen notes hold together.** No entry missing a field, no
   duplicate key, and — over four hundred shuffles — every note shown once and
   never three from the same part of the accounts inside the first twenty.
+- **the explainers are whole.** The eight articles at `/learn/` are static HTML
+  written at build time by a small markdown renderer, and a renderer that
+  quietly drops a construct publishes a beautifully typeset page with a hole in
+  it. So every prose line of every markdown source is looked for in the built
+  page, along with the title, description, canonical link, H1 and a way back to
+  the index — and the pages are checked to carry no script at all, which is the
+  whole point of them. Run before `npm run build`, it says so and checks the
+  sources only.
 
 ### The scenarios
 
@@ -243,3 +251,8 @@ and skipped.
 | `fetch-payloads.mts` | Fetches the sweep set through the site's own API handler. |
 | `tickers.txt` | The sweep set. |
 | `payloads/`, `snapshots/`, `out/` | Working directories, all ignored by git. |
+
+Two things checked here live outside `verify/`: `scripts/buildExplainers.mts`
+writes the explainer pages and refuses a markdown construct it cannot render,
+and `src/data/explainers.ts` records why those pages are files rather than
+routes.

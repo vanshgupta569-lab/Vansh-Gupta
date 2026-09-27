@@ -1,0 +1,11 @@
+# Marginalia
+#
+# The explainers under /learn/ are real HTML files, so every crawler can read
+# them without executing anything. /api/ is already marked noindex by a header
+# in vercel.json; it is repeated here for crawlers that read this file first.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://marginalia-iota-one.vercel.app/sitemap.xml

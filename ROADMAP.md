@@ -84,7 +84,12 @@ In order. Engine defects are worked from `KNOWN_ISSUES.md` in parallel with this
    fifty-three of them on the loading screen, shuffled per build, reordered so
    that no three consecutive notes come from the same part of the accounts, and
    rotated every 6.5 seconds so a slow build does not leave one sentence on
-   screen for the whole wait. The eight SEO explainer pages follow.
+   screen for the whole wait. **The eight explainer pages are done** too
+   (2026-09-27), which leaves this item finished. They are served at `/learn/`
+   as real HTML files written at build time rather than as screens in the
+   application, because the application is one URL with no router and a crawler
+   asking for any address gets an empty div. The reasoning, and what it costs,
+   is written out in `src/data/explainers.ts`.
 5. **IDEA — A check that the dashboard renders what the engine produced.** The one hole the verification harness leaves, recorded under the verification limits in `KNOWN_ISSUES.md`. `playwright` is already a dev dependency.
 
 ---
@@ -239,7 +244,7 @@ Gated on the learning track (section 8). Nothing here starts before its hand mod
 | Margin Notes data file, 19 notes | LIVE | Written from general accounting knowledge. |
 | Buffett lens callouts | LIVE | Our summary of the questions Mary Buffett and David Clark ask. Their numeric thresholds are deliberately excluded; the book is credited instead. Never reproduce the thresholds. |
 | Margin Notes screen | LIVE | Paper palette; index plus article reader. |
-| SEO explainer pages, eight articles | QUEUED | What is a DCF, free cash flow, WACC, terminal value, EV/EBITDA, book value, why two analysts differ, the three-statement model. Outsourceable. |
+| SEO explainer pages, eight articles | LIVE | 2026-09-27, at `/learn/`. Static HTML written at build time from `content/explainers/`, not screens in the application: a crawler gets the whole text without executing anything, which a prerendered SPA route cannot promise outside Google. Paper palette shared with the Margin Notes screen through `paperPalette.ts`; linked from that screen's index; `sitemap.xml` and `robots.txt` added with them. |
 | Did you know, on the loading screen | LIVE | 53 notes, 2026-09-27. Shuffled per build and reordered so no three consecutive come from the same part of the accounts; one holds the screen for 6.5 seconds, so a slow build rotates rather than freezing on one line. Checked in `verify:dashboard` against a fetch held open for seventeen seconds. |
 | Naive investor section | QUEUED | Insights from the reported statements. Explain mechanics, not merit. |
 | Landing page rewrite | QUEUED | Less theory, a clearer statement of what the site does, and the basics of financial modelling for someone arriving cold. |

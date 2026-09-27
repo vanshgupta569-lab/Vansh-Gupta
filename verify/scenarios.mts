@@ -888,6 +888,97 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   totalProblems += bad;
 }
 
+// ---- the explainers are whole, and reachable -------------------------------
+//
+// Eight articles served as static HTML at /learn/<slug>/ rather than as screens
+// in the application, so that a crawler gets the text without executing
+// anything (`src/data/explainers.ts` says why at length). The build writes them;
+// this is what stops the build writing something wrong.
+//
+// The generator already refuses a markdown construct it cannot render and a
+// title that does not match its file. What it cannot check on its own is
+// whether the page it produced still contains the article: a renderer that
+// dropped every paragraph would write eight valid, beautifully typeset, empty
+// documents. So each article is rendered here and every sentence of the source
+// is looked for in the output.
+{
+  console.log('\n=== the explainers ===');
+  const { EXPLAINERS, explainerPath } = await import(`file:///${REPO}/src/data/explainers.ts`);
+  const CONTENT = path.join(REPO, 'content', 'explainers');
+  let bad = 0;
+
+  const files = fs.existsSync(CONTENT)
+    ? fs.readdirSync(CONTENT).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''))
+    : [];
+  const slugs: string[] = (EXPLAINERS as any[]).map((e) => e.slug);
+
+  for (const slug of files)
+    if (!slugs.includes(slug)) { bad++; console.log(`  PROBLEM: ${slug}.md is not listed, so nothing links to it`); }
+  for (const slug of slugs)
+    if (!files.includes(slug)) { bad++; console.log(`  PROBLEM: "${slug}" is listed but has no markdown file`); }
+
+  // The built pages, if there are any. `npm run build` writes them; a checkout
+  // that has not been built yet is not a failure, and is said rather than
+  // passed over in silence.
+  const DIST = path.join(REPO, 'dist', 'learn');
+  let words = 0;
+  if (!fs.existsSync(DIST)) {
+    console.log('  dist/learn is not built, so only the sources are checked here; run npm run build');
+  } else {
+    for (const entry of EXPLAINERS as any[]) {
+      const page = path.join(DIST, entry.slug, 'index.html');
+      if (!fs.existsSync(page)) { bad++; console.log(`  PROBLEM: ${explainerPath(entry.slug)} was not built`); continue; }
+      const html = fs.readFileSync(page, 'utf8');
+      const md = fs.readFileSync(path.join(CONTENT, `${entry.slug}.md`), 'utf8').replace(/\r\n/g, '\n');
+
+      // Every prose line of the source must be findable in the page. Compared
+      // after the same escaping the generator applies, so an apostrophe or an
+      // ampersand is not mistaken for a missing paragraph.
+      const esc = (s: string) =>
+        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const prose = md
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith('#') && !l.startsWith('|'));
+      const lost = prose.filter((l) => !html.includes(esc(l)));
+      if (lost.length) {
+        bad += lost.length;
+        console.log(`  PROBLEM: ${entry.slug} is missing ${lost.length} of its ${prose.length} paragraphs`);
+        console.log(`           first: "${lost[0].slice(0, 70)}…"`);
+      }
+      words += prose.join(' ').split(/\s+/).length;
+
+      // The three things that make it findable at all, and the one that makes
+      // it navigable: a title, a description, a canonical address, and a way
+      // back to the others.
+      for (const [what, re] of [
+        ['a <title>', /<title>[^<]{10,}<\/title>/],
+        ['a meta description', /<meta name="description" content="[^"]{40,}"/],
+        ['a canonical link', new RegExp(`<link rel="canonical" href="https?://[^"]+${entry.slug}/"`)],
+        ['an H1', new RegExp(`<h1>${esc(entry.title).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</h1>`)],
+        ['a link to the index', /href="\/learn\/"/],
+      ] as [string, RegExp][]) {
+        if (!re.test(html)) { bad++; console.log(`  PROBLEM: ${entry.slug} has no ${what}`); }
+      }
+      // And no script: these pages are meant to need nothing executed.
+      if (/<script/i.test(html)) { bad++; console.log(`  PROBLEM: ${entry.slug} carries a script tag`); }
+    }
+    const sitemap = path.join(REPO, 'dist', 'sitemap.xml');
+    if (!fs.existsSync(sitemap)) { bad++; console.log('  PROBLEM: no sitemap.xml was written'); }
+    else {
+      const xml = fs.readFileSync(sitemap, 'utf8');
+      const missing = slugs.filter((s) => !xml.includes(`${explainerPath(s)}<`));
+      if (missing.length) { bad += missing.length; console.log(`  PROBLEM: the sitemap omits ${missing.join(', ')}`); }
+    }
+  }
+
+  console.log(
+    `  ${slugs.length} articles${words ? `, ${words.toLocaleString('en-GB')} words, every paragraph present in the built page` : ''} -- ` +
+      `${bad ? bad + ' PROBLEMS' : 'each listed, built, titled, described, canonical and linked'}`
+  );
+  totalProblems += bad;
+}
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {
