@@ -252,27 +252,24 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
   //    the R&D margin and an average of historical SG&A, and where that average
   //    differed from the forecast SG&A margin, setting the slider back to its
   //    own default did not reproduce the model it started from.
-  //    THE SBC SCALING BELOW IS LEFT FROM A BASIS THE ENGINE NO LONGER USES,
-  //    and it is wrong until it is corrected — see `KI-23`. It was written when
-  //    stock compensation was forecast as a share of total OPERATING COSTS: on
-  //    that basis a point on gross margin cut operating costs, which cut the SBC
-  //    charge with them, so moving gross margin by d moved operating profit by
-  //    d × (1 + share) and the shift had to be scaled by 1/(1 + share) to make
-  //    the operating margin move by exactly what the slider says. Since
-  //    2026-09-25 SBC is a share of REVENUE (`METHODOLOGY.md` §5), which gross
+  //    THE SHIFT IS NOT SCALED, and it used to be. Until 2026-09-25 stock
+  //    compensation was forecast as a share of total OPERATING COSTS, so a point
+  //    on gross margin cut operating costs and cut the SBC charge with them:
+  //    operating profit moved by d × (1 + share), and the shift was divided by
+  //    (1 + share) to make the operating margin move by exactly what the slider
+  //    said. SBC is now a share of REVENUE (`METHODOLOGY.md` §5), which gross
   //    margin does not touch, so operating profit already moves by exactly d and
-  //    the scaling now makes the slider UNDER-move by a factor of (1 + share).
-  //    It is not corrected here because the correction changes a published
-  //    figure for every company with stock compensation and has to be measured
-  //    before it ships, not reasoned into place.
+  //    dividing made the slider UNDER-move by that factor — a point asked for
+  //    delivered 0.87 of a point on Palantir, 0.89 on Broadcom, 0.91 on Meta,
+  //    and a median 0.9876 across the 56 valued companies (`KI-23`, fixed
+  //    2026-09-28). The correction is the division's removal, and it is worth
+  //    keeping in mind that the scaling was not wrong when it was written: it
+  //    was made wrong by a change somewhere else, and nothing failed when that
+  //    happened, because at rest every driver reproduces the model exactly.
   if (touched('operatingMarginPct')) {
     const delta =
       (drivers.operatingMarginPct - Number(defaults.operatingMarginPct ?? 0)) / 100;
-    const baseline: any = buildModel(source);
-    const sbcShare = Number(baseline.sbcPercentOfRevenue?.[baseline.nH] ?? 0) || 0;
-    d.assumptions.grossMargin = d.assumptions.grossMargin.map(
-      (g: number) => g + delta / (1 + sbcShare)
-    );
+    d.assumptions.grossMargin = d.assumptions.grossMargin.map((g: number) => g + delta);
   }
 
   // 3. Tax rate override

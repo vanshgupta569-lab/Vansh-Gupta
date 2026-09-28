@@ -88,16 +88,21 @@ commit were measured on the payload set of that date and say so.
 |---|---|---|---|
 | `KI-20` | The workbook's discount rate does not move with its tax rate | Vodafone, 12.3% on value per share | 18 of 56 above 1% |
 | `KI-21` | The workbook's terminal growth rate does not re-fade its forecast | AbbVie, 3.7% on value per share | 51 of 56 above 1% |
-| `KI-23` | The operating margin slider under-moves, by the stock compensation share of revenue | not yet measured | every company reporting SBC |
 
-`KI-20` and `KI-21` were found on 2026-09-28 while building the Assumptions
-sheet, which is what turned them up: writing down what every assumption rests on
-means following each one to the cell it drives, and two of them stop short of
-where the engine carries them. `KI-23` came from the same job by a different
-route — renaming a field to match what it holds, and reading what consumed it. Both are the `KI-4` pattern — a workbook that agrees with the site
+Both were found on 2026-09-28 while building the Assumptions sheet, which is
+what turned them up: writing down what every assumption rests on means following
+each one to the cell it drives, and two of them stop short of where the engine
+carries them. Both are the `KI-4` pattern — a workbook that agrees with the site
 exactly at rest and parts from it on the first edit — and `KI-4`'s own measured
 lesson applies: the agreement at rest is worth nothing, because the workbook is
 only being used once someone has started editing it.
+
+`KI-23` came from the same job by a third route — renaming a field to match what
+it holds, then reading what consumed it — and was fixed on 2026-09-28, so its
+entry is gone from here. The lesson it left is the one above, in a different
+place: the scaling it removed was correct when it was written and was made wrong
+by a change somewhere else, and nothing failed at the moment it broke, because
+at rest every driver reproduces the model exactly.
 
 Neither moves a published figure. `npm run verify:workbook` compares the two at
 rest and still returns the site's value per share on both terminal methods for
@@ -149,39 +154,6 @@ was built to remove.
 formula interpolating between a first-year rate and DCF row 33, which makes the
 fade a rule in the file rather than five numbers. The Assumptions sheet states
 the limitation beside both rows in the meantime.
-
-### `KI-23` — the operating margin slider under-moves
-
-**Where:** `src/data/companies.ts`, `buildOverridden`, the `operatingMarginPct`
-branch.
-
-The slider shifts the gross margin path and then scales the shift by
-1/(1 + SBC share). That scaling was correct while stock compensation was
-forecast as a share of **operating costs**: a point on gross margin cut operating
-costs, which cut the SBC charge with them, so operating profit moved by
-d × (1 + share) and the shift had to be divided by that factor to make the
-operating margin move by exactly what the slider said.
-
-Since 2026-09-25 stock compensation is a share of **revenue** (`METHODOLOGY.md`
-§5), which gross margin does not touch. Operating profit now moves by exactly d
-already, so dividing by (1 + share) makes the slider move the operating margin
-**less** than it says — by a factor of the SBC share of revenue, which is a
-fraction of a point for most companies and several points for software.
-
-**Found** 2026-09-28, by renaming `sbcPercentOfOpex` to `sbcPercentOfRevenue`
-and reading what consumed it. The field had held a share of revenue for three
-days under a name that said otherwise, and the one place that read it was built
-on the name.
-
-**Not yet measured.** The shell was unavailable for the whole of the session that
-found it, so no sweep was run. It is recorded here without a figure rather than
-with a guessed one. The measurement is the ordinary one: set the operating margin
-slider a point either way on the sweep set, and compare the operating margin the
-model actually produces against the one the slider asked for.
-
-**What it would take to fix:** delete the scaling, so the shift is `delta`. That
-moves a published figure for every company that reports stock compensation, which
-is why it is not done in the commit that found it.
 
 ## Where the list stood before these
 

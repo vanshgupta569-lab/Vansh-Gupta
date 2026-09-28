@@ -867,9 +867,76 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
         }
       }
     }
+    // THE SIZE, not only the direction.
+    //
+    // A driver can move the value the right way and still move it by the wrong
+    // amount, and until 2026-09-28 nothing here would have noticed. The
+    // operating margin handler divided its shift by 1 + the stock compensation
+    // share of revenue — correct while SBC was a share of operating costs, and
+    // left behind when it became a share of revenue three days earlier. A
+    // slider asking for one point delivered 0.87 of one on Palantir. Under-
+    // moving is the right DIRECTION, so the check above passed throughout
+    // (`KI-23`).
+    //
+    // Each driver below is DEFINED as a quantity this model computes, so the
+    // assertion is exact. Only drivers whose own quantity is unambiguous are
+    // listed — capital spending scales a line rather than shifting a ratio, and
+    // beta is not a percentage.
+    //
+    // A SHIFT AND A LEVEL ARE CHECKED DIFFERENTLY, and the difference is not a
+    // technicality. A slider's default is the model's own figure ROUNDED to one
+    // decimal (`defaultDriversFor`). A shift handler moves the path by
+    // slider - default, so the rounding appears on both sides and cancels: the
+    // quantity moves by exactly the nudge. A level handler writes the slider
+    // straight into the assumptions, so the quantity lands on the slider's value
+    // and the rounding shows up as a difference from where it started — Apple's
+    // forecast tax rate is 0.0354 of a point off its own rounded default, which
+    // is the rounding and not a fault. Asserting "moved by the nudge" against a
+    // level driver would fail on arithmetic that is working.
+    const num2 = (v: any) => (typeof v === 'number' && isFinite(v) ? v : null);
+    const SIZE: [string, 'shift' | 'level', (m: any) => number | null][] = [
+      ['operatingMarginPct', 'shift', (m) => (m.revenue?.[m.nH] ? (m.ebit[m.nH] / m.revenue[m.nH]) * 100 : null)],
+      ['revenueGrowthPct', 'shift', (m) => { const v = num2(m.revenueGrowth?.[m.nH]); return v === null ? null : v * 100; }],
+      ['taxRatePct', 'level', (m) => { const v = num2(m.taxRate?.[m.nH]); return v === null ? null : v * 100; }],
+    ];
+    const modelAt = (drivers: any) => {
+      try { return buildFullModel(SRC, drivers)?.model ?? null; } catch { return null; }
+    };
+    for (const [driver, mode, read] of SIZE) {
+      if (defs[driver] === undefined || defs[driver] === null) continue;
+      const restModel = modelAt(defs);
+      const base = restModel && read(restModel);
+      if (base === null || base === undefined) {
+        console.log(`  ${driver}: its own quantity is not computed for this company, so the size is not tested`);
+        continue;
+      }
+      for (const step of [1, -1]) {
+        const asked = Number(defs[driver]) + step;
+        const m = modelAt({ ...defs, [driver]: asked });
+        const got = m && read(m);
+        if (got === null || got === undefined) {
+          console.log(`  ${driver} ${step > 0 ? '+' : ''}${step}: the engine refuses the nudged model, so the size is not tested`);
+          continue;
+        }
+        // A tenth of a basis point on a one-point move: far inside anything a
+        // handler could get wrong, far outside floating point.
+        const want = mode === 'shift' ? step : asked;
+        const have = mode === 'shift' ? got - base : got;
+        if (Math.abs(have - want) > 1e-6) {
+          bad++;
+          console.log(
+            `  PROBLEM: ${driver} ${step > 0 ? '+' : ''}${step} ` +
+              (mode === 'shift'
+                ? `moves its own quantity by ${have.toFixed(4)}, not ${want}`
+                : `leaves its own quantity at ${have.toFixed(4)}, not the ${want.toFixed(4)} it asks for`)
+          );
+        }
+      }
+    }
+
     console.log(
-      `  ${tested.length} drivers set back to their defaults and nudged both ways -- ` +
-        `${bad ? bad + ' PROBLEMS' : 'each is a no-op at its default and each moves the value the way it reads'}`
+      `  ${tested.length} drivers set back to their defaults and nudged both ways, ${SIZE.length} of them sized -- ` +
+        `${bad ? bad + ' PROBLEMS' : 'each is a no-op at its default, each moves the value the way it reads, and each sized driver moves its own quantity by exactly what it asks for'}`
     );
     totalProblems += bad;
   }

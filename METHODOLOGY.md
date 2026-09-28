@@ -1849,16 +1849,33 @@ Five of them **shift the model's own path** rather than replacing it with a
 flat number, because a hand-built model's path is a judgement worth keeping:
 
 - **Revenue growth** shifts every segment's growth path by the same delta.
-- **Operating margin** shifts the gross margin path. Gross margin less R&D and
-  SG&A is the operating margin and neither of those is changing, so a point on
-  one is a point on the other. The code then scales the shift by
-  1/(1 + SBC share), which **was** right and is now wrong: it was written when
-  SBC was a share of operating costs, where a point on gross margin also trimmed
-  the SBC charge, and since 2026-09-25 SBC is a share of revenue (§5), which
-  gross margin does not touch. The slider therefore under-moves by that factor.
-  Open as `KI-23`; it is not corrected in place because the correction moves a
-  published figure for every company that reports stock compensation and has to
-  be measured before it ships.
+- **Operating margin** shifts the gross margin path, by exactly what the slider
+  says. Gross margin less R&D and SG&A is the operating margin and neither of
+  those is changing, so a point on one is a point on the other.
+
+  Until 2026-09-28 the shift was divided by 1 + the SBC share, which **was**
+  right and had been made wrong by a change somewhere else. SBC was once a share
+  of operating costs, so a point on gross margin trimmed the SBC charge too and
+  operating profit moved by d × (1 + share); the division cancelled that. When
+  SBC moved to a share of revenue on 2026-09-25 (§5) — which gross margin does
+  not touch — the division stopped cancelling anything and started subtracting.
+  Measured across the 56 valued companies: a slider asking for one point
+  delivered a median **0.9876**, and **0.8674 on Palantir**, 0.8941 on Broadcom,
+  0.9077 on Meta — the shortfall being exactly the SBC share of revenue. Thirty
+  companies were off by more than a hundredth of a point.
+
+  Removing it moves no published figure (the model at rest is identical to nine
+  decimal places) and changes a valuation only for a reader who has moved that
+  slider: **44 of 56 move, none by more than 1%**, median 0.06%, worst AMD 0.4%
+  on a point either way. The qualitative factors reach this driver too, capped
+  at two points (§21 below), so the largest effect anything can have through it
+  is about double that.
+
+  It is worth naming why nothing caught it for three days: at rest every driver
+  reproduces the model exactly, and the check added in `48c95b6` nudges each
+  driver and asserts only the **direction** it moves the value. Under-moving by
+  1.4% is the right direction. The suite still does not assert the **size** of a
+  driver's response, which is what would have caught this.
 - **Capital spending** scales the whole capex line by the ratio of where the
   slider sits to where it started, leaving the projection method alone. A model
   whose capex is a rising line stays a rising line.
