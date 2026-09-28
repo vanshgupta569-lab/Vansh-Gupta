@@ -438,7 +438,7 @@ an item ships with its hash, in the same commit as the work.
 
 | Commit | What |
 |---|---|
-| `689ddeb` | The Assumptions sheet: every assumption, its value linked live to the cell it comes from, and the basis the engine recorded for it. Four provenance sentences corrected where a clamp had replaced the measurement they named, two written where none existed (`KI-22`, opened and retired here), `METHODOLOGY.md` §10 corrected on what the buyback machinery does for a derived company, and `sbcPercentOfOpex` renamed to what it holds. `KI-20`, `KI-21` and `KI-23` opened. |
+| `fac1d4d` | The Assumptions sheet: every assumption, its value linked live to the cell it comes from, and the basis the engine recorded for it. Four provenance sentences corrected where a clamp had replaced the measurement they named, two written where none existed (`KI-22`, opened and retired here), `METHODOLOGY.md` §10 corrected on what the buyback machinery does for a derived company, and `sbcPercentOfOpex` renamed to what it holds. `KI-20`, `KI-21` and `KI-23` opened. |
 | `3332cf7` | Shared design tokens; contrast fixed on both grounds; the red square in one component. |
 | `239ccae` | Eight explainer pages at `/learn/` as static HTML. |
 | `fe2256e` | Fifty-three did-you-know notes on the loading screen. |
