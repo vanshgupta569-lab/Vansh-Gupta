@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-19`. **Next free: `KI-20`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-23`. **Next free: `KI-24`.** Retired, meaning
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
   average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
@@ -52,7 +52,15 @@ mistakes and would never be fixed:
   finance ministries publish one, and the market risk premium and terminal
   growth moved to `DATA_CONSTRAINTS.md` because nothing publishes them) and
   `KI-15` (a payload cache keyed to the ticker alone, so new code read old
-  payloads, fixed 2026-09-27). Moved out on 2026-09-27: `KI-11`, to
+  payloads, fixed 2026-09-27) and `KI-22` (assumptions reaching the valuation
+  with no basis recorded: stock compensation and buybacks, both opened and fixed
+  on 2026-09-28 in the commit that built the Assumptions sheet — writing the
+  buyback sentence is what established that a derived company's authorised
+  ceiling is its own spend and its percentage exactly 1.0, so `METHODOLOGY.md`
+  §10 was corrected with it. The third figure in that entry, the workbook's
+  revolver rate, was not a defect: it is an assumption with a stated basis and no
+  engine counterpart, and it moved to `METHODOLOGY.md` §22). Moved out on
+  2026-09-27: `KI-11`, to
   `DATA_CONSTRAINTS.md` — how much plant a change in revenue is worth is a
   relationship the filings do not settle, and the three companies where the
   forecast shows it are named there. Moved out on 2026-09-22 and never to be
@@ -76,11 +84,110 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**None open.**
+| ID | What is wrong | Worst | Valued companies affected |
+|---|---|---|---|
+| `KI-20` | The workbook's discount rate does not move with its tax rate | Vodafone, 12.3% on value per share | 18 of 56 above 1% |
+| `KI-21` | The workbook's terminal growth rate does not re-fade its forecast | AbbVie, 3.7% on value per share | 51 of 56 above 1% |
+| `KI-23` | The operating margin slider under-moves, by the stock compensation share of revenue | not yet measured | every company reporting SBC |
+
+`KI-20` and `KI-21` were found on 2026-09-28 while building the Assumptions
+sheet, which is what turned them up: writing down what every assumption rests on
+means following each one to the cell it drives, and two of them stop short of
+where the engine carries them. `KI-23` came from the same job by a different
+route — renaming a field to match what it holds, and reading what consumed it. Both are the `KI-4` pattern — a workbook that agrees with the site
+exactly at rest and parts from it on the first edit — and `KI-4`'s own measured
+lesson applies: the agreement at rest is worth nothing, because the workbook is
+only being used once someone has started editing it.
+
+Neither moves a published figure. `npm run verify:workbook` compares the two at
+rest and still returns the site's value per share on both terminal methods for
+every valued company, worst difference 3.87e-9%.
+
+### `KI-20` — the discount rate does not move with the tax rate
+
+**Where:** `src/data/excelExport.ts`, DCF sheet rows 21 and 23.
+
+Beta is written to the sheet already relevered, and the cost of debt already tax
+effected, both as typed constants. The engine does neither in advance: it
+relevers beta by `(1 − tax)` and tax-effects the cost of debt against whatever
+rate the model is carrying, so moving the tax rate moves its WACC. In the
+workbook the tax rate reaches the cash flows — DCF row 10 links to the model
+sheet — and never reaches the rate that discounts them.
+
+**Measured** 2026-09-28 on the payloads of 2026-09-23, by raising the tax rate
+five points in the workbook and on the engine and comparing value per share
+across the 56 valued companies: **18 part by more than 1%, three by more than
+5%**, median 0.52%. Worst: **Vodafone −12.3%**, whose beta relevers from 1.75 to
+1.67 and whose after-tax cost of debt falls from 2.20% to 1.98% on the engine
+while the workbook holds both. A reader who tests a tax change in the file gets
+an answer the site would not give.
+
+**What it would take to fix:** write rows 21 and 23 as formulas over the model
+sheet's tax rate — the Hamada relation on an asset beta, and the pre-tax cost of
+debt times `(1 − tax)`. Both need two constants the sheet does not currently
+carry (the asset beta and the pre-tax cost of debt), which the engine does have.
+
+### `KI-21` — terminal growth does not re-fade the forecast
+
+**Where:** `src/data/excelExport.ts`, DCF sheet row 33 against the model sheet's
+revenue growth row.
+
+Since `5a2b858` the forecast growth rate fades in a straight line to the terminal
+rate, and the engine reads `dcf.longTermGrowthRate` when it builds that path — so
+moving the terminal rate re-strikes every forecast year to meet the new one. The
+workbook seeds the growth cells with the faded rates as typed numbers and wires
+row 33 to the terminal value alone. Moving it changes what the perpetuity grows
+at and leaves the forecast that feeds it where it was, which is the join the fade
+was built to remove.
+
+**Measured** the same way, terminal growth one point higher on both sides:
+**51 of 56 part by more than 1%**, none by more than 5%, median 2.2%. Worst:
+**AbbVie −3.7%**, whose forecast growth should re-fade from 3.51%→2.50% to
+3.51%→3.50% and does not move at all.
+
+**What it would take to fix:** write the model sheet's forecast growth cells as a
+formula interpolating between a first-year rate and DCF row 33, which makes the
+fade a rule in the file rather than five numbers. The Assumptions sheet states
+the limitation beside both rows in the meantime.
+
+### `KI-23` — the operating margin slider under-moves
+
+**Where:** `src/data/companies.ts`, `buildOverridden`, the `operatingMarginPct`
+branch.
+
+The slider shifts the gross margin path and then scales the shift by
+1/(1 + SBC share). That scaling was correct while stock compensation was
+forecast as a share of **operating costs**: a point on gross margin cut operating
+costs, which cut the SBC charge with them, so operating profit moved by
+d × (1 + share) and the shift had to be divided by that factor to make the
+operating margin move by exactly what the slider said.
+
+Since 2026-09-25 stock compensation is a share of **revenue** (`METHODOLOGY.md`
+§5), which gross margin does not touch. Operating profit now moves by exactly d
+already, so dividing by (1 + share) makes the slider move the operating margin
+**less** than it says — by a factor of the SBC share of revenue, which is a
+fraction of a point for most companies and several points for software.
+
+**Found** 2026-09-28, by renaming `sbcPercentOfOpex` to `sbcPercentOfRevenue`
+and reading what consumed it. The field had held a share of revenue for three
+days under a name that said otherwise, and the one place that read it was built
+on the name.
+
+**Not yet measured.** The shell was unavailable for the whole of the session that
+found it, so no sweep was run. It is recorded here without a figure rather than
+with a guessed one. The measurement is the ordinary one: set the operating margin
+slider a point either way on the sweep set, and compare the operating margin the
+model actually produces against the one the slider asked for.
+
+**What it would take to fix:** delete the scaling, so the shift is `delta`. That
+moves a published figure for every company that reports stock compensation, which
+is why it is not done in the commit that found it.
+
+## Where the list stood before these
 
 The list reached zero on 2026-09-27. That is not a claim that the model is
 right — it is a claim that nothing on it is a mistake of ours that we know about
-and have not dealt with. Everything that was here has been fixed, or established
+and have not dealt with. Everything that was there has been fixed, or established
 as something the filings cannot settle and moved to `DATA_CONSTRAINTS.md` where
 the affected companies are named against the model.
 

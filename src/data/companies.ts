@@ -252,17 +252,24 @@ function buildOverridden(source: any, drivers: ValuationDrivers): any {
   //    the R&D margin and an average of historical SG&A, and where that average
   //    differed from the forecast SG&A margin, setting the slider back to its
   //    own default did not reproduce the model it started from.
-  //    Stock based compensation is now charged in operating profit and is
-  //    forecast as a share of total operating costs on the filed basis, so a
-  //    point on gross margin also trims the SBC charge by that share: moving
-  //    gross margin by d moves operating profit by d × (1 + share). The shift
-  //    is scaled down by that factor so the operating margin moves by exactly
-  //    what the slider says. The share depends only on reported history.
+  //    THE SBC SCALING BELOW IS LEFT FROM A BASIS THE ENGINE NO LONGER USES,
+  //    and it is wrong until it is corrected — see `KI-23`. It was written when
+  //    stock compensation was forecast as a share of total OPERATING COSTS: on
+  //    that basis a point on gross margin cut operating costs, which cut the SBC
+  //    charge with them, so moving gross margin by d moved operating profit by
+  //    d × (1 + share) and the shift had to be scaled by 1/(1 + share) to make
+  //    the operating margin move by exactly what the slider says. Since
+  //    2026-09-25 SBC is a share of REVENUE (`METHODOLOGY.md` §5), which gross
+  //    margin does not touch, so operating profit already moves by exactly d and
+  //    the scaling now makes the slider UNDER-move by a factor of (1 + share).
+  //    It is not corrected here because the correction changes a published
+  //    figure for every company with stock compensation and has to be measured
+  //    before it ships, not reasoned into place.
   if (touched('operatingMarginPct')) {
     const delta =
       (drivers.operatingMarginPct - Number(defaults.operatingMarginPct ?? 0)) / 100;
     const baseline: any = buildModel(source);
-    const sbcShare = Number(baseline.sbcPercentOfOpex?.[baseline.nH] ?? 0) || 0;
+    const sbcShare = Number(baseline.sbcPercentOfRevenue?.[baseline.nH] ?? 0) || 0;
     d.assumptions.grossMargin = d.assumptions.grossMargin.map(
       (g: number) => g + delta / (1 + sbcShare)
     );

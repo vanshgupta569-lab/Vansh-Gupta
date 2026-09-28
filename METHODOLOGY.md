@@ -321,6 +321,23 @@ years this happens in are recorded and shown.
 The chain is EBITDA → less D&A → EBIT → less net interest → EBT → less tax →
 net income, with a margin beside each subtotal, which is `IS 13`.
 
+**Every assumption below is clamped, and a clamp that binds now says so.** The
+bounds exist because one freak year should not set a five-year forecast, and a
+figure the clamp replaced is no longer the company's measurement — so a
+provenance sentence that names the measurement beside it states something
+untrue. Until 2026-09-28 four of them did: the tax rate read "the last reported
+year's effective rate" over a clamped figure for 19 companies, six of them
+valued (BP's own 83.3% shown as 50.0%, Vodafone's 96.8% as 50.0%, AMD's −2.5% as
+0.0%); the payout ratio read "average payout ratio across the reported years"
+over the 0–100% clamp for 13, four valued (Vodafone 675.7%, Gilead 214.4%); the
+gross margin read "the last reported year, held flat" over the 35% no-data
+fallback for 46; and the capital-spending ratio did the same. Each now appends
+what the clamp or the fallback did, in the company's own figures, and the
+no-data case says the figure is the model's default rather than the company's.
+**No value moved** — the clamps themselves are unchanged, and the sweep of
+2026-09-28 shows no company moving a cent. What changed is that the sentence and
+the number now agree.
+
 ### Revenue
 
 **Reported:** as filed.
@@ -977,11 +994,30 @@ It replaced a linear regression through the payout history, which could trend
 the ratio somewhere the company has never been, including above 100% of
 earnings.
 
-**Buybacks** are a percentage of an authorised ceiling. The ceiling in forecast
-years is the average of the reported ceilings plus the first forecast one, over
-a fixed window, counting only the ones that exist. The percentage is the average
-of what the company actually spent against its ceiling in the years that report
+**Buybacks** are a percentage of an authorised ceiling — *for the curated Apple
+file, which is the only model that has one*. The ceiling in forecast years is
+the average of the reported ceilings plus the first forecast one, over a fixed
+window, counting only the ones that exist. The percentage is the average of what
+the company actually spent against its ceiling in the years that report
 repurchases. None reported, none forecast.
+
+**For a derived company the machinery cancels, and what is left is an average.**
+No free source publishes an authorised repurchase programme, so the derivation
+sets the ceiling to the repurchases themselves (`deriveModel.js`,
+`authorisedBuybackCeiling.historical`). The engine then computes the percentage
+as repurchases over ceiling, which is **exactly 1.0 in every reported year**, and
+multiplies it back out. The forecast is therefore the plain average of the
+repurchases the company reported, and nothing in it is a judgement about a
+ceiling. Both figures are read from the same filed field, one of them negated on
+the way in, so the result does not depend on which sign convention the source
+uses.
+
+This was described here as a percentage of a ceiling until 2026-09-28, which
+dressed an average up as something more considered. It was found while writing
+the Assumptions sheet (§22): a sheet that has to state the basis of every figure
+is a sheet that has to say what the ceiling *is*, and for a derived company the
+answer was "the spend". `provenance.buybacks` now states the average and says
+that no ceiling is published.
 **Convention:** `CF 5` (discretionary buybacks flagged and conservatively
 defaulted) — partly followed: they are extrapolated from history rather than
 defaulted to zero, which the checklist warns against, but only from years that
@@ -1815,9 +1851,14 @@ flat number, because a hand-built model's path is a judgement worth keeping:
 - **Revenue growth** shifts every segment's growth path by the same delta.
 - **Operating margin** shifts the gross margin path. Gross margin less R&D and
   SG&A is the operating margin and neither of those is changing, so a point on
-  one is a point on the other — except that SBC is a share of operating costs,
-  so the shift is scaled by 1/(1 + SBC share) to make the operating margin move
-  by exactly what the slider says.
+  one is a point on the other. The code then scales the shift by
+  1/(1 + SBC share), which **was** right and is now wrong: it was written when
+  SBC was a share of operating costs, where a point on gross margin also trimmed
+  the SBC charge, and since 2026-09-25 SBC is a share of revenue (§5), which
+  gross margin does not touch. The slider therefore under-moves by that factor.
+  Open as `KI-23`; it is not corrected in place because the correction moves a
+  published figure for every company that reports stock compensation and has to
+  be measured before it ships.
 - **Capital spending** scales the whole capex line by the ratio of where the
   slider sits to where it started, leaving the projection method alone. A model
   whose capex is a rising line stays a rising line.
@@ -1892,12 +1933,23 @@ every closing balance is opening plus movement, every movement is its driver
 times the line it depends on, and the balance check computes rather than being
 asserted.
 
-**It agrees with the site exactly.** Every valued company's workbook returns the
-site's value per share to nine decimal places on both terminal methods; the
-worst difference across the 70 models checked by `npm run verify:workbook` is
-3.87e-9%, which is floating point in the last digit. Each assumption is seeded
-from the model's own year-by-year figure, so it opens agreeing and diverges only
-where the reader changes something. That is the whole point.
+**It agrees with the site exactly, as it opens.** Every valued company's workbook
+returns the site's value per share to nine decimal places on both terminal
+methods; the worst difference across the 70 models checked by
+`npm run verify:workbook` is 3.87e-9%, which is floating point in the last digit.
+Each assumption is seeded from the model's own year-by-year figure, so it opens
+agreeing and diverges only where the reader changes something. That is the whole
+point.
+
+**It does not yet agree under every edit**, which is a weaker claim than the one
+above and the more useful one, because the workbook is only being used once
+someone has started editing it. Thirteen lines are checked after a revenue-growth
+and a margin edit and all of them hold (`npm run verify`, "workbook against
+engine, after an edit"). Two edits outside that set do not: the tax rate, which
+moves the engine's discount rate and not the workbook's (`KI-20`), and the
+terminal growth rate, which re-fades the engine's forecast and not the
+workbook's (`KI-21`). Both are measured in `KNOWN_ISSUES.md` and stated on the
+Assumptions sheet beside the rows they affect.
 
 ### Where the workbook does something different
 
@@ -2016,10 +2068,72 @@ a row there silently breaks the formulas. The DCF sheet's layout is fixed —
 unlevered free cash flow in rows 9–16, discounting 19–30, perpetuity 33–37, exit
 multiple 40–44, the bridge 47–58.
 
-**The sheets.** Cover, 3-StatementModel, DCFModel, the filed statements,
-annexures, ratios, Checks and Sources. The Checks sheet tests that reported
-operating income, pretax income and net income tie to the filing and that the
-balance sheet balances in every year.
+**The sheets.** Cover, Assumptions, 3-StatementModel, DCFModel, the filed
+statements, annexures, ratios, Checks and Sources. The Checks sheet tests that
+reported operating income, pretax income and net income tie to the filing and
+that the balance sheet balances in every year.
+
+### The Assumptions sheet
+
+`excelSheets.ts`, `buildAssumptionsSheet`. Every assumption the forecast rests
+on, on one sheet, in the order the model builds them: revenue growth and its
+fade, each operating margin, the tax rate, capital spending and its split,
+depreciation, the amortisation run-off, all eight working-capital lines, the
+cost of debt, the PIK and revolver rates, the return on cash, the cash cushion,
+the payout ratio, buybacks, issuance, the cost of equity and each of its parts,
+the weights, the terminal growth rate, the exit multiple, the bridge and the
+share count. A reviewer reads one sheet instead of hunting yellow cells across
+ten tabs.
+
+**Two rules hold it together, and both are rules this file has had to learn
+twice.**
+
+- **Every value is a link, never a copy.** A pasted figure is right on the day
+  it is written and wrong the moment a reader edits the assumption it claims to
+  describe — which is exactly when the sheet is being read. Each figure points
+  at the cell it comes from, on the model sheet or the DCF sheet, so the sheet
+  cannot go stale or disagree with the model beside it. Two columns per row, the
+  first and last forecast year, so an assumption held flat reads the same in
+  both and the revenue-growth fade shows where it starts and where it arrives.
+- **Every basis is the engine's own, never the sheet's.** The basis text is read
+  from `provenance`, from `workingCapitalDriversUsed`, from `capexMethodUsed`
+  and from `amortisationAnchor` — the same declarations §6, §7 and §8 describe.
+  This is `KI-4` applied to prose: a sheet that writes its own account of a rule
+  can describe a rule the engine does not use, and nothing would catch it,
+  because the account is not arithmetic and nothing recomputes it.
+
+**Where the engine states no basis, the sheet says NOT RECORDED** and names what
+the cell was seeded from, rather than composing a plausible sentence from what
+the figures appear to show. Building the sheet found three figures in that
+position and closed two of them: stock compensation and buybacks now carry
+`provenance.stockCompensation` and `provenance.buybacks`, and writing the second
+is what turned up the ceiling that was really a spend (§10). A derived company
+should now show no NOT RECORDED at all. The curated Apple file shows nothing but,
+because a hand-built model carries no provenance — which is true of it, and is
+the honest thing for the sheet to say.
+
+**The interest rate on the revolver is the workbook's own assumption**, and the
+one figure in the file that has no counterpart on the site. The engine charges no
+revolver interest — its circuit breaker is on (§9) — so there is no rate to carry
+across, and a revolver that draws needs one here. The row is seeded at the all-in
+rate on term debt, on the reasoning that a revolving facility from the same
+lenders to the same borrower is priced near its term debt. Nothing in a filing
+establishes that, and the sheet says so on the row. **No valuation rests on it:**
+unlevered free cash flow starts from operating profit, so revolver interest
+reaches the balance sheet and the cash schedule and never the value per share.
+It is recorded here rather than in `KNOWN_ISSUES.md` because it is an assumption
+with a stated basis, not a figure whose basis is missing.
+
+**Two of the values it links to do not behave in the file the way they do on the
+site**, and the sheet says so on the row rather than leaving the reader to find
+out: the discount rate does not move when the tax rate does (`KI-20`), and the
+terminal growth rate does not re-fade the forecast (`KI-21`). Both are recorded
+in `KNOWN_ISSUES.md` with their measurements.
+
+**The two rightmost columns are headed and empty.** They belong to the judgement
+layer (`ROADMAP.md` section 2): whether a value is still the default or the
+reader's own, and the reason the reader gave. Reserving the room now means
+adding them later is a change to two columns rather than a relayout.
 
 ---
 

@@ -1794,6 +1794,13 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     R,
     RL,
     modelSheetName: '3-StatementModel',
+    // The Assumptions sheet states the basis of every assumption, and a basis
+    // is something the engine records rather than something a sheet can work
+    // out from the cells: provenance, the declared working-capital drivers, the
+    // capital-spending method, the amortisation anchor.
+    model: M,
+    dcf: D,
+    refused: refusal !== null,
     years,
     nH,
     nT,
@@ -1809,9 +1816,10 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     title,
     band,
     label,
+    wrapText,
     styleHard,
     styleCalc,
-    fmt: { PCT1, MULT, money, money2 },
+    fmt: { PCT1, PCT2, PLAIN2, MULT, money, money2 },
     colors: { OXBLOOD, SUBHEAD, WHITE, BLACK, BLUE, GREY },
     FONT,
   });
@@ -1820,6 +1828,9 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // given an explicit position instead.
   const order = [
     'Cover',
+    // Second, before the model itself: a reviewer who wants to know what the
+    // number rests on should not have to find the model first.
+    'Assumptions',
     '3-StatementModel',
     'Income Statement',
     'Balance Sheet',

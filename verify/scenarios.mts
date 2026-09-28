@@ -290,6 +290,46 @@ for (const sc of scenarios) {
   }));
   console.log(`  statement ties: ${ties.length * nT - tieBad}/${ties.length * nT}; annexure links: ${annex - annexBad}/${annex}`);
 
+  // THE ASSUMPTIONS SHEET IS LINKS, NOT COPIES.
+  //
+  // Its whole claim is that it cannot go stale: every value points at the cell
+  // the model actually uses, so the sheet moves when the reader moves an
+  // assumption. A PASTED NUMBER WOULD PASS EVERY OTHER CHECK IN THIS FILE — no
+  // error cell, no broken tie, nothing out of balance — and be wrong from the
+  // first edit, which is exactly when the sheet is read. Zero error cells would
+  // also pass on an empty sheet, so the count is asserted too.
+  //
+  // Computed cells (COUNT of the forecast columns, say) are not links and are
+  // skipped; what must never appear in a value column is a literal.
+  let links = 0, linkBad = 0, pasted = 0;
+  (g.Assumptions || []).forEach((row, r) => {
+    // Rows above the first band are the header, whose year columns are labels.
+    if (r < 7) return;
+    [FIRST, FIRST + 1].forEach((c) => {
+      const f = row[c];
+      if (f === null || f === undefined || f === '') return;
+      if (typeof f !== 'string' || !f.startsWith('=')) {
+        pasted++;
+        problems.push(`Assumptions ${L(c)}${r + 1} is a pasted value, not a link: ${JSON.stringify(f)}`);
+        return;
+      }
+      const m = f.match(/^='?([^'!]+)'?!(\$?[A-Z]+)(\$?\d+)$/);
+      if (!m) return;
+      links++;
+      const a = raw('Assumptions', r, c);
+      const b = raw(m[1], Number(m[3].replace('$', '')) - 1, colIdx(m[2].replace('$', '')));
+      if (a !== b) {
+        linkBad++;
+        problems.push(`Assumptions ${L(c)}${r + 1}: ${a} vs ${m[1]}!${m[2]}${m[3]} ${b}`);
+      }
+    });
+  });
+  // A floor, not a target: the sheet lists every assumption that reaches the
+  // valuation, and a refused company drops the cost of capital and the bridge.
+  const FLOOR = REFUSED ? 20 : 30;
+  if (links < FLOOR) problems.push(`Assumptions sheet carries only ${links} linked values, expected at least ${FLOOR}`);
+  console.log(`  assumption links: ${links - linkBad}/${links} resolve to their target; pasted values: ${pasted}`);
+
   // PIK: charged once, accrued once, added back once; interest on the switch's basis.
   const S = (row: number) => Array.from({ length: nT }, (_, i) => num(MODEL, row, FIRST + i));
   const cashInt: number[] = [], pikExp: number[] = [], revInt: number[] = [], cfoRecon: number[] = [];

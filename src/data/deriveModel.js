@@ -40,6 +40,21 @@ function clamp(value, low, high, fallback) {
   return Math.min(high, Math.max(low, value));
 }
 
+// WHAT A CLAMP DID, IN WORDS. A figure the clamp replaced is not the company's
+// measurement, and a provenance sentence that names the measurement beside it
+// says something untrue: BP's tax rate read "50.0% — the last reported year's
+// effective rate" when that year's rate was 83.3%, and AMD's read 0.0% when its
+// own was -2.5%. Empty where the company's own figure was used.
+const pct1 = (v) => `${(v * 100).toFixed(1)}%`;
+function clampNote(raw, used, low, high, whyAbsent) {
+  if (!isNum(raw)) return ` — assumed: ${whyAbsent}, so this is the model's default rather than the company's own`;
+  if (raw === used) return '';
+  return (
+    ` — capped: its own ${pct1(raw)} is outside the ${pct1(low)} to ${pct1(high)} this model will forecast, ` +
+    'so the figure is the limit rather than the company\'s own'
+  );
+}
+
 // The middle of a set of figures. One unusual year cannot move it, which is
 // why the other-operating-costs line already used it and why the revenue growth
 // rate now does too.
@@ -1223,8 +1238,10 @@ export function deriveModel(fetched) {
   // otherwise reads as something derived from the filing.
   const atClamp = isNum(rawGrowth) && rawGrowth !== growth;
   provenance.revenueGrowth =
-    `${(growth * 100).toFixed(1)}% in the first forecast year — the median of the ` +
-    `${measuredYears} year-on-year growth ${measuredYears === 1 ? 'rate' : 'rates'} in the reported history` +
+    `${(growth * 100).toFixed(1)}% in the first forecast year — ` +
+    (isNum(rawGrowth)
+      ? `the median of the ${measuredYears} year-on-year growth ${measuredYears === 1 ? 'rate' : 'rates'} in the reported history`
+      : "assumed: the reported history gives no year-on-year growth to measure, so this is the model's default rather than the company's own") +
     `${atClamp ? ` — capped: its own ${(rawGrowth * 100).toFixed(1)}% is beyond the furthest this model extrapolates, so the figure is the limit rather than the company's own` : ''}, then faded in a straight line to the ` +
     `${(TERMINAL_GROWTH * 100).toFixed(1)}% the terminal value assumes for ever, reached in the last forecast year`;
 
@@ -1239,9 +1256,10 @@ export function deriveModel(fetched) {
     isNum(rev) && isNum(cogs[i]) && rev !== 0 ? (rev - cogs[i]) / rev : null
   );
   const grossMargin = clamp(latest(grossMargins), 0.01, 0.95, 0.35);
-  provenance.grossMargin = `${(grossMargin * 100).toFixed(
-    1
-  )}% — the last reported year, held flat`;
+  provenance.grossMargin =
+    `${(grossMargin * 100).toFixed(1)}%` +
+    (isNum(latest(grossMargins)) ? ' — the last reported year, held flat' : ', held flat') +
+    clampNote(latest(grossMargins), grossMargin, 0.01, 0.95, 'the filing reports no cost of sales to measure a gross margin from');
 
   // R&D, SG&A and other operating costs are all read from the SAME year, the
   // last reported one, because other operating costs is defined against that
@@ -1287,16 +1305,22 @@ export function deriveModel(fetched) {
   const otherOperatingCostsMargin = !otherIsIncome
     ? lastOtherShare
     : Math.min(0, Math.max(lastOtherShare, median(otherShares)));
-  const marginText = (label, field, margin) =>
+  const marginText = (label, field, margin, high) =>
     isNum(lastRow[field])
-      ? `${label} ${(margin * 100).toFixed(1)}%`
+      ? `${label} ${(margin * 100).toFixed(1)}%${clampNote(shareOfLastRevenue(lastRow[field]), margin, 0, high, '')}`
       : `${label} not reported in FY${lastRow.fiscalYear}, forecast at nil (its cost is inside other operating costs)`;
+  const otherText = otherIsIncome
+    ? `other operating costs are income in the last reported year (${(-lastOtherShare * 100).toFixed(1)}% of revenue), ` +
+      `so the smaller of that and the median across the reported years is forecast: ${(-otherOperatingCostsMargin * 100).toFixed(1)}% of revenue as income`
+    : `other operating costs ${(otherOperatingCostsMargin * 100).toFixed(1)}% of revenue — the last reported year, held flat`;
+  // One sentence per line as well as the three together, so the workbook's
+  // Assumptions sheet can give each row its own basis.
+  provenance.rnd = `${marginText('R&D', 'rnd', rndMargin, 0.5)}${isNum(lastRow.rnd) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
+  provenance.sga = `${marginText('SG&A', 'sga', sgaMargin, 0.6)}${isNum(lastRow.sga) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
+  provenance.otherOperatingCosts = otherText;
   provenance.operatingCosts =
-    `${marginText('R&D', 'rnd', rndMargin)}; ${marginText('SG&A', 'sga', sgaMargin)}; ` +
-    (otherIsIncome
-      ? `all held flat at the last reported year; other operating costs are income in that year (${(-lastOtherShare * 100).toFixed(1)}% of revenue), ` +
-        `so the smaller of that and the median across the reported years is forecast: ${(-otherOperatingCostsMargin * 100).toFixed(1)}% of revenue as income`
-      : `other operating costs ${(otherOperatingCostsMargin * 100).toFixed(1)}% of revenue — the last reported year, held flat`);
+    `${marginText('R&D', 'rnd', rndMargin, 0.5)}; ${marginText('SG&A', 'sga', sgaMargin, 0.6)}; ` +
+    (otherIsIncome ? `all held flat at the last reported year; ${otherText}` : otherText);
   provenance.nonCashCharges =
     'the margins above are as filed; depreciation and stock compensation are taken out of them at ' +
     'the share they took in the last reported year, then charged as their own lines';
@@ -1375,7 +1399,8 @@ export function deriveModel(fetched) {
   provenance.taxRate =
     `${(taxRate * 100).toFixed(1)}% — the last reported year's effective rate: filed tax over filed pretax income, ` +
     'which is operating profit after interest and after other non-operating income. The forecast carries all three, ' +
-    'so the rate is applied to the base it was measured on';
+    'so the rate is applied to the base it was measured on' +
+    clampNote(latest(effectiveTaxRates), taxRate, 0, 0.5, 'the filing reports no tax and pretax income to measure a rate from');
 
   // CAPEX — "in line with historical trends as a % of sales". Capex is lumpy
   // year to year in a way margins are not, so this one stays an average: a
@@ -1399,9 +1424,10 @@ export function deriveModel(fetched) {
   provenance.capex = intensityUsable
     ? `replacement of what wears out, plus ${(ppeToRevenue * 100).toFixed(1)}% of each year's increase in revenue — ` +
       `this company's own net PP&E against revenue, averaged over the ${intensities.filter(isNum).length} reported years that give both ` +
-      `(capital spending averaged ${(capexRatio * 100).toFixed(1)}% of revenue across those years)`
+      (isNum(mean(capexRatios)) ? `(capital spending averaged ${(mean(capexRatios) * 100).toFixed(1)}% of revenue across those years)` : '(the filing reports no capital spending to average)')
     : `${(capexRatio * 100).toFixed(1)}% of revenue — average of the reported years; ` +
-      'the filing does not give net PP&E against revenue, so capital spending cannot be split into replacement and growth';
+      'the filing does not give net PP&E against revenue, so capital spending cannot be split into replacement and growth' +
+      clampNote(mean(capexRatios), capexRatio, 0.001, 0.4, 'the filing reports no capital spending against revenue either');
 
   const splitYears = depreciationBasis.filter((b) => b.basis === 'filed depreciation of PP&E' || b.basis.startsWith('filed D&A less')).length;
   provenance.depreciation = isNum(filedDepreciationRate)
@@ -1523,8 +1549,12 @@ export function deriveModel(fetched) {
   );
   const payoutRatio = clamp(mean(payoutRatios), 0, 1, 0);
   provenance.dividends = rows.some((r) => isNum(r.dividendsPaid))
-    ? `${(payoutRatio * 100).toFixed(1)}% of net income — average payout ratio across the reported years that report ` +
-      'dividends, measured on pretax income less tax, which is what the forecast\'s net income contains'
+    ? isNum(mean(payoutRatios))
+      ? `${(payoutRatio * 100).toFixed(1)}% of net income — average payout ratio across the reported years that report ` +
+        'dividends, measured on pretax income less tax, which is what the forecast\'s net income contains' +
+        clampNote(mean(payoutRatios), payoutRatio, 0, 1, '')
+      : '0.0% of net income — assumed: dividends are reported, but in no year with pretax income less tax above nil, ' +
+        "so no payout ratio can be measured and none is forecast. This is the model's default rather than the company's own"
     : 'no dividends are reported in any year, so none are forecast';
 
   // INTEREST — the cheat sheet computes interest as average debt x an interest
@@ -1589,6 +1619,40 @@ export function deriveModel(fetched) {
   provenance.interest = `borrowings of ${Math.round(
     forecastDebt
   ).toLocaleString()} at ${costOfDebtSource}`;
+
+  // STOCK COMPENSATION — a share of REVENUE, whatever the engine's field is
+  // called. The basis moved from operating expense to revenue on 2026-09-25
+  // (METHODOLOGY.md §5); until 2026-09-28 nothing said per company which year
+  // it was measured from or what that year reported, so the workbook's
+  // Assumptions sheet had to print NOT RECORDED against a figure that is
+  // charged in operating profit and added back in unlevered free cash flow.
+  const sbcShare = shareOfLastRevenue(isNum(lastRow.stockComp) ? Math.abs(lastRow.stockComp) : null);
+  provenance.stockCompensation = isNum(sbcShare)
+    ? `${(sbcShare * 100).toFixed(1)}% of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat. ` +
+      'It stays a cost: EBITDA is before D&A only, so the multiple it is compared against is the one the peer ' +
+      'EV/EBITDA figures were computed from, and the dilution it causes is carried in the share count rather than ' +
+      'waved through as a non-cash add-back'
+    : `nil: FY${lastRow.fiscalYear} reports no stock based compensation, so none is charged as its own line and none ` +
+      'is added back to cash from operations. Any the company paid stays inside its cost lines';
+
+  // BUYBACKS — the average of what was actually repurchased.
+  //
+  // The engine's machinery is a ceiling times the share of it spent, which is
+  // what the curated Apple file carries: real authorised ceilings, and a
+  // percentage that means something against them. A DERIVED company has no
+  // authorised ceiling in its data, so the ceiling is set to the repurchases
+  // themselves and the percentage comes out at exactly 1.0 in every reported
+  // year — the two cancel, and the forecast is simply the average of the
+  // reported spend. Saying so plainly is the honest basis; describing it as a
+  // percentage of a ceiling would dress up an average as something it is not
+  // (METHODOLOGY.md §10).
+  const reportedBuybacks = rows.map((r) => (isNum(r.buybacks) ? Math.abs(r.buybacks) : null)).filter(isNum);
+  provenance.buybacks = reportedBuybacks.length
+    ? `${Math.round(mean(reportedBuybacks)).toLocaleString()} a year — the average of the repurchases reported across ` +
+      `${reportedBuybacks.length} reported year${reportedBuybacks.length === 1 ? '' : 's'}, held flat. Years that ` +
+      'report none are left out rather than counted as nil. No authorised ceiling is published for this company, so ' +
+      'the engine carries the spend itself as the ceiling and the forecast reduces to that average'
+    : 'no share repurchases are reported in any year, so none are forecast';
 
   const assumptions = {
     grossMargin: Array(FORECAST_YEARS).fill(grossMargin),

@@ -639,23 +639,30 @@ export function buildModel(data) {
   const operatingCostsFiled = (t) =>
     (S.cogsReportedBasis[t] ?? 0) + (S.rndReportedBasis[t] ?? 0) +
     (S.sgaReportedBasis[t] ?? 0) + (S.otherOperatingCostsReportedBasis[t] ?? 0);
-  S.sbcPercentOfOpex = blank();
+  // NAMED FOR WHAT IT HOLDS. This was `sbcPercentOfOpex` until 2026-09-28,
+  // three years after it stopped holding a share of operating expense and
+  // started holding a share of revenue. The assumption key it reads is still
+  // `sbcAsPercentOfOperatingExpenses`, because that is what the curated Apple
+  // file's own workbook calls it and renaming a hand-authored input would make
+  // the fixture stop matching its source; the series this engine computes is
+  // ours, and now says what it is.
+  S.sbcPercentOfRevenue = blank();
   for (let t = 0; t < nH; t++) {
     // Null in a year stock compensation is not reported.
-    S.sbcPercentOfOpex[t] = isNum(S.stockBasedCompensation[t]) && S.revenue[t]
+    S.sbcPercentOfRevenue[t] = isNum(S.stockBasedCompensation[t]) && S.revenue[t]
       ? S.stockBasedCompensation[t] / S.revenue[t]
       : null;
   }
   // A rule that finds no reported year gives nil; the derivation already sets
   // nil explicitly, and says so, where the last reported year has none.
   const sbcPct = a.sbcAsPercentOfOperatingExpenses === 'lastHistoricalYear'
-    ? S.sbcPercentOfOpex[nH - 1] ?? 0
+    ? S.sbcPercentOfRevenue[nH - 1] ?? 0
     : a.sbcAsPercentOfOperatingExpenses === 'avgOfHistory'
-      ? avgReported(S.sbcPercentOfOpex.slice(0, nH)) ?? 0
+      ? avgReported(S.sbcPercentOfRevenue.slice(0, nH)) ?? 0
       : a.sbcAsPercentOfOperatingExpenses;
 
   for (let t = nH; t < nH + nF; t++) {
-    S.sbcPercentOfOpex[t] = sbcPct;
+    S.sbcPercentOfRevenue[t] = sbcPct;
     S.stockBasedCompensation[t] = sbcPct * S.revenue[t];
   }
 
