@@ -439,7 +439,7 @@ an item ships with its hash, in the same commit as the work.
 | Commit | What |
 |---|---|
 | `aca809e` | The workbook's cost of capital and growth fade computed rather than pasted: `KI-20` and `KI-21` fixed, the cash cushion fixed with them, the DCF sheet's row numbers moved into one map, and `KI-24` opened for the cost of debt. |
-| `PENDING3` | The workbook's cost of debt averaged off its own debt schedule rather than pasted: `KI-24` fixed, and the absent-rate case measured rather than assumed. |
+| `a96b85f` | The workbook's cost of debt averaged off its own debt schedule rather than pasted: `KI-24` fixed, and the absent-rate case measured rather than assumed. |
 | `fac1d4d` | The Assumptions sheet: every assumption, its value linked live to the cell it comes from, and the basis the engine recorded for it. Four provenance sentences corrected where a clamp had replaced the measurement they named, two written where none existed (`KI-22`, opened and retired here), `METHODOLOGY.md` §10 corrected on what the buyback machinery does for a derived company, and `sbcPercentOfOpex` renamed to what it holds. `KI-20`, `KI-21` and `KI-23` opened. |
 | `3332cf7` | Shared design tokens; contrast fixed on both grounds; the red square in one component. |
 | `239ccae` | Eight explainer pages at `/learn/` as static HTML. |
