@@ -1982,18 +1982,30 @@ the engine no longer do:
   with one revenue line to fade: a multi-segment model keeps its seeded rates,
   which `revenueGrowthRuleUsed` declares (`KI-21`).
 
-**A sweep for the same pattern found a third and fixed it.** The cash cushion was
-five typed amounts where the engine applies the company's own lowest
+**A sweep for the same pattern found two more and fixed both.** The cash cushion
+was five typed amounts where the engine applies the company's own lowest
 cash-to-revenue ratio to each forecast year's revenue, so the floor stayed put
-while the revenue under it moved. Every forecast year after the first now reads
-that share off its own year's revenue. One candidate was left alone and is worth
-naming: the **cost of debt before tax** is a measured constant here, where the
-engine averages the debt schedule's own rates across the last reported and every
-forecast year. Writing it as a formula over those rows would make a debt-rate
-edit reach the discount rate, which is what the engine does; it is not done
-because the engine skips years whose rate is absent and reproducing that in a
-formula is where a subtle disagreement would come from. It is recorded in
-`KNOWN_ISSUES.md` rather than guessed at.
+while the revenue under it moved; every forecast year after the first now reads
+that share off its own year's revenue.
+
+And the **cost of debt before tax** was one constant where `computeWACC` averages
+the debt schedule's own all-in rate across the last reported year and every
+forecast year — so editing the interest rate on debt moved interest, profit and
+cash and left the rate that discounts them alone. Measured by scaling that
+interest by half again on both sides: **36 of 56 valued companies parted by more
+than 1%, median 1.67%, Vodafone by 33.8%**. The row is now that average,
+written over the schedule's own rate rows, and none of the 56 parts at all.
+
+**It names the years rather than averaging a range, and that was worth measuring
+first.** The engine skips a year whose rate it could not measure; the workbook
+seeds such a year at 4.5% on the rate rows, which is indistinguishable from a
+company that really pays 4.5%, so a plain `AVERAGE` over the columns would
+quietly fold it in. The generator knows which years the engine used, so the
+formula names those columns. In the event it never bites: of the 56, **two have
+an absent year and both owe nothing at all**, so the debt weight is nil and the
+cost of debt cannot reach their answer — the largest WACC error a plain average
+would have caused is 0.000000000 points. The honest reason to name the columns
+anyway is the company this will apply to after the next refetch.
 
 ### Where the workbook does something different
 

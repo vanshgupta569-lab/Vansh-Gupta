@@ -64,7 +64,10 @@ mistakes and would never be fixed:
   revenue, fixed 2026-09-28) and `KI-20` with `KI-21` (the workbook's discount
   rate not moving with its tax rate, and its terminal growth rate not re-fading
   its forecast, both fixed 2026-09-28; the sweep that followed them fixed the
-  cash cushion the same way and opened `KI-24` for the cost of debt). Moved out on
+  cash cushion the same way and opened `KI-24` for the cost of debt) and `KI-24`
+  itself (the workbook's cost of debt a constant where the engine averages the
+  debt schedule's own rates, fixed 2026-09-28 once the absent-rate cases had been
+  measured and found to reach no valued company's answer). Moved out on
   2026-09-27: `KI-11`, to
   `DATA_CONSTRAINTS.md` — how much plant a change in revenue is worth is a
   relationship the filings do not settle, and the three companies where the
@@ -89,40 +92,11 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-| ID | What is wrong | Worst | Valued companies affected |
-|---|---|---|---|
-| `KI-24` | The workbook's cost of debt does not move with its own debt rates | not measured | every company with debt |
-
-### `KI-24` — the cost of debt is a constant where the engine averages a schedule
-
-**Where:** `src/data/excelExport.ts`, the DCF sheet's cost-of-debt-before-tax row
-against the model sheet's `Cash interest rate on debt` and
-`PIK interest rate on debt`.
-
-`computeWACC` takes the cost of debt as the average of the debt schedule's own
-weighted-average rate across the last reported year and every forecast year. The
-workbook carries that average as one typed figure, so editing the interest rate
-on debt changes interest expense, profit and cash — and leaves the rate that
-discounts them alone. It is the same shape as `KI-20` and `KI-21`, both fixed on
-2026-09-28, and it was found in the sweep that followed them rather than by a
-reader hitting it.
-
-**Not measured, and not fixed on reasoning alone.** Writing it as a formula over
-those two rows is a few characters. Reproducing the engine's handling of a year
-whose rate is **absent** is not: `computeWACC` skips those years and averages
-what remains, and an Excel average over a range containing a blank does the same
-thing only by accident. A formula that silently diverged on the companies whose
-filings stop reporting interest would be worse than the constant, which is at
-least right at rest. The fix needs the absent-year cases enumerated from the
-payload set first.
-
-**What it would take:** average `(cash rate + PIK rate)` across the last reported
-and every forecast column, with the absent years established by measurement, and
-a sweep confirming no valued company moves at rest.
+**None open.**
 
 ## What the 28 September run of entries was about
 
-Five were opened on 2026-09-28 and four closed the same day, all from one job:
+Five were opened on 2026-09-28 and all five closed the same day, all from one job:
 building the workbook's Assumptions sheet. Writing down what every assumption
 rests on means following each one to the cell it drives, and four of them stopped
 short of where the engine carries them.
@@ -133,8 +107,15 @@ share of revenue, a scaling that was correct when written and made wrong by a
 change elsewhere. `KI-20` and `KI-21` were typed constants on the DCF sheet and
 the model sheet where the engine computes a figure: the discount rate did not
 move with the tax rate, and the terminal growth rate did not re-fade the
-forecast. `KI-24`, the one still open, is the same pattern again, found by
-sweeping for it rather than by hitting it.
+forecast. `KI-24` was the same pattern again, found by sweeping for it rather
+than by hitting it: the cost of debt was a constant where the engine averages
+the debt schedule's own rates. It was left open for a day on the grounds that
+reproducing the engine's handling of a year with no filed interest might need
+something the workbook does not carry — then measured, and it does not. Of the
+56 valued companies, two have such a year and both of them owe nothing at all,
+so the debt weight is nil and the cost of debt cannot reach their answer. The
+formula names the years the engine actually used rather than averaging a range,
+so the case still cannot bite the company it one day applies to.
 
 **All five are the `KI-4` shape**, and `KI-4`'s lesson is the one that matters:
 a workbook seeded from the engine's own answer agrees exactly at rest and parts

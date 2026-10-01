@@ -1729,17 +1729,49 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     { unit: 'x' }
   );
   vOne(DR.costOfEquity, 'Cost of equity', `${F}${DR.riskFree}+${F}${DR.equityBeta}*${F}${DR.mrp}`, PCT2, { unit: '%' });
-  // What this company pays to borrow, before the tax shield. Measured from its
-  // own filed interest over its own borrowings; 4.5% assumed where that cannot
-  // be read. A company that owes nothing has no cost of debt, and the weight
-  // below is nil, so the product is nil either way.
-  vInput(
-    DR.preTaxCostOfDebt,
-    'Cost of debt, before tax',
-    D.waccDetail?.costOfDebt ?? 0,
-    PCT2,
-    { unit: '%' }
-  );
+  // What this company pays to borrow, before the tax shield — AVERAGED OFF THE
+  // DEBT SCHEDULE, not pasted.
+  //
+  // `computeWACC` averages the schedule's own all-in rate across the last
+  // reported year and every forecast year, skipping any year whose rate it could
+  // not measure. This row carried that average as one constant, so editing the
+  // interest rate on debt moved interest, profit and cash and left the rate that
+  // discounts them alone (`KI-24`).
+  //
+  // THE YEARS THE ENGINE ACTUALLY USED ARE KNOWN HERE, so the formula names those
+  // columns rather than averaging a range and hoping the blanks line up. That is
+  // what made this worth measuring before writing: an absent year is seeded at
+  // 4.5% on the rate rows, which is indistinguishable from a company that really
+  // pays 4.5%, so a plain AVERAGE over the range would quietly include it. In
+  // the event it never bites — of the 56 valued companies, two have an absent
+  // year and both of them owe nothing at all, so the debt weight is nil and the
+  // cost of debt cannot reach the answer (measured 2026-09-28, largest WACC
+  // error 0.000000000 points). Naming the columns costs nothing and is right for
+  // the company this does bite one day.
+  const codYears: number[] = [];
+  for (let t = nH - 1; t <= nT - 1; t++) {
+    if (isNum(M.debt?.weightedAverageRate?.[t])) codYears.push(t);
+  }
+  // The rate rows live on the MODEL sheet, so every reference is qualified.
+  // Without the prefix these read the DCF sheet's own empty cells, which is a
+  // cost of debt of nil and a discount rate well below the real one — Vodafone
+  // came out 114% above the site before the prefix went in.
+  const allIn = (t: number) =>
+    `'3-StatementModel'!${L(cOf(t))}${R.debtRate}+'3-StatementModel'!${L(cOf(t))}${R.pikRate}`;
+  if (codYears.length) {
+    vOne(
+      DR.preTaxCostOfDebt,
+      `Cost of debt, before tax — the schedule's own rate, averaged over ${codYears.length} year${codYears.length === 1 ? '' : 's'}`,
+      `(${codYears.map(allIn).join('+')})/${codYears.length}`,
+      PCT2,
+      { unit: '%' }
+    );
+  } else {
+    // No year gives a rate, which for every company seen so far means no debt.
+    // The engine carries no cost of debt at all there — and no is not zero, so
+    // the row says what it is rather than showing a rate nobody pays.
+    vInput(DR.preTaxCostOfDebt, 'Cost of debt, before tax — none: this company reports no borrowings', 0, PCT2, { unit: '%' });
+  }
   vOne(DR.costOfDebt, 'After tax cost of debt', `${F}${DR.preTaxCostOfDebt}*(1-${TAX_LAST})`, PCT2, { unit: '%' });
   // Gross debt at book against equity at market: how the business is financed.
   // Cash is not netted off here; it comes back in the bridge below.
