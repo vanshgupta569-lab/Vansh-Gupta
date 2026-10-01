@@ -107,7 +107,19 @@ export function buildModel(data) {
     }
     S.segments[name] = rev;
     S.segmentGrowth[name] = gr;
+    // WHICH RULE GREW THE REVENUE, carried on the model for the same reason
+    // the working-capital drivers and the capital-spending method are: so the
+    // workbook writes the rule rather than the five numbers the rule produced.
+    // Seeded with those numbers it agreed with the site exactly and parted from
+    // it the moment the terminal rate moved, because moving that rate re-fades
+    // every forecast year here and moved nothing there (`KI-21`).
+    S.revenueGrowthRuleUsed = fade ? { method: 'fadeToTerminal', start: fade.start } : { method: 'path' };
   }
+
+  // The workbook carries ONE revenue line, so it can only write the fade as a
+  // formula when there is one segment to fade. A multi-segment model (the
+  // curated Apple file) keeps its seeded rates there, and the sheet says so.
+  if (segmentNames.length !== 1) S.revenueGrowthRuleUsed = { method: 'path' };
 
   // ------------------------------------------------------ 2. INCOME STATEMENT
   S.revenue = blank();

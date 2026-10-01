@@ -159,6 +159,63 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   const cOf = (i: number) => FIRST + i;
   const lastCol = FIRST + nT - 1;
 
+  // ---- THE DCF SHEET'S ROW NUMBERS, IN ONE PLACE --------------------------
+  //
+  // This sheet used to hard-code its row numbers into sixty-odd formulas, which
+  // `CONVENTIONS.md` FD 2 warns against for the obvious reason: inserting a row
+  // silently points every formula below it at the wrong line. That stopped being
+  // hypothetical the moment the cost of capital needed two more rows for the
+  // asset beta and the pre-tax cost of debt (`KI-20`), so the numbers live here
+  // now and the formulas are written from them. The model sheet has had a row
+  // registry from the start; this is the same idea, arranged by hand because the
+  // layout is fixed rather than built up line by line.
+  //
+  // Everything below is derived from the band positions, so moving a band moves
+  // its rows with it.
+  const DR = (() => {
+    const ufcf = 8;
+    const disc = 18;
+    // Each band leaves a blank row above it, so the offsets are one more than
+    // the rows the band before it uses.
+    const perp = disc + 16;
+    const exit = perp + 7;
+    const bridge = exit + 7;
+    const rest = bridge + 14;
+    return {
+      bandUfcf: ufcf,
+      ebit: ufcf + 1, taxRate: ufcf + 2, ebiat: ufcf + 3, da: ufcf + 4, sbc: ufcf + 5,
+      wc: ufcf + 6, capex: ufcf + 7, ufcf: ufcf + 8,
+
+      bandDisc: disc,
+      riskFree: disc + 1, mrp: disc + 2,
+      // Two rows the sheet did not carry before: the beta the business has
+      // before borrowing, and the rate the company borrows at before tax. Both
+      // are what the engine actually starts from, and both are needed here for
+      // the two rows under them to be arithmetic instead of pasted answers.
+      assetBeta: disc + 3, equityBeta: disc + 4, costOfEquity: disc + 5,
+      preTaxCostOfDebt: disc + 6, costOfDebt: disc + 7,
+      weightEquity: disc + 8, weightDebt: disc + 9, wacc: disc + 10,
+      period: disc + 11, factor: disc + 12, pv: disc + 13, pvSum: disc + 14,
+
+      bandPerp: perp,
+      growth: perp + 1, normalised: perp + 2, tvPerp: perp + 3, pvTvPerp: perp + 4, evPerp: perp + 5,
+
+      bandExit: exit,
+      multiple: exit + 1, finalEbitda: exit + 2, tvExit: exit + 3, pvTvExit: exit + 4, evExit: exit + 5,
+
+      bandBridge: bridge,
+      debt: bridge + 1, cash: bridge + 2, netDebt: bridge + 3, minority: bridge + 4,
+      preferred: bridge + 5, shares: bridge + 6, vpsPerp: bridge + 7, vpsExit: bridge + 8,
+      spread: bridge + 9, vpsOne: bridge + 10, price: bridge + 11, premium: bridge + 12,
+
+      bandRest: rest,
+      pvYears: rest + 1, pvTerminal: rest + 2, shareBeyond: rest + 3, benchmark: rest + 4,
+      difference: rest + 5, gLow: rest + 6, gHigh: rest + 7, wLow: rest + 8, wHigh: rest + 9,
+      notes: rest + 11,
+    };
+  })();
+
+
   const at = (s: any, i: number) => (Array.isArray(s) && isNum(s[i]) ? s[i] : null);
   const UNIT = unitLabel.includes('million') ? `${currencySymbol} M` : currencySymbol;
 
@@ -496,6 +553,12 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
             if (v !== null) cell.value = v;
             styleHard(cell, fmt, { italic: true });
           }
+        } else if (o.forecastFormula && i > nH) {
+          // A RULE, NOT THE NUMBERS THE RULE PRODUCED. Only the first forecast
+          // year stays an input; the rest are computed from it, so a reader who
+          // moves either end gets the same path the engine would build.
+          cell.value = { formula: o.forecastFormula(i) } as any;
+          styleCalc(cell, fmt, { italic: true });
         } else {
           const v = seed(i);
           cell.value = v === null ? 0 : v;
@@ -611,16 +674,45 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     bold: true,
     indent: 0,
   });
+  // THE FADE IS A RULE IN THIS FILE, NOT FIVE NUMBERS.
+  //
+  // The engine fades the measured growth rate in a straight line to the
+  // terminal rate, reaching it in the last forecast year, and it reads that
+  // terminal rate when it builds the path — so moving the terminal rate
+  // re-fades every forecast year. This row was seeded with the five rates the
+  // fade produced, which agreed with the site exactly and then stopped agreeing
+  // the moment anyone moved the terminal rate on the DCF sheet: 51 of 56 valued
+  // companies parted by more than 1% on a one-point move, AbbVie by 3.7%
+  // (`KI-21`).
+  //
+  // Now the first forecast year is the input and every later year interpolates
+  // between it and the terminal rate on the DCF sheet, which is the fade
+  // written out. Both ends are editable and the line between them follows.
+  //
+  // Only where the engine says it faded, and only with one revenue line to fade
+  // (`revenueGrowthRuleUsed`). A multi-segment model keeps its seeded rates.
+  const fadeRule = M.revenueGrowthRuleUsed?.method === 'fadeToTerminal' && nF > 1;
+  const gRef = `DCFModel!$${L(FIRST)}$${DR.growth}`;
   driver(
     'revGrowth',
-    'Revenue growth',
+    fadeRule
+      ? 'Revenue growth — fades in a straight line to the terminal rate on the DCF sheet'
+      : 'Revenue growth',
     (c, p, i) => (i > 0 && has(M.revenue, i - 1) ? `${c}${R.rev}/${p}${R.rev}-1` : null),
     (i) => {
       const now = at(M.revenue, i);
       const prev = at(M.revenue, i - 1);
       return isNum(now) && isNum(prev) && prev !== 0 ? now / prev - 1 : 0;
     },
-    PCT1
+    PCT1,
+    fadeRule
+      ? {
+          forecastFormula: (i: number) => {
+            const start = `$${L(cOf(nH))}$${R.revGrowth}`;
+            return `${start}+(${gRef}-${start})*${i - nH}/${nF - 1}`;
+          },
+        }
+      : {}
   );
   driver(
     'gm',
@@ -1255,21 +1347,40 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // draw fell off the balance sheet the following year without ever being
   // repaid, and the balance check failed from the second year of borrowing.
   sub('Revolver');
-  // The engine sizes its revolver against a minimum cash balance; recover it
-  // from the engine's own excess-cash line (opening cash less excess cash).
+  // The engine sizes its revolver against a minimum cash balance.
+  //
+  // THE CUSHION IS A SHARE OF REVENUE, so it is written as one. The engine
+  // applies the company's own lowest cash-to-revenue ratio to each forecast
+  // year's revenue, which means a reader who changes revenue growth changes the
+  // cushion too. This row carried the five amounts that rule produced, so the
+  // floor stayed put while the revenue under it moved — the same pattern as
+  // `KI-20` and `KI-21`, found in the sweep that followed them. Where the rule
+  // is a flat level instead (the curated Apple file's 100,000), the level is
+  // what the row carries, because that is what the engine applies.
+  const cushionPct = M.minimumCashPercentOfRevenue;
   driver(
     'minCash',
     // The basis, on the row, because a floor that sizes every revolver movement
-    // should not be a number nobody can account for (KI-9). The engine carries
-    // the figure it actually used, so this reads it rather than recovering it
-    // by subtracting the excess-cash line from the opening balance.
-    M.minimumCashPercentOfRevenue
-      ? `Minimum cash balance — ${(M.minimumCashPercentOfRevenue * 100).toFixed(1)}% of revenue, the least this company has operated on`
+    // should not be a number nobody can account for (KI-9).
+    cushionPct
+      ? `Minimum cash balance — ${(cushionPct * 100).toFixed(1)}% of revenue, the least this company has operated on`
       : 'Minimum cash balance',
     null,
     (i) => (i < nH ? null : at(M.minimumCashUsed, i) ?? 0),
     money(),
-    { unit: UNIT }
+    {
+      unit: UNIT,
+      // Where the cushion is a share of revenue, every forecast year after the
+      // first reads it off that year's revenue. The first stays an input, so a
+      // reader who knows of a covenant minimum can still type one in — and the
+      // years after it follow the same share of their own revenue.
+      ...(cushionPct
+        ? {
+            forecastFormula: (i: number) =>
+              `${L(cOf(i))}${R.rev}*($${L(cOf(nH))}$${R.minCash}/$${L(cOf(nH))}$${R.rev})`,
+          }
+        : {}),
+    }
   );
   bopRow('revBop', 'Revolver, beginning of period', at(M.revolver?.beginning, 0) ?? at(M.balanceSheet?.revolver, 0) ?? 0, 'revEnd');
 
@@ -1547,35 +1658,94 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     styleInput(cell, fmt);
   };
 
-  band(V, 8, 'Unlevered free cash flow', OXBLOOD, WHITE, fLast);
-  vRow(9, 'EBIT', (c, i) => `'3-StatementModel'!${mCol(i)}${R.ebit}`, money(currencySymbol), { cross: true, bold: true });
-  vRow(10, 'Tax rate', (c, i) => `'3-StatementModel'!${mCol(i)}${R.taxRate}`, PCT1, {
+  // The market capitalisation the engine weights capital on: the share count and
+  // the price, both on this sheet, so a reader who changes either moves the
+  // weights and the relevered beta exactly as the engine would.
+  const MCAP = `${F}${DR.shares}*${F}${DR.price}`;
+  // The tax rate the engine builds its cost of capital from is the LAST forecast
+  // year's, not the first (`computeWACC` reads `M.taxRate[lastFcst]`).
+  const TAX_LAST = `'3-StatementModel'!${L(cOf(nT - 1))}${R.taxRate}`;
+
+  band(V, DR.bandUfcf, 'Unlevered free cash flow', OXBLOOD, WHITE, fLast);
+  vRow(DR.ebit, 'EBIT', (c, i) => `'3-StatementModel'!${mCol(i)}${R.ebit}`, money(currencySymbol), { cross: true, bold: true });
+  vRow(DR.taxRate, 'Tax rate', (c, i) => `'3-StatementModel'!${mCol(i)}${R.taxRate}`, PCT1, {
     cross: true,
     italic: true,
     indent: 2,
     unit: '%',
   });
-  vRow(11, 'EBIAT', (c) => `${c}9*(1-${c}10)`, money(), { bold: true, indent: 0 });
-  vRow(12, 'Plus: depreciation & amortization', (c, i) => `'3-StatementModel'!${mCol(i)}${R.da}`, money(), { cross: true });
-  vRow(13, 'Plus: stock based compensation', (c, i) => `'3-StatementModel'!${mCol(i)}${R.sbc}`, money(), { cross: true });
-  vRow(14, 'Movements in working capital', (c, i) => `'3-StatementModel'!${mCol(i)}${R.cfWc}`, money(), { cross: true });
-  vRow(15, 'Less: capital expenditure', (c, i) => `-'3-StatementModel'!${mCol(i)}${R.ppeCapex}`, money(), { cross: true });
-  vRow(16, 'Unlevered free cash flow', (c) => `${c}11+${c}12+${c}13+${c}14+${c}15`, money(currencySymbol), {
+  vRow(DR.ebiat, 'EBIAT', (c) => `${c}${DR.ebit}*(1-${c}${DR.taxRate})`, money(), { bold: true, indent: 0 });
+  vRow(DR.da, 'Plus: depreciation & amortization', (c, i) => `'3-StatementModel'!${mCol(i)}${R.da}`, money(), { cross: true });
+  vRow(DR.sbc, 'Plus: stock based compensation', (c, i) => `'3-StatementModel'!${mCol(i)}${R.sbc}`, money(), { cross: true });
+  vRow(DR.wc, 'Movements in working capital', (c, i) => `'3-StatementModel'!${mCol(i)}${R.cfWc}`, money(), { cross: true });
+  vRow(DR.capex, 'Less: capital expenditure', (c, i) => `-'3-StatementModel'!${mCol(i)}${R.ppeCapex}`, money(), { cross: true });
+  vRow(DR.ufcf, 'Unlevered free cash flow', (c) => `${c}${DR.ebiat}+${c}${DR.da}+${c}${DR.sbc}+${c}${DR.wc}+${c}${DR.capex}`, money(currencySymbol), {
     bold: true,
     indent: 0,
   });
 
-  band(V, 18, 'Discounting', OXBLOOD, WHITE, fLast);
-  vInput(19, 'Risk free rate', D.waccDetail?.riskFreeRate ?? 0.045, PCT2, { unit: '%' });
-  vInput(20, 'Market risk premium', D.waccDetail?.marketRiskPremium ?? 0.05, PCT2, { unit: '%' });
-  vInput(21, 'Beta', D.waccDetail?.beta ?? 1, PLAIN2, { unit: 'x' });
-  vOne(22, 'Cost of equity', `${F}19+${F}21*${F}20`, PCT2, { unit: '%' });
-  vInput(23, 'After tax cost of debt', D.waccDetail?.afterTaxCostOfDebt ?? 0.03, PCT2, { unit: '%' });
+  // ---- THE COST OF CAPITAL IS COMPUTED HERE, NOT PASTED IN ----------------
+  //
+  // Every rate below used to be a typed constant lifted from the engine's own
+  // answer: the beta already relevered, the cost of debt already tax-effected,
+  // the weights already struck. The figures were right, and they stayed right
+  // only while nothing was edited. Change the tax rate on the model sheet and
+  // the engine relevers beta on it and tax-effects the cost of debt with it,
+  // while this sheet held both still — 18 of 56 valued companies parting by
+  // more than 1% on a five-point tax edit, three by more than 5%, Vodafone by
+  // 12.2% (`KI-20`). The same was true of the share price: it sets market
+  // capitalisation, which sets the weights.
+  //
+  // So the two figures the engine actually starts from are carried as inputs —
+  // the ASSET beta, and the cost of debt BEFORE tax — and everything built on
+  // them is a formula. This is the third instance of the `KI-4` pattern: a
+  // workbook that agrees at rest because it was seeded from the answer, and
+  // parts from the engine on the first edit, which is when anyone reads it.
+  band(V, DR.bandDisc, 'Discounting', OXBLOOD, WHITE, fLast);
+  vInput(DR.riskFree, 'Risk free rate', D.waccDetail?.riskFreeRate ?? 0.045, PCT2, { unit: '%' });
+  vInput(DR.mrp, 'Market risk premium', D.waccDetail?.marketRiskPremium ?? 0.05, PCT2, { unit: '%' });
+  // The risk of the business before borrowing. A flat 1.0 for a derived
+  // company; the curated file's own beta where it carries one.
+  vInput(
+    DR.assetBeta,
+    D.waccDetail?.assetBeta != null ? 'Asset beta, the business before borrowing' : 'Beta, as carried',
+    D.waccDetail?.assetBeta ?? D.waccDetail?.beta ?? 1,
+    PLAIN2,
+    { unit: 'x' }
+  );
+  // Hamada, on gross debt and equity at market, exactly as computeWACC does it.
+  // Borrowing does not make a business safer: as the debt weight rises the cost
+  // of equity rises to meet it, and the cost of capital falls only by the tax
+  // shield rather than without limit.
+  vOne(
+    DR.equityBeta,
+    D.waccDetail?.assetBeta != null
+      ? 'Equity beta, relevered on this capital structure'
+      : 'Equity beta',
+    D.waccDetail?.assetBeta != null
+      ? `${F}${DR.assetBeta}*(1+(1-${TAX_LAST})*IF(${MCAP}>0,${F}${DR.debt}/(${MCAP}),0))`
+      : `${F}${DR.assetBeta}`,
+    PLAIN2,
+    { unit: 'x' }
+  );
+  vOne(DR.costOfEquity, 'Cost of equity', `${F}${DR.riskFree}+${F}${DR.equityBeta}*${F}${DR.mrp}`, PCT2, { unit: '%' });
+  // What this company pays to borrow, before the tax shield. Measured from its
+  // own filed interest over its own borrowings; 4.5% assumed where that cannot
+  // be read. A company that owes nothing has no cost of debt, and the weight
+  // below is nil, so the product is nil either way.
+  vInput(
+    DR.preTaxCostOfDebt,
+    'Cost of debt, before tax',
+    D.waccDetail?.costOfDebt ?? 0,
+    PCT2,
+    { unit: '%' }
+  );
+  vOne(DR.costOfDebt, 'After tax cost of debt', `${F}${DR.preTaxCostOfDebt}*(1-${TAX_LAST})`, PCT2, { unit: '%' });
   // Gross debt at book against equity at market: how the business is financed.
   // Cash is not netted off here; it comes back in the bridge below.
-  vInput(24, 'Weight of equity, at market value', D.waccDetail?.weightEquity ?? 1, PCT1, { unit: '%' });
-  vInput(25, 'Weight of debt, gross and at book value', D.waccDetail?.weightDebt ?? 0, PCT1, { unit: '%' });
-  vOne(26, 'Weighted average cost of capital', `${F}24*${F}22+${F}25*${F}23`, PCT2, {
+  vOne(DR.weightEquity, 'Weight of equity, at market value', `IF((${MCAP})+${F}${DR.debt}>0,(${MCAP})/((${MCAP})+${F}${DR.debt}),1)`, PCT1, { unit: '%' });
+  vOne(DR.weightDebt, 'Weight of debt, gross and at book value', `IF((${MCAP})+${F}${DR.debt}>0,${F}${DR.debt}/((${MCAP})+${F}${DR.debt}),0)`, PCT1, { unit: '%' });
+  vOne(DR.wacc, 'Weighted average cost of capital', `${F}${DR.weightEquity}*${F}${DR.costOfEquity}+${F}${DR.weightDebt}*${F}${DR.costOfDebt}`, PCT2, {
     bold: true,
     unit: '%',
     indent: 0,
@@ -1584,26 +1754,26 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // than left for a reader to infer from the numbers, which is what
   // CONVENTIONS.md DCF 1 asks for.
   vData(
-    27,
+    DR.period,
     `Discount period, years from ${D.valuationDate ?? 'the last reported balance sheet date'} (mid-year convention)`,
     Array.isArray(D.discountFactor) ? D.discountFactor : [],
     FACTOR,
     { unit: 'yrs' }
   );
-  vRow(28, 'Discount factor', (c) => `(1+$${F}$26)^-${c}27`, FACTOR, { italic: true, indent: 2, unit: 'x' });
-  vRow(29, 'Present value of unlevered free cash flow', (c) => `${c}16*${c}28`, money(currencySymbol), {
+  vRow(DR.factor, 'Discount factor', (c) => `(1+$${F}$${DR.wacc})^-${c}${DR.period}`, FACTOR, { italic: true, indent: 2, unit: 'x' });
+  vRow(DR.pv, 'Present value of unlevered free cash flow', (c) => `${c}${DR.ufcf}*${c}${DR.factor}`, money(currencySymbol), {
     bold: true,
     indent: 0,
   });
-  vOne(30, 'Sum of the present values', `SUM(${F}29:${L(fLast)}29)`, money(), { bold: true, indent: 0 });
+  vOne(DR.pvSum, 'Sum of the present values', `SUM(${F}${DR.pv}:${L(fLast)}${DR.pv})`, money(), { bold: true, indent: 0 });
 
-  band(V, 32, 'Perpetuity growth approach', OXBLOOD, WHITE, fLast);
-  vInput(33, 'Long term growth rate (g)', D.longTermGrowthRate ?? 0.025, PCT1, { unit: '%' });
+  band(V, DR.bandPerp, 'Perpetuity growth approach', OXBLOOD, WHITE, fLast);
+  vInput(DR.growth, 'Long term growth rate (g)', D.longTermGrowthRate ?? 0.025, PCT1, { unit: '%' });
   // The engine's normalised terminal cash flow, cell for cell.
   //
   // Start from the final forecast year's unlevered free cash flow (row 16),
-  // take the capital expenditure back out (row 15) and replace it with
-  // terminal capex, which equals PP&E depreciation: that is D&A (row 12) less
+  // take the capital expenditure back out and replace it with terminal capex,
+  // which equals PP&E depreciation: that is D&A less
   // the amortisation that has run off. Then take out the amortisation's tax
   // shield, which lasts only as long as the intangibles do.
   //
@@ -1615,123 +1785,123 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // non-current liabilities, both timing items with no reason to persist in
   // perpetuity - come out here as they do there.
   vOne(
-    34,
+    DR.normalised,
     'Normalised final year cash flow: working capital as forecast, amortisation run off, terminal capex equal to PP&E depreciation',
-    `${L(fLast)}16-${L(fLast)}15-${L(fLast)}12` +
+    `${L(fLast)}${DR.ufcf}-${L(fLast)}${DR.capex}-${L(fLast)}${DR.da}` +
       `+'3-StatementModel'!${mCol(nF - 1)}${R.amort}` +
       `+'3-StatementModel'!${mCol(nF - 1)}${R.dtaChg}` +
       `-'3-StatementModel'!${mCol(nF - 1)}${R.onclChg}` +
-      `-'3-StatementModel'!${mCol(nF - 1)}${R.amort}*${L(fLast)}10`,
+      `-'3-StatementModel'!${mCol(nF - 1)}${R.amort}*${L(fLast)}${DR.taxRate}`,
     money()
   );
-  vOne(35, 'Terminal value', `${F}34*(1+${F}33)/(${F}26-${F}33)`, money());
-  vOne(36, 'Present value of the terminal value', `${F}35*${L(fLast)}28`, money());
-  vOne(37, 'Enterprise value', `${F}30+${F}36`, money(currencySymbol), { bold: true, indent: 0 });
+  vOne(DR.tvPerp, 'Terminal value', `${F}${DR.normalised}*(1+${F}${DR.growth})/(${F}${DR.wacc}-${F}${DR.growth})`, money());
+  vOne(DR.pvTvPerp, 'Present value of the terminal value', `${F}${DR.tvPerp}*${L(fLast)}${DR.factor}`, money());
+  vOne(DR.evPerp, 'Enterprise value', `${F}${DR.pvSum}+${F}${DR.pvTvPerp}`, money(currencySymbol), { bold: true, indent: 0 });
 
-  band(V, 39, 'EBITDA exit multiple approach', OXBLOOD, WHITE, fLast);
-  vInput(40, 'Exit EBITDA multiple', D.exitMultiple ?? 12, MULT, { unit: 'x' });
-  vOne(41, 'Final year EBITDA', `'3-StatementModel'!${mCol(nF - 1)}${R.ebitda}`, money(), { cross: true });
-  vOne(42, 'Terminal value', `${F}40*${F}41`, money());
-  vOne(43, 'Present value of the terminal value', `${F}42*${L(fLast)}28`, money());
-  vOne(44, 'Enterprise value', `${F}30+${F}43`, money(currencySymbol), { bold: true, indent: 0 });
+  band(V, DR.bandExit, 'EBITDA exit multiple approach', OXBLOOD, WHITE, fLast);
+  vInput(DR.multiple, 'Exit EBITDA multiple', D.exitMultiple ?? 12, MULT, { unit: 'x' });
+  vOne(DR.finalEbitda, 'Final year EBITDA', `'3-StatementModel'!${mCol(nF - 1)}${R.ebitda}`, money(), { cross: true });
+  vOne(DR.tvExit, 'Terminal value', `${F}${DR.multiple}*${F}${DR.finalEbitda}`, money());
+  vOne(DR.pvTvExit, 'Present value of the terminal value', `${F}${DR.tvExit}*${L(fLast)}${DR.factor}`, money());
+  vOne(DR.evExit, 'Enterprise value', `${F}${DR.pvSum}+${F}${DR.pvTvExit}`, money(currencySymbol), { bold: true, indent: 0 });
 
-  band(V, 46, 'From enterprise value to one share', OXBLOOD, WHITE, fLast);
+  band(V, DR.bandBridge, 'From enterprise value to one share', OXBLOOD, WHITE, fLast);
   vOne(
-    47,
+    DR.debt,
     'Debt and revolver at the last reported date',
     `'3-StatementModel'!${L(cOf(nH - 1))}${R.debtEnd}+'3-StatementModel'!${L(cOf(nH - 1))}${R.revEnd}`,
     money(),
     { cross: true }
   );
-  vOne(48, 'Cash at the last reported date', `'3-StatementModel'!${L(cOf(nH - 1))}${R.cashEnd}`, money(), { cross: true });
-  vOne(49, 'Net debt', `${F}47-${F}48`, money(), { bold: true, indent: 0 });
+  vOne(DR.cash, 'Cash at the last reported date', `'3-StatementModel'!${L(cOf(nH - 1))}${R.cashEnd}`, money(), { cross: true });
+  vOne(DR.netDebt, 'Net debt', `${F}${DR.debt}-${F}${DR.cash}`, money(), { bold: true, indent: 0 });
   // Claims on the group that are not the common shareholders', from the filing
   // at the last reported date (see the Sources sheet for where each was read).
-  vInput(50, 'Less: minority interests at the last reported date', D.minorityInterest ?? 0, money());
-  vInput(51, 'Less: preferred stock at the last reported date', D.preferredStock ?? 0, money());
-  vInput(52, 'Net diluted shares outstanding', D.perpetuity?.dilutedShares ?? D.dilutedShares ?? 1, money(), {
+  vInput(DR.minority, 'Less: minority interests at the last reported date', D.minorityInterest ?? 0, money());
+  vInput(DR.preferred, 'Less: preferred stock at the last reported date', D.preferredStock ?? 0, money());
+  vInput(DR.shares, 'Net diluted shares outstanding', D.perpetuity?.dilutedShares ?? D.dilutedShares ?? 1, money(), {
     unit: '# M',
   });
-  vOne(53, 'Value per share, perpetuity growth', `(${F}37-${F}49-${F}50-${F}51)/${F}52`, money2(currencySymbol), {
+  vOne(DR.vpsPerp, 'Value per share, perpetuity growth', `(${F}${DR.evPerp}-${F}${DR.netDebt}-${F}${DR.minority}-${F}${DR.preferred})/${F}${DR.shares}`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vOne(54, 'Value per share, exit multiple', `(${F}44-${F}49-${F}50-${F}51)/${F}52`, money2(currencySymbol), {
+  vOne(DR.vpsExit, 'Value per share, exit multiple', `(${F}${DR.evExit}-${F}${DR.netDebt}-${F}${DR.minority}-${F}${DR.preferred})/${F}${DR.shares}`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
   // THE TWO METHODS ARE NOT AVERAGED, here or on the site. An average is
   // neither method's answer and hides the disagreement, which is the useful
-  // part: rows 53 and 54 both stand, row 55 says how far apart they are, and
-  // row 56 names the one figure anything downstream uses.
-  vOne(55, 'Spread between the two methods, against the lower', `ABS(${F}54-${F}53)/MIN(${F}53,${F}54)`, PCT1, {
+  // part: both value-per-share rows stand, the spread row says how far apart
+  // they are, and the row below it names the one figure anything downstream uses.
+  vOne(DR.spread, 'Spread between the two methods, against the lower', `ABS(${F}${DR.vpsExit}-${F}${DR.vpsPerp})/MIN(${F}${DR.vpsPerp},${F}${DR.vpsExit})`, PCT1, {
     unit: '%',
   });
-  vOne(56, 'Where one figure is needed: perpetuity growth', `${F}53`, money2(currencySymbol), {
+  vOne(DR.vpsOne, 'Where one figure is needed: perpetuity growth', `${F}${DR.vpsPerp}`, money2(currencySymbol), {
     bold: true,
     indent: 0,
     unit: `${currencySymbol}/sh`,
   });
-  vInput(57, 'Share price as of last close', D.marketPrice ?? 0, money2(currencySymbol), {
+  vInput(DR.price, 'Share price as of last close', D.marketPrice ?? 0, money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
-  vOne(58, 'Premium / (discount) to the perpetuity value', `${F}57/${F}56-1`, PCT1, { bold: true, indent: 0, unit: '%' });
+  vOne(DR.premium, 'Premium / (discount) to the perpetuity value', `${F}${DR.price}/${F}${DR.vpsOne}-1`, PCT1, { bold: true, indent: 0, unit: '%' });
 
   // ---- HOW MUCH OF THIS RESTS ON THE TERMINAL VALUE -----------------------
   //
   // A five-year window at these rates leaves most of the value beyond it for
-  // any going concern; row 64 is what a company with a flat cash flow would
+  // any going concern; the benchmark row is what a company with a flat cash flow would
   // show at the same discount rate and the same perpetual growth, so a reader
   // can tell the ordinary shape of a DCF from a company where something else is
   // going on. Rows 66 to 69 move one assumption at a time and hold everything
   // else, computed live from the rows above rather than pasted from the site.
-  band(V, 60, 'How much of this rests on the terminal value', OXBLOOD, WHITE, fLast);
-  vOne(61, 'Present value of the modelled years', `${F}30`, money(), { cross: true });
-  vOne(62, 'Present value of the terminal value', `${F}36`, money(), { cross: true });
-  vOne(63, 'Share of enterprise value beyond the forecast', `${F}36/${F}37`, PCT1, {
+  band(V, DR.bandRest, 'How much of this rests on the terminal value', OXBLOOD, WHITE, fLast);
+  vOne(DR.pvYears, 'Present value of the modelled years', `${F}${DR.pvSum}`, money(), { cross: true });
+  vOne(DR.pvTerminal, 'Present value of the terminal value', `${F}${DR.pvTvPerp}`, money(), { cross: true });
+  vOne(DR.shareBeyond, 'Share of enterprise value beyond the forecast', `${F}${DR.pvTvPerp}/${F}${DR.evPerp}`, PCT1, {
     bold: true,
     indent: 0,
     unit: '%',
   });
   vOne(
-    64,
+    DR.benchmark,
     `What any ${nF}-year forecast at this discount rate would put beyond it`,
-    `(((1+${F}33)/(${F}26-${F}33))*(1+${F}26)^-${nF})/((1-(1+${F}26)^-${nF})/${F}26+((1+${F}33)/(${F}26-${F}33))*(1+${F}26)^-${nF})`,
+    `(((1+${F}${DR.growth})/(${F}${DR.wacc}-${F}${DR.growth}))*(1+${F}${DR.wacc})^-${nF})/((1-(1+${F}${DR.wacc})^-${nF})/${F}${DR.wacc}+((1+${F}${DR.growth})/(${F}${DR.wacc}-${F}${DR.growth}))*(1+${F}${DR.wacc})^-${nF})`,
     PCT1,
     { unit: '%' }
   );
-  vOne(65, 'Difference', `${F}63-${F}64`, PCT1, { unit: 'pts' });
+  vOne(DR.difference, 'Difference', `${F}${DR.shareBeyond}-${F}${DR.benchmark}`, PCT1, { unit: 'pts' });
 
   // One assumption moved, everything else held. Not a margin of error: the two
   // are not additive and the perpetuity formula is not symmetric, so each end
   // is shown as the value it produces.
   const perShareAtGrowth = (g: string) =>
-    `((${F}30+${F}34*(1+${g})/(${F}26-${g})*${L(fLast)}28)-${F}49-${F}50-${F}51)/${F}52`;
+    `((${F}${DR.pvSum}+${F}${DR.normalised}*(1+${g})/(${F}${DR.wacc}-${g})*${L(fLast)}${DR.factor})-${F}${DR.netDebt}-${F}${DR.minority}-${F}${DR.preferred})/${F}${DR.shares}`;
   // Written out year by year rather than as SUMPRODUCT over a negated range,
   // which does not evaluate: the forecast is five columns, so the explicit sum
   // is both safe and readable in the cell.
   const perShareAtWacc = (w: string) => {
     const discounted = years
       .slice(nH)
-      .map((_, i) => `${L(fCol(i))}16*(1+${w})^-${L(fCol(i))}27`)
+      .map((_, i) => `${L(fCol(i))}${DR.ufcf}*(1+${w})^-${L(fCol(i))}${DR.period}`)
       .join('+');
     return (
-      `((${discounted}+${F}34*(1+${F}33)/(${w}-${F}33)*(1+${w})^-${L(fLast)}27)` +
-      `-${F}49-${F}50-${F}51)/${F}52`
+      `((${discounted}+${F}${DR.normalised}*(1+${F}${DR.growth})/(${w}-${F}${DR.growth})*(1+${w})^-${L(fLast)}${DR.period})` +
+      `-${F}${DR.netDebt}-${F}${DR.minority}-${F}${DR.preferred})/${F}${DR.shares}`
     );
   };
-  vOne(66, 'Value per share, growth after the forecast 1 point lower', perShareAtGrowth(`(${F}33-0.01)`), money2(currencySymbol), {
+  vOne(DR.gLow, 'Value per share, growth after the forecast 1 point lower', perShareAtGrowth(`(${F}${DR.growth}-0.01)`), money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
-  vOne(67, 'Value per share, growth after the forecast 1 point higher', perShareAtGrowth(`(${F}33+0.01)`), money2(currencySymbol), {
+  vOne(DR.gHigh, 'Value per share, growth after the forecast 1 point higher', perShareAtGrowth(`(${F}${DR.growth}+0.01)`), money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
-  vOne(68, 'Value per share, discount rate half a point lower', perShareAtWacc(`(${F}26-0.005)`), money2(currencySymbol), {
+  vOne(DR.wLow, 'Value per share, discount rate half a point lower', perShareAtWacc(`(${F}${DR.wacc}-0.005)`), money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
-  vOne(69, 'Value per share, discount rate half a point higher', perShareAtWacc(`(${F}26+0.005)`), money2(currencySymbol), {
+  vOne(DR.wHigh, 'Value per share, discount rate half a point higher', perShareAtWacc(`(${F}${DR.wacc}+0.005)`), money2(currencySymbol), {
     unit: `${currencySymbol}/sh`,
   });
 
@@ -1744,26 +1914,26 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     'The terminal value is discounted over the last explicit year period for the same reason, so one convention runs',
     'through both. The value is therefore as at the last balance sheet date and is compared with a price from today.',
     '',
-    'Row 63 is not a fault to be corrected. Five modelled years are a small annuity beside a perpetuity, so most of the',
-    'value of any going concern sits beyond the window: row 64 is what that share would be for a company whose cash flow',
+    `Row ${DR.shareBeyond} is not a fault to be corrected. Five modelled years are a small annuity beside a perpetuity, so most of the`,
+    `value of any going concern sits beyond the window: row ${DR.benchmark} is what that share would be for a company whose cash flow`,
     'never changes, at this same discount rate. A figure close to it is the shape of a discounted cash flow; a figure well',
     'above it means the modelled years are contributing less than they usually would, and is worth asking about.',
     '',
-    'Rows 66 to 69 move one assumption and hold the rest. They are not a margin of error and the ends are not equally',
+    `Rows ${DR.gLow} to ${DR.wHigh} move one assumption and hold the rest. They are not a margin of error and the ends are not equally`,
     'likely; the two ranges are not additive, and a point off the growth rate does not move the answer as far as a point',
     'on it, which is why each end is shown as a value rather than as a single plus-or-minus.',
     '',
-    'The two terminal methods are shown separately and never averaged. A wide spread (row 55) is information, not noise:',
+    `The two terminal methods are shown separately and never averaged. A wide spread (row ${DR.spread}) is information, not noise:`,
     'an exit multiple well above the perpetuity value means the multiple prices in growth these cash flows do not produce,',
     'and one well below it means the cash flows are worth more than the market pays for businesses like this.',
-    'Where a single figure is needed it is the perpetuity value (row 56), because the exit multiple rests on a multiple',
+    `Where a single figure is needed it is the perpetuity value (row ${DR.vpsOne}), because the exit multiple rests on a multiple`,
     'that is the same for every derived company.',
     '',
     'With the circularity switch off, interest is charged on opening balances rather than average balances, so nothing',
     'computes circularly. The difference to the answer is small. See Model settings on the 3-statement model sheet.',
   ].forEach((text, i) => {
-    V.getCell(71 + i, 3).value = text;
-    V.getCell(71 + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
+    V.getCell(DR.notes + i, 3).value = text;
+    V.getCell(DR.notes + i, 3).font = { ...FONT, size: 10, italic: true, color: { argb: GREY } };
   });
 
   // NOTHING COMPUTED FOR A REFUSED COMPANY SURVIVES INTO THE FILE. The sheet
@@ -1793,6 +1963,10 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   addSupportingSheets({
     R,
     RL,
+    // The DCF sheet's row numbers, so the Assumptions sheet links into it by
+    // name rather than keeping a second copy of the layout. It kept one for
+    // three days and that is exactly how a positional sheet goes wrong.
+    DR,
     modelSheetName: '3-StatementModel',
     // The Assumptions sheet states the basis of every assumption, and a basis
     // is something the engine records rather than something a sheet can work

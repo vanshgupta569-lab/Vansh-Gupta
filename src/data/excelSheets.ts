@@ -48,6 +48,10 @@ export interface SupportingSheetsContext {
   // a line can repeat its name too instead of keeping a second copy (KI-4).
   RL: Record<string, string>;
   modelSheetName: string;
+  // The DCF sheet's row numbers, from the one place that defines them
+  // (`excelExport.ts`). This sheet links into that one, and a second copy of a
+  // positional layout is a copy that goes stale.
+  DR: Record<string, number>;
   // The engine's model and its DCF, for the Assumptions sheet: it states the
   // basis of each assumption, and a basis is something the engine records
   // (provenance, the declared drivers, the amortisation anchor) rather than
@@ -958,7 +962,7 @@ function buildAnnexuresSheet(ctx: SupportingSheetsContext) {
 // Reserving the room now means the sheet does not get relaid out later.
 function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
   const {
-    R, model: M, dcf: D, refused, source, years, nH, nT, FIRST, cOf, L,
+    R, DR, model: M, dcf: D, refused, source, years, nH, nT, FIRST, cOf, L,
     modelSheetName, companyName, newSheet, title, band, label, styleCalc,
     fmt, colors, FONT, UNIT, currencySymbol, wrapText,
   } = ctx;
@@ -985,11 +989,16 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
   // The row registry places every model-sheet row; the DCF sheet's are fixed by
   // position (METHODOLOGY.md §22), so they are named once here rather than
   // spelled into each formula below.
+  // Read from the one definition of the layout, passed in rather than copied:
+  // this sheet used to keep its own numbers, which is the whole trouble with a
+  // positional sheet.
   const DCF = {
-    riskFree: 19, mrp: 20, beta: 21, costOfEquity: 22, costOfDebt: 23,
-    weightEquity: 24, weightDebt: 25, wacc: 26, period: 27,
-    terminalGrowth: 33, exitMultiple: 40,
-    netDebt: 49, minority: 50, preferred: 51, shares: 52, price: 57,
+    riskFree: DR.riskFree, mrp: DR.mrp, assetBeta: DR.assetBeta, beta: DR.equityBeta,
+    costOfEquity: DR.costOfEquity, preTaxCostOfDebt: DR.preTaxCostOfDebt, costOfDebt: DR.costOfDebt,
+    weightEquity: DR.weightEquity, weightDebt: DR.weightDebt, wacc: DR.wacc, period: DR.period,
+    terminalGrowth: DR.growth, exitMultiple: DR.multiple,
+    netDebt: DR.netDebt, minority: DR.minority, preferred: DR.preferred,
+    shares: DR.shares, price: DR.price,
   };
 
   const MODEL = `'${modelSheetName}'`;
@@ -1438,21 +1447,28 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     row('Weighted average cost of capital', '%', fmt.PCT2, dd(DCF.wacc), null,
       'Computed from the four rows above.');
     note([
-      'THIS DISCOUNT RATE DOES NOT MOVE WITH THE TAX RATE IN THIS WORKBOOK. The beta above is already relevered and the',
-      'cost of debt already tax effected, both as typed figures, so editing the tax rate on the model sheet moves the',
-      'cash flows and leaves the rate that discounts them alone. The engine relevers and tax effects on the rate it is',
-      'given, so the two part company under that one edit. Recorded as KI-20 in KNOWN_ISSUES.md.',
+      'THIS DISCOUNT RATE MOVES WITH THE TAX RATE AND THE SHARE PRICE, as the engine does. The asset beta and the cost of',
+      'debt before tax are the two figures the engine starts from, so they are the inputs here; the equity beta, the',
+      'after tax cost of debt, both weights and the rate itself are computed from them and from the model sheet. Change',
+      'the tax rate and the relevering, the tax shield and this rate all follow. Change the share price and the weights do.',
     ]);
 
     heading('Terminal value');
     row('Growth after the forecast (g)', '%', fmt.PCT1, dd(DCF.terminalGrowth), null,
       P.terminalGrowth || notRecorded('The cell holds the rate the perpetuity grows at for ever.'));
-    note([
-      'MOVING THIS CELL DOES NOT RE-FADE THE FORECAST IN THIS WORKBOOK. On the site the forecast growth path is struck',
-      'against this rate, so changing it re-fades every forecast year to meet the new one; here it feeds the terminal',
-      'value alone and the growth cells on the model sheet stay where they were. Fade them by hand to reproduce the',
-      "site's answer. Recorded as KI-21 in KNOWN_ISSUES.md.",
-    ]);
+    note(
+      M?.revenueGrowthRuleUsed?.method === 'fadeToTerminal'
+        ? [
+            'MOVING THIS CELL RE-FADES THE WHOLE FORECAST. The revenue growth row on the model sheet runs in a straight line',
+            'from its first forecast year to this rate, reaching it in the last, so the year being capitalised already grows',
+            'at the rate the perpetuity continues. Only the first forecast year is typed; the rest are that line. Move either',
+            'end and the years between follow.',
+          ]
+        : [
+            'This model forecasts each revenue segment on its own path, so there is no single fade for this rate to re-strike.',
+            'Moving it changes the terminal value and leaves the forecast growth rates on the model sheet where they are.',
+          ]
+    );
     row('Exit EBITDA multiple', 'x', fmt.MULT, dd(DCF.exitMultiple), null,
       P.exitMultiple || notRecorded('The cell holds the multiple the last forecast year\'s EBITDA is capitalised at.'));
     row('Discount period, first forecast year', 'yrs', fmt.PLAIN2, dd(DCF.period), null,

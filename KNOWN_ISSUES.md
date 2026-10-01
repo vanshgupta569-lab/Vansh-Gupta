@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-23`. **Next free: `KI-24`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-24`. **Next free: `KI-25`.** Retired, meaning
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
   average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
@@ -59,7 +59,12 @@ mistakes and would never be fixed:
   ceiling is its own spend and its percentage exactly 1.0, so `METHODOLOGY.md`
   §10 was corrected with it. The third figure in that entry, the workbook's
   revolver rate, was not a defect: it is an assumption with a stated basis and no
-  engine counterpart, and it moved to `METHODOLOGY.md` §22). Moved out on
+  engine counterpart, and it moved to `METHODOLOGY.md` §22), `KI-23` (the
+  operating margin slider under-moving by the stock compensation share of
+  revenue, fixed 2026-09-28) and `KI-20` with `KI-21` (the workbook's discount
+  rate not moving with its tax rate, and its terminal growth rate not re-fading
+  its forecast, both fixed 2026-09-28; the sweep that followed them fixed the
+  cash cushion the same way and opened `KI-24` for the cost of debt). Moved out on
   2026-09-27: `KI-11`, to
   `DATA_CONSTRAINTS.md` — how much plant a change in revenue is worth is a
   relationship the filings do not settle, and the three companies where the
@@ -86,74 +91,57 @@ commit were measured on the payload set of that date and say so.
 
 | ID | What is wrong | Worst | Valued companies affected |
 |---|---|---|---|
-| `KI-20` | The workbook's discount rate does not move with its tax rate | Vodafone, 12.3% on value per share | 18 of 56 above 1% |
-| `KI-21` | The workbook's terminal growth rate does not re-fade its forecast | AbbVie, 3.7% on value per share | 51 of 56 above 1% |
+| `KI-24` | The workbook's cost of debt does not move with its own debt rates | not measured | every company with debt |
 
-Both were found on 2026-09-28 while building the Assumptions sheet, which is
-what turned them up: writing down what every assumption rests on means following
-each one to the cell it drives, and two of them stop short of where the engine
-carries them. Both are the `KI-4` pattern — a workbook that agrees with the site
-exactly at rest and parts from it on the first edit — and `KI-4`'s own measured
-lesson applies: the agreement at rest is worth nothing, because the workbook is
-only being used once someone has started editing it.
+### `KI-24` — the cost of debt is a constant where the engine averages a schedule
 
-`KI-23` came from the same job by a third route — renaming a field to match what
-it holds, then reading what consumed it — and was fixed on 2026-09-28, so its
-entry is gone from here. The lesson it left is the one above, in a different
-place: the scaling it removed was correct when it was written and was made wrong
-by a change somewhere else, and nothing failed at the moment it broke, because
-at rest every driver reproduces the model exactly.
+**Where:** `src/data/excelExport.ts`, the DCF sheet's cost-of-debt-before-tax row
+against the model sheet's `Cash interest rate on debt` and
+`PIK interest rate on debt`.
 
-Neither moves a published figure. `npm run verify:workbook` compares the two at
-rest and still returns the site's value per share on both terminal methods for
-every valued company, worst difference 3.87e-9%.
+`computeWACC` takes the cost of debt as the average of the debt schedule's own
+weighted-average rate across the last reported year and every forecast year. The
+workbook carries that average as one typed figure, so editing the interest rate
+on debt changes interest expense, profit and cash — and leaves the rate that
+discounts them alone. It is the same shape as `KI-20` and `KI-21`, both fixed on
+2026-09-28, and it was found in the sweep that followed them rather than by a
+reader hitting it.
 
-### `KI-20` — the discount rate does not move with the tax rate
+**Not measured, and not fixed on reasoning alone.** Writing it as a formula over
+those two rows is a few characters. Reproducing the engine's handling of a year
+whose rate is **absent** is not: `computeWACC` skips those years and averages
+what remains, and an Excel average over a range containing a blank does the same
+thing only by accident. A formula that silently diverged on the companies whose
+filings stop reporting interest would be worse than the constant, which is at
+least right at rest. The fix needs the absent-year cases enumerated from the
+payload set first.
 
-**Where:** `src/data/excelExport.ts`, DCF sheet rows 21 and 23.
+**What it would take:** average `(cash rate + PIK rate)` across the last reported
+and every forecast column, with the absent years established by measurement, and
+a sweep confirming no valued company moves at rest.
 
-Beta is written to the sheet already relevered, and the cost of debt already tax
-effected, both as typed constants. The engine does neither in advance: it
-relevers beta by `(1 − tax)` and tax-effects the cost of debt against whatever
-rate the model is carrying, so moving the tax rate moves its WACC. In the
-workbook the tax rate reaches the cash flows — DCF row 10 links to the model
-sheet — and never reaches the rate that discounts them.
+## What the 28 September run of entries was about
 
-**Measured** 2026-09-28 on the payloads of 2026-09-23, by raising the tax rate
-five points in the workbook and on the engine and comparing value per share
-across the 56 valued companies: **18 part by more than 1%, three by more than
-5%**, median 0.52%. Worst: **Vodafone −12.3%**, whose beta relevers from 1.75 to
-1.67 and whose after-tax cost of debt falls from 2.20% to 1.98% on the engine
-while the workbook holds both. A reader who tests a tax change in the file gets
-an answer the site would not give.
+Five were opened on 2026-09-28 and four closed the same day, all from one job:
+building the workbook's Assumptions sheet. Writing down what every assumption
+rests on means following each one to the cell it drives, and four of them stopped
+short of where the engine carries them.
 
-**What it would take to fix:** write rows 21 and 23 as formulas over the model
-sheet's tax rate — the Hamada relation on an asset beta, and the pre-tax cost of
-debt times `(1 − tax)`. Both need two constants the sheet does not currently
-carry (the asset beta and the pre-tax cost of debt), which the engine does have.
+`KI-22` was two assumptions with no recorded basis — written, and retired.
+`KI-23` was the operating margin slider under-moving by the stock compensation
+share of revenue, a scaling that was correct when written and made wrong by a
+change elsewhere. `KI-20` and `KI-21` were typed constants on the DCF sheet and
+the model sheet where the engine computes a figure: the discount rate did not
+move with the tax rate, and the terminal growth rate did not re-fade the
+forecast. `KI-24`, the one still open, is the same pattern again, found by
+sweeping for it rather than by hitting it.
 
-### `KI-21` — terminal growth does not re-fade the forecast
-
-**Where:** `src/data/excelExport.ts`, DCF sheet row 33 against the model sheet's
-revenue growth row.
-
-Since `5a2b858` the forecast growth rate fades in a straight line to the terminal
-rate, and the engine reads `dcf.longTermGrowthRate` when it builds that path — so
-moving the terminal rate re-strikes every forecast year to meet the new one. The
-workbook seeds the growth cells with the faded rates as typed numbers and wires
-row 33 to the terminal value alone. Moving it changes what the perpetuity grows
-at and leaves the forecast that feeds it where it was, which is the join the fade
-was built to remove.
-
-**Measured** the same way, terminal growth one point higher on both sides:
-**51 of 56 part by more than 1%**, none by more than 5%, median 2.2%. Worst:
-**AbbVie −3.7%**, whose forecast growth should re-fade from 3.51%→2.50% to
-3.51%→3.50% and does not move at all.
-
-**What it would take to fix:** write the model sheet's forecast growth cells as a
-formula interpolating between a first-year rate and DCF row 33, which makes the
-fade a rule in the file rather than five numbers. The Assumptions sheet states
-the limitation beside both rows in the meantime.
+**All five are the `KI-4` shape**, and `KI-4`'s lesson is the one that matters:
+a workbook seeded from the engine's own answer agrees exactly at rest and parts
+on the first edit, which is precisely when anyone is reading it. Agreement at
+rest is worth very little. `npm run verify` now checks thirteen lines after an
+edit, the size of a driver's response as well as its direction, and that every
+value on the Assumptions sheet is a link rather than a copy.
 
 ## Where the list stood before these
 

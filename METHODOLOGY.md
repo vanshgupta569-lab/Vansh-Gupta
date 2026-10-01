@@ -1958,15 +1958,42 @@ Each assumption is seeded from the model's own year-by-year figure, so it opens
 agreeing and diverges only where the reader changes something. That is the whole
 point.
 
-**It does not yet agree under every edit**, which is a weaker claim than the one
-above and the more useful one, because the workbook is only being used once
-someone has started editing it. Thirteen lines are checked after a revenue-growth
-and a margin edit and all of them hold (`npm run verify`, "workbook against
-engine, after an edit"). Two edits outside that set do not: the tax rate, which
-moves the engine's discount rate and not the workbook's (`KI-20`), and the
-terminal growth rate, which re-fades the engine's forecast and not the
-workbook's (`KI-21`). Both are measured in `KNOWN_ISSUES.md` and stated on the
-Assumptions sheet beside the rows they affect.
+**And it agrees under an edit, which is the claim that matters**, because the
+workbook is only being used once someone has started editing it. Thirteen lines
+are checked after a revenue-growth and a margin edit (`npm run verify`,
+"workbook against engine, after an edit"), and two edits that used to part from
+the engine no longer do:
+
+- **The tax rate.** The cost of capital block carried the beta already relevered
+  and the cost of debt already tax-effected, as typed constants, so a tax edit
+  moved the engine's discount rate and left the workbook's alone — 18 of 56
+  valued companies parting by more than 1%, three by more than 5%, Vodafone by
+  12.2%. The sheet now carries the two figures the engine starts from, the
+  **asset** beta and the cost of debt **before** tax, and reads the tax rate off
+  the model sheet's last forecast year, which is the year `computeWACC` uses. The
+  weights are formulas over the same market capitalisation the bridge uses, so a
+  share-price edit moves them too (`KI-20`).
+- **The terminal growth rate.** The engine reads it when it builds the forecast
+  growth path, so moving it re-fades every forecast year; the workbook held five
+  seeded rates and moved only the terminal value — 51 of 56 parting by more than
+  1%, AbbVie by 3.7%. The first forecast year is now the input and every later
+  year interpolates between it and the terminal rate on the DCF sheet, which is
+  the fade written out as a rule. Only where the engine says it faded, and only
+  with one revenue line to fade: a multi-segment model keeps its seeded rates,
+  which `revenueGrowthRuleUsed` declares (`KI-21`).
+
+**A sweep for the same pattern found a third and fixed it.** The cash cushion was
+five typed amounts where the engine applies the company's own lowest
+cash-to-revenue ratio to each forecast year's revenue, so the floor stayed put
+while the revenue under it moved. Every forecast year after the first now reads
+that share off its own year's revenue. One candidate was left alone and is worth
+naming: the **cost of debt before tax** is a measured constant here, where the
+engine averages the debt schedule's own rates across the last reported and every
+forecast year. Writing it as a formula over those rows would make a debt-rate
+edit reach the discount rate, which is what the engine does; it is not done
+because the engine skips years whose rate is absent and reproducing that in a
+formula is where a subtle disagreement would come from. It is recorded in
+`KNOWN_ISSUES.md` rather than guessed at.
 
 ### Where the workbook does something different
 
@@ -2078,12 +2105,24 @@ Re-deriving them looked identical until capital spending floored at nil for a
 company whose revenue falls, where the base and the charge stop agreeing — Saudi
 Aramco, caught by `verify:workbook` at 0.0127%.
 
-**Row numbers on the DCF sheet are positional.** The three-statement sheet
+**Row numbers on the DCF sheet come from one map.** The three-statement sheet
 allocates rows through a registry and formulas reference it, which is `FD 2`.
-The DCF sheet hard-codes its row numbers, which `FD 2` warns against: inserting
-a row there silently breaks the formulas. The DCF sheet's layout is fixed —
-unlevered free cash flow in rows 9–16, discounting 19–30, perpetuity 33–37, exit
-multiple 40–44, the bridge 47–58.
+The DCF sheet used to hard-code its numbers into sixty-odd formulas, which
+`FD 2` warns against for the obvious reason, and on 2026-09-28 the warning came
+true: the cost of capital needed two more rows, and four hard-coded numbers in
+`verify/workbook-vs-site.mts` plus a duplicate layout in the Assumptions sheet
+all pointed at the wrong lines. Three of the generator's own calls were
+multi-line and escaped the renumbering, so the discount period landed on the
+weight-of-debt row and the normalised cash flow on the terminal growth rate —
+caught by the suite, which recomputes value per share from the sheet's own cells
+and read $42.22 against $141.98.
+
+So the layout is now a single `DR` map in `excelExport.ts`, derived from the band
+positions, and every formula, the Assumptions sheet and the verification harness
+read it — the harness by finding each row it needs **by its label**, which moves
+with the row. The bands are unlevered free cash flow, discounting, perpetuity
+growth, exit multiple, the bridge, and what rests on the terminal value, each
+with a blank row above it.
 
 **The sheets.** Cover, Assumptions, 3-StatementModel, DCFModel, the filed
 statements, annexures, ratios, Checks and Sources. The Checks sheet tests that

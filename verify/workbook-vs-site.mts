@@ -34,13 +34,18 @@ const AAPL = (await import(`file:///${REPO}/src/data/AAPL.js`)).default;
 const isNum = (v: any) => typeof v === 'number' && isFinite(v);
 const colIdx = (s: string) => [...s].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
 
-// The DCF sheet's single-value column, and the rows the bridge ends on. These
-// are placed by number in the generator, so they are named here once.
+// The DCF sheet's single-value column, and the rows this check reads. They are
+// FOUND BY THEIR LABEL, not by number: the generator places that sheet by
+// position, and these were four hard-coded numbers until the cost of capital
+// needed two more rows and every one of them pointed at the wrong line. A label
+// moves with its row; a number does not (`KI-20`).
 const VALUE_COL = 'E';
-const ROW_PERPETUITY = 53;
-const ROW_EXIT = 54;
-const ROW_NET_DEBT = 49;
-const ROW_NORMALISED = 34;
+const LABELS = {
+  perpetuity: /^Value per share, perpetuity growth$/,
+  exit: /^Value per share, exit multiple$/,
+  netDebt: /^Net debt$/,
+  normalised: /^Normalised final year cash flow/,
+};
 
 async function readBack(wb: any) {
   const buf = await wb.xlsx.writeBuffer();
@@ -60,7 +65,14 @@ async function readBack(wb: any) {
   });
   const hf = HyperFormula.buildFromSheets(sheets, { licenseKey: 'gpl-v3' });
   const id = hf.getSheetId('DCFModel')!;
-  return (row: number) => hf.getCellValue({ sheet: id, row: row - 1, col: colIdx(VALUE_COL) }) as number;
+  const rows: Record<string, number> = {};
+  for (const [key, re] of Object.entries(LABELS)) {
+    const at = sheets.DCFModel.findIndex((r) => re.test(String(r?.[2] ?? '')));
+    if (at < 0) throw new Error(`the DCF sheet has no row labelled ${re}`);
+    rows[key] = at;
+  }
+  return (key: keyof typeof LABELS) =>
+    hf.getCellValue({ sheet: id, row: rows[key], col: colIdx(VALUE_COL) }) as number;
 }
 
 interface Case { ticker: string; name: string; model: any; dcf: any; source: any; symbol: string }
@@ -106,7 +118,7 @@ let checked = 0;
 const problems: string[] = [];
 
 for (const c of cases) {
-  let at: (row: number) => number;
+  let at: (key: 'perpetuity' | 'exit' | 'netDebt' | 'normalised') => number;
   try {
     const wb = await buildWorkbook({
       model: c.model, dcf: c.dcf, source: c.source,
@@ -122,12 +134,12 @@ for (const c of cases) {
   const sitePerp = c.dcf.perpetuity?.valuePerShare;
   const siteExit = c.dcf.exitMultipleValuation?.valuePerShare;
   const gap = (wbv: number, site: number) => (isNum(wbv) && isNum(site) && site !== 0 ? Math.abs(wbv / site - 1) * 100 : NaN);
-  const gp = gap(at(ROW_PERPETUITY), sitePerp);
-  const ge = gap(at(ROW_EXIT), siteExit);
+  const gp = gap(at('perpetuity'), sitePerp);
+  const ge = gap(at('exit'), siteExit);
   checked++;
 
   if (!isFinite(gp) || !isFinite(ge)) {
-    problems.push(`${c.ticker}: no comparable value (workbook ${at(ROW_PERPETUITY)}, site ${sitePerp})`);
+    problems.push(`${c.ticker}: no comparable value (workbook ${at('perpetuity')}, site ${sitePerp})`);
     continue;
   }
   if (Math.max(gp, ge) > worst.perpetuity + worst.exit) {
@@ -137,10 +149,10 @@ for (const c of cases) {
   // any difference in method.
   if (gp > 1e-6 || ge > 1e-6) {
     problems.push(
-      `${c.ticker}: perpetuity workbook ${at(ROW_PERPETUITY).toFixed(4)} vs site ${sitePerp.toFixed(4)} (${gp.toFixed(4)}%), ` +
-        `exit ${at(ROW_EXIT).toFixed(4)} vs ${siteExit.toFixed(4)} (${ge.toFixed(4)}%); ` +
-        `net debt ${at(ROW_NET_DEBT).toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
-        `normalised terminal ${at(ROW_NORMALISED).toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
+      `${c.ticker}: perpetuity workbook ${at('perpetuity').toFixed(4)} vs site ${sitePerp.toFixed(4)} (${gp.toFixed(4)}%), ` +
+        `exit ${at('exit').toFixed(4)} vs ${siteExit.toFixed(4)} (${ge.toFixed(4)}%); ` +
+        `net debt ${at('netDebt').toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
+        `normalised terminal ${at('normalised').toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
     );
   }
 }

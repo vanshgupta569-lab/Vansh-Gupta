@@ -54,7 +54,7 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 ## Now and next
 
-1. **`KNOWN_ISSUES.md` stood empty from 2026-09-27 to 2026-09-28**, when building the Assumptions sheet opened four and closed one of them the same day: two workbook link gaps (`KI-20`, `KI-21`), a set of assumptions with no recorded basis (`KI-22`, written and retired in the same commit), and an override left behind by a basis change (`KI-23`). Nineteen numbered defects were opened between 22 and 27 September — fourteen fixed, three established as things the filings cannot settle and moved to `DATA_CONSTRAINTS.md`, one needing disclosure rather than a different number. The list staying empty is the work, not the milestone, and a sheet whose job is to write down what every number rests on is the kind of work that refills it.
+1. **`KNOWN_ISSUES.md` holds one entry**, `KI-24` — the cost of debt the workbook does not recompute from its own debt schedule. It stood empty from 2026-09-27, and building the Assumptions sheet on 2026-09-28 opened five and closed four the same day: assumptions with no recorded basis (`KI-22`), the operating margin slider under-moving (`KI-23`), and the discount rate and growth fade the workbook held still where the engine recomputes them (`KI-20`, `KI-21`). All five are the `KI-4` shape — a workbook seeded from the engine's answer, right at rest and wrong on the first edit. Nineteen numbered defects were opened between 22 and 27 September: fourteen fixed, three established as things the filings cannot settle, one needing disclosure. The list staying empty is the work, not the milestone, and a sheet whose job is to write down what every number rests on is the kind of work that refills it.
 2. **NEXT — Primary-filings data layer** (section 1). The largest piece of work and the foundation for almost everything below.
 3. **NEXT — The judgement layer** (section 2). Can begin in parallel: the structural judgements already exist as engine defaults and need surfacing, saving and recording, which does not wait on new data.
 4. **QUEUED — Standard chart of accounts** (section 4). Cheap, and several later items depend on it.
@@ -438,6 +438,7 @@ an item ships with its hash, in the same commit as the work.
 
 | Commit | What |
 |---|---|
+| `PENDING2` | The workbook's cost of capital and growth fade computed rather than pasted: `KI-20` and `KI-21` fixed, the cash cushion fixed with them, the DCF sheet's row numbers moved into one map, and `KI-24` opened for the cost of debt. |
 | `fac1d4d` | The Assumptions sheet: every assumption, its value linked live to the cell it comes from, and the basis the engine recorded for it. Four provenance sentences corrected where a clamp had replaced the measurement they named, two written where none existed (`KI-22`, opened and retired here), `METHODOLOGY.md` §10 corrected on what the buyback machinery does for a derived company, and `sbcPercentOfOpex` renamed to what it holds. `KI-20`, `KI-21` and `KI-23` opened. |
 | `3332cf7` | Shared design tokens; contrast fixed on both grounds; the red square in one component. |
 | `239ccae` | Eight explainer pages at `/learn/` as static HTML. |
