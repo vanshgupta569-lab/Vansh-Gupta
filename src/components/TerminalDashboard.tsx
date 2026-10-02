@@ -21,6 +21,16 @@ import { terminalSpread } from '../data/terminalSpread';
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 import { reverseDcf } from '../data/reverseDcf';
 import type { ReverseDcfResult } from '../data/reverseDcf';
+import {
+  Disclose,
+  Figure,
+  Pill,
+  MetricTile,
+  RefStrip,
+  EYEBROW,
+  LABEL,
+  BODY,
+} from './instrument';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
 import { SavedModelsPanel } from './savedModelsPanel';
@@ -813,10 +823,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const premiumDiscountLabel = premiumToModelPct > 0
     ? `${premiumToModelPct}% PREMIUM TO MODEL`
     : `${Math.abs(premiumToModelPct)}% DISCOUNT TO MODEL`;
-  const premiumDiscountStyle = potentialUpsidePct < 0
-    ? 'bg-rose-950/60 text-rose-300 border-rose-700'
-    : 'bg-emerald-950/60 text-emerald-300 border-emerald-700';
-
   // Preset Scenario Handlers
   const applyPreset = (preset: 'BASE' | 'BULL' | 'BEAR' | 'FORENSIC') => {
     // Presets flex the ACTIVE model's own defaults, not the company record's.
@@ -915,25 +921,26 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Terminal Title & Ticker Selector Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 border-b hairline-border-b pb-6">
-        <div>
-          <h2 className="font-display text-2xl sm:text-3xl text-[#F2F0EA] tracking-tight">
-            Company Specific Analysis
-          </h2>
-        </div>
+      {/* ==================================================================
+          SCREEN CHROME — which company, and how to change it.
 
-        {/* Company Quick Ticker Selector */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[11px] text-[#8A8A8F] mr-2 hidden sm:inline uppercase tracking-widest">SELECT TICKER:</span>
+          This row used to open with "Company Specific Analysis" set in 30px
+          display type: the largest thing on the screen, telling a reader
+          something they had just typed in themselves. It is an eyebrow now,
+          and the space it took went to the figure the screen exists to show.
+          ================================================================== */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <span className={`${EYEBROW} text-quiet`}>Company analysis</span>
+
+        <div className="flex flex-wrap items-center gap-1.5">
           {Object.keys(companies).map((t) => (
             <button
               key={t}
               onClick={() => onSelectTicker(t)}
-              className={`font-mono text-[11px] uppercase tracking-wider px-4 py-1.5 transition-all cursor-pointer ${
+              className={`${LABEL} cursor-pointer px-2.5 py-1 uppercase tracking-wider transition-colors ${
                 selectedTicker === t
-                  ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold border border-[#8B1E1E] shadow-[0_0_10px_rgba(139,30,30,0.3)]'
-                  : 'bg-[#111114] text-[#A1A1AA] border hairline-border hover:bg-[#222228] hover:text-[#F2F0EA]'
+                  ? 'border border-accent bg-accent font-semibold text-ink'
+                  : 'border border-line bg-panel text-muted hover:border-quiet/40 hover:text-ink'
               }`}
             >
               {t}
@@ -941,9 +948,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           ))}
           <button
             onClick={onOpenDirectory}
-            className="font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 bg-transparent border hairline-border text-[#8B1E1E] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors cursor-pointer ml-2"
+            className={`${LABEL} ml-1 cursor-pointer border border-line px-2.5 py-1 uppercase tracking-wider text-accent-text transition-colors hover:border-accent hover:text-ink`}
           >
-            + All Companies
+            + All
           </button>
         </div>
       </div>
@@ -958,270 +965,293 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         }}
       />
 
-      {/* Primary Header Info Bar */}
-      <div className="bg-[#111114] border hairline-border p-6 lg:p-8 mb-6 shadow-lg">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mb-6">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
-              <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] border border-[#222228] px-2 py-0.5 uppercase bg-[#0B0B0D]">
-                {company.exchange}: {company.ticker}
-              </span>
-              <span className="font-mono text-[10px] tracking-widest uppercase text-[#8A8A8F]">{company.sector}</span>
-              <span className="font-mono text-[10px] tracking-widest uppercase text-[#8A8A8F]">ISIN: {company.isin}</span>
-            </div>
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA] tracking-tight">
-              {company.name}
-            </h1>
+      {/* ==================================================================
+          THE VERDICT — the figures a reader came for, then the account of
+          them behind a disclosure.
 
-            {/* The download sits under the name, on its own, rather than
-                crowding the number it is meant to support. */}
-            {hasRealModel && dcfResult.applicable !== false && (
-              <button
-                type="button"
-                onClick={exportExcel}
-                disabled={exporting}
-                className="mt-5 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 disabled:opacity-40 transition-colors"
-                title="Download the full model as one Excel workbook"
-              >
-                <Download className="w-4 h-4" />
-                {exporting ? 'Building the workbook…' : 'Download Excel model'}
-              </button>
-            )}
-            {hasRealModel && (
-              <button
-                type="button"
-                onClick={() => setNerdView('SAVED')}
-                className="mt-5 ml-3 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
-              >
-                Saved models
-              </button>
-            )}
+          What changed, and why: the company name was set at 48px, the price
+          at 36px and the value at 30px, so the page led with the one fact the
+          reader had supplied and buried the one it had computed. Three lines
+          of prose sat under the value explaining the method, the spread and
+          where to find the working, and a reader had to read past all of it
+          every visit. The figures are now the largest things on the screen
+          and the prose is one row below them, open when it is wanted.
+          ================================================================== */}
+      <section aria-label="Valuation" className="mb-6 border border-line bg-panel">
+        {/* Identity, as reference rather than headline. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line px-5 py-4 lg:px-6">
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-baseline gap-2.5">
+              <span className="font-mono text-[13px] font-bold tracking-[0.16em] text-accent-text">
+                {company.ticker}
+              </span>
+              <h1 className="truncate font-display text-[19px] font-medium tracking-tight text-ink sm:text-[22px]">
+                {company.name}
+              </h1>
+            </div>
+            <RefStrip
+              items={[
+                ['exch', company.exchange],
+                ['sector', company.sector],
+                ['isin', company.isin],
+              ]}
+            />
           </div>
 
-          <div className="flex flex-col gap-6 w-full md:w-auto md:min-w-[340px]">
-            <div className="flex flex-wrap items-end justify-start md:justify-end gap-6">
-            <div className="text-left md:text-right">
-              <div className="font-mono text-[11px] text-[#8A8A8F] tracking-widest mb-1 uppercase">
-                {liveQuote ? 'LIVE PRICING' : 'LAST STORED PRICE'} ({company.currency})
-              </div>
-              <div className="flex items-baseline gap-3 md:justify-end">
-                <span className="font-display text-3xl sm:text-4xl text-[#F2F0EA] font-semibold">
-                  {company.currencySymbol}{displayPrice.toFixed(2)}
-                </span>
-                <span
-                  className={`font-mono text-[11px] tracking-wider font-semibold flex items-center gap-0.5 px-2 py-0.5 ${
-                    displayChangePct >= 0 ? 'text-emerald-400 bg-emerald-950/40' : 'text-rose-400 bg-rose-950/40'
-                  }`}
-                >
-                  {displayChangePct >= 0 ? '+' : ''}{displayChangePct}%
-                </span>
-              </div>
-              {/* A listing quoted in another currency (or in pence) is shown in
-                  the currency the statements are in, so the price and the value
-                  beside it can be compared. Say so, with the rate. */}
-              {company.currencyBasis?.priceConverted && (
-                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-wider mt-1">
-                  Quoted in {company.currencyBasis.quotedCurrency}; shown in {company.currencyBasis.reportingCurrency}, the
-                  statements' currency, at {company.currencyBasis.rate?.toPrecision(6)}
-                  {company.currencyBasis.pair ? ` (${company.currencyBasis.pair})` : ''}
-                </div>
-              )}
-            </div>
-
-            {/* Derived vs analyst model switch — only where both exist */}
-            {canCompare && (
-              <div className="text-left md:text-right">
-                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  Model
-                </div>
-                <div className="flex border hairline-border">
+          {/* The model switch belongs beside the number it changes. */}
+          {canCompare && (
+            <div className="flex items-center gap-2">
+              <span className={`${EYEBROW} text-quiet`}>Model</span>
+              <div className="flex border border-line">
+                {(['DERIVED', 'ANALYST'] as const).map((mode) => (
                   <button
-                    onClick={() => setViewMode('DERIVED')}
-                    className={`font-mono text-[10px] px-3 py-2 uppercase tracking-wider cursor-pointer transition-colors ${
-                      viewMode === 'DERIVED'
-                        ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold'
-                        : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`${LABEL} cursor-pointer px-3 py-1.5 uppercase tracking-wider transition-colors ${
+                      viewMode === mode ? 'bg-accent font-semibold text-ink' : 'text-muted hover:text-ink'
                     }`}
                   >
-                    Derived
+                    {mode === 'DERIVED' ? 'Derived' : 'Analyst'}
                   </button>
-                  <button
-                    onClick={() => setViewMode('ANALYST')}
-                    className={`font-mono text-[10px] px-3 py-2 uppercase tracking-wider cursor-pointer transition-colors ${
-                      viewMode === 'ANALYST'
-                        ? 'bg-[#8B1E1E] text-[#F2F0EA] font-semibold'
-                        : 'text-[#8A8A8F] hover:text-[#F2F0EA]'
-                    }`}
-                  >
-                    Analyst
-                  </button>
-                </div>
+                ))}
               </div>
-            )}
-
             </div>
+          )}
+        </div>
 
-            {/* Model Implied Value & Premium/Discount — its own row, so the
-                price and the model switch never squeeze it. */}
-            {bankModel ? (
-              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
-                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  INTRINSIC VALUE
-                </div>
-                <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
-                  <span className="font-display text-3xl text-[#8B1E1E] font-bold">
-                    {company.currencySymbol}
-                    {bankModel.valuePerShare.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                  {bankPremiumPct !== null && (
-                    <span className={`font-mono text-[10px] px-2.5 py-1 font-semibold uppercase tracking-widest border whitespace-nowrap ${premiumDiscountStyle}`}>
+        {/* The figures. A hairline grid — one background with the gaps let
+            through — so the columns divide without three more borders. */}
+        {bankModel ? (
+          <div className="grid gap-px bg-line sm:grid-cols-2">
+            <div className="bg-panel px-5 py-5 lg:px-6">
+              <Figure
+                scale="hero"
+                tone="accent"
+                eyebrow="Intrinsic value · residual income"
+                value={`${company.currencySymbol}${bankModel.valuePerShare.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`}
+                pill={
+                  bankPremiumPct !== null ? (
+                    <Pill tone={bankPremiumPct > 0 ? 'negative' : 'positive'}>
                       {bankPremiumPct > 0
                         ? `${bankPremiumPct}% premium`
                         : `${Math.abs(bankPremiumPct)}% discount`}
-                    </span>
-                  )}
-                </div>
-                <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
-                  valued as a bank · (the working is explained below)
-                </div>
-              </div>
-            ) : hasRealModel && dcfResult.applicable !== false ? (
-              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
-                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  INTRINSIC VALUE, BOTH TERMINAL METHODS
-                </div>
-                {/* Two answers, never averaged. The gap between them is the
-                    point, not a defect to smooth over. */}
-                <div className="flex flex-wrap gap-x-6 gap-y-2 md:justify-end">
-                  {[
-                    {
-                      label: 'perpetuity growth',
-                      value: terminalMethods.perpetuity ?? dcfResult.targetPrice,
-                      premium: premiumAgainst.perpetuity,
-                    },
-                    {
-                      label: 'exit multiple',
-                      value: terminalMethods.exit,
-                      premium: premiumAgainst.exit,
-                    },
-                  ]
-                    .filter((m) => isNum(m.value))
-                    .map((m) => (
-                      <div key={m.label} className="text-left md:text-right">
-                        <FlashOnChange watch={viewMode} className="px-1 -mx-1">
-                          <span className="font-display text-3xl text-[#8B1E1E] font-bold">
-                            <TweenNumber value={m.value as number} prefix={company.currencySymbol} />
-                          </span>
-                        </FlashOnChange>
-                        <div className="font-mono text-[10px] text-[#8A8A8F] mt-1 uppercase tracking-widest">
-                          {m.label}
-                          {m.premium !== null && (
-                            <span className="ml-2 text-[#A1A1AA]">
-                              {m.premium > 0
-                                ? `${m.premium}% premium`
-                                : `${Math.abs(m.premium)}% discount`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                </div>
+                    </Pill>
+                  ) : undefined
+                }
+                foot="valued as a bank"
+              />
+            </div>
+            <div className="bg-panel px-5 py-5 lg:px-6">
+              <Figure
+                eyebrow={`${liveQuote ? 'Live price' : 'Last stored price'} · ${company.currency}`}
+                value={`${company.currencySymbol}${displayPrice.toFixed(2)}`}
+                pill={
+                  <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
+                    {displayChangePct >= 0 ? '+' : ''}
+                    {displayChangePct}%
+                  </Pill>
+                }
+              />
+            </div>
+          </div>
+        ) : hasRealModel && dcfResult.applicable !== false ? (
+          <div className="grid gap-px bg-line sm:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]">
+            {/* Named as the headline, because where one figure is needed it is
+                this one: the exit multiple rests on a multiple that is the
+                same for every derived company. */}
+            <div className="bg-panel px-5 py-5 lg:px-6">
+              <FlashOnChange watch={viewMode} className="-mx-1 block px-1">
+                <Figure
+                  scale="hero"
+                  tone="accent"
+                  eyebrow="Intrinsic value · perpetuity growth"
+                  value={
+                    <TweenNumber
+                      value={(terminalMethods.perpetuity ?? dcfResult.targetPrice) as number}
+                      prefix={company.currencySymbol}
+                    />
+                  }
+                  pill={
+                    premiumAgainst.perpetuity !== null ? (
+                      <Pill tone={premiumAgainst.perpetuity > 0 ? 'negative' : 'positive'}>
+                        {premiumAgainst.perpetuity > 0
+                          ? `${premiumAgainst.perpetuity}% premium`
+                          : `${Math.abs(premiumAgainst.perpetuity)}% discount`}
+                      </Pill>
+                    ) : undefined
+                  }
+                />
+              </FlashOnChange>
+            </div>
 
-                {terminalMethods.split && (
-                  <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 md:text-right">
-                    the two methods are {(terminalMethods.split.spread * 100).toFixed(0)}% apart
-                  </div>
-                )}
-                {terminalMethods.split?.wide && (
-                  <p className="text-[12px] leading-relaxed text-[#A1A1AA] mt-2 max-w-md md:ml-auto text-left">
-                    {terminalMethods.split.sentence}
-                  </p>
-                )}
-
-                <div className="font-mono text-[10px] text-[#8A8A8F] mt-2">
-                  (the working is explained below)
-                </div>
-              </div>
-            ) : (
-              <div className="bg-[#0B0B0D] border hairline-border p-4 px-5 text-left md:text-right shadow-inner">
-                <div className="font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase mb-1">
-                  NO VALUE SHOWN
-                </div>
-                <div className="font-mono text-[11px] text-[#A1A1AA] leading-relaxed">
-                  {dcfResult.applicable === false && dcfResult.message
-                    ? dcfResult.message
-                    : 'Placeholder record. Search this ticker in the directory to build a model from its filings.'}
-                </div>
+            {isNum(terminalMethods.exit) && (
+              <div className="bg-panel px-5 py-5 lg:px-6">
+                <FlashOnChange watch={viewMode} className="-mx-1 block px-1">
+                  <Figure
+                    eyebrow="Exit multiple"
+                    value={
+                      <TweenNumber value={terminalMethods.exit as number} prefix={company.currencySymbol} />
+                    }
+                    pill={
+                      premiumAgainst.exit !== null ? (
+                        <Pill tone={premiumAgainst.exit > 0 ? 'negative' : 'positive'}>
+                          {premiumAgainst.exit > 0
+                            ? `${premiumAgainst.exit}% premium`
+                            : `${Math.abs(premiumAgainst.exit)}% discount`}
+                        </Pill>
+                      ) : undefined
+                    }
+                  />
+                </FlashOnChange>
               </div>
             )}
+
+            <div className="bg-panel px-5 py-5 lg:px-6">
+              <Figure
+                eyebrow={`${liveQuote ? 'Live price' : 'Last stored price'} · ${company.currency}`}
+                value={`${company.currencySymbol}${displayPrice.toFixed(2)}`}
+                pill={
+                  <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
+                    {displayChangePct >= 0 ? '+' : ''}
+                    {displayChangePct}%
+                  </Pill>
+                }
+              />
+            </div>
           </div>
+        ) : (
+          <div className="px-5 py-6 lg:px-6">
+            <div className={`${EYEBROW} mb-2 text-quiet`}>NO VALUE SHOWN</div>
+            <p className={`${BODY} max-w-prose text-read`}>
+              {dcfResult.applicable === false && dcfResult.message
+                ? dcfResult.message
+                : 'Placeholder record. Search this ticker in the directory to build a model from its filings.'}
+            </p>
+          </div>
+        )}
+
+        {/* ---- THE ACCOUNT, ON DEMAND ----------------------------------
+            Everything that used to be prose sitting open under the figures.
+            The spread itself stays visible on the closed row, because it is a
+            measurement rather than an explanation: a reader comparing two
+            values has to know they disagree without opening anything. What
+            opens is what the disagreement MEANS. */}
+        <div className="px-5 lg:px-6">
+          {terminalMethods.split && (
+            <Disclose
+              summary="Why there are two values, and what the gap means"
+              trailing={`the two methods are ${(terminalMethods.split.spread * 100).toFixed(0)}% apart`}
+            >
+              <p className="max-w-prose">
+                {terminalMethods.split.wide
+                  ? terminalMethods.split.sentence
+                  : 'The perpetuity method grows the last forecast year for ever at the terminal rate; the exit multiple capitalises that year’s EBITDA at an assumed multiple. They answer the same question two ways and are never averaged, because an average is neither method’s answer and hides the disagreement — which is the useful part.'}
+              </p>
+              <p className="mt-2 max-w-prose text-quiet">
+                Where one figure is needed it is the perpetuity value, because it is built from this
+                company’s own cash flows; the exit multiple rests on a multiple that is the same for
+                every derived company.
+              </p>
+            </Disclose>
+          )}
+
+          {company.currencyBasis?.priceConverted && (
+            <Disclose summary="What this price is quoted in">
+              <p className="max-w-prose">
+                Quoted in {company.currencyBasis.quotedCurrency}; shown in{' '}
+                {company.currencyBasis.reportingCurrency}, the currency the statements are in, so the
+                price and the value beside it can be compared. Converted at{' '}
+                {company.currencyBasis.rate?.toPrecision(6)}
+                {company.currencyBasis.pair ? ` (${company.currencyBasis.pair})` : ''}.
+              </p>
+            </Disclose>
+          )}
+
+          <Disclose summary="Where the working is">
+            <p className="max-w-prose">
+              Every line of it is on this page, below: how the value was calculated, the ratios the
+              forecast produces, the valuation range, what the current price assumes, and the full
+              three-statement model and discounted cash flow. The Excel workbook carries the same
+              model with its formulas live.
+            </p>
+          </Disclose>
         </div>
 
-        {/* 5 Key Metric Cards */}
-        <motion.div
-          initial="hidden"
-          animate="shown"
-          variants={{ shown: { transition: { staggerChildren: 0.06 } } }}
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-6 hairline-border-t"
-        >
-          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Market Cap</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.marketCapStr}</span>
-          </motion.div>
-
-          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROE (LTM)</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roePct} decimals={1} suffix="%" /></span>
-          </motion.div>
-
-          <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-            <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">ROA (LTM)</span>
-            <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.roaPct} decimals={1} suffix="%" /></span>
-          </motion.div>
-
-          {/* The last two cards depend on the kind of company. Operating margin
-              and net debt to EBITDA are meaningless for a bank: a bank's
-              borrowing is its raw material, so "net debt" is not a burden to be
-              measured against earnings. Price to book and the model's implied
-              price to book are what a bank is actually judged on. */}
-          {bankModel ? (
-            <>
-              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Price / Book</span>
-                <span className="font-mono text-lg text-[#F2F0EA] font-semibold">
-                  {bankModel.bookPerShare > 0
-                    ? `${(displayPrice / bankModel.bookPerShare).toFixed(2)}x`
-                    : '—'}
-                </span>
-              </motion.div>
-
-              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Model P / B</span>
-                <span className="font-mono text-lg text-[#F2F0EA] font-semibold">
-                  {typeof bankModel.impliedPriceToBook === 'number'
-                    ? `${bankModel.impliedPriceToBook.toFixed(2)}x`
-                    : '—'}
-                </span>
-              </motion.div>
-            </>
-          ) : (
-            <>
-              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Op Margin</span>
-                <span className="font-mono text-lg text-[#F2F0EA] font-semibold"><TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /></span>
-              </motion.div>
-
-              <motion.div variants={{ hidden: { opacity: 0, y: 10 }, shown: { opacity: 1, y: 0 } }} className="bg-[#0B0B0D] border hairline-border p-4 hover:border-[#222228] transition-colors cursor-default">
-                <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest block mb-1">Net Debt / EBITDA</span>
-                <span className="font-mono text-lg text-[#F2F0EA] font-semibold">{company.netDebtEbitda}</span>
-              </motion.div>
-            </>
+        {/* ---- WHAT A READER DOES NEXT --------------------------------- */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4 lg:px-6">
+          {hasRealModel && dcfResult.applicable !== false && (
+            <button
+              type="button"
+              onClick={exportExcel}
+              disabled={exporting}
+              className={`${LABEL} inline-flex items-center gap-2 border border-accent bg-accent/20 px-3.5 py-2 uppercase tracking-widest text-ink transition-colors hover:bg-accent/35 disabled:opacity-40`}
+              title="Download the full model as one Excel workbook"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? 'Building the workbook…' : 'Download Excel model'}
+            </button>
           )}
-        </motion.div>
-      </div>
+          {hasRealModel && (
+            <button
+              type="button"
+              onClick={() => setNerdView('SAVED')}
+              className={`${LABEL} inline-flex items-center gap-2 border border-line px-3.5 py-2 uppercase tracking-widest text-muted transition-colors hover:border-accent hover:text-ink`}
+            >
+              Saved models
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ==================================================================
+          THE MEASURES — one tile component, not five copies of its markup.
+          Dense by intention: a professional reads the row at a glance.
+          ================================================================== */}
+      <motion.div
+        initial="hidden"
+        animate="shown"
+        variants={{ shown: { transition: { staggerChildren: 0.05 } } }}
+        className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
+      >
+        {(bankModel
+          ? [
+              { label: 'Market cap', value: company.marketCapStr },
+              { label: 'ROE (LTM)', value: <TweenNumber value={company.roePct} decimals={1} suffix="%" /> },
+              { label: 'ROA (LTM)', value: <TweenNumber value={company.roaPct} decimals={1} suffix="%" /> },
+              {
+                label: 'Price / book',
+                value:
+                  bankModel.bookPerShare > 0
+                    ? `${(displayPrice / bankModel.bookPerShare).toFixed(2)}x`
+                    : '—',
+              },
+              {
+                label: 'Model P / B',
+                value:
+                  typeof bankModel.impliedPriceToBook === 'number'
+                    ? `${bankModel.impliedPriceToBook.toFixed(2)}x`
+                    : '—',
+              },
+            ]
+          : [
+              { label: 'Market cap', value: company.marketCapStr },
+              { label: 'ROE (LTM)', value: <TweenNumber value={company.roePct} decimals={1} suffix="%" /> },
+              { label: 'ROA (LTM)', value: <TweenNumber value={company.roaPct} decimals={1} suffix="%" /> },
+              { label: 'Op margin', value: <TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /> },
+              { label: 'Net debt / EBITDA', value: company.netDebtEbitda },
+            ]
+        ).map((tile) => (
+          <motion.div
+            key={tile.label}
+            variants={{ hidden: { opacity: 0, y: 8 }, shown: { opacity: 1, y: 0 } }}
+          >
+            <MetricTile label={tile.label} value={tile.value} />
+          </motion.div>
+        ))}
+      </motion.div>
 
       {/* Marks where the full header ends, for the condensed bar above */}
       <div ref={headerSentinel} className="h-px w-full" aria-hidden="true" />

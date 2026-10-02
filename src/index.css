@@ -6,6 +6,32 @@
   --font-serif: "Playfair Display", Georgia, serif;
   --font-mono: "JetBrains Mono", monospace;
   --font-sans: "Inter", sans-serif;
+
+  /* THE RAMP, AS UTILITY NAMES — `text-ink`, `bg-panel`, `border-line`.
+     Screens were written with the hex in the class (`text-[#8A8A8F]`), which
+     is why the remapping block near the bottom of this file has to exist: it
+     catches those spellings and points them at the ramp. These names are what
+     a screen should use instead, so a new screen needs no remapping and the
+     colour it asks for is the colour it gets.
+
+     Each one points at the `--m-*` custom property below rather than repeating
+     its value, so there is no third copy of the palette to drift:
+     `src/design/tokens.ts` is the source, `:root` mirrors it, and these are
+     names for what `:root` already says. `npm run verify` compares the first
+     two and fails if they disagree. */
+  --color-page: var(--m-page);
+  --color-panel: var(--m-panel);
+  --color-line: var(--m-line);
+  --color-ink: var(--m-ink);
+  --color-read: var(--m-read);
+  --color-muted: var(--m-muted);
+  --color-quiet: var(--m-quiet);
+  --color-accent: var(--m-accent);
+  --color-accent-text: var(--m-accent-text);
+  --color-positive: var(--m-positive);
+  --color-positive-line: var(--m-positive-line);
+  --color-positive-fill: var(--m-positive-fill);
+  --color-amber: var(--m-amber);
 }
 
 @layer base {
@@ -82,19 +108,56 @@
   border-right: 1px solid #262521;
 }
 
-/* Custom scrollbar */
+/* ---------------------------------------------------------------------------
+   THE SURFACES NOBODY DRAWS
+   ---------------------------------------------------------------------------
+   The scrollbar was themed and the other four were not, so selecting a figure
+   painted it in the browser's default blue — the one colour on the site that
+   belongs to no palette — and tabbing through the disclosures drew Chrome's
+   focus ring. These are cheap and they are the difference between a page that
+   was built and one that was assembled.
+
+   Firefox gets `scrollbar-color`; it does not implement the WebKit
+   pseudo-elements and was showing a full-width default bar beside a 4px one
+   everywhere else. */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: #0B0B0D;
+  background: var(--m-page);
 }
 ::-webkit-scrollbar-thumb {
-  background: #262521;
+  background: var(--m-line);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #8B1E1E;
+  background: var(--m-accent);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--m-line) var(--m-page);
+}
+
+/* Selection: the oxblood at low alpha, so the ink stays legible through it
+   rather than being inverted to the browser's white-on-blue. */
+::selection {
+  background: color-mix(in srgb, var(--m-accent) 55%, transparent);
+  color: var(--m-ink);
+}
+
+/* The caret in the search box and every figure editor. */
+input,
+textarea,
+[contenteditable] {
+  caret-color: var(--m-accent-text);
+}
+
+/* Keyboard focus, from the palette and only for the keyboard. A disclosure row
+   is a real button, so it was getting the default ring; a mouse user never saw
+   it and a keyboard user saw the wrong colour. */
+:focus-visible {
+  outline: 1px solid var(--m-accent-text);
+  outline-offset: 2px;
 }
 
 /* Marquee animation */

@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T00:00:00.000Z",
+  "title": "Design System: Marginalia",
+  "extensions": {
+    "colorMeta": {
+      "page": {
+        "role": "neutral",
+        "displayName": "Page Black",
+        "canonical": "#0B0B0D",
+        "note": "The instrument ground, and the ground a metric tile sits back down onto.",
+        "tonalRamp": ["oklch(14% 0.004 290)", "oklch(22% 0.004 290)", "oklch(32% 0.004 290)", "oklch(44% 0.004 290)", "oklch(56% 0.004 290)", "oklch(68% 0.004 290)", "oklch(82% 0.004 290)", "oklch(95% 0.004 290)"]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel Black",
+        "canonical": "#111114",
+        "note": "Any raised surface. One black, where four near-identical ones had accumulated.",
+        "tonalRamp": ["oklch(15% 0.006 285)", "oklch(24% 0.006 285)", "oklch(34% 0.006 285)", "oklch(45% 0.006 285)", "oklch(57% 0.006 285)", "oklch(69% 0.006 285)", "oklch(82% 0.006 285)", "oklch(95% 0.006 285)"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#262521",
+        "note": "Every rule and border on the dark ground, plus the scrollbar thumb. Warm, so it does not read as blue-cast grey-on-grey.",
+        "tonalRamp": ["oklch(16% 0.007 85)", "oklch(25% 0.007 85)", "oklch(35% 0.007 85)", "oklch(46% 0.007 85)", "oklch(58% 0.007 85)", "oklch(70% 0.007 85)", "oklch(83% 0.007 85)", "oklch(95% 0.007 85)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#F2F0EA",
+        "note": "Headings, figures, anything being read closely.",
+        "tonalRamp": ["oklch(15% 0.008 90)", "oklch(25% 0.008 90)", "oklch(36% 0.008 90)", "oklch(47% 0.008 90)", "oklch(59% 0.008 90)", "oklch(71% 0.008 90)", "oklch(83% 0.008 90)", "oklch(95% 0.008 90)"]
+      },
+      "read": {
+        "role": "neutral",
+        "displayName": "Reading Grey",
+        "canonical": "#C6C1B7",
+        "note": "Body paragraphs. Bright enough to actually read on a near-black ground, which the greys it replaced were not.",
+        "tonalRamp": ["oklch(15% 0.012 88)", "oklch(25% 0.012 88)", "oklch(36% 0.012 88)", "oklch(47% 0.012 88)", "oklch(59% 0.012 88)", "oklch(71% 0.012 88)", "oklch(83% 0.012 88)", "oklch(95% 0.012 88)"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Grey",
+        "canonical": "#A8A29A",
+        "note": "Labels, captions, secondary lines.",
+        "tonalRamp": ["oklch(15% 0.011 86)", "oklch(25% 0.011 86)", "oklch(36% 0.011 86)", "oklch(47% 0.011 86)", "oklch(59% 0.011 86)", "oklch(71% 0.011 86)", "oklch(83% 0.011 86)", "oklch(95% 0.011 86)"]
+      },
+      "quiet": {
+        "role": "neutral",
+        "displayName": "Quiet Grey",
+        "canonical": "#85816F",
+        "note": "The smallest print: disclaimers, placeholders, units, eyebrows. The floor, at 5.03:1 on the page and 4.82:1 on a panel. Absorbed a second grey 0.9:1 away.",
+        "tonalRamp": ["oklch(15% 0.021 92)", "oklch(25% 0.021 92)", "oklch(36% 0.021 92)", "oklch(47% 0.021 92)", "oklch(59% 0.021 92)", "oklch(71% 0.021 92)", "oklch(83% 0.021 92)", "oklch(95% 0.021 92)"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Oxblood",
+        "canonical": "#8B1E1E",
+        "note": "The mark, rules, fills, the selected ticker chip, the scrollbar thumb on hover, text selection at 55%. 2.16:1 on the page: NEVER text.",
+        "tonalRamp": ["oklch(18% 0.09 27)", "oklch(27% 0.12 27)", "oklch(36% 0.15 27)", "oklch(45% 0.16 27)", "oklch(56% 0.15 27)", "oklch(68% 0.12 27)", "oklch(82% 0.07 27)", "oklch(95% 0.02 27)"]
+      },
+      "accent-text": {
+        "role": "primary",
+        "displayName": "Read Oxblood",
+        "canonical": "#D05E58",
+        "note": "The oxblood where it carries words, plus the caret and the keyboard focus outline. 5.08:1 on the page, 4.87:1 on a panel. Hue held at 3 degrees, saturation lifted 51% to 56% so it does not go dusty pink.",
+        "tonalRamp": ["oklch(18% 0.07 25)", "oklch(28% 0.10 25)", "oklch(38% 0.13 25)", "oklch(48% 0.14 25)", "oklch(60% 0.14 25)", "oklch(71% 0.11 25)", "oklch(83% 0.07 25)", "oklch(95% 0.02 25)"]
+      },
+      "positive": {
+        "role": "secondary",
+        "displayName": "Ledger Green",
+        "canonical": "#5FA37B",
+        "note": "One green, for a live state or a positive. Four emerald shades had been in use; the tone of a gain should not depend on which screen it is on.",
+        "tonalRamp": ["oklch(18% 0.03 155)", "oklch(28% 0.05 155)", "oklch(38% 0.07 155)", "oklch(48% 0.08 155)", "oklch(62% 0.08 155)", "oklch(73% 0.07 155)", "oklch(84% 0.05 155)", "oklch(95% 0.02 155)"]
+      },
+      "positive-line": {
+        "role": "secondary",
+        "displayName": "Ledger Green Hairline",
+        "canonical": "#2F5C45",
+        "note": "The border of a positive pill or a positive fill."
+      },
+      "positive-fill": {
+        "role": "secondary",
+        "displayName": "Ledger Green Wash",
+        "canonical": "#12211A",
+        "note": "The ground of a positive pill."
+      },
+      "amber": {
+        "role": "tertiary",
+        "displayName": "Statement Amber",
+        "canonical": "#C79A2E",
+        "note": "A warning that is a fact rather than a judgement: a data constraint, a basis the filing will not support.",
+        "tonalRamp": ["oklch(18% 0.04 85)", "oklch(28% 0.06 85)", "oklch(38% 0.08 85)", "oklch(50% 0.10 85)", "oklch(70% 0.12 85)", "oklch(80% 0.09 85)", "oklch(88% 0.06 85)", "oklch(96% 0.02 85)"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#F2F0EA",
+        "note": "The reading ground: Margin Notes and the explainers under /learn/."
+      },
+      "paper-ink": {
+        "role": "neutral",
+        "displayName": "Paper Ink",
+        "canonical": "#16150F",
+        "note": "Headings and close reading on paper."
+      },
+      "paper-read": {
+        "role": "neutral",
+        "displayName": "Paper Read",
+        "canonical": "#3A382F",
+        "note": "Body paragraphs on paper."
+      },
+      "paper-quiet": {
+        "role": "neutral",
+        "displayName": "Paper Quiet",
+        "canonical": "#6B6759",
+        "note": "The smallest print on paper. Fails the floor on the dark ground, which is why the two ramps are separate."
+      },
+      "paper-line": {
+        "role": "neutral",
+        "displayName": "Paper Hairline",
+        "canonical": "#DAD6CC",
+        "note": "Rules and borders on paper."
+      },
+      "paper-accent-text": {
+        "role": "primary",
+        "displayName": "Paper Read Oxblood",
+        "canonical": "#A23A34",
+        "note": "The darker cut of the oxblood that carries words on paper: 5.77:1. Paper also permits the deep accent as text; the dark ground does not."
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Landing-page and long-section headings. Inter 700 cut hard, because an editorial serif at display size reads as a magazine and this reads as an institution." },
+      "headline": { "displayName": "Headline", "purpose": "Screen headings." },
+      "title": { "displayName": "Title", "purpose": "Panel headings." },
+      "editorial": { "displayName": "Editorial", "purpose": "Playfair Display, opt-in only: the wordmark, a blockquote, anything marked .editorial." },
+      "hero-figure": { "displayName": "Hero Figure", "purpose": "The one figure a screen exists to show. A clamp, not three breakpoint steps, because the hero should fill the width it is given." },
+      "figure": { "displayName": "Figure", "purpose": "The figures beside the hero: exit multiple, live price." },
+      "tile-figure": { "displayName": "Tile Figure", "purpose": "The measure in a metric tile. Dense on purpose." },
+      "body": { "displayName": "Body", "purpose": "Paragraphs. Generous leading and slight positive tracking, because reading text on a near-black ground needs more room than the same text on white." },
+      "body-dense": { "displayName": "Body Dense", "purpose": "The sentence inside a disclosure." },
+      "label": { "displayName": "Label / Eyebrow", "purpose": "What a thing is: a figure's name, a row's unit, a tile's label, a chip's ticker. Uniformly 0.16em at weight 500." },
+      "label-chrome": { "displayName": "Chrome Label", "purpose": "The top bar only: the stated 12px exemption from the 13px floor, because it is glanced at rather than read and wraps at 13px." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "disclose", "value": "height/opacity 200ms ease-out", "purpose": "A Disclose body opening and closing. The chevron rotates 90deg over the same 200ms rather than swapping glyph, so the control does not reflow." },
+      { "name": "condensed-header", "value": "y -60px to 0, opacity 0 to 1, 280ms ease-out", "purpose": "The condensed header entering once the full one has scrolled out." },
+      { "name": "tile-stagger", "value": "staggerChildren 50ms; child opacity 0 to 1, y 8px to 0", "purpose": "The metric tile row entering." },
+      { "name": "colour-only-states", "value": "transition-colors", "purpose": "Every hover and active state is a colour change. No lift, no scale, no shadow." },
+      { "name": "marquee", "value": "translateX(0) to translateX(-100%), 110s linear infinite, paused on hover", "purpose": "The headline ticker. Starts at zero so the first headline is readable immediately." }
+    ],
+    "breakpoints": [
+      { "name": "prose-ragged", "value": "640px", "purpose": "At or below this width prose stops justifying and goes ragged-right; justifying a narrow column forces gaps into every line." },
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "container", "value": "1440px" }
+    ],
+    "verification": {
+      "contrastFloor": 4.5,
+      "command": "npm run verify",
+      "what": "Compares src/design/tokens.ts against the :root block of src/index.css and fails if any --m-* disagrees; measures every token in TEXT_ON_DARK and TEXT_ON_PAPER against 4.5:1 on every ground; asserts accent stays out of the dark-ground text list; fails a component that declares a palette hex of its own."
+    }
+  },
+  "components": [
+    {
+      "name": "Hero Figure",
+      "kind": "custom",
+      "refersTo": "figure-hero",
+      "description": "The one figure a screen exists to show: an eyebrow above, the number large, monospaced and alone, a state pill on its baseline. Read oxblood marks a figure this product computed rather than fetched.",
+      "html": "<div class=\"ds-figure\"><div class=\"ds-figure-eyebrow\">Intrinsic value · perpetuity growth</div><div class=\"ds-figure-row\"><span class=\"ds-figure-value\">$184.26</span><span class=\"ds-pill ds-pill-negative\">12% premium</span></div><div class=\"ds-figure-foot\">valued from its own cash flows</div></div>",
+      "css": ".ds-figure { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-figure-eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-figure-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; } .ds-figure-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: clamp(2.5rem, 5vw, 3.75rem); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--m-accent-text, #D05E58); } .ds-figure-foot { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.04em; color: var(--m-quiet, #85816F); margin-top: 8px; } .ds-pill { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-negative { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); }"
+    },
+    {
+      "name": "State Pill",
+      "kind": "chip",
+      "refersTo": "pill-positive",
+      "description": "A square hairline capsule beside a figure. Four tones and no more: positive, negative, neutral, warn. A discount reads positive and a premium reads oxblood — a measurement, never a verdict.",
+      "html": "<span class=\"ds-pill ds-pill-positive\">8% discount</span> <span class=\"ds-pill ds-pill-neg\">12% premium</span> <span class=\"ds-pill ds-pill-neutral\">exit multiple</span> <span class=\"ds-pill ds-pill-warn\">basis not reported</span>",
+      "css": ".ds-pill { display: inline-block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-positive { color: var(--m-positive, #5FA37B); border-color: var(--m-positive-line, #2F5C45); background: var(--m-positive-fill, #12211A); } .ds-pill-neg { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); } .ds-pill-neutral { color: var(--m-muted, #A8A29A); border-color: var(--m-line, #262521); background: var(--m-page, #0B0B0D); } .ds-pill-warn { color: var(--m-amber, #C79A2E); border-color: rgba(199,154,46,0.4); background: rgba(199,154,46,0.1); }"
+    },
+    {
+      "name": "Metric Tile",
+      "kind": "card",
+      "refersTo": "metric-tile",
+      "description": "One measure. Dense on purpose: an eyebrow label, a 17px mono figure, a hairline, no shadow. A professional reads a row of these at a glance and wants them close together.",
+      "html": "<div class=\"ds-tile\"><div class=\"ds-tile-label\" title=\"Net debt / EBITDA\">Net debt / EBITDA</div><div class=\"ds-tile-value\">1.84x</div><div class=\"ds-tile-note\">reported FY24, lease-adjusted</div></div>",
+      "css": ".ds-tile { border: 1px solid var(--m-line, #262521); background: var(--m-page, #0B0B0D); padding: 12px 14px; border-radius: 0; transition: border-color 0.2s; } .ds-tile:hover { border-color: rgba(133,129,111,0.4); } .ds-tile-label { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-tile-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 500; line-height: 1; color: var(--m-ink, #F2F0EA); } .ds-tile-note { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.4; color: var(--m-quiet, #85816F); margin-top: 6px; }"
+    },
+    {
+      "name": "Disclose Row",
+      "kind": "custom",
+      "refersTo": "disclose-row",
+      "description": "Where the prose went. A real button with aria-expanded over a controlled region; the chevron rotates rather than swapping glyph so the control cannot reflow. A measurement may stay visible on the closed row.",
+      "html": "<div class=\"ds-disclose\"><button type=\"button\" class=\"ds-disclose-btn\" aria-expanded=\"false\"><svg class=\"ds-disclose-chev\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg><span class=\"ds-disclose-summary\">Why there are two values, and what the gap means</span><span class=\"ds-disclose-trailing\">the two methods are 14% apart</span></button><div class=\"ds-disclose-body\">The perpetuity method grows the last forecast year for ever at the terminal rate; the exit multiple capitalises that year’s EBITDA at an assumed multiple. They are never averaged, because an average is neither method’s answer.</div></div>",
+      "css": ".ds-disclose { border-top: 1px solid var(--m-line, #262521); } .ds-disclose-btn { display: flex; width: 100%; align-items: center; gap: 12px; text-align: left; padding: 12px 0; background: none; border: none; cursor: pointer; transition: color 0.2s; } .ds-disclose-chev { flex-shrink: 0; color: var(--m-quiet, #85816F); transition: transform 0.2s, color 0.2s; } .ds-disclose-btn[aria-expanded=\"true\"] .ds-disclose-chev { transform: rotate(90deg); } .ds-disclose-btn:hover .ds-disclose-chev { color: var(--m-accent-text, #D05E58); } .ds-disclose-summary { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.04em; color: var(--m-muted, #A8A29A); transition: color 0.2s; } .ds-disclose-btn:hover .ds-disclose-summary { color: var(--m-ink, #F2F0EA); } .ds-disclose-trailing { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-variant-numeric: tabular-nums; margin-left: auto; color: var(--m-quiet, #85816F); } .ds-disclose-btn:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-disclose-body { padding: 0 0 16px 24px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; line-height: 1.625; color: var(--m-read, #C6C1B7); }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action a screen exists for: downloading the workbook. Oxblood border over an oxblood wash, square, with an inline SVG icon.",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/></svg>Download Excel model</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-ink, #F2F0EA); background: rgba(139,30,30,0.2); border: 1px solid var(--m-accent, #8B1E1E); border-radius: 0; padding: 8px 14px; cursor: pointer; transition: background-color 0.2s; } .ds-btn-primary:hover { background: rgba(139,30,30,0.35); } .ds-btn-primary:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.4; cursor: default; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The default secondary action: hairline border, muted label, border goes oxblood on hover.",
+      "html": "<button type=\"button\" class=\"ds-btn-ghost\">Saved models</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-muted, #A8A29A); background: transparent; border: 1px solid var(--m-line, #262521); border-radius: 0; padding: 8px 14px; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-btn-ghost:hover { color: var(--m-ink, #F2F0EA); border-color: var(--m-accent, #8B1E1E); } .ds-btn-ghost:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ticker Chip",
+      "kind": "chip",
+      "refersTo": "chip-ticker",
+      "description": "The company switch. Unselected is the panel ground inside a hairline; selected is a solid oxblood ground with an ink label. The escape chip that leaves the set carries read oxblood.",
+      "html": "<button type=\"button\" class=\"ds-chip ds-chip-selected\">AAPL</button> <button type=\"button\" class=\"ds-chip\">MSFT</button> <button type=\"button\" class=\"ds-chip ds-chip-escape\">+ All</button>",
+      "css": ".ds-chip { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-muted, #A8A29A); background: var(--m-panel, #111114); border: 1px solid var(--m-line, #262521); border-radius: 0; padding: 4px 10px; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-chip:hover { color: var(--m-ink, #F2F0EA); border-color: rgba(133,129,111,0.4); } .ds-chip-selected { background: var(--m-accent, #8B1E1E); border-color: var(--m-accent, #8B1E1E); color: var(--m-ink, #F2F0EA); font-weight: 600; } .ds-chip-escape { color: var(--m-accent-text, #D05E58); background: transparent; } .ds-chip-escape:hover { border-color: var(--m-accent, #8B1E1E); color: var(--m-ink, #F2F0EA); } .ds-chip:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; }"
+    },
+    {
+      "name": "Reference Strip",
+      "kind": "nav",
+      "refersTo": "panel",
+      "description": "Identity as reference rather than headline: exchange, sector, ISIN as key/value pairs at label size, because a reader who typed the ticker already knows which company this is.",
+      "html": "<dl class=\"ds-refstrip\"><div class=\"ds-refstrip-item\"><dt>exch</dt><dd>NASDAQ</dd></div><div class=\"ds-refstrip-item\"><dt>sector</dt><dd>Technology</dd></div><div class=\"ds-refstrip-item\"><dt>isin</dt><dd>US0378331005</dd></div></dl>",
+      "css": ".ds-refstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0; } .ds-refstrip-item { display: flex; align-items: baseline; gap: 6px; } .ds-refstrip dt { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); } .ds-refstrip dd { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: var(--m-muted, #A8A29A); margin: 0; }"
+    },
+    {
+      "name": "The Mark",
+      "kind": "custom",
+      "refersTo": "mark",
+      "description": "The red square that ends a heading in place of a full stop. marginRight -0.21em gives it zero advance width, so it hangs into the gutter instead of being pushed onto a line of its own. A word joiner precedes it.",
+      "html": "<h2 class=\"ds-heading\">How the value was calculated⁠<span class=\"ds-mark\"></span></h2>",
+      "css": ".ds-heading { font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.04; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); margin: 0; } .ds-mark { display: inline-block; vertical-align: baseline; width: 0.13em; height: 0.13em; background: var(--m-accent, #8B1E1E); margin-left: 0.08em; margin-right: -0.21em; }"
+    },
+    {
+      "name": "Valuation Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The container form: square, hairline-bordered, panel ground, divided internally by hairlines. Figure columns separate with a 1px gap over a hairline background rather than with more borders.",
+      "html": "<section class=\"ds-panel\" aria-label=\"Valuation\"><div class=\"ds-panel-head\"><span class=\"ds-panel-ticker\">AAPL</span><span class=\"ds-panel-name\">Apple Inc.</span></div><div class=\"ds-panel-grid\"><div class=\"ds-panel-cell\"><div class=\"ds-cell-eyebrow\">Intrinsic value</div><div class=\"ds-cell-value\">$184.26</div></div><div class=\"ds-panel-cell\"><div class=\"ds-cell-eyebrow\">Live price · USD</div><div class=\"ds-cell-value\">$209.41</div></div></div></section>",
+      "css": ".ds-panel { border: 1px solid var(--m-line, #262521); background: var(--m-panel, #111114); border-radius: 0; } .ds-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--m-line, #262521); padding: 16px 20px; } .ds-panel-ticker { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.16em; color: var(--m-accent-text, #D05E58); } .ds-panel-name { font-family: Inter, system-ui, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); } .ds-panel-grid { display: grid; gap: 1px; background: var(--m-line, #262521); grid-template-columns: 1.25fr 1fr; } .ds-panel-cell { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-cell-eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-cell-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: clamp(1.625rem, 3vw, 2.375rem); font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--m-ink, #F2F0EA); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lit Ledger",
+    "overview": "Marginalia is a warm near-black instrument with a paper annex. Everything on the instrument side is measured in a single warm ramp — a warm page, a warm off-white ink, and warm greys between them — because the one cool grey the build used to carry (Tailwind's zinc, 62 uses sitting beside 300 uses of a warm grey) read as faintly dirty against the ground and nobody could say why. The reading side — Margin Notes and the explainers under /learn/ — is a separate ramp on paper, not the same ramp inverted, because a colour legible on one ground is usually not legible on the other.\n\nDensity is a value here, not a side effect. An eyebrow label, a figure at 17px, a hairline and no shadow: a professional reads a row of tiles at a glance and wants them close together, and the airy version of the same card says \"dashboard\" rather than \"terminal\". The governing pattern of the shipped company screen is the number first, the explanation on demand. A figure is large, monospaced and alone; everything that accounts for it sits behind a disclosure that opens beside the figure rather than in a footnote at the bottom of the panel. The prose was never the fault — it is the reason to trust the number — but a reader who already trusts it should not walk past three sentences to find the value.\n\nContrast is a property of the token, not of the component. Every colour that carries words clears 4.5:1 on every ground it is used on; verify/scenarios.mts measures it and npm run verify fails the run if a token drops below. The one deliberate exception is stated as its own token rather than remembered: the oxblood that carries words is a different value from the oxblood that is a square.",
+    "keyCharacteristics": [
+      "Two grounds, two ramps: a warm near-black instrument, warm paper for reading.",
+      "Hairlines and tonal layering only. Not one box-shadow in the build.",
+      "Square corners. Radius appears only as a full circle, on a status dot or a diagram ring.",
+      "Every figure monospace and tabular; every heading Inter at 700, cut tight.",
+      "One red, one green, one amber. Their rarity is what makes them mean anything.",
+      "A red square, not a full stop, ends a heading.",
+      "Even the surfaces nobody draws — scrollbar, selection, caret, focus ring — come from the palette."
+    ],
+    "rules": [
+      { "name": "The Mark Is Not Text Rule", "body": "accent is the mark, the rule and the fill, and is never set as type at any size. Words in oxblood take accent-text. The two are separate tokens so the distinction is stated rather than remembered, and the contrast check asserts accent stays out of the text list.", "section": "colors" },
+      { "name": "The Two Grounds Rule", "body": "Dark tokens are for instrument screens, paper tokens for reading screens. Never carry a token across grounds, and never derive one ramp from the other by inversion.", "section": "colors" },
+      { "name": "The 4.5:1 Floor Rule", "body": "Any token that carries words clears 4.5:1 on every ground it appears on. A colour is chosen by measurement, not by eye, and the measurement is enforced by npm run verify.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "One red, one green, one amber. A new state borrows an existing tone or goes grey; it does not introduce a hue.", "section": "colors" },
+      { "name": "The Palette Lives In One File Rule", "body": "src/design/tokens.ts is the source; src/index.css mirrors it as --m-* custom properties and @theme names them as --color-* utilities pointing at those properties, so there is no third copy to drift. A component that declares a palette hex of its own fails verification.", "section": "colors" },
+      { "name": "The No Browser Default Rule", "body": "The scrollbar, the selection, the caret and the focus ring are palette colours. A default blue selection is the one colour on the page that belongs to no palette, and it is the difference between a page that was built and one that was assembled.", "section": "colors" },
+      { "name": "The Figures Are Mono Rule", "body": "Every number is JetBrains Mono with tabular-nums. Inter's digits are proportional, so a column of them does not line up and a figure that tweens as a slider drags jitters sideways. A span or div marked .font-display is resolved to mono for exactly this reason: a serif price above a mono ratio row was the last place the build changed its mind about itself.", "section": "typography" },
+      { "name": "The 13px Floor Rule", "body": "Nothing anyone has to read is set below 13px. There is one exemption and it is stated in the stylesheet rather than left as a mystery in a component: the top bar carries seven labels, a clock and two buttons on a fixed 1440px rule, is glanced at rather than read, and is held at 12px with nowrap because at 13px its last three labels wrap.", "section": "typography" },
+      { "name": "The Seven Sizes Rule", "body": "13 / 15 / 16 / 18 / 20 / 24, plus 30-48 on the landing page only, each declared with its own line height. Thirteen sizes between 8px and 24px is not a hierarchy; 14px and 15px in neighbouring panels read as a mistake rather than a distinction.", "section": "typography" },
+      { "name": "The Uniform Label Rule", "body": "Every uppercase mono label is 0.16em and weight 500, set once in the stylesheet. Four different tracking values is the sort of thing nobody notices individually and everybody notices in aggregate.", "section": "typography" },
+      { "name": "The Prose Is Not Mono Rule", "body": "Monospace carries figures and the small-caps labels above them. A paragraph set in it reads as a terminal dump, so any monospace block with relaxed leading and no small caps is reset to the reading face.", "section": "typography" },
+      { "name": "The Density Rule", "body": "Rows of measures sit close. If a surface feels airy it is reading as a dashboard rather than a terminal, and the padding is wrong.", "section": "layout" },
+      { "name": "The Blocks Line Up Rule", "body": "A paragraph, a table and a chart in the same panel share one left and one right edge. Three different prose widths beside full-width tables is what makes a page read as ragged columns floating in empty space.", "section": "layout" },
+      { "name": "The Hairline Rule", "body": "Separation is a 1px warm line or a one-step tonal change. A surface is never lifted off the page with a shadow, a glow or a gradient.", "section": "elevation" },
+      { "name": "The Zero Advance Width Rule", "body": "marginRight: -0.21em on the mark is not a tuning value and is never adjusted. Render the mark through the one Mark component; never hand-roll the square, and never write a literal full stop before one.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do take colour from the ramp by utility name (text-ink, bg-panel, border-line, text-accent-text), which resolves through --m-* to src/design/tokens.ts.",
+      "Do set every number in JetBrains Mono with tabular-nums, including any number that tweens.",
+      "Do use accent-text for oxblood words and accent for the mark, rules and fills.",
+      "Do separate with a 1px warm hairline or a one-step tonal change.",
+      "Do keep square corners (0px) on panels, tiles, chips, pills and buttons.",
+      "Do put the figure first and fold its account into a Disclose beside it, leaving a measurement visible on the closed row where a reader needs it.",
+      "Do render the heading mark through the Mark component, keeping marginRight: -0.21em.",
+      "Do build new screens from the instrument.tsx primitives (Figure, Pill, MetricTile, Disclose, RefStrip) rather than new markup.",
+      "Do give an interactive row a real <button> with aria-expanded and a palette :focus-visible outline.",
+      "Do run npm run verify after touching a colour: it compares tokens.ts against index.css and measures every text token against the 4.5:1 floor.",
+      "Do keep prose at full panel width, justified with hyphenation above 640px."
+    ],
+    "donts": [
+      "Don't set accent (#8B1E1E) as text at any size. It is 2.16:1 on the page.",
+      "Don't declare a palette hex inside a component; verification fails it.",
+      "Don't add a second green, a second red, a second panel black, or a cool grey. The ground is warm, and a cool grey on it reads as faintly dirty.",
+      "Don't use Playfair Display for a heading. Headings are Inter 700; the serif is opt-in for the wordmark, a blockquote and .editorial.",
+      "Don't add a box-shadow, a glow or a gradient to lift a surface.",
+      "Don't set type below 13px outside the top bar's stated 12px exemption.",
+      "Don't add a font size between the seven steps, or set a size without its line height.",
+      "Don't set a paragraph in the monospace face.",
+      "Don't leave a browser default on the scrollbar, the selection, the caret or the focus ring.",
+      "Don't loosen tile or row padding into an airy grid; density is the register.",
+      "Don't round, rename or re-derive a token hex. The frontmatter values are the measured ones."
+    ]
+  }
+}

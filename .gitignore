@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Impeccable detector cache: regenerated on every edit, not a record.
+.impeccable/hook.cache.json

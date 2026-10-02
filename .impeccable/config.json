@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-02T17:17:20.619Z",
+        "reason": "user confirmed: the redesign brief pinned the typefaces verbatim — 'Keep the palette, Inter and Playfair, and the square'. Inter is the site-wide body face loaded in index.html and mirrored in src/design/tokens.ts TYPE.body; changing it is a site-wide redesign the brief forbids."
+      }
+    ]
+  }
+}
