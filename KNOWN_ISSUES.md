@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-24`. **Next free: `KI-25`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-26`. **Next free: `KI-27`.** Retired, meaning
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
   average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
@@ -92,7 +92,65 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**None open.**
+**Neither of these moves a valuation.** They are faults on the screen, found
+while redesigning the company screen on 2026-10-02, and they are here because
+this file is the list of things this repository does incorrectly — not only the
+ones that change a number.
+
+| ID | What is wrong | Measured |
+|---|---|---|
+| `KI-25` | The news ticker scrolls text out of view that already fits | strip 730px inside a 1117px window |
+| `KI-26` | A render-blocking stylesheet for an icon font nothing uses | one request per page load, zero usage |
+
+### `KI-25` — the ticker scrolls away text that fits
+
+**Where:** `src/index.css`, the `marquee` keyframes and `.animate-marquee`,
+used by the news ticker in `src/components/TerminalDashboard.tsx`.
+
+The animation translates the strip from `translateX(0)` to `translateX(-100%)`
+unconditionally. When the headlines are wider than the window that is a ticker.
+When they are **narrower** it is a fault: the text fits entirely, needs no
+scrolling, and is dragged off the left edge anyway until nothing is left, then
+snaps back and does it again.
+
+**Measured** 2026-10-02 on the dev server at 1440px, sampling the strip's offset
+inside its window every 1.6 seconds: the strip is **730px wide in a 1117px
+window** — it fits with 387px to spare — and its left edge moves from −9px to
+−105px over fifteen seconds, continuing to −730px before restarting. A
+screenshot taken mid-cycle caught the placeholder reading `oading...]` where it
+should read `[Loading...]`.
+
+The 2026-09 fix that made the strip start at `translateX(0)` rather than off the
+right edge is the reason the first headline is readable at all; it did not add
+the condition that the strip should only move when it has somewhere to go.
+
+**What it would take to fix:** animate only when the strip is wider than its
+window, which needs its width measured rather than assumed — or duplicate the
+content and translate by half, the usual marquee construction, which also
+removes the blank period before the restart.
+
+### `KI-26` — a stylesheet fetched for an icon font nothing uses
+
+**Where:** `index.html`, line 17.
+
+The page loads `Material+Symbols+Outlined` from Google Fonts in `<head>`. The
+application draws every icon with `lucide-react` inline SVG: there is no
+`material-symbols` class, no `Material Symbols` font-family and no ligature text
+anywhere in `src/`, `scripts/`, `content/` or `api/`.
+
+**Measured** 2026-10-02. The font **file** is never fetched — a browser loads a
+webfont only when a glyph needs it, and the request list for a page load shows
+`materialsymbols woff2 fetched: false`. So the cost is not the 1,137,972-byte
+woff2 the family would weigh; it is the **688-byte CSS request itself**, made on
+every page load, as a render-blocking `<link rel="stylesheet">` to a third-party
+origin in `<head>`. It also keeps `fonts.googleapis.com` in the critical path
+for a resource with no consumer.
+
+**What it would take to fix:** delete the line. It is recorded rather than done
+because deleting a font link is the kind of change that wants a page-by-page
+check that nothing renders a glyph through it, and the redesign commit it was
+found in had a different subject.
+
 
 ## What the 28 September run of entries was about
 
