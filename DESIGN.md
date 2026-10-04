@@ -115,7 +115,7 @@ components:
     rounded: "{rounded.none}"
     padding: "16px 20px"
   figure-hero:
-    textColor: "{colors.accent-text}"
+    textColor: "{colors.ink}"
     typography: "{typography.hero-figure}"
     padding: "24px 20px"
   figure-secondary:
@@ -504,9 +504,15 @@ one.
 
 **Figure.** An eyebrow in quiet above, the number large and alone, an optional
 pill on its baseline and an optional quiet footnote beneath. `scale="hero"` is the
-one figure the screen exists to show; `tone="accent"` marks a figure this product
-computed rather than fetched, which is why the intrinsic value is the one thing on
-the screen set in read oxblood.
+one figure the screen exists to show.
+
+**A figure is always ink, and there is no option to make it otherwise.** It had a
+`tone` prop, and the intrinsic value was set in oxblood through it — which on a
+dark instrument screen reads as a warning rather than as the headline it is: a red
+number is the one that has gone wrong. The red belongs to the mark and to a signal
+that is meant, which is the premium badge on the figure's own baseline. The prop
+was removed rather than left unused, because an option to make a figure red is an
+invitation to.
 
 **Pill.** A square hairline capsule beside a figure: uppercase mono, tabular,
 weight 600, 8px / 3px padding. Four tones and no more — positive (green on its

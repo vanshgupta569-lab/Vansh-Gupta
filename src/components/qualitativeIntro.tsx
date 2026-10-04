@@ -138,7 +138,9 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
         </span>
       </div>
 
-      <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F0EA] mb-5">
+      {/* The Screen Title step (DESIGN.md), as the figures editor uses: this is
+          the other screen that step was added for. */}
+      <h1 className="font-display text-[clamp(27px,3.2vw,40px)] font-medium text-ink mb-5">
         What the filings cannot tell us about {company.name}
       </h1>
 
