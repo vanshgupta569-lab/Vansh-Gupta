@@ -28,6 +28,12 @@ typography:
     fontWeight: 700
     lineHeight: 1.06
     letterSpacing: "-0.045em"
+  screen-title:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: "clamp(27px, 3.2vw, 40px)"
+    fontWeight: 800
+    lineHeight: 0.98
+    letterSpacing: "-0.045em"
   headline:
     fontFamily: "Inter, system-ui, sans-serif"
     fontSize: "24px"
@@ -312,6 +318,23 @@ Every number is JetBrains Mono.
 ### Hierarchy
 - **Display** (Inter 700, `clamp(34px, 4.2vw, 54px)`, 1.06, -0.02em at section
   level, -0.045em at `h1`): landing-page and long-section headings.
+- **Screen Title** (Inter 800, `clamp(27px, 3.2vw, 40px)`, 0.98, -0.045em): the
+  one heading that names a working screen — the figures editor, the questions.
+
+  **Why this step exists, and why it must not be removed.** Display is the
+  landing-page voice and is too loud for a screen somebody works in: the figures
+  editor opened with a 56px centred headline above two paragraphs and three
+  definition cards, so a reader who came to check what the source returned
+  scrolled past a screen and a half of preamble to reach the first figure, every
+  visit. The obvious correction is to drop that heading to Headline at 24px — and
+  that is wrong, because the section heading immediately under it (`PAPER as
+  filed`) is also 24px, and a page title the same size as the section inside it is
+  not a hierarchy, it is two headings. This step is the gap between the two: large
+  enough to name the screen, quiet enough not to compete with the table that is
+  the screen's reason to exist. Added 2026-10-03 after the figures screen was
+  rebuilt; `impeccable detect` flags any size off this ramp, so a step used by a
+  screen and absent here reads as drift and gets "corrected" back into a
+  collision.
 - **Headline** (Inter 700, 24px, 1.04, -0.035em): screen headings.
 - **Title** (Inter 700, 20px, 1.2, -0.02em): panel headings.
 - **Hero Figure** (JetBrains Mono 600, `clamp(2.5rem, 5vw, 3.75rem)`, 1, -0.03em,

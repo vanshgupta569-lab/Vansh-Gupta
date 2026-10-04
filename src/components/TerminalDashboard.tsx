@@ -1026,7 +1026,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             <div className="bg-panel px-5 py-5 lg:px-6">
               <Figure
                 scale="hero"
-                tone="accent"
                 eyebrow="Intrinsic value · residual income"
                 value={`${company.currencySymbol}${bankModel.valuePerShare.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
@@ -1066,7 +1065,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <FlashOnChange watch={viewMode} className="-mx-1 block px-1">
                 <Figure
                   scale="hero"
-                  tone="accent"
                   eyebrow="Intrinsic value · perpetuity growth"
                   value={
                     <TweenNumber

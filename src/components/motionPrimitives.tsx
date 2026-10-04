@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, animate, AnimatePresence, useInView } from 'motion/react';
 import { noteOrder } from '../data/didYouKnow';
 import type { DidYouKnow } from '../data/didYouKnow';
+import { EYEBROW, LABEL, BODY } from './instrument';
 
 /**
  * Shared motion helpers for the dashboard.
@@ -234,93 +235,82 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
         /* A note adds four lines to a card that was already five stages tall,
            so a short phone viewport gets something to scroll rather than
            losing the bottom of it. */
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto border hairline-border bg-[#111114] p-7 shadow-2xl"
+        className="w-full max-w-xl max-h-[90vh] overflow-y-auto border border-line bg-panel p-7 shadow-2xl sm:p-9"
       >
-        <div className="flex items-center gap-2 mb-5">
-          <span className="w-2 h-2 bg-[#8B1E1E]" />
-          <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
-            Building the model
-          </span>
+        {/* ---- THE PROGRESS, REDUCED TO ONE LINE --------------------------
+            Five labelled rows with ticks and a pulsing underline took the
+            middle of the card, and they are the dull part: a reader cannot act
+            on "Discounting cash flows" and does not need the stage named at all
+            — only to know the thing is alive and roughly how far along. So the
+            five rows are one rule that fills, with the current stage named
+            beside it in the quietest type on the card.
+
+            The stage names are kept because the argument of this site is that
+            the workings are visible, and a progress bar that says nothing about
+            what it is doing is the opposite of that. They are just no longer
+            the loudest thing here. */}
+        <div className="mb-7">
+          <div className="mb-2.5 flex items-baseline justify-between gap-4">
+            <span className={`${EYEBROW} text-quiet`}>Building the model</span>
+            <span className={`${EYEBROW} text-quiet tabular-nums`}>
+              {Math.min(stage + 1, STAGES.length)}/{STAGES.length}
+            </span>
+          </div>
+          {/* CAPPED SHORT OF FULL, because the work is not finished when the
+              last stage is reached — the stage walk takes 4.5 seconds and then
+              holds while the fetch is still outstanding, which on a slow build
+              is most of the wait. A bar sitting at 100% for ten seconds says
+              the thing is done and broken. The old checklist was careful about
+              this (it held on the last stage rather than ticking it off) and
+              the bar keeps that promise: it never claims to be complete. */}
+          <div className="h-px w-full bg-line" aria-hidden="true">
+            <motion.div
+              className="h-px bg-accent"
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.min(((stage + 1) / STAGES.length) * 100, 92)}%` }}
+              transition={{ duration: reduced ? 0 : 0.5, ease: 'easeOut' }}
+            />
+          </div>
+          <div className={`${LABEL} mt-2.5 text-quiet`}>{STAGES[stage]}</div>
         </div>
 
-        {STAGES.map((label, index) => {
-          const done = index < stage;
-          const current = index === stage;
+        {/* ---- THE NOTE, WHICH IS WHY THIS SCREEN IS WORTH LOOKING AT ------
+            It was below the checklist, in 12px grey, under an eyebrow reading
+            "While you wait" — which is an apology for the wait rather than a
+            reason to read. A reader who has just asked for a valuation is
+            exactly the reader for whom one correction about how accounts behave
+            is worth having, so it is the content of the card now and the
+            progress is the furniture.
 
-          return (
-            <motion.div
-              key={label}
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: done || current ? 1 : 0.3, x: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.05 }}
-              className="flex items-center gap-3 py-2 font-mono text-[11px]"
-            >
-              <span
-                className={`w-4 h-4 border flex items-center justify-center text-[9px] shrink-0 ${
-                  done
-                    ? 'border-[#8B1E1E] bg-[#8B1E1E] text-[#F2F0EA]'
-                    : current
-                    ? 'border-[#8B1E1E] text-[#8B1E1E]'
-                    : 'border-[#222228] text-transparent'
-                }`}
-              >
-                {done ? '✓' : current ? '·' : ''}
-              </span>
-              <span className={done || current ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}>
-                {label}
-              </span>
-              {current && (
-                <motion.span
-                  className="h-[1px] bg-[#8B1E1E] ml-1"
-                  initial={{ width: 0 }}
-                  animate={{ width: 28 }}
-                  transition={{ duration: 0.6, repeat: Infinity, repeatType: 'reverse' }}
-                />
-              )}
-            </motion.div>
-          );
-        })}
-
-        {/* ---- something to read while it works ----------------------------
-            The wait is a few seconds of nothing, and a reader who has just
-            asked for a valuation is exactly the reader for whom one correction
-            about how accounts behave is worth having. Mechanics, never merit:
-            each note states a reasonable belief, what the accounting actually
-            says, and the mechanism. `aria-live` is off here deliberately — the
-            card announces its progress, and a note that changes every six
-            seconds would talk over it. */}
+            `aria-live` is off deliberately: the card announces its progress, and
+            a note changing every six seconds would talk over it. */}
         {note && (
-          <div
-            className="mt-5 pt-4 border-t hairline-border-t"
-            aria-live="off"
-          >
-            <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mb-2.5">
-              While you wait
-            </div>
+          <div aria-live="off">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={note.key}
-                initial={reduced ? false : { opacity: 0, y: 4 }}
+                initial={reduced ? false : { opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={reduced ? undefined : { opacity: 0, y: -4 }}
+                exit={reduced ? undefined : { opacity: 0, y: -6 }}
                 transition={{ duration: reduced ? 0 : 0.35, ease: 'easeOut' }}
               >
-                <p className="text-[12px] leading-snug text-[#8A8A8F] italic">
-                  {note.belief}
-                </p>
-                <p className="font-serif text-[15px] leading-snug text-[#F2F0EA] mt-1.5">
+                <p className={`${BODY} text-muted italic`}>{note.belief}</p>
+                {/* The fact is the headline of this screen, so it is set like
+                    one: the display face, at a size that carries the card. */}
+                <p className="mt-3 font-display text-[clamp(1.25rem,2.4vw,1.75rem)] font-medium leading-[1.2] tracking-tight text-ink">
                   {note.fact}
                 </p>
-                <p className="text-[12px] leading-relaxed text-[#A1A1AA] mt-2">
-                  {note.why}
-                </p>
+                <p className={`${BODY} mt-3.5 text-read`}>{note.why}</p>
               </motion.div>
             </AnimatePresence>
           </div>
         )}
 
-        <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 border-t hairline-border-t leading-relaxed">
-          Reading the filings and running the same engine used for every company
+        {/* Sentence case, not the tracked uppercase the eyebrows use. At 13px
+            with 0.16em tracking this ran to three shouting lines on a phone,
+            for the least important sentence on the card. */}
+        <div className={`${LABEL} mt-7 border-t border-line pt-4 leading-relaxed text-quiet`}>
+          Reading the filings, running the same engine used for every company
         </div>
       </motion.div>
     </motion.div>

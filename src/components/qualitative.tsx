@@ -20,6 +20,7 @@
 // happens until the reader presses the button.
 
 import React, { useMemo } from 'react';
+import { Disclose } from './instrument';
 import { ValuationDrivers } from '../types';
 
 // The factors, the arithmetic and the caps all live in one module now, shared
@@ -135,23 +136,29 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
         Your judgement, put through the model
       </h3>
 
-      <div className="text-[15px] leading-relaxed text-[#A1A1AA] space-y-3 mb-8">
-        <p>
-          A model reads accounts. It cannot read a management team, a regulator
-          or a competitor. That part is yours.
-        </p>
-        <p>
-          What it will not do is multiply the answer by a number you picked
-          because a company felt strong. There would be no reasoning connecting
-          the two, and the result would look far more precise than it was.
-        </p>
-        <p>
-          Instead, each view below moves the assumption it genuinely belongs in.
-          A stronger competitive position holds margins up for longer. Weaker
-          governance raises the return an investor should demand. Every change is
-          listed before you apply it, and you can trace it through the eight
-          steps above.
-        </p>
+      {/* THE READER CAME HERE TO ANSWER QUESTIONS, not to read about them.
+          Three paragraphs sat above the first one explaining why a view moves
+          an assumption rather than the answer. The argument is good — it is the
+          reason this screen is not a sentiment slider — and it is the same
+          argument every time, so it is one line and a disclosure now. */}
+      <p className="text-[16px] leading-relaxed text-read mb-1">
+        A model reads accounts. It cannot read a management team, a regulator or a
+        competitor. That part is yours.
+      </p>
+      <div className="mb-7 max-w-[70ch] border-b border-line">
+        <Disclose summary="Why a view moves an assumption, not the answer">
+          <p className="max-w-prose">
+            What this will not do is multiply the answer by a number you picked because a
+            company felt strong. There would be no reasoning connecting the two, and the
+            result would look far more precise than it was.
+          </p>
+          <p className="mt-2 max-w-prose">
+            Instead, each view below moves the assumption it genuinely belongs in. A
+            stronger competitive position holds margins up for longer. Weaker governance
+            raises the return an investor should demand. Every change is listed before you
+            apply it, and you can trace it through the eight steps above.
+          </p>
+        </Disclose>
       </div>
 
       {appliedCount > 0 && (
@@ -183,10 +190,12 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           because judging a moat or a management team from a balance sheet
           alone is not really judging it at all. */}
       {profile && (profile.summary || profile.officers?.length) ? (
-        <div className="border border-[#222228] bg-[#0B0B0D] p-5 mb-8">
-          <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
-            About {companyName}
-          </div>
+        <div className="mb-7 max-w-[70ch] border-b border-line">
+          {/* Descriptive context, and a reader judging a moat wants it to hand
+              rather than in front of the questions: a summary paragraph, a
+              grid of officers and a three-line disclaimer stood between the
+              intro and the first question. */}
+          <Disclose summary={`About ${companyName}`} trailing="context, not figures">
 
           {(profile.industry || profile.sector || profile.employees || profile.country) && (
             <div className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-[13px] text-[#8A8A8F] mb-4">
@@ -237,11 +246,12 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
             </a>
           )}
 
-          <p className="text-[13px] leading-relaxed text-[#8A8A8F] mt-4">
+          <p className="text-[13px] leading-relaxed text-quiet mt-4">
             Description and officers as published by the company. None of it is
             a reported figure and none of it feeds the model. Read the news on
             the company page alongside it.
           </p>
+          </Disclose>
         </div>
       ) : null}
 
@@ -269,11 +279,14 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                   </span>
                 ) : null}
               </div>
-              <div className="text-[15px] text-[#8A8A8F] mb-3 max-w-2xl">
+              {/* The question is what the reader is here for, so it is set as
+                  the thing being asked rather than as a caption: read weight,
+                  not the muted grey it shared with the reasoning below it. */}
+              <div className="text-[16px] leading-snug text-read mb-3 max-w-2xl">
                 {factor.question}
               </div>
 
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-wrap gap-2">
                 {(['helps', 'neutral', 'hurts'] as Verdict[]).map((option) => (
                   <button
                     key={option}
@@ -294,8 +307,15 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                 ))}
               </div>
 
-              <div className="font-mono text-[12px] text-[#8A8A8F] leading-relaxed">
-                {factor.reasoning}
+              {/* Twenty-three questions, each with a line of reasoning under it
+                  set at the same weight as the question itself — so the column
+                  read as prose with buttons in it rather than as a form. The
+                  reasoning is why this screen can be trusted, and it is still
+                  one click away on the question it belongs to. */}
+              <div className="-mb-2 mt-1">
+                <Disclose summary="what this moves, and why" dense>
+                  {factor.reasoning}
+                </Disclose>
               </div>
             </div>
           );

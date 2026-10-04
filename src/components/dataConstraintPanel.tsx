@@ -8,6 +8,7 @@
 // and is looking at a number needs the same warning next to that number, which
 // is what the panel below the valuation is for.
 import { AlertTriangle, Info } from 'lucide-react';
+import { Disclose, Pill } from './instrument';
 import type { DataConstraint } from '../types';
 
 const pct = (v: number) => `${(Math.abs(v) * 100).toFixed(1)}%`;
@@ -85,69 +86,72 @@ export function DataConstraintPanel({ constraints }: { constraints: DataConstrai
       <h2 className="font-display text-2xl text-[#F2F0EA] tracking-tight mb-1">
         What the source does not give us
       </h2>
-      <p className="text-[13px] leading-relaxed text-[#A1A1AA] max-w-3xl mb-6">
-        Figures the filing or the data source never publishes. No amount of modelling can conjure
-        them, so each is named here with the largest effect it could have on the value per share,
-        measured against what the filing does report. Where that is more than a quarter of the
-        value, no valuation is shown at all.
+      {/* ==================================================================
+          A LIST YOU CAN READ DOWN, not a stack of open paragraphs.
+
+          Every entry was expanded at once: a label, two size tags, a detail
+          paragraph, an effect paragraph and a source line, in a filled box, for
+          each of up to a dozen constraints. The reader's actual question is
+          "how many, and does any of them matter to the number I am looking
+          at" — which the list could not answer, because answering it meant
+          reading all of it.
+
+          So each constraint is one row carrying the two things that answer
+          that question: what is missing, and the largest effect it could have.
+          The account of it opens on the row it belongs to.
+          ================================================================== */}
+      <p className="text-[13px] leading-relaxed text-read max-w-3xl mb-1">
+        Figures the filing or the data source never publishes. Each is named with the largest
+        effect it could have on the value per share.
       </p>
 
-      <div className="space-y-4">
+      <div className="mt-4 border-t border-line">
         {sorted.map((c) => (
-          <div
+          <Disclose
             key={c.code}
-            className={`border p-4 ${
-              c.severity === 'refusal'
-                ? 'border-[#8B1E1E] bg-[#1A0B0B]'
-                : c.severity === 'warning'
-                ? 'border-[#5C4415] bg-[#14100A]'
-                : 'hairline-border bg-[#0B0B0D]'
-            }`}
+            summary={c.label}
+            trailing={
+              <Pill
+                tone={
+                  c.severity === 'refusal' ? 'negative' : c.severity === 'warning' ? 'warn' : 'neutral'
+                }
+              >
+                {sizeTag(c)}
+              </Pill>
+            }
           >
-            <div className="flex items-start gap-3">
-              {c.severity === 'note' ? (
-                <Info className="w-4 h-4 text-[#8A8A8F] mt-0.5 shrink-0" />
-              ) : (
-                <AlertTriangle
-                  className={`w-4 h-4 mt-0.5 shrink-0 ${
-                    c.severity === 'refusal' ? 'text-[#C0392B]' : 'text-[#C79A2E]'
-                  }`}
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1.5">
-                  <span className="text-[14px] text-[#F2F0EA] font-semibold">{c.label}</span>
-                  <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest">
-                    {sizeTag(c)}
-                  </span>
-                  <span className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest">
-                    {c.severity === 'refusal'
-                      ? 'no value shown'
-                      : c.severity === 'warning'
-                      ? 'warned'
-                      : 'noted'}
-                  </span>
-                </div>
-                <p className="text-[12px] leading-relaxed text-[#A1A1AA]">{c.detail}</p>
-                <p className="text-[12px] leading-relaxed text-[#A1A1AA] mt-1.5">
-                  <span className="text-[#8A8A8F]">Effect: </span>
-                  {c.effect}.
-                </p>
-                <p className="font-mono text-[10px] text-[#8A8A8F] mt-2 uppercase tracking-wider">
-                  Source: {c.source}
-                </p>
-              </div>
-            </div>
-          </div>
+            <p className="max-w-prose">{c.detail}</p>
+            <p className="mt-2 max-w-prose">
+              <span className="text-quiet">Effect: </span>
+              {c.effect}.
+            </p>
+            <p className="mt-2.5 font-mono text-[13px] uppercase tracking-wider text-quiet">
+              Source: {c.source}
+              {' · '}
+              {c.severity === 'refusal'
+                ? 'no value shown'
+                : c.severity === 'warning'
+                ? 'warned above the model'
+                : 'noted only'}
+            </p>
+          </Disclose>
         ))}
       </div>
 
-      <p className="font-mono text-[10px] text-[#8A8A8F] mt-6 leading-relaxed max-w-3xl">
-        The thresholds: more than 25% of the value per share and no value is shown, because that is
-        further than the site's two terminal methods ordinarily disagree; more than 5% and the
-        reader is warned above the model and here; below that it is listed but nothing is flagged.
-        DATA_CONSTRAINTS.md records every constraint and which source it comes from.
-      </p>
+      <div className="mt-5 max-w-3xl border-b border-line">
+        <Disclose summary="How the three thresholds were set" trailing="25% · 5%">
+          <p className="max-w-prose">
+            More than 25% of the value per share and no value is shown at all, because that is
+            further than the site's two terminal methods ordinarily disagree. More than 5% and the
+            reader is warned above the model and here. Below that it is listed and nothing is
+            flagged.
+          </p>
+          <p className="mt-2 max-w-prose text-quiet">
+            <code className="font-mono">DATA_CONSTRAINTS.md</code> records every constraint and
+            which source it comes from.
+          </p>
+        </Disclose>
+      </div>
     </section>
   );
 }

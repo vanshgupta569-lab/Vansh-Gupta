@@ -22,6 +22,7 @@
 // a penalty people would click it anyway and get a worse answer for it.
 
 import React, { useMemo, useState } from 'react';
+import { Disclose } from './instrument';
 import { ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { CompanyData } from '../types';
 import {
@@ -141,41 +142,46 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
         What the filings cannot tell us about {company.name}
       </h1>
 
-      <div className="text-[15px] leading-relaxed text-[#A1A1AA] max-w-2xl space-y-3 mb-8">
-        <p>
-          The model on the next screen is built entirely from what this company
-          has filed. That makes it checkable, and it makes it blind to
-          everything a filing does not record: whether the technology still
-          matters in ten years, whether four customers account for most of the
-          revenue, whether the people running it deserve the benefit of the
-          doubt.
-        </p>
-        <p>
-          Those are judgements, and they are yours rather than ours. Answer what
-          you have a view on and leave the rest alone. Each answer moves one
-          assumption inside the model, and you will see exactly which.
-        </p>
+      {/* ONE LINE SAYING WHAT TO DO, then the questions.
+
+          Two paragraphs, then a bordered card explaining the skip, put roughly
+          eight hundred pixels between the heading and the first question — and
+          a reader who has arrived here has arrived to answer them. The second
+          paragraph is the argument for why this screen exists at all, which is
+          worth having and is the same every time, so it is a disclosure. */}
+      <p className="text-[16px] leading-relaxed text-read max-w-2xl mb-1">
+        Answer what you have a view on and leave the rest alone. Each answer moves one
+        assumption inside the model, and you will see exactly which.
+      </p>
+      <div className="mb-6 max-w-2xl border-b border-line">
+        <Disclose summary="Why the model needs your judgement at all">
+          <p className="max-w-prose">
+            The model on the next screen is built entirely from what this company has
+            filed. That makes it checkable, and it makes it blind to everything a filing
+            does not record: whether the technology still matters in ten years, whether
+            four customers account for most of the revenue, whether the people running it
+            deserve the benefit of the doubt. Those are judgements, and they are yours
+            rather than ours.
+          </p>
+        </Disclose>
       </div>
 
-      {/* The skip, said loudly and early, because a reader who does not yet
-          know this company should not be made to guess. */}
-      <div className="border border-[#222228] bg-[#111114] p-5 sm:p-6 mb-10 max-w-3xl">
-        <div className="text-[16px] text-[#F2F0EA] mb-2">
-          Don’t know this company yet? Skip.
-        </div>
-        <p className="text-[14px] leading-relaxed text-[#8A8A8F] mb-4">
-          The model is built from the filings either way, and skipping changes
-          nothing about it. You can come back and make these judgements at any
-          time from “For the nerds” at the foot of the company page.
-        </p>
+      {/* The skip stays visible and early — a reader who does not yet know this
+          company should not have to guess — but as a row rather than a card:
+          the explanation of what skipping costs (nothing) sits behind it. */}
+      <div className="mb-8 flex flex-wrap items-center gap-x-5 gap-y-2 max-w-3xl">
         <button
           type="button"
           onClick={onSkip}
-          className="inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-widest px-5 py-3 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 transition-colors font-semibold"
+          className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-5 py-3 border border-accent text-ink bg-accent/25 hover:bg-accent/45 transition-colors font-semibold"
         >
           Skip and build the model
           <ArrowRight className="w-4 h-4" />
         </button>
+        <span className="font-mono text-[13px] text-quiet">
+          Don’t know this company yet? Skipping changes nothing about the model; you can
+          answer these later from “For the nerds”.
+        </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-8 lg:gap-12">

@@ -142,8 +142,21 @@ export const Disclose: React.FC<DiscloseProps> = ({
             className="overflow-hidden"
           >
             {/* The indent lines the prose up with the summary, past the
-                chevron, so an open disclosure reads as one block. */}
-            <div className={`pl-6 ${dense ? 'pb-2' : 'pb-4'} ${BODY} text-read`}>{children}</div>
+                chevron, so an open disclosure reads as one block.
+
+                THE MEASURE IS CAPPED HERE AND NOT ON THE PARAGRAPH. The
+                obvious class is `max-w-prose`, and on this site that class
+                does the opposite of what its name says: `index.css` sets
+                `.max-w-prose { max-width: none; text-align: justify }` as a
+                deliberate house rule, so writing it widens the column and
+                justifies it. A disclosure opens inside a full-width panel, so
+                without a cap its prose ran past 140 characters a line. 68ch is
+                inside the 65-75 a line should hold; `max-w-prose` may still be
+                written on a paragraph inside, where it now means only
+                "justify this", which is all it has ever meant here. */}
+            <div className={`max-w-[68ch] pl-6 ${dense ? 'pb-2' : 'pb-4'} ${BODY} text-read`}>
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -164,8 +177,6 @@ export interface FigureProps {
   pill?: React.ReactNode;
   /** 'hero' for the one figure the screen exists to show. */
   scale?: 'hero' | 'figure';
-  /** The oxblood, for a figure this site computed rather than fetched. */
-  tone?: 'ink' | 'accent';
   className?: string;
 }
 
@@ -175,6 +186,12 @@ export interface FigureProps {
  * `clamp` rather than breakpoints: the hero is the one element that should fill
  * the width it is given, and three `sm:text-` steps is a worse description of
  * that than one clamp. `tabular-nums` so the digits do not shift as they tween.
+ *
+ * A FIGURE IS ALWAYS INK, and there is no option to make it otherwise. The
+ * intrinsic value was set in oxblood at first, which reads as a warning rather
+ * than as the headline it is: on a dark instrument screen a red number is the
+ * one that has gone wrong. The red belongs to the mark and to a signal that is
+ * meant — the premium badge beside the figure, where being red is the point.
  */
 export const Figure: React.FC<FigureProps> = ({
   eyebrow,
@@ -182,7 +199,6 @@ export const Figure: React.FC<FigureProps> = ({
   foot,
   pill,
   scale = 'figure',
-  tone = 'ink',
   className = '',
 }) => (
   <div className={className}>
@@ -193,7 +209,7 @@ export const Figure: React.FC<FigureProps> = ({
           scale === 'hero'
             ? 'text-[clamp(2.5rem,5vw,3.75rem)] font-semibold tracking-[-0.03em]'
             : 'text-[clamp(1.625rem,3vw,2.375rem)] font-medium tracking-[-0.02em]'
-        } ${tone === 'accent' ? 'text-accent-text' : 'text-ink'}`}
+        } text-ink`}
       >
         {value}
       </span>

@@ -42,6 +42,7 @@ import {
   yearChecks,
 } from '../data/corrections';
 import { DARK } from '../design/tokens';
+import { Disclose, EYEBROW, LABEL } from './instrument';
 import { Mark } from '../design/Mark';
 
 // Colours come from the one palette. They used to be local constants at the
@@ -233,42 +234,77 @@ export const FiguresEditor: React.FC<Props> = ({
           color: #F2F0EA;
         }
       `}</style>
-      <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-28 lg:pt-32 pb-40">
-        <div className="text-center">
-          <Eyebrow centred>Before the model is built</Eyebrow>
-          <h1
-            className="text-[32px] sm:text-[44px] lg:text-[56px] mx-auto max-w-[24ch]"
-            style={{ ...DISPLAY, color: INK }}
+      <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-24 pb-40">
+        {/* ==================================================================
+            WHAT THIS SCREEN IS, IN THE SPACE IT DESERVES.
+
+            It opened with a 56px centred headline, two paragraphs running to
+            62 and 74 characters, and three definition cards in a full-width
+            grid — roughly a screen and a half before the first figure. The
+            figures are the screen. A reader who came here to check what the
+            source returned had to scroll past an essay to reach them, every
+            time, including the second and third visit.
+
+            The headline stays, smaller and left-aligned; one line says what to
+            do; and the two explanations that were paragraphs are disclosures
+            above the table rather than a wall in front of it.
+            ================================================================== */}
+        <Eyebrow>Before the model is built</Eyebrow>
+        <h1
+          /* The Screen Title step (DESIGN.md): one clamp, not three
+             breakpoint literals, for the same reason the hero figure is one. */
+          className="text-[clamp(27px,3.2vw,40px)] max-w-[22ch]"
+          style={{ ...DISPLAY, color: INK }}
+        >
+          Read the figures before the model does
+          <Mark />
+        </h1>
+        <p className="text-[16px] leading-[1.6] mt-4 max-w-[70ch]" style={{ color: READ }}>
+          These are the figures {name} was returned with, from {source}, and the whole model is
+          built on them. Change anything the annual report contradicts, or leave every one alone
+          and carry on.
+          {returning && (
+            <>
+              {' '}
+              Anything you changed before is still marked, with the filed figure beside it.
+            </>
+          )}
+        </p>
+
+        {/* A closing rule under the last one: Disclose draws its own rule
+            ABOVE each row, so a stack of them ends on open air and reads as
+            though a third row failed to render. */}
+        <div className="mt-6 max-w-[70ch] border-b" style={{ borderColor: LINE }}>
+          <Disclose
+            summary="What the three states mean"
+            trailing="reported · corrected · modelled"
           >
-            Read the figures before the model does
-            <Mark />
-          </h1>
-          <p
-            className="text-[17px] lg:text-[19px] leading-[1.6] mt-7 mx-auto max-w-[62ch]"
-            style={{ color: READ }}
-          >
-            These are the figures {name} was returned with, from {source}. They are
-            what the whole model is built on, so anything wrong here is wrong
-            everywhere. Change any of them to what the annual report says, or
-            leave every one alone and carry on.
-            {returning && (
-              <>
-                {' '}
-                Anything you changed before is still marked, with the filed figure
-                beside it — put one back, change it again, or reset the lot.
-              </>
-            )}
-          </p>
-          <p
-            className="font-mono text-[12px] leading-[1.6] mt-5 mx-auto max-w-[74ch]"
-            style={{ color: MUTED }}
-          >
-            Nothing is uploaded, nothing is stored and nothing leaves this browser
-            tab. A correction is remembered for as long as the tab is open, and the
-            filed figure is kept beside it the whole time.
+            <dl className="space-y-3">
+              {[
+                ['Reported', 'What the source filed. Left alone unless you change it.'],
+                ['Corrected', 'A figure you supplied. Marked, with the filed one still shown beside it.'],
+                ['Modelled', 'Anything the engine works out. None of it is on this screen.'],
+              ].map(([term, line]) => (
+                <div key={term} className="flex flex-wrap gap-x-3">
+                  <dt className={`${EYEBROW} shrink-0 pt-0.5`} style={{ color: RED_TEXT, minWidth: '7.5rem' }}>
+                    {term}
+                  </dt>
+                  <dd className="flex-1 min-w-[16rem]" style={{ color: READ }}>
+                    {line}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Disclose>
+
+          <Disclose summary="What happens to a correction">
+            <p className="max-w-prose">
+              Nothing is uploaded, nothing is stored and nothing leaves this browser tab. A
+              correction is remembered for as long as the tab is open, and the filed figure is kept
+              beside it the whole time.
+            </p>
             {sourceUrl ? (
-              <>
-                {'  '}
+              <p className="mt-2">
                 <a
                   href={sourceUrl}
                   target="_blank"
@@ -278,58 +314,37 @@ export const FiguresEditor: React.FC<Props> = ({
                 >
                   Open the filings
                 </a>
-              </>
+              </p>
             ) : null}
-          </p>
-        </div>
-
-        {/* The three states, said once, plainly, before anything is editable. */}
-        <div
-          className="grid grid-cols-1 md:grid-cols-3 gap-px mt-12 lg:mt-16"
-          style={{ background: LINE }}
-        >
-          {[
-            ['Reported', 'What the source filed. Left alone unless you change it.'],
-            ['Corrected', 'A figure you supplied. Marked, with the filed one still shown beside it.'],
-            ['Modelled', 'Anything the engine works out. None of it is on this screen.'],
-          ].map(([title, line]) => (
-            <div key={title} className="p-6" style={{ background: PANEL }}>
-              <div className="font-mono text-[11px] uppercase tracking-[0.2em] mb-3" style={{ color: RED_TEXT }}>
-                {title}
-              </div>
-              <div className="text-[15px] leading-[1.55]" style={{ color: MUTED }}>
-                {line}
-              </div>
-            </div>
-          ))}
+          </Disclose>
         </div>
 
         {/* ---------------------------------------------------------- */}
         {/* The statements                                              */}
         {/* ---------------------------------------------------------- */}
-        <div className="mt-14 lg:mt-20">
-          <div className="flex items-baseline justify-between gap-6 flex-wrap mb-6">
-            <h2 className="text-[24px] lg:text-[30px]" style={{ ...DISPLAY, color: INK }}>
+        <div className="mt-10 lg:mt-12">
+          <div className="flex items-baseline justify-between gap-6 flex-wrap mb-4">
+            <h2 className="text-[24px]" style={{ ...DISPLAY, color: INK }}>
               {ticker} as filed
               <Mark />
             </h2>
-            <div className="font-mono text-[12px] text-right" style={{ color: MUTED }}>
+            <div className="font-mono text-[13px] text-right" style={{ color: MUTED }}>
               Figures in millions of {currencySymbol} unless the row says otherwise
             </div>
           </div>
 
-          {/* Said plainly, immediately above the first figure. A reader who has
-              to guess whether a table is editable will assume it is not. */}
+          {/* THE ONE THING THAT IS NOT EXPLANATION. A reader who has to guess
+              whether a table is editable assumes it is not, so this stays
+              visible — but as a single line against a hairline rather than the
+              three-line filled callout it was. */}
           <div
-            className="flex items-start gap-3 border px-5 py-4 mb-8"
-            style={{ borderColor: 'rgba(139,30,30,0.45)', background: 'rgba(139,30,30,0.07)' }}
+            className="flex items-center gap-2.5 border-t border-b py-2.5 mb-6"
+            style={{ borderColor: LINE }}
           >
-            <Pencil className="w-4 h-4 mt-0.5 shrink-0" style={{ color: RED_TEXT }} />
-            <p className="text-[15px] leading-[1.6]" style={{ color: READ }}>
+            <Pencil className="w-3.5 h-3.5 shrink-0" style={{ color: RED_TEXT }} />
+            <p className={LABEL} style={{ color: READ }}>
               <span style={{ color: INK, fontWeight: 600 }}>Every figure below can be changed.</span>{' '}
-              Click one and type over it. Anything you change turns red and keeps
-              the filed figure beside it, and an empty box puts the original
-              straight back.
+              Click one and type over it; an empty box puts the original back.
             </p>
           </div>
 
