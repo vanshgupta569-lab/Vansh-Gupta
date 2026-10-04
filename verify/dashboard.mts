@@ -217,22 +217,62 @@ const compare = (what: string, expected: string, got: string) => {
 /** Type a ticker into the search and send it, from wherever the reader is. */
 async function search(page: Page, ticker: string) {
   await page.goto(BASE, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(1200);
-  await page.getByRole('button', { name: /value a listed company/i }).first().click();
+
+  // THE SEARCH BOX IS FOUND BY ITS PLACEHOLDER, NEVER BY ORDINAL, and the
+  // difference is three green-or-red runs of this whole check.
+  //
+  // This used to wait a flat 1200ms, click through, and take
+  // `input:visible.first()`. The button exists in the served HTML before React
+  // attaches to it, so a click landing in that window does nothing at all and
+  // the app stays on the landing page — and the landing page has exactly one
+  // visible input: the feedback form's email field. It is visible, it is
+  // fillable, and it accepts "AAPL" quite happily, so the fill loop below
+  // succeeded on its first attempt and everything looked fine until
+  // "Build model" timed out thirty seconds later against a screen that was
+  // never going to have one. The failure screenshot showed the landing page and
+  // the error named a button, which is why this took three occurrences to read.
+  //
+  // Named by placeholder, a missed navigation fails here, immediately, saying
+  // the search box never appeared.
+  const enter = page.getByRole('button', { name: /value a listed company/i }).first();
+  await enter.waitFor({ state: 'visible', timeout: 30_000 });
+  const box = page.getByPlaceholder(/Apple, Reliance/i);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (await box.isVisible().catch(() => false)) break;
+    // Clicking again is the fix for a click that landed pre-hydration: the
+    // handler is attached now even if it was not a moment ago.
+    await enter.click().catch(() => {});
+    await page.waitForTimeout(500);
+  }
+  await box.waitFor({ state: 'visible', timeout: 30_000 });
+
   // The screen animates in, and an input filled while it is still arriving is
   // filled and then thrown away with the frame it was in. So the value is put
   // in and read back before anything is sent.
-  const box = page.locator('input:visible').first();
-  await box.waitFor({ state: 'visible', timeout: 30_000 });
+  let filled = false;
   for (let attempt = 0; attempt < 5; attempt++) {
     await page.waitForTimeout(800);
     await box.fill(ticker);
-    if ((await box.inputValue()) === ticker) break;
+    if ((await box.inputValue()) === ticker) {
+      filled = true;
+      break;
+    }
   }
+  // Say so rather than walking on. The old loop gave up silently after five
+  // tries and left the next line to discover it, which is how a filled-the-
+  // wrong-box failure reached the operator as a button timeout.
+  if (!filled) throw new Error(`the search box would not hold "${ticker}" after five attempts`);
+
   // The button, not the Enter key: it is disabled until the field holds
   // something, so clicking it proves the field's own state arrived, which
-  // typing into a screen that is still animating in does not.
-  await page.getByRole('button', { name: /^build model$/i }).first().click({ timeout: 30_000 });
+  // typing into a screen that is still animating in does not. `visible=true`
+  // because there are two — the wide-screen one inside the field and the
+  // narrow-screen one beneath it — and only one of them is ever on screen.
+  await page
+    .getByRole('button', { name: /^build model$/i })
+    .locator('visible=true')
+    .first()
+    .click({ timeout: 30_000 });
 }
 
 /** A curated company: no fetch, straight to the questions. */
