@@ -1106,6 +1106,12 @@ const asRate = (v) => {
 
 // Each source returns [{ date: 'YYYY-MM-DD', percent: number }] covering at
 // least the window asked for. Anything it cannot answer, it throws.
+//
+// `frequency` is part of the contract, not decoration: it sets how many
+// observations a year is allowed to contain before the window is trusted, and
+// it is carried through to the page so a reader is never told a monthly series
+// is a daily one. Daily is the default because every source here was daily
+// until INR.
 const RISK_FREE_SOURCES = {
   USD: {
     name: '10-year US Treasury par yield',
@@ -1247,6 +1253,45 @@ const RISK_FREE_SOURCES = {
         .filter((row) => row.percent !== null);
     },
   },
+
+  // THE INDIAN TEN-YEAR, AND WHY IT IS THE ONLY MONTHLY ONE HERE.
+  //
+  // The benchmark itself is FBIL's, and FBIL licenses it. RBI republishes a
+  // handful of weekly observations with no history. CCIL operates the market
+  // and its Terms of Use forbid automated collection outright. NSE answers
+  // from India and times out from a US datacentre, and publishes a
+  // total-return index rather than a yield. The World Bank has no government
+  // bond yield indicator at all -- every "yield" series it carries is
+  // agricultural. That leaves the OECD's Main Economic Indicators series,
+  // republished by FRED, which is monthly.
+  //
+  // Monthly is a real cost and it is stated rather than hidden: see
+  // DATA_CONSTRAINTS.md, which carries the measured size of it.
+  INR: {
+    name: '10-year Indian government bond yield',
+    publisher: 'OECD Main Economic Indicators, via FRED',
+    terms: 'OECD statistics, reusable with attribution; redistributed by FRED',
+    url: 'https://fred.stlouisfed.org/series/INDIRLTLT01STM',
+    frequency: 'monthly',
+    async read(from, to) {
+      const res = await fetch(
+        'https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDIRLTLT01STM' +
+          `&cosd=${ymd(from)}&coed=${ymd(to)}`,
+        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'text/csv' } }
+      );
+      if (!res.ok) throw new Error(`FRED ${res.status}`);
+      const lines = (await res.text()).trim().split('\n');
+      if (!/observation_date/i.test(lines[0] || '')) throw new Error('FRED: not the CSV, probably a block page');
+      const out = [];
+      for (const line of lines.slice(1)) {
+        const [rawDate, rawValue] = line.split(',');
+        const percent = asRate(rawValue);
+        const date = String(rawDate).trim().slice(0, 10);
+        if (percent !== null && /^\d{4}-\d{2}-\d{2}$/.test(date)) out.push({ date, percent });
+      }
+      return out;
+    },
+  },
 };
 
 async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
@@ -1269,7 +1314,21 @@ async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
     const from = ymd(start);
     const to = ymd(end);
     const window = all.filter((row) => row.date >= from && row.date <= to);
-    if (window.length < 30) throw new Error(`only ${window.length} observations in the window`);
+    // HOW MANY OBSERVATIONS IS ENOUGH DEPENDS ON HOW OFTEN THE SOURCE PUBLISHES.
+    // 30 was the right floor while every source was daily -- roughly six weeks
+    // of trading, enough that one quiet fortnight cannot carry the mean. Asking
+    // a monthly series for 30 observations in a year asks for something that
+    // cannot exist, and would have refused every INR company for the rest of
+    // time while looking like a fetch failure. The floor is now stated per
+    // frequency, against what a full year of that frequency actually holds.
+    const frequency = spec.frequency || 'daily';
+    const floor = { daily: 30, weekly: 20, monthly: 9 }[frequency];
+    if (floor === undefined) throw new Error(`unknown publication frequency "${frequency}"`);
+    if (window.length < floor) {
+      throw new Error(
+        `only ${window.length} ${frequency} observations in the window, below the ${floor} this source needs`
+      );
+    }
     window.sort((a, b) => (a.date < b.date ? -1 : 1));
     const mean = window.reduce((t, row) => t + row.percent, 0) / window.length;
     return {
@@ -1280,6 +1339,7 @@ async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
       terms: spec.terms,
       sourceUrl: spec.url,
       tenorYears: 10,
+      frequency,
       observations: window.length,
       windowFrom: window[0].date,
       windowTo: window[window.length - 1].date,

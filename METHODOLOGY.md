@@ -1381,12 +1381,30 @@ WACC           = weight of equity × cost of equity
 ```
 
 **The risk-free rate is fetched, dated and currency-matched** (since
-2026-09-26; five currencies since 2026-09-27). It is the **mean daily yield of
-the 10-year government bond of the currency the statements are in, over the year
-ending at the company's own balance sheet date**, taken from the institution
-that publishes it: the US Treasury, the European Central Bank, Japan's Ministry
-of Finance, the Bank of England and the Riksbank. Each returns 245 to 255
-observations for a year's window.
+2026-09-26; five currencies since 2026-09-27, six since 2026-10-10). It is the
+**mean yield of the 10-year government bond of the currency the statements are
+in, over the year ending at the company's own balance sheet date**, taken from
+the institution that publishes it: the US Treasury, the European Central Bank,
+Japan's Ministry of Finance, the Bank of England and the Riksbank. Each of those
+five is daily and returns 245 to 255 observations for a year's window.
+
+**The rupee is monthly, and the engine knows it is.** No daily Indian series is
+both openly licensed and reachable from where this site runs, so INR comes from
+the OECD's Main Economic Indicators series republished by FRED
+(`INDIRLTLT01STM`), which publishes once a month. Because of that, **how many
+observations a window must hold is a property of the source, not a constant**:
+30 for a daily publisher, 20 for a weekly one, 9 for a monthly one. The old flat
+floor of 30 would have refused every rupee company for ever while reporting it
+as a fetch failure. A 31 March balance-sheet date — which is most Indian
+companies — gives all twelve months; fewer than nine and the rate is refused
+rather than averaged from a stub.
+
+The frequency travels with the rate to the page, so the sentence under a rupee
+valuation says "the mean of the monthly ... 12 monthly averages" and names the
+lag, rather than claiming daily closes that were never read.
+`DATA_CONSTRAINTS.md` carries the measured cost: on the two currencies where
+both a daily and an OECD monthly series exist, monthly sampling alone moved the
+one-year mean by 0.3bp (USD) and 0.1bp (GBP).
 
 So Apple discounts at 4.33% and Toyota at 1.74%, because those are the rates
 their cash flows are in. SAP 2.72%, GSK 4.62%, Volvo 2.48%. A single vendor's
@@ -1421,13 +1439,12 @@ asset beta of 1.0, not measured over any period. So the horizon is consistent
 between two of the three terms and undefined for the third, and `DCF 9` is still
 not demonstrable — for a different and smaller reason than before.
 
-**A currency without a yield is still refused, not approximated.** Five
-publishers were reached; five currencies were not. A company reporting in won,
-renminbi, Taiwan dollars, kroner or rupees has no risk-free rate and is refused
-with `riskFreeRateUnavailable` rather than discounted at another country's rate
-— Samsung, Tencent, Alibaba, TSMC, Novo Nordisk, Reliance and Tata Consultancy.
-`DATA_CONSTRAINTS.md` sets out what was tried for each, and why the rupee is a
-licensing and access problem rather than a gap in what exists.
+**A currency without a yield is still refused, not approximated.** Six
+publishers are reached; four currencies are not. A company reporting in won,
+renminbi, Taiwan dollars or kroner has no risk-free rate and is refused with
+`riskFreeRateUnavailable` rather than discounted at another country's rate —
+Samsung, Tencent, Alibaba, TSMC, Novo Nordisk. `DATA_CONSTRAINTS.md` sets out
+what was tried for each.
 
 **A fetch that fails is absent, not 4.5%.** The rate is null, the reason is
 carried, and the company is refused. A rate this important does not quietly

@@ -249,11 +249,12 @@ model. Where the line the filing stops tagging is one the **forecast itself** is
 built from — cost of sales, capital expenditure, or net PP&E — there is nothing
 to absorb it and no value is shown at all; see *Already refused, and why*.
 
-### A government bond yield for the rupee, the won, the renminbi, the Taiwan dollar and the krone
+### A government bond yield for the won, the renminbi, the Taiwan dollar and the krone — and a monthly one for the rupee
 
 **Source:** the institutions that publish these rates, where they can be
-reached. **Affects:** 7 companies. **Bound:** not computable, and the error runs
-both ways — **refused**.
+reached. **Affects:** 4 companies refused, 4 valued on a monthly series.
+**Bound:** not computable for the four refused; for the rupee, **measured at
+0.4bp to 7.7bp** — see below.
 
 The cost of equity starts from a risk-free rate, and a risk-free rate belongs to
 a currency: a yen cash flow discounted at a US Treasury yield is not an
@@ -271,6 +272,7 @@ first left the matter; that was a fact about one vendor, not about the data.
 | JPY | Ministry of Finance, Japan | JGB daily interest rates, 10Y | daily, from 1974 | Japanese government standard terms, free reuse with attribution |
 | GBP | Bank of England | IADB series IUDMNZC, 10-year nominal par yield | daily, any window | Bank statistics, reusable with acknowledgement |
 | SEK | Sveriges Riksbank | SWEA SEGVB10YC, 10-year benchmark | daily, any window | open data |
+| INR | OECD Main Economic Indicators, via FRED | `INDIRLTLT01STM`, 10-year, **monthly** | monthly, from Dec 2011 | OECD statistics, reusable with attribution |
 
 Each was fetched for a full year ending eighteen months in the past on
 2026-09-27 and returned 245 to 255 observations. The US moved off the vendor's
@@ -278,25 +280,67 @@ index onto the Treasury's own feed at the same time, so every rate in the model
 now comes from the institution that sets it: Apple's rate changed by half a
 basis point in the move.
 
-**Five currencies could not be reached, and those companies stay refused**:
+**Four currencies could not be reached, and those companies stay refused**:
 Samsung (won), Tencent and Alibaba (renminbi), TSMC (Taiwan dollar), Novo
-Nordisk (krone), Reliance and Tata Consultancy (rupee).
+Nordisk (krone).
 
-**India is the sharpest case**, and worth setting out because it is the market
-this site is built for. The published Indian benchmark is the **FBIL** 10-year
-G-Sec par yield — a commercial benchmark administrator, whose rates are licensed
-rather than open, so republishing them needs a licence this site does not have.
-The Reserve Bank republishes FBIL's latest observations on its NSDP page (6.58%
-to 7.08% across the columns shown on 2026-09-27), but that page carries a
-handful of recent figures and no history, and a year's average is what this
-model asks for. The Bank's own historical database, `dbie.rbi.org.in`, resolves
-but does not complete a connection from outside India. So the rupee is a
-licensing and access problem rather than a gap in what exists, and it is the
-first thing a data layer with an Indian presence should close.
+**The rupee is settled, on a monthly series, and the cost is stated.**
 
-**What would remove it:** an open daily history for each of those five
-currencies — for the rupee, either an FBIL licence or the Reserve Bank's own
-database reachable from where this site runs.
+Every daily publisher of the Indian ten-year was checked on 2026-10-10:
+
+| Source | Daily history? | Terms | Reachable from a US server? |
+|---|---|---|---|
+| FBIL (the benchmark itself) | yes | licensed commercially | n/a — no licence |
+| RBI NSDP page | no — a handful of **weekly** figures, no history | public | yes |
+| RBI DBIE (`data.rbi.org.in`) | yes, behind an undocumented gateway | public | **yes** — see below |
+| CCIL | yes | Terms of Use forbid *"systematic or automated data collection, including scraping, data mining, data extraction and data harvesting"* | no — timed out from both India and a US datacentre |
+| NSE | a total-return **index**, not a yield | redistribution restricted | no — 200 from India, timed out from a US datacentre |
+| World Bank | **no such indicator exists** — every "yield" series it publishes is agricultural | open | yes |
+| IMF | monthly at best; IFS was restructured in 2025 | open | yes |
+| OECD via FRED | **monthly** | reusable with attribution | **yes** |
+
+**One earlier conclusion in this file was wrong and is corrected here.** It said
+the Bank's historical database "resolves but does not complete a connection from
+outside India". `dbie.rbi.org.in` no longer resolves *even from India*; the live
+host is `data.rbi.org.in`, and it is **not** geo-blocked — its gateway answers in
+about 0.4 seconds from India and from a US datacentre alike. The obstacle there
+is that the service path is undocumented, not where the server sits.
+
+**What the monthly series costs, measured rather than asserted.** On the two
+currencies where this site holds a daily series *and* the OECD publishes a
+monthly one for the same country, over the same twelve-month window
+(2025-09-01 to 2026-08-31):
+
+| | daily mean | OECD monthly mean | gap | of which frequency | of which source definition |
+|---|---|---|---|---|---|
+| USD (Treasury, 250 obs) | 4.2998% | 4.2958% | **−0.4bp** | −0.3bp | −0.1bp |
+| GBP (BoE IUDMNZC, 253 obs) | 4.7694% | 4.6920% | **−7.7bp** | +0.1bp | −7.8bp |
+
+For scale, the daily series moved 78bp and 86bp high-to-low inside those same
+windows. The decomposition is the part that matters: **monthly sampling itself
+costs almost nothing** — 0.3bp and 0.1bp, because a mean of twelve monthly
+averages and a mean of 250 daily closes are estimating the same thing. The
+7.7bp on sterling is almost entirely *source definition*: the OECD's UK series
+is not constructed the same way as the Bank's nominal par yield. So the risk the
+rupee carries is not that the data is monthly. It is that the OECD's Indian
+series may be defined differently from FBIL's benchmark, and **there is no
+Indian daily series reachable from here to measure that against** — which is
+the whole reason this constraint exists. On the evidence from the two
+currencies that can be checked, the plausible size is single-digit basis
+points, against a cost of equity near 10.8%.
+
+**It also lags.** The latest observation on 2026-10-10 was **2026-07**, 101 days
+back. For a one-year mean this is minor — the window is anchored to the
+company's own balance-sheet date, and for a 31 March year-end all twelve months
+are published — but the rate is not a current one, and a company with a very
+recent period end averages fewer months. Below nine monthly observations in the
+window the rate is refused rather than averaged from a stub.
+
+**What would remove it:** an open daily history for each of the four refused
+currencies; and for the rupee, an open *daily* Indian series — either an FBIL
+licence, or the DBIE gateway's service path documented well enough to depend
+on. Until then the rupee is valued on a monthly series that is named as monthly
+everywhere it is shown.
 
 ### How much plant a change in revenue is worth
 

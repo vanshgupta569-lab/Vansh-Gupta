@@ -1027,12 +1027,26 @@ export function deriveModel(fetched) {
     : null;
 
   const riskFree = fetched?.riskFree ?? null;
+  // THE SENTENCE SAYS WHAT THE SOURCE ACTUALLY PUBLISHES. It said "the mean
+  // daily yield ... closes" for every currency, which stopped being true when
+  // the Indian series arrived monthly: the only source for it is the OECD's,
+  // and calling twelve monthly observations "closes" would be the fifth
+  // provenance line in this repo to describe something that did not happen.
+  const rfFrequency = riskFree?.frequency || 'daily';
+  const rfReading = { daily: 'daily close', weekly: 'weekly reading', monthly: 'monthly average' }[
+    rfFrequency
+  ] || `${rfFrequency} reading`;
   provenance.riskFreeRate = isNum(riskFree?.rate)
-    ? `${(riskFree.rate * 100).toFixed(2)}% — the mean daily yield of the ${riskFree.name}, ` +
-      `${riskFree.observations} closes over the year ending ${riskFree.windowTo}, which is this company's own ` +
-      `balance sheet date. An average rather than a close, so the value does not move with one day's bond market; ` +
-      `the ten-year rather than the thirty, because the market risk premium it is added to is quoted against the ` +
-      `ten-year benchmark. The last close in that window was ${(riskFree.latest * 100).toFixed(2)}%`
+    ? `${(riskFree.rate * 100).toFixed(2)}% — the mean of the ${rfFrequency} ${riskFree.name}, ` +
+      `${riskFree.observations} ${rfReading}${riskFree.observations === 1 ? '' : 's'} over the year ending ` +
+      `${riskFree.windowTo}, which is this company's own balance sheet date. An average rather than a single ` +
+      `reading, so the value does not move with one day's bond market; the ten-year rather than the thirty, ` +
+      `because the market risk premium it is added to is quoted against the ten-year benchmark. The last ` +
+      `${rfReading} in that window was ${(riskFree.latest * 100).toFixed(2)}%` +
+      (rfFrequency === 'daily'
+        ? ''
+        : `. This series is published ${rfFrequency}, not daily, and lags; DATA_CONSTRAINTS.md records what ` +
+          `that costs`)
     : `not established: ${riskFree?.reason || 'the rate could not be fetched'}`;
 
   provenance.exitMultiple =
