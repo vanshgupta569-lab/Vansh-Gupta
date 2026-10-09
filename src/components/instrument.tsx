@@ -290,7 +290,7 @@ export interface MetricTileProps {
  * "terminal".
  */
 export const MetricTile: React.FC<MetricTileProps> = ({ label, value, note, detail }) => (
-  <div className="border border-line bg-page px-4 py-3.5 transition-colors hover:border-quiet/50 hover:bg-panel/60">
+  <div className="border border-line bg-panel px-4 py-3.5 transition-colors hover:border-quiet/50 hover:bg-panel/70">
     <div className={`${EYEBROW} text-quiet mb-1.5 truncate`} title={label}>
       {label}
     </div>

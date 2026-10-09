@@ -93,7 +93,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
     })}`;
 
   return (
-    <section className="border border-[#222228] bg-[#111114] p-5 sm:p-7">
+    <section className="border-t border-line pt-8 sm:pt-10">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           Football field
@@ -273,7 +273,7 @@ export const RatioBand: React.FC<RatioBandProps> = ({ reported, forecast }) => {
   const firstForecast = reported.periods.length;
 
   return (
-    <section className="border border-[#222228] bg-[#111114] p-5 sm:p-7">
+    <section className="border-t border-line pt-8 sm:pt-10">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           How the business actually runs

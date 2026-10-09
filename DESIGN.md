@@ -500,16 +500,54 @@ one.
   label to ink. The "+ All" escape chip carries read oxblood rather than muted,
   marking it as the one that leaves the set.
 
+### Sections: Rules And Space, Not Boxes
+
+**A section is a hairline above it and space, not a container.**
+`border-t border-line pt-8 sm:pt-10`, full width to the page gutter, no
+background and no side or bottom border.
+
+**Why the step exists.** Every section used to be `border + bg-panel + p-7`,
+stacked. Measured, the company screen drew 50 bordered-and-filled boxes. Each
+one was defensible on its own; together they said that the screen is a pile of
+separate cards, when it is one continuous argument about one company — the
+ratios are not a different document from the valuation above them. A reader
+scanning for a figure was crossing a border every time, and a border reads as
+"new thing, re-orient". Rules and space say "still the same document, next
+part", which is what is true.
+
+**One raised surface, then a document.** The verdict block keeps its panel,
+because it is the object the screen exists to deliver. Everything below it sits
+on the page. Exactly one thing being raised is what makes raising it mean
+anything.
+
+**What stays a box.** Things that are genuinely objects rather than parts of the
+argument: a metric tile, a chart panel, the news strip, an overlay. The test is
+whether it would still make sense lifted out and put somewhere else. A section
+would not; a tile would.
+
+**This raises contrast rather than lowering it.** Text moved from `panel`
+(#111114) onto the darker `page` (#0B0B0D), so every ratio in the sweep improved
+or held. Nothing got harder to read.
+
 ### Cards / Containers
 - **Corner Style:** square (0px).
-- **Background:** panel for a container; a metric tile deliberately uses the page
-  colour, so a row of tiles reads as wells cut into the panel rather than cards
-  floating on it.
+- **Background:** `panel`. A metric tile is `panel` **on the page ground** —
+  this inverted when sections stopped being boxes. A tile used to be page-
+  coloured so it read as a well cut into a panel; with the panel gone it would
+  have been invisible against the ground it was contrasting with, so the tile is
+  now the raised surface and the ground is the page. The relationship is the
+  same; which side carries it swapped.
 - **Shadow Strategy:** none — see Elevation & Depth.
-- **Border:** 1px hairline throughout; internal sections divide with a hairline
-  rather than with a gap.
+- **Border:** 1px hairline on an object; a **section** gets a top hairline only.
+  Internal divisions within a panel divide with a hairline rather than a gap.
 - **Internal Padding:** 20px horizontal / 16-24px vertical on a panel (24px side
-  padding at `lg`); 14px / 12px on a metric tile.
+  padding at `lg`); 16px / 14px on a metric tile. **A section has no horizontal
+  padding** — it aligns to the page gutter, which is what makes the rule above
+  it read as a rule rather than as the top edge of a box.
+- **Measure:** with sections full-bleed, nothing constrains prose any more, so
+  the line length is capped in CSS at **76ch** rather than by panel padding. See
+  the note on `.max-w-2xl` in `index.css`; before the cap the ratios intro ran
+  to about 160 characters.
 
 ### Inputs / Fields
 - **Style:** square, hairline border on the panel ground, placeholder in quiet.

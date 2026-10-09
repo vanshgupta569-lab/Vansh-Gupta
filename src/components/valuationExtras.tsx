@@ -50,7 +50,7 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
   const mult = (v: any) => (isNum(v) ? `${v.toFixed(1)}x` : '—');
 
   return (
-    <div className="border border-t-0 border-[#222228] bg-[#111114] px-5 sm:px-7 py-6">
+    <div className="border-t border-line bg-panel/40 px-5 sm:px-6 py-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <h3 className="font-serif text-lg sm:text-xl text-[#F2F0EA]">
           Market approach
@@ -209,7 +209,7 @@ export const ImpliedByPrice: React.FC<ImpliedProps> = ({ result, currencySymbol 
     isNum(v) ? (unit === 'pct' ? `${v.toFixed(1)}%` : `${v.toFixed(1)}x`) : '—';
 
   return (
-    <section id="implied" className="scroll-mt-24 border border-[#222228] bg-[#111114] p-5 sm:p-7">
+    <section id="implied" className="scroll-mt-24 border-t border-line pt-8 sm:pt-10">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           What the price already assumes

@@ -82,7 +82,7 @@ export function DataConstraintPanel({ constraints }: { constraints: DataConstrai
   const sorted = [...constraints].sort((a, b) => order[a.severity] - order[b.severity]);
 
   return (
-    <section id="data-constraints" className="scroll-mt-24 bg-[#111114] border hairline-border p-6 lg:p-8 mb-6">
+    <section id="data-constraints" className="scroll-mt-24 border-t border-line pt-8 sm:pt-10 mb-10">
       <h2 className="font-display text-2xl text-[#F2F0EA] tracking-tight mb-1">
         What the source does not give us
       </h2>

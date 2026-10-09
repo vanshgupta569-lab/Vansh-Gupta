@@ -31,7 +31,7 @@ export function TerminalReliancePanel({
   const bar = Math.max(0, Math.min(100, reliance.share * 100));
 
   return (
-    <section id="terminal-reliance" className="scroll-mt-24 bg-[#111114] border hairline-border p-6 lg:p-8 mb-6">
+    <section id="terminal-reliance" className="scroll-mt-24 border-t border-line pt-8 sm:pt-10 mb-10">
       <h2 className="font-display text-2xl text-[#F2F0EA] tracking-tight mb-1">
         How much of this rests on the terminal value
       </h2>

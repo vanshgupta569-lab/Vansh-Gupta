@@ -1345,7 +1345,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         
         {/* Card 1: Revenue & Margin Trend Bar Chart */}
-        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
+        <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-4">
               <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
@@ -1427,7 +1427,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
 
         {/* Card 2: DCF Sensitivity Heatmap Matrix */}
-        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
+        <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-3">
               <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
@@ -1507,7 +1507,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
 
         {/* Card 3: Health Score Radar Chart */}
-        <div className="bg-[#111114] border hairline-border p-6 flex flex-col justify-between relative min-h-[360px] shadow-md">
+        <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
@@ -1687,7 +1687,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           everything else arrives, and it is what they would want next.
           ------------------------------------------------------------------ */}
       {!bankModel && (
-      <section id="nerds" className="scroll-mt-32 border border-[#222228] bg-[#111114] mb-10 p-5 sm:p-7">
+      <section id="nerds" className="scroll-mt-32 border-t border-line pt-8 sm:pt-10 mb-10">
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
           <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
             For the nerds

@@ -443,9 +443,16 @@ async function checkRefused(page: Page, source: any, company: any, symbol: strin
   // Opened from the company's own page, the list arrives seeded with that
   // company, which is the journey a reader actually takes.
   await page.getByRole('button', { name: /model a list/i }).click();
-  await page.getByRole('button', { name: /^run$/i }).first().click({ timeout: 30_000 });
-  await page.getByText(new RegExp(firstSentence.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).waitFor({ timeout: 60_000 });
-  const batchText = (await page.textContent('body')) || '';
+  // SCOPED TO THE OVERLAY, because the company page behind it carries this same
+  // sentence. Unscoped, the wait hit two elements and threw strict mode on the
+  // runs where both had mounted -- and worse, the assertion below read the whole
+  // body, so it would have passed on the page's own copy with the batch row
+  // blank. The check now reads only the row it claims to be checking.
+  const batch = page.getByRole('dialog', { name: /model a list of companies/i });
+  await batch.waitFor({ timeout: 30_000 });
+  await batch.getByRole('button', { name: /^run$/i }).first().click({ timeout: 30_000 });
+  await batch.getByText(new RegExp(firstSentence.slice(0, 40).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')).first().waitFor({ timeout: 60_000 });
+  const batchText = (await batch.textContent()) || '';
   if (batchText.includes(firstSentence.slice(0, 40))) ok('the batch row carries the reason');
   else fail('the batch row', firstSentence.slice(0, 40), '(not on the batch screen)');
   await page.keyboard.press('Escape');

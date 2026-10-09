@@ -239,13 +239,18 @@ export const FullScreenPanel: React.FC<{
   onClose: () => void;
   children: React.ReactNode;
 }> = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-50 bg-[#0B0B0D] overflow-y-auto">
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+    className="fixed inset-0 z-50 bg-[#0B0B0D] overflow-y-auto"
+  >
     <div className="sticky top-0 z-10 bg-[#0B0B0D]/95 backdrop-blur border-b border-[#222228]">
       <div className="max-w-[1440px] mx-auto px-5 sm:px-10 py-4 flex items-center justify-between gap-4">
         <div>
           <h2 className="font-serif text-lg sm:text-2xl text-[#F2F0EA]">{title}</h2>
           {subtitle && (
-            <p className="font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase mt-0.5">
+            <p className="font-sans text-[13px] leading-snug text-[#8A8A8F] mt-1">
               {subtitle}
             </p>
           )}

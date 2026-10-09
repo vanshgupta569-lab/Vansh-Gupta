@@ -35,7 +35,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
 
   if (!model.applicable) {
     return (
-      <section className="border border-[#222228] bg-[#111114] p-5 sm:p-7">
+      <section className="border-t border-line pt-8 sm:pt-10">
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA] mb-2">
           Valuing a bank
         </h2>
@@ -52,7 +52,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
       : null;
 
   return (
-    <section className="border border-[#222228] bg-[#111114] p-5 sm:p-7">
+    <section className="border-t border-line pt-8 sm:pt-10">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           Valued as a bank, not as a business selling goods

@@ -243,7 +243,21 @@ textarea,
 
 .max-w-2xl:not(.w-full),
 .max-w-prose {
-  max-width: none;
+  /* CAPPED AT 76ch, where it used to be `none`.
+     
+     Removing the cap was right when every section lived inside a padded panel:
+     the panel supplied the measure, and the extra width let justified text
+     justify without forcing gaps. Sections sit on the page now, separated by
+     rules rather than boxed, and with the padding gone nothing was holding the
+     line at all -- the ratios intro ran to about 160 characters, which is twice
+     a readable measure and exactly the kind of thing that gets worse when a
+     layout gets cleaner.
+
+     76ch is the top of the 65-75 a line should hold, chosen at the top because
+     this is a dense instrument and its prose sits beside tables that are wider
+     still. Justification keeps the width it needs; the line stops where a
+     reader can still find the start of the next one. */
+  max-width: 76ch;
   text-align: justify;
   text-justify: inter-word;
   hyphens: auto;
