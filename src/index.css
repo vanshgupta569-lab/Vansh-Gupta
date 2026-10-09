@@ -712,3 +712,13 @@ div.font-display {
   letter-spacing: -0.01em;
   font-weight: 500;
 }
+
+/* A FIXED BOTTOM BAR IS PAINTED OVER THIS PAGE, so the page is told how tall
+   the bar actually is. `useBottomBarInset` measures the bar and writes the
+   variable; screens without one are unaffected, because the fallback is zero.
+   This sits on `body` rather than on a screen's own panel because a footer
+   rendered by the screen's parent is still part of the document the bar
+   covers -- padding the panel left the disclaimer under the bar. */
+body {
+  padding-bottom: var(--bottom-bar-inset, 0px);
+}

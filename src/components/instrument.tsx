@@ -21,7 +21,7 @@
 // names — `text-ink`, `text-muted`, `border-line` — declared in `index.css`
 // from `src/design/tokens.ts`. `npm run verify` fails a component that
 // declares a palette hex of its own, which is how the last one drifted.
-import React, { useId, useState } from 'react';
+import React, { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -79,6 +79,61 @@ import { motion, AnimatePresence } from 'motion/react';
 // or two words. `UI` is the same size in Inter and is what every secondary
 // SENTENCE uses. The test is not the length and not the weight: it is whether
 // the thing reads as a sentence. If it does, it is Inter.
+/* ======================================================================
+   A FIXED BAR AND THE PAGE BENEATH IT
+
+   A bar pinned to the bottom of the viewport is painted over the page, not
+   laid out in it, so the page clears it only if something tells the page how
+   tall it is. The figures screen used a constant -- `pb-40`, 160px -- which is
+   a guess about a height nobody measured. Measured at 360px wide with one
+   figure corrected, the bar gains a Reset button, wraps to a third row and
+   stands 184px.
+
+   THE INSET GOES ON THE DOCUMENT, NOT ON A PANEL. Padding the screen's own
+   content div looked right and fixed nothing, because the footer is rendered
+   by the screen's parent and follows it: the disclaimer ran 48px under the bar
+   at every width, and no amount of padding inside the content could reach it.
+   A bar fixed to the viewport is covering the DOCUMENT, so the document is
+   what carries the inset -- `body` reads the variable this hook writes, which
+   also means any future bar is handled by declaring it rather than by
+   remembering to pad something.
+
+   A ResizeObserver keeps it in step through wrapping, font loading, a button
+   appearing and rotation. The gap is breathing room; the clearance is the
+   measured part.
+   ====================================================================== */
+export function useBottomBarInset(gap = 48) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () => {
+      const h = el.getBoundingClientRect().height;
+      root.style.setProperty('--bottom-bar-inset', `${Math.ceil(h) + gap}px`);
+    };
+    apply();
+    let stop: () => void;
+    if (typeof ResizeObserver === 'undefined') {
+      // Older Safari: a resize listener rather than no inset at all.
+      window.addEventListener('resize', apply);
+      stop = () => window.removeEventListener('resize', apply);
+    } else {
+      const ro = new ResizeObserver(apply);
+      ro.observe(el);
+      stop = () => ro.disconnect();
+    }
+    return () => {
+      stop();
+      // The bar is gone with this screen, so the inset goes with it.
+      root.style.removeProperty('--bottom-bar-inset');
+    };
+  }, [gap]);
+
+  return { ref: ref as React.RefObject<any> };
+}
+
 export const EYEBROW = 'font-mono text-[13px] uppercase';
 export const LABEL = 'font-mono text-[13px] tracking-wide';
 /** Secondary sentences in the chrome: hints, summaries, foots, captions. */

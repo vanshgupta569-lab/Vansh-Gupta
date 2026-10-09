@@ -42,7 +42,7 @@ import {
   yearChecks,
 } from '../data/corrections';
 import { DARK } from '../design/tokens';
-import { Disclose, EYEBROW, LABEL, UI } from './instrument';
+import { Disclose, EYEBROW, LABEL, UI, useBottomBarInset } from './instrument';
 import { Mark } from '../design/Mark';
 
 // Colours come from the one palette. They used to be local constants at the
@@ -199,6 +199,10 @@ export const FiguresEditor: React.FC<Props> = ({
 
   const resetAll = () => onChange({});
 
+  // The standing bar is painted over this page, so the page is told how tall
+  // it actually is rather than guessing. See useBottomBarInset.
+  const bar = useBottomBarInset();
+
   return (
     <div className="min-h-screen" style={{ background: '#0B0B0D' }}>
       {/* A FIELD HAS TO LOOK LIKE A FIELD.
@@ -234,7 +238,7 @@ export const FiguresEditor: React.FC<Props> = ({
           color: #F2F0EA;
         }
       `}</style>
-      <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-24 pb-40">
+      <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-24 pb-16">
         {/* ==================================================================
             WHAT THIS SCREEN IS, IN THE SPACE IT DESERVES.
 
@@ -582,8 +586,17 @@ export const FiguresEditor: React.FC<Props> = ({
           screen because the count is the thing the reader must not lose
           track of. */}
       <div
+        ref={bar.ref}
         className="fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-md"
-        style={{ background: 'rgba(17,17,20,0.96)', borderColor: LINE }}
+        style={{
+          background: 'rgba(17,17,20,0.96)',
+          borderColor: LINE,
+          /* On a phone the browser's own chrome is drawn over the bottom of
+             the viewport, and a bar at `bottom: 0` puts its buttons underneath
+             it. The safe area is the part the browser promises not to cover.
+             Zero everywhere else, so this costs nothing on a desktop. */
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        }}
       >
         <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-4 flex items-center justify-between gap-6 flex-wrap">
           <div className="font-mono text-[12px]" style={{ color: changed ? RED_TEXT : MUTED }}>

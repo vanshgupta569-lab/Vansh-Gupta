@@ -6,7 +6,7 @@ export const Footer: React.FC = () => {
 
   return (
     <>
-      <footer className="w-full bg-[#111114] border-t hairline-border-t py-8 px-6 lg:px-12 max-w-[1440px] mx-auto">
+      <footer className="relative z-10 w-full bg-[#111114] border-t hairline-border-t py-8 px-6 lg:px-12 max-w-[1440px] mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="font-mono text-xs text-[#8A8A8F] uppercase tracking-widest">
             © 2026 MARGINALIA RESEARCH. ALL RIGHTS RESERVED.

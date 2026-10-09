@@ -290,10 +290,90 @@ async function openCurated(page: Page, ticker: string) {
 }
 
 /** A fetched company: the figures screen, then the questions. */
+/**
+ * A BAR PINNED OVER THE PAGE, AND THE PAGE'S OWN PADDING.
+ *
+ * A fixed bottom bar is painted over the page rather than laid out in it, so
+ * the page clears it only if something tells the page how tall it is. This
+ * used to be a 160px constant; measured at 360px wide with a figure edited,
+ * the bar stands 184px. The failure is silent -- the page looks finished and
+ * the last control on it is simply unreachable -- so it is checked rather
+ * than reasoned about, at the narrow widths where the bar wraps.
+ */
+async function checkBottomBarClearance(page: Page, label: string) {
+  const r: any = await page.evaluate(`(() => {
+    const sc = document.scrollingElement;
+    sc.scrollTop = sc.scrollHeight;
+    const vh = innerHeight;
+    let bar = null;
+    for (const el of document.querySelectorAll('*')) {
+      const s = getComputedStyle(el);
+      if (s.position !== 'fixed' || s.display === 'none' || s.visibility === 'hidden') continue;
+      const b = el.getBoundingClientRect();
+      if (b.height < 4 || b.width < 40 || b.height > vh * 0.85) continue;
+      if (Math.abs(b.bottom - vh) > 4) continue;
+      bar = el;
+    }
+    if (!bar) return { none: true };
+    const barTop = bar.getBoundingClientRect().top;
+    // THE INVARIANT: scrolled as far as it goes, the page's own content must
+    // END above the bar. Asking instead whether some control happens to land
+    // under it is luck, not clearance -- it passed all through the defect,
+    // because the last control sat just high enough to miss the overlap.
+    // INK, not boxes: a container's rect includes its own bottom padding, so
+    // measuring containers would say the page always reaches the page bottom
+    // and the clearance could never be wrong. Only leaves that actually paint.
+    let bottom = 0, worst = '';
+    const PAINTS = /^(IMG|SVG|CANVAS|INPUT|SELECT|TEXTAREA|BUTTON|HR)$/;
+    for (const el of document.querySelectorAll('body *')) {
+      const s = getComputedStyle(el);
+      if (s.visibility === 'hidden' || s.display === 'none') continue;
+      const leaf = el.children.length === 0 && (el.textContent || '').trim().length > 0;
+      if (!leaf && !PAINTS.test(el.tagName)) continue;
+      let p = el, fixed = false;
+      while (p) { if (getComputedStyle(p).position === 'fixed') { fixed = true; break; } p = p.parentElement; }
+      if (fixed) continue;
+      const b = el.getBoundingClientRect();
+      if (b.height < 1 || b.width < 1) continue;
+      if (b.bottom > bottom) { bottom = b.bottom; worst = (el.textContent || '').trim().slice(0, 30) || el.tagName; }
+    }
+    return { barH: Math.round(bar.getBoundingClientRect().height),
+             over: Math.round(bottom - barTop), worst };
+  })()`);
+  if (r.none) return;
+  if (r.over <= 0) ok(`the page ends clear of the standing bar (${label}: bar ${r.barH}px, ${-r.over}px to spare)`);
+  else fail(`the page's clearance under the standing bar (${label})`,
+    `content ending above the bar (${r.barH}px tall)`,
+    `it runs ${r.over}px past the top of the bar — "${r.worst}"`);
+}
+
 async function openFetched(page: Page, ticker: string) {
   await search(page, ticker);
   // The figures screen shows the filings before anything is modelled, and the
   // site holds it for a few seconds on purpose, so this waits rather than races.
+  await page.getByRole('button', { name: /^build the model$/i }).waitFor({ timeout: 90_000 });
+  // While the only screen with a standing bar is up, check the page clears it.
+  // Narrow first, because the bar wraps to two rows there and the wide case
+  // never fails.
+  const was = page.viewportSize();
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.waitForTimeout(500);
+  await checkBottomBarClearance(page, '360px, as filed');
+  // WITH A FIGURE CORRECTED, which is the state that actually fails: the bar
+  // gains a "Reset to as filed" button, wraps to a third row and stands 184px
+  // against the 160px constant this check was written for. Checking only the
+  // untouched screen would have passed throughout the defect.
+  const field = page.locator('input[inputmode], input[type="text"]').first();
+  if (await field.count()) {
+    await field.fill('999');
+    await field.blur();
+    await page.waitForTimeout(600);
+    await checkBottomBarClearance(page, '360px, one figure corrected');
+    const reset = page.getByRole('button', { name: /reset to as filed/i });
+    if (await reset.count()) { await reset.click(); await page.waitForTimeout(500); }
+  }
+  if (was) { await page.setViewportSize(was); await page.waitForTimeout(400); }
+  await checkBottomBarClearance(page, 'as opened');
   await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
   await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
   await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });

@@ -529,6 +529,39 @@ would not; a tile would.
 (#111114) onto the darker `page` (#0B0B0D), so every ratio in the sweep improved
 or held. Nothing got harder to read.
 
+### A Fixed Bar And The Page Beneath It
+
+**A bar pinned to the viewport is painted over the page, never laid out in it.**
+The page clears it only if something measures it. Never a constant.
+
+`useBottomBarInset` (in `instrument.tsx`) puts a `ResizeObserver` on the bar and
+writes `--bottom-bar-inset`; `body` in `index.css` reads it. A screen with no
+bar is unaffected, because the fallback is `0px`.
+
+**The inset goes on the document, not on the screen's own panel.** This is the
+part that is easy to get wrong and was: the figures screen padded its content
+div, which looked correct and fixed nothing, because the footer is rendered by
+the screen's *parent* and follows it. Measured, the disclaimer ran **48px under
+the bar** at every width with that padding in place. A bar fixed to the viewport
+covers the document, so the document carries the inset.
+
+**Why not a constant.** The figures screen used `pb-40` — 160px, a guess about a
+height nobody had measured. The bar is 79px on a desktop, 123px at 360px wide,
+and **184px at 360px once a figure is corrected**, because correcting one adds a
+Reset button and wraps the row. The guess was smaller than the thing it was
+guessing at.
+
+**On a phone, also the safe area.** The browser's own chrome is drawn over the
+bottom of the viewport, so a bar at `bottom: 0` puts its buttons underneath it.
+The bar carries `padding-bottom: env(safe-area-inset-bottom)`, which needs
+`viewport-fit=cover` on the viewport meta or it resolves to zero. Both, or
+neither does anything.
+
+**Checked, not remembered.** `verify:dashboard` scrolls the figures screen to
+the end at 360px, with and without a corrected figure, and asserts the page's
+last ink ends above the bar. Asking instead whether some *control* lands under
+the bar passes throughout the defect — that is luck, not clearance.
+
 ### Cards / Containers
 - **Corner Style:** square (0px).
 - **Background:** `panel`. A metric tile is `panel` **on the page ground** —
