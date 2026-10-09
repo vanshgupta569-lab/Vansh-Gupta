@@ -379,10 +379,33 @@ set once in the stylesheet. Four different tracking values is the sort of thing
 nobody notices individually and everybody notices in aggregate. A tracking
 utility written on an uppercase mono element does not win against it.
 
-**The Prose Is Not Mono Rule.** Monospace carries figures and the small-caps
-labels above them. A paragraph set in it reads as a terminal dump, so any
-monospace block with relaxed leading and no small caps is reset to the reading
-face. Labels, tickers and every number are untouched.
+**The Prose Is Not Mono Rule.** Monospace carries **numbers, tickers, codes,
+units and labels of a word or two**. Everything that reads as a sentence is
+Inter, whatever its size, weight or colour, and whether or not it is secondary.
+
+**The test is the text, not the class.** Not the length, not the weight, not
+whether it sits in the chrome: read it aloud, and if it is a sentence it is
+Inter. `NASDAQ`, `US0378331005`, `0.29x net cash`, `FY2025`, `Net debt / EBITDA`
+and `25% · 5%` are mono. "Click one and type over it", "the two methods are 12%
+apart", "Why there are two values, and what the gap means" and "Don't know this
+company yet?" are Inter — the middle one despite carrying a figure, because a
+figure inside a sentence does not make the sentence a figure.
+
+**Why, and it is not only taste.** Measured across the five screens on
+2026-10-08: **103 passages of four words or more were set in JetBrains Mono, 94
+of them ordinary lowercase prose** — disclosure summaries, instructional lines,
+trailing hints, the units note, the empty state of the news ticker. At that
+density the monospace stops reading as precision and starts reading as a
+terminal costume, which is the opposite of what this product is. It is also
+harder work: the even advance width that makes a column of digits line up is the
+same property that flattens the word-shapes a reader scans by, which is why the
+13px floor exists two rules above.
+
+The split is enforced at the source rather than per screen: `instrument.tsx`
+exports `LABEL` (mono, for the things that earn it) and `UI` (Inter, same size,
+for every secondary sentence). Reaching for `LABEL` on a sentence is the mistake
+this rule exists to prevent. After the pass the count was 77, and what remains
+is labels — eyebrows, tab names, metric names, section numbering.
 
 ## Layout
 

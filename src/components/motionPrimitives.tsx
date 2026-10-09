@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, animate, AnimatePresence, useInView } from 'motion/react';
 import { noteOrder } from '../data/didYouKnow';
 import type { DidYouKnow } from '../data/didYouKnow';
-import { EYEBROW, LABEL, BODY } from './instrument';
+import { EYEBROW, LABEL, BODY, UI } from './instrument';
 
 /**
  * Shared motion helpers for the dashboard.
@@ -271,7 +271,7 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
               transition={{ duration: reduced ? 0 : 0.5, ease: 'easeOut' }}
             />
           </div>
-          <div className={`${LABEL} mt-2.5 text-quiet`}>{STAGES[stage]}</div>
+          <div className={`${UI} mt-2.5 text-quiet`}>{STAGES[stage]}</div>
         </div>
 
         {/* ---- THE NOTE, WHICH IS WHY THIS SCREEN IS WORTH LOOKING AT ------
@@ -309,7 +309,7 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
         {/* Sentence case, not the tracked uppercase the eyebrows use. At 13px
             with 0.16em tracking this ran to three shouting lines on a phone,
             for the least important sentence on the card. */}
-        <div className={`${LABEL} mt-7 border-t border-line pt-4 leading-relaxed text-quiet`}>
+        <div className={`${UI} mt-7 border-t border-line pt-4 leading-relaxed text-quiet`}>
           Reading the filings, running the same engine used for every company
         </div>
       </motion.div>

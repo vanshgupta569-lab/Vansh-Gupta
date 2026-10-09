@@ -180,7 +180,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
           Skip and build the model
           <ArrowRight className="w-4 h-4" />
         </button>
-        <span className="font-mono text-[13px] text-quiet">
+        <span className="font-sans text-[13px] leading-snug text-quiet">
           Don’t know this company yet? Skipping changes nothing about the model; you can
           answer these later from “For the nerds”.
         </span>

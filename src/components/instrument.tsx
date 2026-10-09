@@ -64,8 +64,25 @@ import { motion, AnimatePresence } from 'motion/react';
 // EYEBROW takes its tracking and weight from the shared `.uppercase.font-mono`
 // rule rather than restating them, so every small-caps label on the site stays
 // set identically — which is why that rule exists.
+// MONO IS FOR FIGURES, NOT FOR SENTENCES.
+//
+// Measured across the five screens on 2026-10-08: 103 passages of four words or
+// more were set in JetBrains Mono, 94 of them ordinary lowercase prose —
+// disclosure summaries, instructional lines, trailing hints, the units note.
+// Monospace carrying running text reads as a terminal costume rather than as a
+// finance product, and it is genuinely harder to read: the even advance width
+// that makes a column of digits line up is the same property that removes the
+// word-shape a reader scans by.
+//
+// So the two were separated. `LABEL` is mono and stays mono because what it
+// carries earns it — a ticker, a code, a unit, a figure, a short label of one
+// or two words. `UI` is the same size in Inter and is what every secondary
+// SENTENCE uses. The test is not the length and not the weight: it is whether
+// the thing reads as a sentence. If it does, it is Inter.
 export const EYEBROW = 'font-mono text-[13px] uppercase';
 export const LABEL = 'font-mono text-[13px] tracking-wide';
+/** Secondary sentences in the chrome: hints, summaries, foots, captions. */
+export const UI = 'font-sans text-[13px] leading-snug';
 export const BODY = 'font-sans text-[13px] leading-relaxed';
 
 /** A dotted rule, for a row that continues a thought rather than ending one. */
@@ -110,22 +127,24 @@ export const Disclose: React.FC<DiscloseProps> = ({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={id}
-        className={`group flex w-full flex-wrap items-center gap-x-3 text-left transition-colors cursor-pointer ${
+        className={`group -mx-2 flex w-full flex-wrap items-center gap-x-3 rounded-none px-2 text-left transition-colors cursor-pointer hover:bg-ink/[0.03] ${
           dense ? 'py-2' : 'py-3'
-        } hover:text-ink`}
+        }`}
       >
         <ChevronRight
           className={`h-3 w-3 shrink-0 text-quiet transition-transform duration-200 group-hover:text-accent-text ${
-            open ? 'rotate-90' : ''
+            open ? 'rotate-90 text-accent-text' : ''
           }`}
           aria-hidden="true"
         />
-        <span className={`${LABEL} text-muted group-hover:text-ink transition-colors`}>{summary}</span>
+        <span className={`${UI} transition-colors ${open ? 'text-ink' : 'text-muted'} group-hover:text-ink`}>
+          {summary}
+        </span>
         {/* The stat goes to the far end on a wide row and onto its own line on
             a narrow one. Left as one flex line it became two cramped columns
             of wrapped text at 414px, each about four words wide. */}
         {trailing !== undefined && (
-          <span className={`${LABEL} w-full pl-6 text-quiet tabular-nums sm:ml-auto sm:w-auto sm:pl-0 sm:text-right`}>
+          <span className={`${UI} w-full pl-6 text-quiet tabular-nums sm:ml-auto sm:w-auto sm:pl-0 sm:text-right`}>
             {trailing}
           </span>
         )}
@@ -215,7 +234,7 @@ export const Figure: React.FC<FigureProps> = ({
       </span>
       {pill}
     </div>
-    {foot && <div className={`${LABEL} text-quiet mt-2`}>{foot}</div>}
+    {foot && <div className={`${UI} text-quiet mt-2`}>{foot}</div>}
   </div>
 );
 
@@ -271,12 +290,14 @@ export interface MetricTileProps {
  * "terminal".
  */
 export const MetricTile: React.FC<MetricTileProps> = ({ label, value, note, detail }) => (
-  <div className="border border-line bg-page px-3.5 py-3 transition-colors hover:border-quiet/40">
+  <div className="border border-line bg-page px-4 py-3.5 transition-colors hover:border-quiet/50 hover:bg-panel/60">
     <div className={`${EYEBROW} text-quiet mb-1.5 truncate`} title={label}>
       {label}
     </div>
-    <div className="font-mono text-[17px] font-medium tabular-nums text-ink leading-none">{value}</div>
-    {note && <div className="font-mono text-[10px] text-quiet mt-1.5 leading-snug">{note}</div>}
+    <div className="font-mono text-[19px] font-medium tabular-nums text-ink leading-none tracking-[-0.01em]">
+      {value}
+    </div>
+    {note && <div className={`${UI} text-quiet mt-1.5`}>{note}</div>}
     {detail && (
       <div className="mt-2 -mb-1">
         <Disclose summary="basis" dense>

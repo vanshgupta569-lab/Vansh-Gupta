@@ -1208,12 +1208,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           THE MEASURES — one tile component, not five copies of its markup.
           Dense by intention: a professional reads the row at a glance.
           ================================================================== */}
-      <motion.div
-        initial="hidden"
-        animate="shown"
-        variants={{ shown: { transition: { staggerChildren: 0.05 } } }}
-        className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
-      >
+      {/* NO STAGGERED ENTRANCE. These five tiles used to fade up one after
+          another on every arrival, which is a page performing its own loading
+          to a reader who came to read a number. A product loads into a task.
+          The tiles are simply there. */}
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {(bankModel
           ? [
               { label: 'Market cap', value: company.marketCapStr },
@@ -1242,14 +1241,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               { label: 'Net debt / EBITDA', value: company.netDebtEbitda },
             ]
         ).map((tile) => (
-          <motion.div
-            key={tile.label}
-            variants={{ hidden: { opacity: 0, y: 8 }, shown: { opacity: 1, y: 0 } }}
-          >
-            <MetricTile label={tile.label} value={tile.value} />
-          </motion.div>
+          <MetricTile key={tile.label} label={tile.label} value={tile.value} />
         ))}
-      </motion.div>
+      </div>
 
       {/* Marks where the full header ends, for the condensed bar above */}
       <div ref={headerSentinel} className="h-px w-full" aria-hidden="true" />
@@ -1306,7 +1300,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
         <div className="overflow-hidden relative w-full">
           {newsToShow.length === 0 ? (
-            <span className="font-mono text-xs text-[#8A8A8F] tracking-wide">
+            <span className="font-sans text-[13px] leading-snug text-[#8A8A8F]">
               {newsLoading ? 'Loading the news…' : 'No recent headlines found for this company.'}
             </span>
           ) : (
@@ -1501,7 +1495,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   </span>
                 </>
               ) : (
-                <span className="text-[#8A8A8F] uppercase tracking-widest">Hover matrix cell to inspect valuation sensitivity.</span>
+                <span className="font-sans text-[13px] normal-case tracking-normal text-[#8A8A8F]">Hover a cell to inspect the valuation at that pair.</span>
               )}
             </div>
           </div>

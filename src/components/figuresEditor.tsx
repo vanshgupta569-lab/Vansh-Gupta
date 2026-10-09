@@ -42,7 +42,7 @@ import {
   yearChecks,
 } from '../data/corrections';
 import { DARK } from '../design/tokens';
-import { Disclose, EYEBROW, LABEL } from './instrument';
+import { Disclose, EYEBROW, LABEL, UI } from './instrument';
 import { Mark } from '../design/Mark';
 
 // Colours come from the one palette. They used to be local constants at the
@@ -328,7 +328,7 @@ export const FiguresEditor: React.FC<Props> = ({
               {ticker} as filed
               <Mark />
             </h2>
-            <div className="font-mono text-[13px] text-right" style={{ color: MUTED }}>
+            <div className="font-sans text-[13px] leading-snug text-right" style={{ color: MUTED }}>
               Figures in millions of {currencySymbol} unless the row says otherwise
             </div>
           </div>
@@ -342,7 +342,7 @@ export const FiguresEditor: React.FC<Props> = ({
             style={{ borderColor: LINE }}
           >
             <Pencil className="w-3.5 h-3.5 shrink-0" style={{ color: RED_TEXT }} />
-            <p className={LABEL} style={{ color: READ }}>
+            <p className={UI} style={{ color: READ }}>
               <span style={{ color: INK, fontWeight: 600 }}>Every figure below can be changed.</span>{' '}
               Click one and type over it; an empty box puts the original back.
             </p>

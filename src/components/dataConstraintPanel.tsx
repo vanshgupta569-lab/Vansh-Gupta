@@ -125,7 +125,7 @@ export function DataConstraintPanel({ constraints }: { constraints: DataConstrai
               <span className="text-quiet">Effect: </span>
               {c.effect}.
             </p>
-            <p className="mt-2.5 font-mono text-[13px] uppercase tracking-wider text-quiet">
+            <p className="mt-2.5 font-sans text-[13px] leading-snug text-quiet">
               Source: {c.source}
               {' · '}
               {c.severity === 'refusal'

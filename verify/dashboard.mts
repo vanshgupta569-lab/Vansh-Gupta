@@ -241,8 +241,15 @@ async function search(page: Page, ticker: string) {
     if (await box.isVisible().catch(() => false)) break;
     // Clicking again is the fix for a click that landed pre-hydration: the
     // handler is attached now even if it was not a moment ago.
-    await enter.click().catch(() => {});
-    await page.waitForTimeout(500);
+    //
+    // THE SHORT TIMEOUT IS THE POINT. Playwright's click waits 30 seconds for
+    // its target by default, and once the search screen is up this button is
+    // gone — so a retry issued just after a successful navigation sat waiting
+    // half a minute for an element that was never coming back, and the caller's
+    // own 30-second wait expired first. That turned the fix for one flake into
+    // a slower flake of its own, which the loading-screen check caught.
+    await enter.click({ timeout: 2_000 }).catch(() => {});
+    await page.waitForTimeout(400);
   }
   await box.waitFor({ state: 'visible', timeout: 30_000 });
 

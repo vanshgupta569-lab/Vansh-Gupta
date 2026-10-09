@@ -194,7 +194,7 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                   )}
                 </div>
 
-                <div className="font-mono text-[12px] text-[#8A8A8F] mt-1.5 tracking-wide">
+                <div className="font-sans text-[13px] leading-snug text-[#8A8A8F] mt-1.5">
                   {row.detail}
                   {!isReference && !isPoint && ` · base case ${fmt(row.point)}`}
                   <span className="ml-2 text-[#8A8A8F]">

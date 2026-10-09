@@ -109,6 +109,38 @@
 }
 
 /* ---------------------------------------------------------------------------
+   ONE TRANSITION, AND WHY IT IS SHORT
+   ---------------------------------------------------------------------------
+   An instrument is a surface somebody is working in, not one they are watching.
+   Transitions were whatever each component reached for -- 200ms here, 500ms
+   there, 700ms on the flash -- and a hover that takes half a second to resolve
+   reads as lag rather than as polish.
+
+   Every state change on a control now runs on one curve at 160ms: fast enough
+   to feel immediate, slow enough not to flicker. `tailwind`'s default easing is
+   a symmetric ease, which looks mechanical on a colour change; this is an
+   ease-out, so the change leaves quickly and settles.
+
+   Deliberately NOT applied to: the disclosure's height animation (a reveal is
+   a movement and needs its own 200ms), and the did-you-know crossfade (a
+   reading moment, 350ms). Both are stated where they are written.
+   --------------------------------------------------------------------------- */
+:where(a, button, [role='button'], summary, input, select, textarea, .transition-colors) {
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    THE SURFACES NOBODY DRAWS
    ---------------------------------------------------------------------------
    The scrollbar was themed and the other four were not, so selecting a figure
@@ -424,9 +456,19 @@ h1, h2, h3, h4, h5, h6, .font-serif, .font-display {
 
 /* Every small-caps label on the site, set identically. These were carrying
    four different tracking values, which is exactly the sort of thing nobody
-   notices individually and everybody notices in aggregate. */
+   notices individually and everybody notices in aggregate.
+
+   NARROWED FROM 0.16em TO 0.11em. Monospace is already evenly spaced -- that is
+   what it is for -- so wide tracking on top of it spaces the same letters
+   twice, and at 0.16em a label stopped reading as a word and started reading as
+   a row of characters. Spread across every eyebrow, every tile name, every tab
+   and every unit, that was most of what made the site feel shouted rather than
+   set. 0.11em still separates small caps enough to breathe, which is the whole
+   job of tracking them, and it buys back real width: "Intrinsic value ·
+   perpetuity growth" and "Net debt / EBITDA" stop wrapping at the sizes their
+   columns actually get. */
 .uppercase.font-mono {
-  letter-spacing: 0.16em;
+  letter-spacing: 0.11em;
   font-weight: 500;
 }
 
