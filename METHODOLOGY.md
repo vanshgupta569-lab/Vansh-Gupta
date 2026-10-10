@@ -2537,6 +2537,124 @@ so the check recalculates rather than reading the formulas and agreeing they
 look right. Pointing every cross-tab read one row low makes it fail on every
 company.
 
+## 22c. The house template
+
+**A firm uploads its own Excel layout once, and every export after that arrives
+in that layout instead of ours.**
+
+This is the second thing section 22a bought. A template maps onto a fixed set of
+lines or it maps onto nothing: if our rows still moved with the company, a
+mapping made against one model would point at the wrong lines in the next. The
+138 contracted rows are what a template is mapped to.
+
+### How the mapping is captured, and why that way
+
+The obvious design is a form — 138 of our lines down one side, a cell picker
+against each. It is also the design that kills the feature. Nobody completes a
+138-row form to find out whether something is any good, and a feature that must
+be earned before it can be judged does not get earned.
+
+**So the upload does the work and the firm corrects it.** We read their file,
+find every text cell that looks like a line name, and match it against the names
+the contract publishes:
+
+| How | What it means | Confidence |
+|---|---|---|
+| `instruction` | they wrote `{{rev}}` in the cell | 1.00 |
+| `exact` | the names are the same words | 1.00 |
+| `synonym` | a name analysts use for it — "Sales", "COGS", "SG&A", "PP&E" | 0.95 |
+| `words` | most of the words overlap | 0.60–0.94 |
+
+Each proposal carries **how** it was matched, so the firm reviews a short list of
+uncertain ones rather than confirming a hundred obvious ones. The synonym table
+is deliberately a table and not a cleverer algorithm: a wrong guess puts a figure
+on the wrong line of a partner's model, so the failure has to be something a
+person can read and correct rather than a score to be tuned.
+
+A firm that wants certainty writes `{{rev}}` in a cell and that beats every other
+rule. That is the precise path for whoever wants it, and nobody has to learn a
+key to begin.
+
+**Our figures are computed, not read off the sheet.** Our model sheet is
+formulas — only the reported years are written as numbers — so reading the cells
+straight returned "not reported" for Apple's own net income, the exact failure
+this feature exists to avoid. The model is recalculated first, by the same
+engine `verify:workbook` uses to prove the workbook reproduces the site. That
+engine is imported dynamically, so it is fetched only by someone who actually
+fills a template: measured, the entry bundle grows 2406 KB → 2435 KB, and its
+766 KB sits in a chunk nobody else loads.
+
+### The three rules, and where each is enforced
+
+**A line of ours their template has no place for is reported, never dropped.**
+It is listed on screen at mapping time, and again on a sheet written into every
+filled file — because the partner reading that model a week later has no other
+way of knowing that a hundred of our lines had nowhere to go.
+
+**A cell we cannot fill says so.** It gets the words "not reported", never a
+blank and never a zero. A blank in a filled model reads as nil, and a nil we
+never had is the one thing this site exists not to print.
+
+**Their formatting is theirs.** The template is loaded and written back out:
+every style, formula, merge, print range and logo it arrived with is still
+there. We write only the cells the mapping names, we do not restyle a cell or
+change a number format, and a line they carry that we do not — "Diluted EPS",
+"Dividend per share" — comes back untouched rather than blanked.
+
+### A revised template
+
+Templates change: a row is inserted, a section reordered, a tab renamed. The
+mapping is stored **against the name as well as the cell**, so a revision is
+reconciled rather than rebuilt. Each mapped line is looked for by its name
+first, and the firm is shown what was kept, what moved, what is gone and what is
+new.
+
+**Silent re-pointing is what is not done.** A line whose name has disappeared is
+reported as lost and dropped from the mapping, rather than quietly left pointing
+at whatever now occupies its old cell — which would put revenue on a row that
+used to be revenue and is now a spacer. A dropped line reappears in the unmapped
+list, and so is reported in every export from then on.
+
+Measured on a revision that inserted two rows into the P&L and renamed the cash
+flow tab: 12 lines kept, 20 followed to their new homes, 0 lost.
+
+### What is stored, where, and for how long
+
+The template and its mapping live **in the firm's browser, in IndexedDB**, and
+are not sent anywhere. There is no upload in the network sense — the page reads
+the file, maps it and fills it. Marginalia runs no server that receives it, so
+there is nothing of a firm's to leak or lose, and "we delete it on request" is a
+fact about where the bytes are rather than a promise about our operations.
+
+Kept: the file as chosen, the confirmed mapping, a name and two timestamps. Not
+kept: any filled output, any figure, and any record anywhere else that a
+template exists. Held until the firm removes it or clears the browser's data;
+removing deletes bytes and mapping together.
+
+The cost is that a template does not follow a reader to another device — the same
+trade `savedModels.ts` makes. **All of this is stated on the screen before the
+file is asked for**, in the same words, and `STORAGE_STATEMENT` in
+`templateStore.ts` is where the page gets them, so the claim and the code cannot
+drift apart.
+
+### Measured
+
+Against a representative firm template — written the way an analyst writes one,
+with its own tabs, a units column, a year header and lines we do not carry, and
+deliberately **not** built from our labels:
+
+- **32 of 138 contracted rows mapped**: 15 exact, 17 by synonym, 0 needing
+  review, 2 conflicts where two of their cells claimed the same line.
+- **105 reported as unmapped.** That is the honest shape of it: our 138 rows
+  include the drivers, schedules and opening/closing balances a model needs and
+  a firm's summary template does not carry. A template maps the reported lines.
+- **117 figures written** across 5 periods, with **7 cells reading "not
+  reported"** where the model genuinely had no figure.
+
+`verify:workbook` runs the whole flow and asserts every rule above, including
+that nothing mapped comes back blank. Leaving an unfillable cell empty instead
+of saying "not reported" makes it fail.
+
 ## 23. What the source does not give us
 
 `src/data/dataConstraints.ts`. A figure the filing or the data source never

@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 import { checkPeerSpreading, samplePeers } from './peerSpreading.mts';
+import { checkHouseTemplate } from './houseTemplate.mts';
 import { createRequire } from 'node:module';
 import { HyperFormula } from 'hyperformula';
 
@@ -192,6 +193,25 @@ for (const c of cases) {
         `net debt ${at('netDebt').toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
         `normalised terminal ${at('normalised').toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
     );
+  }
+}
+
+// ---- THE HOUSE TEMPLATE -------------------------------------------------
+// Also downstream of the chart of accounts: a template maps onto the
+// contracted rows or onto nothing.
+{
+  const r = await checkHouseTemplate();
+  console.log(
+    `house template: ${r.mapped} of ${r.contracted} contracted rows mapped by a representative firm ` +
+      `template, ${r.unmapped} reported as unmapped, ${r.conflicts} conflicts; ${r.filled} figures over ` +
+      `${r.periods} periods and ${r.unfilled} cells saying "not reported"; a revision kept ${r.kept}, ` +
+      `moved ${r.moved}, lost ${r.lost}` + (r.problems.length ? '' : ' — every rule held')
+  );
+  if (r.problems.length) {
+    console.log(`
+PROBLEMS WITH THE HOUSE TEMPLATE: ${r.problems.length}`);
+    for (const p of r.problems.slice(0, 20)) console.log(`  ${p}`);
+    process.exit(1);
   }
 }
 

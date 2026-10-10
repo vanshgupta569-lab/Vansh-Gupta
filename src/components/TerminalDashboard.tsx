@@ -42,8 +42,11 @@ import { TerminalReliancePanel } from './terminalReliancePanel';
 import { terminalReliance } from '../data/terminalReliance';
 import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
-import { downloadWorkbook } from '../data/excelExport';
+import { downloadWorkbook, buildWorkbook } from '../data/excelExport';
 import { downloadPeerWorkbook, gatherPeers, MAX_PEERS } from '../data/peerSpreading';
+import HouseTemplatePanel from './houseTemplatePanel';
+import { listTemplates, loadTemplate } from '../data/templateStore';
+import { fillTemplate, computeModelValues } from '../data/houseTemplate';
 import { fetchCompanyPayload, buildCompanyFrom } from '../data/autoCompany';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
@@ -98,8 +101,26 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   const [exporting, setExporting] = useState(false);
   // The peer spreading file takes one fetch per peer, so it says where it is.
   const [spreading, setSpreading] = useState<string | null>(null);
+  // A FIRM'S OWN LAYOUT, WHERE ONE HAS BEEN KEPT ON THIS DEVICE. When there is
+  // one, the download button fills it instead of handing over ours.
+  const [houseTemplate, setHouseTemplate] = useState<{ id: string; name: string } | null>(null);
+  /** Bumped when the template screen closes, so the button re-reads the store. */
+  const [templateTick, setTemplateTick] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void listTemplates()
+      .then((all) => {
+        if (live) setHouseTemplate(all[0] ? { id: all[0].id, name: all[0].name } : null);
+      })
+      .catch(() => {
+        if (live) setHouseTemplate(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [templateTick]);
   const [nerdView, setNerdView] = useState<
-    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'ASSET' | 'BATCH'
+    null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'ASSET' | 'BATCH' | 'TEMPLATE'
   >(null);
 
 
@@ -142,7 +163,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     setExporting(true);
     void (async () => {
       try {
-        await downloadWorkbook({
+        const input = {
           model: built.model,
           dcf: built.dcf,
           source: { ...activeSource, rawStatements: derivedSource?.rawStatements ?? activeSource.rawStatements },
@@ -154,7 +175,30 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             viewMode === 'ANALYST' && company.engineBacked
               ? 'Analyst model, built by hand from the filings'
               : 'Derived model, assumptions taken from reported history',
-        });
+        };
+
+        // THEIR FORMAT IF THEY HAVE GIVEN US ONE, ours otherwise.
+        const stored = houseTemplate ? await loadTemplate(houseTemplate.id) : null;
+        if (stored) {
+          const ours = await buildWorkbook(input);
+          const valueAt = await computeModelValues(ours);
+          const periods = Array.isArray(built.model?.years) ? built.model.years.length : 5;
+          const filledFile = await fillTemplate(stored.bytes, stored.mapping, valueAt, { periods });
+          const blob = new Blob([filledFile.bytes], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          });
+          const safe = String(company.ticker || 'model').replace(/[^A-Za-z0-9.-]/g, '');
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${stored.name}_${safe}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } else {
+          await downloadWorkbook(input);
+        }
       } catch (error) {
         console.error('Excel export failed', error);
       } finally {
@@ -1273,7 +1317,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               title="Download the full model as one Excel workbook"
             >
               <Download className="h-3.5 w-3.5" />
-              {exporting ? 'Building the workbook…' : 'Download Excel model'}
+              {exporting
+                ? 'Building the workbook…'
+                : houseTemplate
+                  ? `Download in ${houseTemplate.name}`
+                  : 'Download Excel model'}
             </button>
           )}
           {hasRealModel && peerSelection.length > 0 && (
@@ -1286,6 +1334,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             >
               <Download className="h-3.5 w-3.5" />
               {spreading ?? `Spread against ${Math.min(peerSelection.length, MAX_PEERS)} peers`}
+            </button>
+          )}
+          {hasRealModel && (
+            <button
+              type="button"
+              onClick={() => setNerdView('TEMPLATE')}
+              className={`${LABEL} inline-flex items-center gap-2 border border-line px-3.5 py-2 uppercase tracking-widest text-muted transition-colors hover:border-accent hover:text-ink`}
+              title="Upload your firm's Excel layout once, and every export arrives in it"
+            >
+              Your template
             </button>
           )}
           {hasRealModel && (
@@ -1880,6 +1938,25 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             onChange={setDrivers}
             currencySymbol={company.currencySymbol}
             unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+          />
+        </FullScreenPanel>
+      )}
+
+      {nerdView === 'TEMPLATE' && (
+        <FullScreenPanel
+          title="Your template, our figures"
+          subtitle="upload your firm's layout once, and every export arrives in it"
+          onClose={() => {
+            setTemplateTick((n) => n + 1);
+            setNerdView(null);
+          }}
+        >
+          <HouseTemplatePanel
+            companyName={company.name}
+            onClose={() => {
+              setTemplateTick((n) => n + 1);
+              setNerdView(null);
+            }}
           />
         </FullScreenPanel>
       )}
