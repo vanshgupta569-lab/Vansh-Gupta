@@ -117,8 +117,8 @@ Availability and terms of use must be confirmed per source before building. A wo
 ## 2. The judgement layer
 
 **Status: IN FLIGHT.** Raised 28 September 2026. The centre of the product.
-Expense classification, the first structural judgement, is LIVE
-(10 October 2026) and the layer's four rules are built with it: a default that
+Expense classification, the first structural judgement, is LIVE (`9980f72`,
+10 October 2026) and the layer's four rules are built with it: a default that
 says where it came from, an optional one-line reason, a visible return to the
 default, and an immediate rebuild with the previous value still beside it. Each
 judgement below inherits that machinery rather than rebuilding it.
@@ -451,7 +451,7 @@ trusting a status.
 
 | Commit | What |
 |---|---|
-| *(this commit)* | **Expense classification**, the first piece of the judgement layer (section 2), on the figures screen between reported and modelled. Four cost lines, five categories, a default per line that states where it came from, an optional reason, a visible return to the default and an immediate rebuild with the previous value beside it. Grouping moves proved to move no figure; an exclusion proved to move one. The workbook's two reserved Assumptions columns filled. The figures screen added to the contrast pass, where it had never been. `METHODOLOGY.md` §22d. |
+| `9980f72` | **Expense classification**, the first piece of the judgement layer (section 2), on the figures screen between reported and modelled. Four cost lines, five categories, a default per line that states where it came from, an optional reason, a visible return to the default and an immediate rebuild with the previous value beside it. Grouping moves proved to move no figure; an exclusion proved to move one. The workbook's two reserved Assumptions columns filled. The figures screen added to the contrast pass, where it had never been. `METHODOLOGY.md` §22d. |
 | `bc52544` | An unmapped line in a house template carries its figures and not only its name, and our own layout stays one click away beside the firm's. |
 | `b7fbcaa` | **The house template**: a firm uploads its own Excel layout once and every export arrives in it. Mapping proposed from their own line names and corrected by them, held in their browser only, reconciled rather than rebuilt on a revision. `METHODOLOGY.md` §22c. |
 | `c66cb66` | **Peer spreading**: the target and up to ten peers on identical formula-driven tabs, with a comparison tab of live cross-tab formulas, medians and spreads. A refused peer keeps its tab and its refusal. `METHODOLOGY.md` §22b. |
