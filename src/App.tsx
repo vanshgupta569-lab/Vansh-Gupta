@@ -17,6 +17,7 @@ import { COMPANIES_DATA } from './data/companies';
 import { fetchCompanyPayload, buildCompanyFrom } from './data/autoCompany';
 import type { Corrections } from './data/corrections';
 import type { Classification } from './data/classification';
+import type { CorrectionReasons } from './data/corrections';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
 
@@ -67,6 +68,8 @@ export default function App() {
   // the badge in the header reads it, and reopening the figures must not cost
   // another fetch or lose a judgement already made.
   const [classification, setClassification] = useState<Classification>({});
+  // One line per corrected field, which the adjusted EBITDA bridge carries.
+  const [correctionReasons, setCorrectionReasons] = useState<CorrectionReasons>({});
   const [building, setBuilding] = useState(false);
   // True when the figures were opened from a finished model rather than on the
   // way to one. It decides where "back" goes, and it is why re-answering the
@@ -130,6 +133,7 @@ export default function App() {
       // about one company's cost lines is not a judgement about another's.
       setCorrections({});
       setClassification({});
+      setCorrectionReasons({});
       setFiguresFromModel(false);
       setSelectedTicker(ticker);
       setLookupState({ loading: false, error: null });
@@ -151,7 +155,7 @@ export default function App() {
     // takes the thread.
     window.setTimeout(() => {
       try {
-        const company = buildCompanyFrom(payload, corrections, classification);
+        const company = buildCompanyFrom(payload, corrections, classification, correctionReasons);
         setLoadedCompanies((prev) => ({ ...prev, [company.ticker]: company }));
         setBuilding(false);
         if (figuresFromModel) {
@@ -300,6 +304,8 @@ export default function App() {
             onChange={setCorrections}
             classification={classification}
             onClassify={setClassification}
+            correctionReasons={correctionReasons}
+            onReason={setCorrectionReasons}
             payload={payload}
             onContinue={buildFromFigures}
             onBack={leaveFigures}

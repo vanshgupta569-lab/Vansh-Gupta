@@ -2436,6 +2436,10 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     // Second, before the model itself: a reviewer who wants to know what the
     // number rests on should not have to find the model first.
     'Assumptions',
+    // Third: the bridge is the artefact a valuer, a lender or a buyer actually
+    // sends on, and it belongs beside the assumptions rather than behind the
+    // statements. See buildEbitdaBridgeSheet for why it is a sheet at all.
+    'EBITDA bridge',
     '3-StatementModel',
     'Income Statement',
     'Balance Sheet',

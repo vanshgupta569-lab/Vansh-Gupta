@@ -41,6 +41,34 @@
 /** fiscal year -> field -> the figure the reader supplied. */
 export type Corrections = Record<string, Record<string, number>>;
 
+/**
+ * field -> the reader's one line for why they changed it.
+ *
+ * PER FIELD, NOT PER CELL. A correction's reason is a statement about the line
+ * — "the source's SG&A leaves out depreciation" — and is the same reason in
+ * every year it was applied. One reason per field is also the unit an adjusted
+ * EBITDA bridge reads in: one row per adjustment, its amount in each year, and
+ * the reason beside it (`ebitdaBridge.ts`).
+ *
+ * Optional, like every reason in the judgement layer: a reason nobody can skip
+ * is a reason nobody reads.
+ */
+export type CorrectionReasons = Record<string, string>;
+
+export const correctionReasonCount = (r: CorrectionReasons | undefined): number =>
+  Object.values(r || {}).filter((v) => String(v || '').trim()).length;
+
+/** Reasons for fields that are no longer corrected are not kept. */
+export function pruneReasons(reasons: CorrectionReasons, corrections: Corrections): CorrectionReasons {
+  const live = new Set<string>();
+  for (const patch of Object.values(corrections || {})) for (const key of Object.keys(patch)) live.add(key);
+  const out: CorrectionReasons = {};
+  for (const [field, text] of Object.entries(reasons || {})) {
+    if (live.has(field) && String(text || '').trim()) out[field] = text;
+  }
+  return out;
+}
+
 export interface FieldSpec {
   key: string;
   label: string;

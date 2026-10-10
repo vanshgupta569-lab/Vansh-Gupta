@@ -74,6 +74,7 @@ that understates.
 |---|---|---|---|
 | Lines the filing does not report at all | both | 116 modelled | note; the treatment ties operating income to the filing |
 | Selling and administrative reported as one line | both | 161 of 175 payloads | note; the classification default is a stated convention, and the split moves no figure |
+| D&A the filing does not report | both | 13 of 175 payloads | note; nothing is added back and the EBITDA bridge says "none filed" |
 | Stock compensation never broken out | Yahoo mostly | 54 modelled, 19 valued | **warn** — the value is a floor |
 | A price that must be converted | Yahoo | 46 modelled | note; no effect on value |
 | Total liabilities not tagged | both | 23 modelled | note; presentation only |
@@ -218,6 +219,30 @@ so.
 
 The workbook's statement totals read "not reported" cells through `N()`, which
 its notes state.
+
+### Depreciation and amortisation the filing does not report
+
+**Source:** both. **Affects:** 13 of 175 payloads — 11 report none in any year
+(CB, CRWD, MELI, MS, NEE, SCHW, V, VALE, VALE3.SA, WELL, XOM), 2 in some years
+(CBA.AX and CNQ, three years each).
+
+Mostly banks and insurers, where the free sources tag no D&A line in the cash
+flow statement at all.
+
+Where it is missing the engine adds back nothing, so **EBITDA equals operating
+profit** for that year, and the forecast depreciation is read from the
+balance-sheet movement instead (`METHODOLOGY.md` §6). The adjusted EBITDA bridge
+(§22e) prints **none filed** on the add-back line rather than a nil, because a
+nil in a column of figures reads as a measurement and this is an absence.
+
+**It cannot be bounded the usual way**: the figure is not a missing input to an
+otherwise complete model, it is a missing line in a reported year, and the
+engine refuses a company whose forecast depreciation it cannot measure at all.
+Of the 11, every one is a financial company, which the engine values by residual
+income rather than by a discounted cash flow.
+
+What would remove it: the cash flow statement read from the primary filing,
+where the line is almost always disclosed (section 1 of `ROADMAP.md`).
 
 ### Selling and administrative costs reported as one line
 

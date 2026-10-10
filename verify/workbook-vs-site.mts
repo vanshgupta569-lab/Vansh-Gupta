@@ -18,6 +18,7 @@ import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 import { checkPeerSpreading, samplePeers } from './peerSpreading.mts';
 import { checkHouseTemplate } from './houseTemplate.mts';
 import { checkClassification } from './classification.mts';
+import { checkEbitdaBridge } from './ebitdaBridge.mts';
 import { createRequire } from 'node:module';
 import { HyperFormula } from 'hyperformula';
 
@@ -194,6 +195,32 @@ for (const c of cases) {
         `net debt ${at('netDebt').toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
         `normalised terminal ${at('normalised').toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
     );
+  }
+}
+
+// ---- THE ADJUSTED EBITDA BRIDGE -----------------------------------------
+// Downstream of both judgements the figures screen makes, so it runs before
+// them: if the bridge does not tie, nothing the two screens above it claim is
+// worth reading.
+{
+  const r = await checkEbitdaBridge();
+  console.log(
+    `EBITDA bridge: ${r.cases} adjustment cases; reported EBITDA ties to filed operating profit plus filed ` +
+      `D&A within ${r.worstFilingTie.toExponential(2)} and, with the corrections, to the model within ` +
+      `${r.worstEngineTie.toExponential(2)}; reported plus every adjustment ties to adjusted within ` +
+      `${r.worstBridgeTie.toExponential(2)}, recalculated across ${r.recalculated} year columns in the ` +
+      `written file` +
+      (r.example
+        ? `; ${r.example.lines} adjustment lines take ${r.example.ticker} from ` +
+          `${Math.round(r.example.reported).toLocaleString('en-US')} to ` +
+          `${Math.round(r.example.adjusted).toLocaleString('en-US')}`
+        : '') +
+      (r.problems.length ? '' : ' \u2014 every rule held')
+  );
+  if (r.problems.length) {
+    console.log(`\nPROBLEMS WITH THE EBITDA BRIDGE: ${r.problems.length}`);
+    for (const p of r.problems.slice(0, 20)) console.log(`  ${p}`);
+    process.exit(1);
   }
 }
 

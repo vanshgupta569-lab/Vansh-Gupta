@@ -127,9 +127,12 @@ It predates the judgement layer — corrections have never been saved either —
 expense classification widens it, so it is written down now rather than left as
 a shape nobody had measured.
 
-**What it would take to fix:** carry `corrections` and `classification` on
-`SavedModel` and re-apply both on restore, which means restore has to rebuild
-the company record rather than only set the sliders. The honest interim, if that
+**What it would take to fix:** carry `corrections`, `classification` and
+`correctionReasons` on `SavedModel` and re-apply all three on restore, which
+means restore has to rebuild the company record rather than only set the
+sliders. The reasons matter as much as the figures now that the adjusted EBITDA
+bridge carries them (`METHODOLOGY.md` §22e): a saved model reopens with the
+bridge empty, so the artefact a firm would send is not saved either. The honest interim, if that
 is deferred, is for the saved list to say that a saved entry keeps its sliders
 and not its judgements — but a sentence is not the fix, and the figure in the
 list is wrong until the judgements travel with it.

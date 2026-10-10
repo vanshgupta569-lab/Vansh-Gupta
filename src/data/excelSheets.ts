@@ -1628,13 +1628,41 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
   const { FIRST, cOf, lastCol, companyName, source, newSheet, title, band, label, styleHard, fmt, colors, FONT } = ctx;
 
   const ws = newSheet('Sources', colors.OXBLOOD);
+  // THE FILING, NOT THE FILING AS CORRECTED.
+  //
+  // This sheet used to read `rawStatements`, which is the array the model was
+  // built from — the CORRECTED one wherever a reader had corrected anything. So
+  // a corrected SG&A of 506,436 printed under "what the filing actually said"
+  // against a filed 382,980, on the one sheet whose entire job is to be the
+  // filing. It now reads `filedStatements`, the untouched payload, and names
+  // the corrected figure beside it rather than in place of it.
+  const filedRows: any[] = Array.isArray(source?.filedStatements) ? source.filedStatements : [];
+  const modelRows: any[] = Array.isArray(source?.rawStatements) ? source.rawStatements : [];
+  const rows: any[] = filedRows.length ? filedRows : modelRows;
+  const correctedAt = (key: string, i: number): number | null => {
+    if (!filedRows.length) return null;
+    const mine = modelRows[i]?.[key];
+    const was = rows[i]?.[key];
+    if (!isNum(mine)) return null;
+    if (isNum(was) && Math.abs(mine - was) < 1e-9) return null;
+    return mine;
+  };
+  const anyCorrected = () => {
+    for (let i = 0; i < rows.length; i++) {
+      for (const k of Object.keys(rows[i] || {})) if (correctedAt(k, i) !== null) return true;
+    }
+    return false;
+  };
   title(
     ws,
     `${companyName} - sources`,
-    'What the filing actually said. Every figure below is hard-coded from source.rawStatements, unrenamed and uncomputed.'
+    'What the filing actually said. Every figure below is hard-coded from the payload as fetched, unrenamed and ' +
+      'uncomputed' +
+      (anyCorrected()
+        ? '. Where you replaced a figure, the filed one is here and yours is named beside it: a corrected figure is ' +
+          'never shown as filed.'
+        : '. Nothing on this sheet has been corrected.')
   );
-
-  const rows: any[] = Array.isArray(source?.rawStatements) ? source.rawStatements : [];
   const nS = rows.length;
   const endCol = Math.max(lastCol, cOf(nS - 1));
 
@@ -1713,15 +1741,411 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
         cell.font = { ...FONT, italic: true, color: { argb: colors.GREY } };
         cell.alignment = { horizontal: 'right' };
       }
+      // THE CORRECTION TRAVELS WITH THE FILED FIGURE, in a note on the cell, so
+      // the column stays the filing and nothing is hidden.
+      const mine = correctedAt(key, i);
+      if (mine !== null) {
+        cell.note = `Filed: ${isNum(v) ? v.toLocaleString('en-US') : 'not disclosed'}. The model was built on your ${mine.toLocaleString('en-US')}.`;
+        cell.font = { ...(cell.font as any), color: { argb: colors.OXBLOOD } };
+      }
     });
     r++;
   });
+
+  if (anyCorrected()) {
+    r++;
+    band(ws, r, 'Corrected figures', colors.OXBLOOD, colors.WHITE, endCol);
+    r++;
+    const lines: string[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      for (const k of Object.keys(rows[i] || {})) {
+        const mine = correctedAt(k, i);
+        if (mine === null) continue;
+        const was = rows[i]?.[k];
+        lines.push(
+          `FY${rows[i]?.fiscalYear}  ${k}: filed ${isNum(was) ? was.toLocaleString('en-US') : 'not disclosed'}, ` +
+            `yours ${mine.toLocaleString('en-US')}`
+        );
+      }
+    }
+    for (const line of lines.slice(0, 200)) {
+      const cell = ws.getCell(r, 3);
+      cell.value = line;
+      cell.font = { ...FONT, size: 10, color: { argb: colors.OXBLOOD } };
+      r++;
+    }
+    const why: Record<string, string> = (source?.meta?.correctionReasons as any) || {};
+    const given = Object.entries(why).filter(([, v]) => String(v || '').trim());
+    if (given.length) {
+      r++;
+      for (const [field, reason] of given) {
+        const cell = ws.getCell(r, 3);
+        cell.value = `${field}: ${reason}`;
+        cell.font = { ...FONT, size: 10, italic: true, color: { argb: colors.GREY } };
+        r++;
+      }
+    }
+  }
 }
+
+// =============================================================================
+
+/**
+ * THE ADJUSTED EBITDA BRIDGE.
+ *
+ * ITS OWN SHEET, NOT A SECTION OF ASSUMPTIONS, for three reasons.
+ *
+ *   1. It is the artefact people send. A valuer, a lender or a buyer receives
+ *      "the adjusted EBITDA bridge" as a thing in itself, argues over it line by
+ *      line and prints it. A thing that gets sent needs a tab somebody can point
+ *      at, not a band halfway down a longer sheet.
+ *   2. Its grammar is different. Assumptions is one row per forecast assumption
+ *      with a basis, across the first and last forecast year. The bridge is one
+ *      row per adjustment across every REPORTED year, which is the opposite
+ *      shape in both directions.
+ *   3. A company with no adjustments still has a bridge, and it should read as a
+ *      one-page statement that reported EBITDA is the adjusted figure. As a
+ *      section inside another sheet the same thing reads as dead space.
+ *
+ * REPORTED EBITDA IS NOT A LINK TO THE MODEL, and the first version of this
+ * sheet got that wrong. The model is built on the reader's CORRECTED figures, so
+ * linking the top of the bridge to the model sheet's EBITDA row put the
+ * corrected figure where the filing belongs and then added the correction again
+ * underneath it: a double count that the sheet's own tie could not see, because
+ * every row in the tie came from the same corrected place. The top three rows
+ * are the filing, hard-coded from `filedStatements` the way the Sources sheet
+ * hard-codes it, because a filed figure has no model cell to point at.
+ *
+ * The LINK TO THE MODEL is a tie instead, and a more useful one: reported EBITDA
+ * plus the corrections must equal the model sheet's own EBITDA, year by year. If
+ * the two ever disagree, either the bridge or the model is wrong about what it
+ * was built on, and the file says so on its own face.
+ *
+ * So there are three ties, all live Excel formulas: reported against its two
+ * filed parts, EBITDA on your figures against the model, and adjusted against
+ * reported plus every adjustment. They go on holding after somebody edits an
+ * adjustment in the file rather than being right only on the day it was written.
+ */
+function buildEbitdaBridgeSheet(ctx: SupportingSheetsContext) {
+  const {
+    R, nH, years, FIRST, cOf, L, companyName, source, modelSheetName,
+    newSheet, title, band, label, styleHard, styleCalc, fmt, colors, FONT, UNIT, wrapText,
+  } = ctx;
+
+  const B: any = source?.meta?.ebitdaBridge || null;
+  const MODEL = `'${modelSheetName}'`;
+  const ws = newSheet('EBITDA bridge', colors.OXBLOOD);
+  ws.getColumn(3).width = 52;
+  ws.getColumn(4).width = 10;
+  const endCol = cOf(nH - 1);
+  // Two columns past the years: what moved it, and the reason given.
+  const WHAT = endCol + 1;
+  const WHY = endCol + 2;
+  ws.getColumn(WHAT).width = 68;
+  ws.getColumn(WHY).width = 46;
+
+  title(
+    ws,
+    `${companyName} - adjusted EBITDA bridge`,
+    'Reported EBITDA as the accounts state it, every adjustment you made with your reason for it, and the adjusted ' +
+      'figure. Reported years only: the forecast is on the model sheet.'
+  );
+
+  if (!B) {
+    ws.getCell(8, 3).value = 'This model carries no EBITDA bridge.';
+    ws.getCell(8, 3).font = { ...FONT, size: 10, italic: true, color: { argb: colors.GREY } };
+    return;
+  }
+
+  yearHeader(ctx, ws, years.slice(0, nH).map((y) => `FY${String(y).slice(2)}`), nH, 'Line');
+  // The two text columns are headed on the same row as the years.
+  ([[WHAT, 'What moved it'], [WHY, 'Your reason']] as [number, string][]).forEach(([c, text]) => {
+    const cell = ws.getCell(6, c);
+    cell.value = text;
+    cell.font = { ...FONT, bold: true };
+    cell.alignment = { horizontal: 'left', wrapText: true, vertical: 'bottom' };
+    cell.border = { bottom: { style: 'thin', color: { argb: colors.BLACK } } };
+  });
+
+  let r = 8;
+  const heading = (text: string) => {
+    band(ws, r, text, colors.OXBLOOD, colors.WHITE, WHY);
+    r++;
+  };
+  const note = (text: string) => {
+    for (const line of wrapText(text, 150)) {
+      const cell = ws.getCell(r, 3);
+      cell.value = line;
+      cell.font = { ...FONT, size: 10, italic: true, color: { argb: colors.GREY } };
+      r++;
+    }
+  };
+  /** One row of figures, with the two text cells beside it. */
+  const money = fmt.money();
+  const figures = (
+    name: string,
+    cell: (i: number) => any,
+    o: { bold?: boolean; indent?: number; calc?: boolean; what?: string; why?: string; colour?: string } = {}
+  ) => {
+    const at = r;
+    label(ws, at, name, o.bold ? UNIT : '', { indent: o.indent ?? 1 });
+    if (o.bold) {
+      const l = ws.getCell(at, 3);
+      l.font = { ...FONT, bold: true };
+    }
+    for (let i = 0; i < nH; i++) {
+      const c = ws.getCell(at, cOf(i));
+      const v = cell(i);
+      if (v === null || v === undefined) {
+        // NOT A NIL. A year with nothing to say says so.
+        c.value = 'not reported';
+        c.font = { ...FONT, italic: true, color: { argb: colors.GREY } };
+        c.alignment = { horizontal: 'right' };
+        continue;
+      }
+      c.value = v;
+      if (o.calc) styleCalc(c, money, { cross: true });
+      else styleHard(c, money);
+      if (o.bold) c.font = { ...(c.font as any), bold: true };
+      if (o.colour) c.font = { ...(c.font as any), color: { argb: o.colour } };
+    }
+    if (o.what !== undefined) {
+      const w = ws.getCell(at, WHAT);
+      w.value = o.what;
+      w.font = { ...FONT, size: 10 };
+      w.alignment = { wrapText: true, vertical: 'top' };
+    }
+    if (o.why !== undefined) {
+      const y = ws.getCell(at, WHY);
+      y.value = o.why;
+      y.font = { ...FONT, size: 10, color: { argb: o.why === NO_REASON ? colors.GREY : colors.BLACK } };
+      y.alignment = { wrapText: true, vertical: 'top' };
+    }
+    r++;
+    return at;
+  };
+
+  // ---- reported, from the filing -----------------------------------------
+  heading('Reported EBITDA, as the accounts state it');
+  const opRow = figures('Operating profit, as filed', (i) => B.operatingProfitFiled?.[i] ?? null, {
+    what:
+      'The filed figure, hard-coded from the payload as fetched \u2014 not from the model, which is built on your ' +
+      'corrections. The model is anchored to this figure, with any difference against the named cost lines carried ' +
+      'in other operating costs.',
+  });
+  const daRow = figures('Plus: depreciation and amortisation', (i) => B.depreciationAddedBack?.[i] ?? null, {
+    what:
+      'Filed D&A, from the cash flow statement. This add-back is what makes the figure below EBITDA rather than EBIT. ' +
+      'It is never an adjustment here: depreciation is not offered as a classifiable line because it already sits ' +
+      'inside the filed cost lines, and classifying it would classify the same money twice.',
+  });
+  const reportedRow = figures(
+    'Reported EBITDA',
+    (i) => {
+      const col = L(cOf(i));
+      if (B.reportedEbitda?.[i] === null || B.reportedEbitda?.[i] === undefined) return null;
+      return { formula: `${col}${opRow}+${B.depreciationNotReported?.[i] ? '0' : `${col}${daRow}`}` } as any;
+    },
+    {
+      bold: true,
+      calc: true,
+      indent: 0,
+      what: 'Operating profit plus D&A, both as filed. A subtraction you can do on the accounts themselves.',
+    }
+  );
+  if (B.depreciationNotReported?.some((v: boolean) => v)) {
+    const which = (B.years || [])
+      .filter((_: string, i: number) => B.depreciationNotReported[i])
+      .map((y: string) => `FY${y}`)
+      .join(', ');
+    note(
+      `The filing reports no depreciation or amortisation in ${which}, so nothing is added back there and EBITDA ` +
+        'equals operating profit. That is an absence in the filing, not a company with no depreciation.'
+    );
+  }
+  note(
+    'Stock-based compensation is NOT added back. This is EBITDA, not EBITDA before share-based pay: the engine leaves ' +
+      'it in costs because the peer multiples on the Ratios sheet are computed that way, and because pay settled in ' +
+      'shares is still pay. Adding it back here would give a figure no multiple in this file could be applied to.'
+  );
+  r++;
+
+  // ---- the adjustments ---------------------------------------------------
+  const every: any[] = [...(B.corrections || []), ...(B.exclusions || [])];
+  heading(
+    every.length
+      ? `Your adjustments (${every.length})`
+      : 'Your adjustments (none)'
+  );
+  const adjRows: number[] = [];
+  const corrRows: number[] = [];
+  if (!every.length) {
+    note(
+      'You made none. No filed figure was replaced and no cost line was excluded, so the adjusted figure below is the ' +
+        'reported figure and this bridge says exactly that.'
+    );
+  }
+  for (const a of every) {
+    const at = (
+      figures(
+        a.label,
+        (i) => (a.byYear?.[i] === null || a.byYear?.[i] === undefined ? null : a.byYear[i]),
+        {
+          what:
+            `${a.detail}. ` +
+            (a.yearsMoved === nH
+              ? `It moves EBITDA in all ${nH} reported years.`
+              : a.yearsMoved === 1
+                ? 'It moves EBITDA in one reported year only.'
+                : `It moves EBITDA in ${a.yearsMoved} of the ${nH} reported years.`),
+          why: String(a.reason || '').trim() || NO_REASON,
+          colour: colors.OXBLOOD,
+        }
+      )
+    );
+    adjRows.push(at);
+    if (a.kind === 'correction') corrRows.push(at);
+  }
+
+  // ---- the model, which is built on the corrected figures ----------------
+  //
+  // Reported EBITDA plus the corrections IS what the model's reported EBITDA
+  // row holds. This is the one row that crosses into the model, and it crosses
+  // as a check rather than as a source.
+  if (corrRows.length) {
+    r++;
+    figures(
+      'EBITDA on your figures',
+      (i) => {
+        const col = L(cOf(i));
+        if (B.afterCorrections?.[i] === null || B.afterCorrections?.[i] === undefined) return null;
+        return { formula: [`${col}${reportedRow}`, ...corrRows.map((row) => `${col}${row}`)].join('+') } as any;
+      },
+      { calc: true, what: 'Reported EBITDA with your corrections to filed figures applied. This is what the model was built on.' }
+    );
+    const modelTie = r;
+    figures(
+      'Against the model sheet\u2019s own EBITDA',
+      (i) => {
+        const col = L(cOf(i));
+        if (B.afterCorrections?.[i] === null || B.afterCorrections?.[i] === undefined) return null;
+        return { formula: `${col}${modelTie - 1}-${MODEL}!${L(cOf(i))}${R.ebitda}` } as any;
+      },
+      {
+        calc: true,
+        what:
+          'Nil in every year. If this is not nil, the bridge and the model disagree about which figures the model was ' +
+          'built on, and one of them is wrong.',
+      }
+    );
+  }
+
+  // ---- adjusted ----------------------------------------------------------
+  r++;
+  const adjustedRow = figures(
+    'Adjusted EBITDA',
+    (i) => {
+      const col = L(cOf(i));
+      const parts = [`${col}${reportedRow}`, ...adjRows.map((row) => `${col}${row}`)];
+      return { formula: parts.join('+') } as any;
+    },
+    { bold: true, indent: 0, calc: true, what: 'Reported EBITDA plus every adjustment above.' }
+  );
+  // A formula over cells holding "not reported" text would come back #VALUE!,
+  // so a year the bridge could not compute is written as text here too.
+  for (let i = 0; i < nH; i++) {
+    if (B.adjustedEbitda?.[i] === null || B.adjustedEbitda?.[i] === undefined) {
+      const c = ws.getCell(adjustedRow, cOf(i));
+      c.value = 'not reported';
+      c.font = { ...FONT, italic: true, color: { argb: colors.GREY } };
+      c.alignment = { horizontal: 'right' };
+    }
+  }
+
+  // ---- the two ties, live ------------------------------------------------
+  r++;
+  heading('The two ties');
+  const tieRow = figures(
+    'Adjusted, less reported and every adjustment',
+    (i) => {
+      const col = L(cOf(i));
+      if (B.adjustedEbitda?.[i] === null || B.adjustedEbitda?.[i] === undefined) return null;
+      const parts = [`${col}${reportedRow}`, ...adjRows.map((row) => `${col}${row}`)];
+      return { formula: `${col}${adjustedRow}-(${parts.join('+')})` } as any;
+    },
+    {
+      calc: true,
+      what: 'Nil in every year, or the bridge does not add up. It stays a formula so it goes on being nil after you edit an adjustment above.',
+    }
+  );
+  const filingRow = figures(
+    'Reported EBITDA, less filed operating profit and filed D&A',
+    (i) => {
+      const col = L(cOf(i));
+      return { formula: `${col}${reportedRow}-(${col}${opRow}+${B.depreciationNotReported?.[i] ? '0' : `${col}${daRow}`})` } as any;
+    },
+    {
+      calc: true,
+      what: 'Nil in every year. This is the tie to the filing: the top of the bridge is the two filed figures and nothing else.',
+    }
+  );
+  void tieRow;
+  void filingRow;
+
+  // ---- corrections that cannot move it -----------------------------------
+  if (B.neutral?.length) {
+    r++;
+    heading('Corrections you made that cannot move EBITDA');
+    note(
+      'Reported operating profit is anchored to the filed figure, with the difference against the named cost lines ' +
+        'carried in other operating costs. So correcting a cost line changes what the costs are called and not what ' +
+        'the company earned, and these are listed rather than left out: a correction you cannot find in a bridge ' +
+        'gives you no way to tell whether it was ignored or had no effect.'
+    );
+    for (const n of B.neutral) {
+      const at = r;
+      label(ws, at, n.label, '', { indent: 1 });
+      const w = ws.getCell(at, WHAT);
+      w.value = `Corrected in ${n.years.map((y: string) => `FY${y}`).join(', ')}. No effect on EBITDA in any year.`;
+      w.font = { ...FONT, size: 10 };
+      w.alignment = { wrapText: true, vertical: 'top' };
+      if (String(n.reason || '').trim()) {
+        const y = ws.getCell(at, WHY);
+        y.value = n.reason;
+        y.font = { ...FONT, size: 10 };
+        y.alignment = { wrapText: true, vertical: 'top' };
+      }
+      r++;
+    }
+  }
+
+  // ---- what this is, and is not ------------------------------------------
+  r++;
+  band(ws, r, 'What is in this bridge, and what is not', colors.OXBLOOD, colors.WHITE, WHY);
+  r++;
+  note(
+    'IN: filed operating profit, filed depreciation and amortisation added back, every figure you replaced, and every ' +
+      'cost line you excluded as non-recurring.'
+  );
+  note(
+    'NOT IN: stock-based compensation, which stays a cost. Rent, management charges and other normalisations nobody ' +
+      'has filed a figure for. Any adjustment to a forecast year \u2014 this bridge is about reported years, and an ' +
+      'exclusion\u2019s effect on the forecast is on the model sheet and the Assumptions sheet.'
+  );
+  note(
+    'An exclusion is set aside in EVERY reported year. A cost paid once needs the per-item, per-year choice that ' +
+      'ROADMAP.md section 2 lists next; until it lands, a single year\u2019s one-off is better handled as a correction to ' +
+      'that year\u2019s operating profit, which this bridge will show as a correction line.'
+  );
+}
+
+const NO_REASON = 'No reason given.';
 
 // =============================================================================
 
 export function addSupportingSheets(ctx: SupportingSheetsContext) {
   buildAssumptionsSheet(ctx);
+  buildEbitdaBridgeSheet(ctx);
   buildIncomeStatementSheet(ctx);
   buildBalanceSheetSheet(ctx);
   buildCashFlowSheet(ctx);

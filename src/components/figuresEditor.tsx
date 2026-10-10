@@ -36,11 +36,13 @@ import React, { useMemo, useState } from 'react';
 import { ArrowRight, RotateCcw, Pencil } from 'lucide-react';
 import {
   Corrections,
+  CorrectionReasons,
   FIELDS,
   GROUPS,
   correctionCount,
   yearChecks,
 } from '../data/corrections';
+import { buildEbitdaBridge } from '../data/ebitdaBridge';
 import {
   CATEGORIES,
   CATEGORY_BY_KEY,
@@ -121,6 +123,9 @@ interface Props {
   /** The reader's treatment of each reported expense line. */
   classification: Classification;
   onClassify: (next: Classification) => void;
+  /** One line per corrected field, for the EBITDA bridge to carry. */
+  correctionReasons: CorrectionReasons;
+  onReason: (next: CorrectionReasons) => void;
   /**
    * The payload itself, so a classification can be REBUILT here rather than
    * described: the judgement layer's rule is that a change rebuilds the model
@@ -147,6 +152,8 @@ export const FiguresEditor: React.FC<Props> = ({
   onChange,
   classification,
   onClassify,
+  correctionReasons,
+  onReason,
   payload,
   onContinue,
   onBack,
@@ -273,6 +280,34 @@ export const FiguresEditor: React.FC<Props> = ({
     () => (payload && reclassified ? valueUnder(payload, corrections, {}) : null),
     [payload, corrections, reclassified]
   );
+
+  // ------------------------------------------------------------------------
+  // THE ADJUSTED EBITDA BRIDGE
+  // ------------------------------------------------------------------------
+  // Built from the SAME function the workbook reads (`buildEbitdaBridge`), on
+  // the untouched filed statements plus the two judgements this screen makes.
+  // A second derivation of the same bridge could disagree with the first and
+  // nothing would catch it.
+  const bridge = useMemo(
+    () => buildEbitdaBridge(statements, corrections, classification, correctionReasons),
+    [statements, corrections, classification, correctionReasons]
+  );
+  /** One reason per adjustment, whichever kind it is, typed in one place. */
+  const setAdjustmentReason = (key: string, text: string) => {
+    if (key.startsWith('exclusion:')) {
+      const lineKey = key.slice('exclusion:'.length);
+      const next: Classification = { ...classification };
+      const category = categoryOf(lineKey, classification);
+      next[lineKey] = { category, ...(text.trim() ? { reason: text } : {}) };
+      onClassify(next);
+      return;
+    }
+    const field = key.slice('correction:'.length);
+    const next: CorrectionReasons = { ...correctionReasons };
+    if (text.trim()) next[field] = text;
+    else delete next[field];
+    onReason(next);
+  };
 
   // The standing bar is painted over this page, so the page is told how tall
   // it actually is rather than guessing. See useBottomBarInset.
@@ -981,6 +1016,228 @@ export const FiguresEditor: React.FC<Props> = ({
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* ==================================================================
+            THE ADJUSTED EBITDA BRIDGE — the closing artefact of this screen.
+
+            Last on purpose. The sections above are the work: the filed figures,
+            the treatment of each cost, and two subtractions about the source.
+            This one names what the reader has built out of them. Correcting a
+            filed figure and excluding a line are, between them, exactly how an
+            adjusted EBITDA is arrived at, and the bridge is the page a valuer,
+            a lender or a buyer actually receives.
+            ================================================================== */}
+        <div className="mt-16 lg:mt-20">
+          <Eyebrow>What you have built</Eyebrow>
+          <h2 className="text-[clamp(22px,2.4vw,30px)] max-w-[26ch]" style={{ ...DISPLAY, color: INK }}>
+            The adjusted EBITDA bridge
+            <Mark />
+          </h2>
+          <p className="text-[16px] leading-[1.6] mt-4 max-w-[70ch]" style={{ color: READ }}>
+            Reported EBITDA as the accounts state it, every adjustment you have made with your reason
+            beside it, and the adjusted figure. Every reported year, because the question asked of an
+            adjustment is almost always whether it recurs.
+          </p>
+
+          <div className="mt-6 max-w-[70ch] border-b" style={{ borderColor: LINE }}>
+            <Disclose summary="What is in this bridge, and what is not" trailing="read this first">
+              <p className="max-w-prose">
+                <span style={{ color: INK }}>In:</span> filed operating profit, filed depreciation and
+                amortisation added back, every figure you replaced, and every cost line you excluded as
+                non-recurring.
+              </p>
+              <p className="max-w-prose mt-2">
+                <span style={{ color: INK }}>Not in:</span> stock-based compensation, which stays a
+                cost — this is EBITDA, not EBITDA before share-based pay, because the peer multiples on
+                this site are computed that way and pay settled in shares is still pay. Nor any
+                normalisation nobody has filed a figure for. Nor anything about a forecast year: this
+                bridge is about reported years.
+              </p>
+              <p className="max-w-prose mt-2">
+                <span style={{ color: INK }}>The D&amp;A add-back is not an adjustment.</span> It is what
+                makes this EBITDA rather than operating profit, so it is on its own line with its amount
+                named. Depreciation is not offered as a classifiable cost above because it already sits
+                inside the filed cost lines, and classifying it would classify the same money twice.
+              </p>
+              <p className="max-w-prose mt-2">
+                An exclusion is set aside in <span style={{ color: INK }}>every</span> reported year. A
+                cost paid once is better handled as a correction to that year&rsquo;s operating profit,
+                which appears here as a correction line.
+              </p>
+            </Disclose>
+          </div>
+
+          <div className="mt-8 overflow-x-auto">
+            <table className="w-full border-collapse" style={{ minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <th
+                    className="text-left font-mono text-[11px] uppercase tracking-[0.18em] pb-3 pr-6"
+                    style={{ color: DIM, minWidth: 300 }}
+                  >
+                    Line
+                  </th>
+                  {bridge.years.map((y) => (
+                    <th
+                      key={y}
+                      className="text-right font-mono text-[12px] pb-3 pl-6"
+                      style={{ color: INK, minWidth: 128 }}
+                    >
+                      FY{y}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t" style={{ borderColor: LINE }}>
+                  <td className="py-2.5 pr-6 text-[15px]" style={{ color: INK }}>
+                    Operating profit, as filed
+                  </td>
+                  {bridge.operatingProfitFiled.map((v, i) => (
+                    <td key={i} className="py-2.5 pl-6 text-right font-mono text-[14px]" style={{ color: READ }}>
+                      {fmt(v)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-6 text-[15px]" style={{ color: INK }}>
+                    Plus: depreciation and amortisation
+                    <div className="text-[13px] leading-[1.5] mt-1 max-w-[46ch]" style={{ color: DIM }}>
+                      Filed D&amp;A. Not an adjustment — it is what makes the line below EBITDA.
+                    </div>
+                  </td>
+                  {bridge.depreciationAddedBack.map((v, i) => (
+                    <td key={i} className="py-2.5 pl-6 text-right font-mono text-[14px]" style={{ color: READ }}>
+                      {v === null ? (
+                        <span style={{ color: DIM }}>none filed</span>
+                      ) : (
+                        fmt(v)
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-t" style={{ borderColor: LINE }}>
+                  <td className="py-3 pr-6 text-[16px]" style={{ color: INK, fontWeight: 600 }}>
+                    Reported EBITDA
+                  </td>
+                  {bridge.reportedEbitda.map((v, i) => (
+                    <td
+                      key={i}
+                      /* Named so the tie beneath it can be read against it: a
+                         year with no filed operating profit has no EBITDA, and
+                         a nil tie there is correct rather than a failure. */
+                      data-bridge-reported={bridge.years[i]}
+                      className="py-3 pl-6 text-right font-mono text-[15px]"
+                      style={{ color: INK }}
+                    >
+                      {fmt(v)}
+                    </td>
+                  ))}
+                </tr>
+
+                {[...bridge.corrections, ...bridge.exclusions].map((a) => (
+                  <tr key={a.key} className="border-t align-top" style={{ borderColor: LINE }}>
+                    <td className="py-3 pr-6">
+                      <div className="text-[15px]" style={{ color: RED_TEXT }}>
+                        {a.kind === 'correction' ? 'Correction' : 'Excluded'} · {a.label}
+                      </div>
+                      <div className="text-[13px] leading-[1.5] mt-1 max-w-[52ch]" style={{ color: DIM }}>
+                        {a.detail}.{' '}
+                        {a.yearsMoved === 1
+                          ? 'It moves EBITDA in one reported year only.'
+                          : `It moves EBITDA in ${a.yearsMoved} of the ${bridge.years.length} reported years.`}
+                      </div>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                        <label
+                          className="font-mono text-[11px] uppercase tracking-[0.16em] shrink-0"
+                          htmlFor={`adj-${a.key}`}
+                          style={{ color: DIM }}
+                        >
+                          Why
+                        </label>
+                        <input
+                          id={`adj-${a.key}`}
+                          data-adjustment={a.key}
+                          value={a.reason}
+                          onChange={(e) => setAdjustmentReason(a.key, e.target.value)}
+                          placeholder="One line, optional — it travels with the workbook"
+                          maxLength={200}
+                          className="mg-cell flex-1 min-w-[16rem] font-sans text-[14px] px-2.5 py-2 outline-none transition-colors"
+                        />
+                      </div>
+                    </td>
+                    {a.byYear.map((v, i) => (
+                      <td key={i} className="py-3 pl-6 text-right font-mono text-[14px]" style={{ color: RED_TEXT }}>
+                        {v === null ? '\u2014' : v === 0 ? '0' : `${v > 0 ? '+' : ''}${fmt(v)}`}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+
+                <tr className="border-t" style={{ borderColor: LINE }}>
+                  <td className="py-3 pr-6 text-[16px]" style={{ color: INK, fontWeight: 600 }}>
+                    Adjusted EBITDA
+                    {!bridge.adjusted && (
+                      <div className="text-[13px] leading-[1.5] mt-1 max-w-[46ch]" style={{ color: DIM }}>
+                        You have made no adjustments, so this is the reported figure. The bridge says so
+                        rather than being hidden.
+                      </div>
+                    )}
+                  </td>
+                  {bridge.adjustedEbitda.map((v, i) => (
+                    <td key={i} className="py-3 pl-6 text-right font-mono text-[15px]" style={{ color: INK }}>
+                      {fmt(v)}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-t border-b" style={{ borderColor: LINE }}>
+                  <td className="py-3 pr-6">
+                    <div className="text-[15px]" style={{ color: INK }}>
+                      Adjusted, less reported and every adjustment
+                    </div>
+                    <div className="text-[13px] leading-[1.5] mt-1 max-w-[46ch]" style={{ color: DIM }}>
+                      Nil in every year, or the bridge does not add up.
+                    </div>
+                  </td>
+                  {bridge.tie.map((v, i) => (
+                    <td
+                      key={i}
+                      data-bridge-tie={bridge.years[i]}
+                      className="py-3 pl-6 text-right font-mono text-[14px]"
+                      style={{ color: v === null || Math.abs(v) < 0.05 ? READ : RED_TEXT }}
+                    >
+                      {fmt(v)}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {bridge.neutral.length > 0 && (
+            <div className="mt-6 max-w-[76ch]">
+              <div className={EYEBROW} style={{ color: DIM }}>
+                Corrections that cannot move EBITDA
+              </div>
+              <p className="text-[14px] leading-[1.6] mt-2" style={{ color: READ }}>
+                Reported operating profit is anchored to the filed figure, with the difference against
+                the named cost lines carried in other operating costs. So these change what the costs
+                are called and not what the company earned — listed here rather than left out, because a
+                correction you cannot find in a bridge gives you no way to tell whether it was ignored
+                or had no effect.
+              </p>
+              <ul className={`${UI} mt-3 space-y-1`} style={{ color: DIM }}>
+                {bridge.neutral.map((n) => (
+                  <li key={n.label}>
+                    <span style={{ color: READ }}>{n.label}</span> — corrected in{' '}
+                    {n.years.map((y) => `FY${y}`).join(', ')}, no effect on EBITDA in any year
+                    {n.reason ? `. ${n.reason}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="mt-16">

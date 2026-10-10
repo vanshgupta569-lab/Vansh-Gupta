@@ -2841,6 +2841,155 @@ never in the contrast pass before this**, which is how a whole band of new type
 could have arrived on it unmeasured; adding it took the pass from 5 screens and
 2,347 elements to 9 and 4,153.
 
+## 22e. The adjusted EBITDA bridge
+
+**The figures screen already did the work; it did not name what the reader had
+built.** Correcting a filed figure (feature 11a) and excluding a cost line as
+non-recurring (§22d) are, between them, exactly how an adjusted EBITDA is
+arrived at. The bridge is the artefact: a valuer, a lender or a buyer does not
+receive a model, they receive a page that starts at the EBITDA in the accounts,
+lists every adjustment with the reason for it, and arrives at the number the
+deal is priced on. `src/data/ebitdaBridge.ts`.
+
+### The shape of it
+
+    Operating profit, as filed
+     + Depreciation and amortisation, as filed
+    = Reported EBITDA
+     ± one line per corrected figure, with the reason
+    = EBITDA on your figures          — which is what the model is built on
+     + one line per excluded cost line, with the reason
+    = Adjusted EBITDA
+
+Every reported year, not only the last, because the question asked of an
+adjustment is almost always whether it recurs — and each line carries the count
+of years it moves.
+
+### What is in it, and what is not
+
+**Reported EBITDA is filed operating profit plus filed D&A, and nothing else.**
+Both are figures the filing states, so the top of the bridge is a subtraction a
+reader can do on the accounts. It is the same definition the engine uses
+(`S.ebitda`) and the same one the peer multiples are computed on.
+
+**The D&A add-back is named, not assumed, and is never an adjustment.** It is
+what makes the figure EBITDA rather than EBIT. §22d deliberately does not offer
+depreciation as a classifiable line — the sources report it in the cash flow
+statement and it already sits inside the filed cost lines, so classifying it
+would classify the same money twice — and the bridge says so rather than leaving
+a reader to work out why it is absent from the list of choices. Where the filing
+reports no D&A in a year, the line reads **none filed** and EBITDA equals
+operating profit: an absence in the filing, not a company without depreciation.
+
+**Stock-based compensation is not added back.** This is EBITDA, not EBITDA
+before share-based pay (§4b). Adding it back would produce a figure no multiple
+in the file could be applied to.
+
+**A correction inside the cost lines moves nothing, and is still named.**
+Reported operating profit is anchored to the filed figure with the difference
+carried in other operating costs (§4), so correcting cost of sales or SG&A
+changes what the costs are called and not what the company earned. Those
+corrections are listed under "corrections that cannot move EBITDA" rather than
+left out: a reader who made one and cannot find it in the bridge has no way to
+tell whether it was ignored or had no effect.
+
+**An exclusion is set aside in every reported year.** A cost paid once is better
+handled as a correction to that year's operating profit, which the bridge then
+shows as a correction line. The per-item, per-year choice is the next structural
+judgement in `ROADMAP.md` section 2.
+
+### A reason per adjustment, including for a correction
+
+Corrections never carried one. They do now — `CorrectionReasons` in
+`corrections.ts`, **one line per field rather than per cell**, because a
+correction's reason is a statement about the line ("the source's SG&A leaves out
+depreciation") and is the same in every year it was applied. One reason per
+field is also the unit a bridge reads in. It is typed on the bridge line itself,
+which is where a person explains an adjustment, rather than in a text box
+squeezed into a table of figures. For an exclusion the same box writes to the
+classification's own reason, so there is one place to type and one store behind
+it.
+
+### The three ties
+
+1. **Reported EBITDA against its two filed parts.** Nil in every year.
+2. **EBITDA on your figures against the model sheet's own EBITDA.** Nil in every
+   year. This is the one row that crosses into the model, and it crosses as a
+   check rather than as a source.
+3. **Adjusted against reported plus every adjustment.** Nil in every year.
+
+All three are **live Excel formulas** in the workbook, so the file goes on tying
+after somebody edits an adjustment in it. The screen shows the third beside the
+figures, and a year with no filed operating profit shows an em dash in both the
+reported row and the tie rather than a nil.
+
+### Its own sheet, not a section
+
+`EBITDA bridge`, third in the tab order, after Assumptions and before the model.
+Three reasons:
+
+1. **It is the artefact people send.** A thing that gets sent needs a tab
+   somebody can point at and print, not a band halfway down a longer sheet.
+2. **Its grammar is different.** Assumptions is one row per forecast assumption
+   with a basis, across the first and last forecast year. The bridge is one row
+   per adjustment across every reported year — the opposite shape in both
+   directions.
+3. **A company with no adjustments still has a bridge**, and it should read as a
+   one-page statement that the reported figure *is* the adjusted figure. As a
+   section inside another sheet the same thing reads as dead space.
+
+### Two things found building it
+
+**Reported EBITDA must not link to the model**, and the first version of the
+sheet did. The model is built on the reader's corrected figures, so linking the
+top of the bridge to the model's EBITDA row put the corrected figure where the
+filing belongs and then added the correction again underneath it. The tie could
+not see it, because every row in that tie came from the same corrected place.
+The top three rows are now hard-coded from the filing, the way the Sources sheet
+hard-codes it, and tie 2 above is what crosses to the model.
+
+**The Sources sheet was printing corrected figures as filed.** It read
+`rawStatements`, which is the array the model was built from — the corrected one
+wherever anything was corrected — under the heading *"What the filing actually
+said"*. Measured on Reliance: a corrected SG&A of **506,436** printed as the
+filed figure against the filed **382,980**, on the one sheet whose entire job is
+to be the filing, breaking the rule that a corrected figure is never shown as
+filed. The untouched payload now travels separately as `filedStatements`; the
+sheet prints that, marks each corrected cell with the filed figure and the
+reader's in a note, and lists every correction with its reason at the foot.
+
+### Measured
+
+On Reliance with four adjustment lines — operating profit corrected in one year,
+D&A corrected in another, and two cost lines excluded — reported EBITDA of
+**1,790,650** becomes adjusted EBITDA of **3,280,830** in the last of four
+reported years, with the SG&A correction listed separately as one that cannot
+move EBITDA. On an untouched company the bridge shows reported EBITDA, "Your
+adjustments (none)", and the same figure as adjusted.
+
+### Checked
+
+`verify/ebitdaBridge.mts`, run by `verify:workbook`. Seven adjustment
+combinations — none, each kind alone, a neutral one, two years of one field, and
+four lines at once. Reported EBITDA ties to filed operating profit plus filed
+D&A within **0** and, with the corrections applied, to the engine's own EBITDA
+within **3.79e-16**. The bridge ties within **0**, and the same two ties are then
+**recalculated in HyperFormula inside the written file** across every year
+column.
+
+Proved to fail without each fix: building reported EBITDA on the corrected
+statements reports the double count and the live model tie at −50,000; dropping
+the neutral list reports the correction as appearing nowhere; omitting one
+adjustment from the sheet's adjusted formula reports the live tie at −1,048,200;
+pointing Sources back at `rawStatements` reports the corrected figure printed as
+filed; and removing the "No reason given." fallback reports a blank reason.
+
+`verify:dashboard` drives it in a browser: the bridge on the screen that built
+it, what it includes and excludes, an adjustment arriving with its reason field,
+the reason shared with the classification band, the tie nil in every year that
+has a reported EBITDA and an em dash in every year that has none. Breaking the
+bridge makes it fail on the page as well as in the file.
+
 ## 23. What the source does not give us
 
 `src/data/dataConstraints.ts`. A figure the filing or the data source never

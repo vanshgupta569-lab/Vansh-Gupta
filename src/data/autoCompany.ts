@@ -17,8 +17,11 @@ import {
   applyCorrections,
   correctionCount,
   correctedFields,
+  pruneReasons,
   type Corrections,
+  type CorrectionReasons,
 } from './corrections';
+import { buildEbitdaBridge } from './ebitdaBridge';
 import {
   applyClassification,
   overrideCount,
@@ -77,7 +80,8 @@ export async function fetchCompanyPayload(ticker: string): Promise<any> {
 export function buildCompanyFrom(
   fetched: any,
   corrections?: Corrections,
-  classification?: Classification
+  classification?: Classification,
+  correctionReasons?: CorrectionReasons
 ): CompanyData {
   const changed = corrections ? correctionCount(corrections) : 0;
   const corrected = changed ? applyCorrections(fetched, corrections as Corrections) : fetched;
@@ -92,6 +96,33 @@ export function buildCompanyFrom(
   // The filings themselves travel with the model, so the dashboard can show
   // reported history without going back through the engine.
   modelData.rawStatements = source.statements;
+
+  // AND THE UNTOUCHED FILING TRAVELS SEPARATELY.
+  //
+  // `rawStatements` are the statements the model was built from, which is the
+  // CORRECTED array wherever a reader has corrected anything. The workbook's
+  // Sources sheet was printing those under the heading "what the filing
+  // actually said", so a corrected SG&A of 506,436 appeared as the filed figure
+  // on the one sheet whose entire job is to be the filing. Both are needed and
+  // they are now separate: the model reads `rawStatements`, anything claiming
+  // to quote the filing reads `filedStatements`, and the EBITDA bridge needs
+  // both to measure what each correction moved.
+  modelData.filedStatements = fetched?.statements ?? source.statements;
+  modelData.meta.correctionReasons = correctionReasons
+    ? pruneReasons(correctionReasons, corrections || {})
+    : null;
+
+  // THE ADJUSTED EBITDA BRIDGE, computed once here.
+  //
+  // The figures screen builds it as the reader types, from the same function;
+  // the workbook reads this one. A second derivation of the same bridge could
+  // disagree with the first and nothing would catch it, which is the KI-4 rule.
+  modelData.meta.ebitdaBridge = buildEbitdaBridge(
+    modelData.filedStatements,
+    corrections,
+    classification,
+    modelData.meta.correctionReasons || undefined
+  );
 
   const record = buildCompanyRecord(source, modelData);
 
@@ -309,10 +340,11 @@ export interface ValueUnder {
 export function valueUnder(
   fetched: any,
   corrections?: Corrections,
-  classification?: Classification
+  classification?: Classification,
+  correctionReasons?: CorrectionReasons
 ): ValueUnder {
   try {
-    const record = buildCompanyFrom(fetched, corrections, classification);
+    const record = buildCompanyFrom(fetched, corrections, classification, correctionReasons);
     const source = record.modelData;
     const drivers: any = { ...(record.defaultDrivers || {}), ...defaultDriversFor(source) };
     const { dcf: D } = buildFullModel(source, drivers);

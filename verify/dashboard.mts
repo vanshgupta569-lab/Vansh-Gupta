@@ -378,6 +378,7 @@ async function openFetched(page: Page, ticker: string) {
   // whole band of new type could have arrived on it unmeasured.
   await readContrast(page, 'the figures screen');
   await checkClassificationOnScreen(page);
+  await checkBridgeOnScreen(page);
   await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
   await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
   await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
@@ -470,6 +471,137 @@ async function checkClassificationOnScreen(page: Page) {
   } else {
     ok('returning to the default puts the screen back where it started');
   }
+}
+
+/** The tie row read against the reported row it belongs to. */
+async function checkBridgeTies(page: Page, label: string) {
+  const pairs: { year: string; tie: string; reported: string }[] = await page.evaluate(
+    `Array.from(document.querySelectorAll('[data-bridge-tie]')).map(function (cell) {
+       var year = cell.getAttribute('data-bridge-tie') || '';
+       var reported = document.querySelector('[data-bridge-reported="' + year + '"]');
+       return {
+         year: year,
+         tie: (cell.textContent || '').replace(/\s|,/g, ''),
+         reported: ((reported && reported.textContent) || '').replace(/\s|,/g, '')
+       };
+     })`
+  );
+  if (!pairs.length) {
+    fail(`the bridge tie cells, ${label}`, 'one per reported year', 'none');
+    return;
+  }
+  const bad = pairs.filter((p) => (p.reported === '\u2014' ? p.tie !== '\u2014' : p.tie !== '0'));
+  const blank = pairs.filter((p) => p.reported === '\u2014').length;
+  if (bad.length) {
+    fail(
+      `the bridge tie, ${label}`,
+      'nil in every year with a reported EBITDA',
+      bad.map((p) => `FY${p.year} tie ${p.tie} against reported ${p.reported}`).join(' / ')
+    );
+  } else if (blank === pairs.length) {
+    ok(`${label}: no year has a reported EBITDA, and the bridge says so in all ${pairs.length} rather than printing nil`);
+  } else {
+    ok(`${label}: the bridge ties in all ${pairs.length - blank} years that have a reported EBITDA`);
+  }
+}
+
+/**
+ * THE ADJUSTED EBITDA BRIDGE ON SCREEN.
+ *
+ * The arithmetic is checked below the screen by `verify/ebitdaBridge.mts`, and
+ * inside the written file by recalculating it. What only a browser can check is
+ * that the bridge is on the screen that built it, that it states what it does
+ * and does not include, that an adjustment arrives on it with a place to type
+ * the reason, and that the tie row is nil on the page a reader is looking at.
+ *
+ * Driven right after the classification band, so it is read in the state that
+ * band left behind: SG&A excluded, then put back.
+ */
+async function checkBridgeOnScreen(page: Page) {
+  console.log(`\n=== the figures screen: the adjusted EBITDA bridge ===`);
+  const head = page.getByRole('heading', { name: /the adjusted ebitda bridge/i });
+  if (!(await head.count())) {
+    fail('the EBITDA bridge', 'on the figures screen', '(not there)');
+    return;
+  }
+  ok('the bridge is on the screen that built it');
+
+  const body = (await page.textContent('body')) || '';
+  // IT SAYS WHAT IT IS AND IS NOT. The disclosure is closed, so its text is in
+  // the DOM but the assertions are about the words being there at all.
+  for (const [re, what] of [
+    [/Operating profit, as filed/i, 'filed operating profit at the top'],
+    [/Plus: depreciation and amortisation/i, 'the D&A add-back on its own line'],
+    [/Reported EBITDA/i, 'reported EBITDA'],
+    [/Adjusted EBITDA/i, 'adjusted EBITDA'],
+    [/Adjusted, less reported and every adjustment/i, 'the tie'],
+  ] as [RegExp, string][]) {
+    if (re.test(body)) ok(`the bridge shows ${what}`);
+    else fail(`the bridge's ${what}`, 'on the page', '(not there)');
+  }
+  const whatsIn = page.getByText(/What is in this bridge, and what is not/i).first();
+  if (await whatsIn.count()) {
+    await whatsIn.click();
+    await page.waitForTimeout(400);
+    const open = (await page.textContent('body')) || '';
+    if (/not EBITDA before share-based pay/i.test(open)) ok('it says stock compensation is not added back');
+    else fail('the stock-compensation statement', 'in the bridge', '(not there)');
+    if (/classify the same money twice/i.test(open)) ok('it says why depreciation is not a classifiable line');
+    else fail('why depreciation is not classifiable', 'in the bridge', '(not there)');
+  } else {
+    fail('the "what is in it" disclosure', 'on the bridge', '(not there)');
+  }
+
+  // THE TIE IS NIL ON THE PAGE, in every year that has a reported EBITDA.
+  //
+  // A year the filing gives no operating profit for has no EBITDA, so its tie
+  // is an em dash and that is correct. The two rows are read TOGETHER rather
+  // than the tie alone, because a tie reading nothing is right beside a
+  // reported figure reading nothing and wrong beside a figure.
+  await checkBridgeTies(page, 'with nothing adjusted');
+
+  // WITH NOTHING ADJUSTED, it says so rather than hiding.
+  if (/You have made no adjustments/i.test(body)) ok('with nothing adjusted, the bridge says so');
+  else fail('the no-adjustments sentence', 'on an untouched screen', '(not there)');
+
+  // ---- make one, and watch it arrive on the bridge with a reason field ----
+  const sgaRow = page.locator('[data-line="sga"]').first();
+  const exclude = sgaRow.getByRole('button', { name: /^excluded$/i }).first();
+  if (!(await exclude.count())) {
+    fail('an exclude button on SG&A', 'present', '(not there)');
+    return;
+  }
+  await exclude.click();
+  await page.waitForTimeout(1200);
+  const line = page.locator('input[data-adjustment="exclusion:sga"]');
+  if (await line.count()) ok('the exclusion arrives on the bridge with a place for its reason');
+  else fail('the exclusion on the bridge', 'a reason field', '(not there)');
+  await line.fill('the promoter salary comes out on a sale');
+  await page.waitForTimeout(700);
+  const after = (await page.textContent('body')) || '';
+  if (/Excluded \u00b7 Selling, general and administrative/i.test(after)) ok('the bridge names the line and what kind of adjustment it is');
+  else fail('the adjustment line', 'named on the bridge', '(not there)');
+  if (/It moves EBITDA in/i.test(after)) ok('the line says in how many years it moves EBITDA');
+  else fail('the recurrence count', 'on the adjustment line', '(not there)');
+  await checkBridgeTies(page, 'with an adjustment on it');
+
+  // The reason typed on the bridge is the same store the classification band
+  // reads, so it must show there too.
+  const bandReason = await sgaRow.locator('input#why-sga').inputValue().catch(() => '');
+  if (bandReason === 'the promoter salary comes out on a sale') {
+    ok('a reason typed on the bridge is the same one the classification band holds');
+  } else {
+    fail('the shared reason', 'the promoter salary comes out on a sale', bandReason || '(empty)');
+  }
+
+  await readContrast(page, 'the figures screen, with an EBITDA bridge adjustment');
+
+  // ---- and put it back ----
+  await sgaRow.getByRole('button', { name: /back to the default/i }).first().click();
+  await page.waitForTimeout(900);
+  const undone = (await page.textContent('body')) || '';
+  if (/You have made no adjustments/i.test(undone)) ok('returning to the default empties the bridge again');
+  else fail('the bridge after a return to default', 'no adjustments', 'it still carries one');
 }
 
 // ------------------------------------------------------------------ the checks

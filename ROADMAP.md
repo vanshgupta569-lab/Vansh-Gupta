@@ -56,7 +56,7 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 1. **`KNOWN_ISSUES.md` is empty again.** It stood empty from 2026-09-27, and building the Assumptions sheet on 2026-09-28 opened five and closed all five the same day: assumptions with no recorded basis (`KI-22`), the operating margin slider under-moving (`KI-23`), the discount rate and growth fade the workbook held still where the engine recomputes them (`KI-20`, `KI-21`), and the cost of debt found by sweeping for the same pattern (`KI-24`). All five are the `KI-4` shape — a workbook seeded from the engine's answer, right at rest and wrong on the first edit. Nineteen numbered defects were opened between 22 and 27 September: fourteen fixed, three established as things the filings cannot settle, one needing disclosure. The list staying empty is the work, not the milestone, and a sheet whose job is to write down what every number rests on is the kind of work that refills it.
 2. **NEXT — Primary-filings data layer** (section 1). The largest piece of work and the foundation for almost everything below.
-3. **IN FLIGHT — The judgement layer** (section 2). Expense classification shipped 10 October 2026 and built the layer's machinery with it: the default and its basis, the optional reason, the return to default, the immediate rebuild, and the workbook's two judgement columns. The next structural judgement reuses all of it. The one to take next is **what counts as non-recurring, item by item** — expense classification can exclude a whole line in every year, which is the right unit for a line a company should not have and the wrong one for a settlement it paid once.
+3. **IN FLIGHT — The judgement layer** (section 2). Expense classification shipped 10 October 2026 and built the layer's machinery with it; the adjusted EBITDA bridge shipped 11 October 2026 and is the artefact it produces. The one to take next is **what counts as non-recurring, item by item** — an exclusion today is set aside in every reported year, which is the right unit for a line a company should not have and the wrong one for a settlement it paid once, and the bridge says so on its own face.
 4. **QUEUED — Standard chart of accounts** (section 4). Cheap, and several later items depend on it.
 5. **QUEUED — `CLAUDE.md` house-rules file** (section 8).
 
@@ -123,6 +123,12 @@ says where it came from, an optional one-line reason, a visible return to the
 default, and an immediate rebuild with the previous value still beside it. Each
 judgement below inherits that machinery rather than rebuilding it.
 
+The **adjusted EBITDA bridge** is LIVE with it (11 October 2026): the artefact
+the layer produces, naming what the reader has built out of a correction and an
+exclusion, on the screen and as its own sheet in the workbook. It is the first
+place the layer stops being a set of controls and becomes something a firm
+sends to a client.
+
 Financial modelling resists automation because it is a chain of judgements, not a calculation. This layer makes every one explicit, defaulted, overridable and recorded.
 
 ### The rules
@@ -177,6 +183,7 @@ Each is a few lines of work and disproportionately useful.
 
 | Item | Status | Notes |
 |---|---|---|
+| **Adjusted EBITDA bridge** | **LIVE** | Reported EBITDA from the filing, every correction and every exclusion as its own line with the reader's reason, adjusted EBITDA at the foot, per reported year. Three live ties, its own workbook sheet. The artefact a valuer, a lender or a buyer actually receives. `METHODOLOGY.md` §22e. |
 | **Named policies** | QUEUED | Save a set of judgements and apply it to any company. A firm sets its house view once and every analyst inherits it. This is the switching cost, and it arrives through the feature people most want. |
 | **Decision trail** | QUEUED | Who chose what, when and why, exported with the workbook. The auditable model: not only figures traced to filings, but decisions traced to people. |
 | **What others chose** | IDEA | Once enough people have classified the same line, show the distribution, anonymised. Grows with use; cannot be bought or prompted into existence. Needs a privacy position first. |
@@ -451,6 +458,7 @@ trusting a status.
 
 | Commit | What |
 |---|---|
+| *(this commit)* | **The adjusted EBITDA bridge**: reported EBITDA from the filing, every correction and every exclusion as its own line with the reader's reason, adjusted EBITDA at the foot, every reported year. Three live ties, recalculated inside the written file. Its own workbook sheet, and reasons added to corrections for the first time. Two defects fixed with it: the bridge's own top line linking to the corrected model, and the Sources sheet printing corrected figures under “what the filing actually said”. `METHODOLOGY.md` §22e. |
 | `9980f72` | **Expense classification**, the first piece of the judgement layer (section 2), on the figures screen between reported and modelled. Four cost lines, five categories, a default per line that states where it came from, an optional reason, a visible return to the default and an immediate rebuild with the previous value beside it. Grouping moves proved to move no figure; an exclusion proved to move one. The workbook's two reserved Assumptions columns filled. The figures screen added to the contrast pass, where it had never been. `METHODOLOGY.md` §22d. |
 | `bc52544` | An unmapped line in a house template carries its figures and not only its name, and our own layout stays one click away beside the firm's. |
 | `b7fbcaa` | **The house template**: a firm uploads its own Excel layout once and every export arrives in it. Mapping proposed from their own line names and corrected by them, held in their browser only, reconciled rather than rebuilt on a revision. `METHODOLOGY.md` §22c. |
