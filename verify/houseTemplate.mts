@@ -45,10 +45,14 @@ export interface TemplateReport {
   kept: number;
   moved: number;
   lost: number;
+  /** Unmapped lines listed on the report sheet, and figures carried for them. */
+  unmappedRows: number;
+  unmappedFigures: number;
 }
 
 export async function checkHouseTemplate(ticker = 'AAPL'): Promise<TemplateReport> {
   const problems: string[] = [];
+  const UNMAPPED_SEEN = { rows: 0, figures: 0 };
 
   // ---- the firm's template, and the mapping the upload proposes -----------
   const bytes = await houseTemplateBytes();
@@ -115,7 +119,11 @@ export async function checkHouseTemplate(ticker = 'AAPL'): Promise<TemplateRepor
     periodColumnsBySheet: detection.periodColumnsBySheet,
     periodColumns: detection.periodColumns,
   };
-  const result: any = await H.fillTemplate(bytes, mapping, valueAt, { periods: 5 });
+  const YEARS = (built.model?.years ?? []).slice(0, 5).map((y: any) => String(y));
+  const result: any = await H.fillTemplate(bytes, mapping, valueAt, {
+    periods: 5,
+    periodLabels: YEARS,
+  });
 
   const filled = new ExcelJS.Workbook();
   await filled.xlsx.load(result.bytes);
@@ -197,6 +205,86 @@ export async function checkHouseTemplate(ticker = 'AAPL'): Promise<TemplateRepor
     for (const u of result.unmapped.slice(0, 5)) {
       if (!joined.includes(u.key)) problems.push(`the report omits the unmapped line ${u.key}`);
     }
+
+    // ---- AN UNMAPPED LINE'S ROW CARRIES ITS FIGURES, NOT ONLY ITS NAME ----
+    //
+    // This is the check that makes "reported, not dropped" mean something. A
+    // template written as a summary leaves most of our 138 lines unmapped; if
+    // the report named them and withheld what they held, the rule would be
+    // satisfied in letter and useless in practice. So for EVERY unmapped line,
+    // every period column on its row must carry either a figure or the words
+    // "not reported" -- never a blank, for the same reason their own cells are
+    // never blank.
+    //
+    // Proved to fail without its fix: with the figure loop removed those cells
+    // are empty and this reports one problem per unmapped line.
+    const keyRows = new Map<string, number>();
+    reportSheet.eachRow({ includeEmpty: false }, (row: any) => {
+      const k = row.getCell(2).value;
+      if (typeof k === 'string' && !keyRows.has(k)) keyRows.set(k, row.number);
+    });
+    const VALUE_COL = 5;
+    let rowsSeen = 0;
+    let figuresSeen = 0;
+    let blankCells = 0;
+    for (const u of result.unmapped) {
+      const at = keyRows.get(u.key);
+      if (at === undefined) continue;   // already reported as omitted above
+      rowsSeen++;
+      for (let p = 0; p < YEARS.length; p++) {
+        const cell = reportSheet.getRow(at).getCell(VALUE_COL + p);
+        const v = cell.value;
+        if (v === null || v === undefined || v === '') {
+          blankCells++;
+          if (blankCells <= 5) {
+            problems.push(
+              `the unmapped line ${u.key} has nothing in period ${p + 1} on the report sheet ` +
+                `(row ${at}, column ${VALUE_COL + p}) -- a name without a figure cannot be acted on`
+            );
+          }
+          continue;
+        }
+        if (isNum(v)) {
+          figuresSeen++;
+          // AND IT IS OUR FIGURE, not an adjacent one.
+          const want = valueAt(u.key, p);
+          if (!isNum(want)) {
+            problems.push(`the report carries ${v} for ${u.key} in period ${p + 1}, but the model has no figure there`);
+          } else if (Math.abs(v - want) > Math.max(1e-6, Math.abs(want) * 1e-9)) {
+            problems.push(`the report carries ${v} for ${u.key} in period ${p + 1}, model holds ${want}`);
+          }
+        } else if (v !== H.CANNOT_FILL) {
+          problems.push(`the unmapped line ${u.key} reads ${JSON.stringify(v)} in period ${p + 1}, expected a figure or "${H.CANNOT_FILL}"`);
+        } else {
+          // "not reported" is only honest if the model really has nothing.
+          if (isNum(valueAt(u.key, p))) {
+            problems.push(`the unmapped line ${u.key} says "${H.CANNOT_FILL}" in period ${p + 1} but the model holds ${valueAt(u.key, p)}`);
+          }
+        }
+      }
+    }
+    if (blankCells > 5) problems.push(`and ${blankCells - 5} further blank period cells on unmapped rows`);
+    if (rowsSeen !== result.unmapped.length) {
+      problems.push(`${result.unmapped.length - rowsSeen} unmapped lines have no row on the report sheet`);
+    }
+    // The period columns must be headed, or a column of figures says nothing
+    // about which year it is.
+    if (YEARS.length) {
+      let found = false;
+      reportSheet.eachRow({ includeEmpty: false }, (row: any) => {
+        if (row.getCell(2).value === 'Our key' && String(row.getCell(VALUE_COL).value ?? '') === YEARS[0]) found = true;
+      });
+      if (!found) problems.push(`the unmapped figures are not headed with the periods (expected "${YEARS[0]}")`);
+    }
+    // A FEATURE THAT CARRIES NO FIGURES IS NOT THE FEATURE.
+    if (result.unmapped.length && figuresSeen === 0) {
+      problems.push('not one unmapped line carried a figure, so the report is still only names');
+    }
+    if (figuresSeen !== result.unmappedFigures) {
+      problems.push(`the file holds ${figuresSeen} unmapped figures, the result claims ${result.unmappedFigures}`);
+    }
+    UNMAPPED_SEEN.rows = rowsSeen;
+    UNMAPPED_SEEN.figures = figuresSeen;
   }
 
   // ---- a revised template reconciles rather than being redone ------------
@@ -244,6 +332,8 @@ export async function checkHouseTemplate(ticker = 'AAPL'): Promise<TemplateRepor
     kept: r.kept.length,
     moved: r.moved.length,
     lost: r.lost.length,
+    unmappedRows: UNMAPPED_SEEN.rows,
+    unmappedFigures: UNMAPPED_SEEN.figures,
   };
 }
 
@@ -257,6 +347,7 @@ if (import.meta.url === `file:///${process.argv[1].split(path.sep).join('/')}`) 
     `house template: ${r.mapped} of ${r.contracted} contracted rows mapped by a representative firm template ` +
       `(${r.unmapped} reported as unmapped, ${r.review} to review, ${r.conflicts} conflicts); ` +
       `${r.filled} figures written over ${r.periods} periods, ${r.unfilled} cells said "not reported"; ` +
+      `the report sheet carries ${r.unmappedFigures} figures across ${r.unmappedRows} unmapped rows; ` +
       `a revision kept ${r.kept}, moved ${r.moved}, lost ${r.lost}`
   );
   for (const p of r.problems) console.log(`  PROBLEM: ${p}`);

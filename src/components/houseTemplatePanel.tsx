@@ -286,9 +286,11 @@ export function HouseTemplatePanel({ companyName, onClose }: Props) {
               trailing={<Pill tone={detection.unmapped.length ? 'warn' : 'neutral'}>{detection.unmapped.length}</Pill>}
             >
               <p className="max-w-prose">
-                These are not dropped quietly. Every export carries a sheet naming them, so whoever
-                reads the filled model knows what is not in it. Add a row with any of these names to
-                your template and it will be picked up next time.
+                These are not dropped quietly. Every export carries a sheet naming them{' '}
+                <span className="text-ink">and giving their figures period by period</span>, because
+                a line name on its own is not something you can act on. Add a row with any of these
+                names to your template and it will be picked up next time — and the full model in
+                our own layout stays one click away on the company page.
               </p>
               <ul className={`${UI} mt-3 grid gap-x-6 gap-y-1 text-quiet sm:grid-cols-2`}>
                 {detection.unmapped.map((u) => (
@@ -302,7 +304,9 @@ export function HouseTemplatePanel({ companyName, onClose }: Props) {
 
           <p className={`${UI} mt-5 text-quiet`}>
             A cell we are asked to fill and cannot will read “{CANNOT_FILL}” rather than being left
-            blank, because a blank in a filled model reads as a nil.
+            blank, because a blank in a filled model reads as a nil. Your cells receive figures, not
+            formulas — your own formulas are untouched and go on calculating from them. The workbook
+            in our layout is the one with our formulas live, and it stays one click away.
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-line pt-5">

@@ -204,7 +204,8 @@ for (const c of cases) {
   console.log(
     `house template: ${r.mapped} of ${r.contracted} contracted rows mapped by a representative firm ` +
       `template, ${r.unmapped} reported as unmapped, ${r.conflicts} conflicts; ${r.filled} figures over ` +
-      `${r.periods} periods and ${r.unfilled} cells saying "not reported"; a revision kept ${r.kept}, ` +
+      `${r.periods} periods and ${r.unfilled} cells saying "not reported"; the report sheet carries ` +
+      `${r.unmappedFigures} figures across ${r.unmappedRows} unmapped rows; a revision kept ${r.kept}, ` +
       `moved ${r.moved}, lost ${r.lost}` + (r.problems.length ? '' : ' — every rule held')
   );
   if (r.problems.length) {

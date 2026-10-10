@@ -431,6 +431,8 @@ export interface FillResult {
   unfilled: { key: string; at: string; why: string }[];
   filled: number;
   periodsWritten: number;
+  /** Figures written onto our own report sheet for lines their template has no cell for. */
+  unmappedFigures: number;
 }
 
 /**
@@ -450,7 +452,7 @@ export async function fillTemplate(
   templateBytes: ArrayBuffer,
   mapping: TemplateMapping,
   modelSheetValues: (key: string, period: number) => number | null | undefined,
-  options: { periods: number }
+  options: { periods: number; periodLabels?: readonly string[] }
 ): Promise<FillResult> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(templateBytes as any);
@@ -495,10 +497,20 @@ export async function fillTemplate(
   }
 
   const unmapped = unmappedOf(mapping);
-  writeTheReport(wb, mapping, unmapped, unfilled, filled, widest);
+  const unmappedFigures = writeTheReport({
+    wb,
+    mapping,
+    unmapped,
+    unfilled,
+    filled,
+    periodsWritten: widest,
+    modelSheetValues,
+    modelPeriods: options.periods,
+    periodLabels: options.periodLabels,
+  });
 
   const out = await wb.xlsx.writeBuffer();
-  return { bytes: out as ArrayBuffer, unmapped, unfilled, filled, periodsWritten: widest };
+  return { bytes: out as ArrayBuffer, unmapped, unfilled, filled, periodsWritten: widest, unmappedFigures };
 }
 
 /** The contracted lines a mapping has no cell for. */
@@ -515,20 +527,42 @@ export function unmappedOf(mapping: TemplateMapping): { key: string; label: stri
 }
 
 /**
- * A SHEET THAT SAYS WHAT WAS NOT CARRIED ACROSS.
+ * A SHEET THAT SAYS WHAT WAS NOT CARRIED ACROSS, AND WHAT IT SAID.
  *
  * Reporting the gap in the browser and not in the file would mean the partner
- * reading the filled model a week later has no way of knowing that forty of our
- * lines had nowhere to go. The report travels with the file.
+ * reading the filled model a week later has no way of knowing that a hundred
+ * of our lines had nowhere to go. The report travels with the file.
+ *
+ * AND IT CARRIES THE FIGURES, not only the names. A template written as a
+ * summary maps the reported lines and leaves our drivers, schedules and
+ * opening balances unmapped — for the fixture template, 32 of 138 rows map and
+ * 105 are reported as unmapped. Naming those 106 and withholding what they held satisfied the
+ * rule in letter and broke it in substance: a row label is not something an
+ * analyst can act on, and the figures were already computed, in memory, one
+ * loop away. So every unmapped line is listed WITH its value in each period.
+ *
+ * These columns are on our own sheet, so the number format is ours to set.
+ * Their sheets are still untouched.
  */
-function writeTheReport(
-  wb: ExcelJS.Workbook,
-  mapping: TemplateMapping,
-  unmapped: { key: string; label: string }[],
-  unfilled: FillResult['unfilled'],
-  filled: number,
-  periods: number
-) {
+function writeTheReport(args: {
+  wb: ExcelJS.Workbook;
+  mapping: TemplateMapping;
+  unmapped: { key: string; label: string }[];
+  unfilled: FillResult['unfilled'];
+  filled: number;
+  /** Periods written into THEIR cells, which their sheets' width may have capped. */
+  periodsWritten: number;
+  modelSheetValues: (key: string, period: number) => number | null | undefined;
+  /** Periods the model has. Our own sheet is not capped by their layout. */
+  modelPeriods: number;
+  periodLabels?: readonly string[];
+}): number {
+  const { wb, mapping, unmapped, unfilled, filled, periodsWritten, modelSheetValues } = args;
+  const periods = Math.max(0, args.modelPeriods);
+  /** Where the period columns start. Left of this is the existing three. */
+  const VALUE_COL = 5;
+  const headFor = (p: number) => String(args.periodLabels?.[p] ?? `Period ${p + 1}`);
+
   const NAME = 'Marginalia — what was mapped';
   const existing = wb.getWorksheet(NAME);
   if (existing) wb.removeWorksheet(existing.id);
@@ -537,6 +571,7 @@ function writeTheReport(
   ws.getColumn(2).width = 62;
   ws.getColumn(3).width = 34;
   ws.getColumn(4).width = 44;
+  for (let p = 0; p < periods; p++) ws.getColumn(VALUE_COL + p).width = 15;
 
   let r = 1;
   const put = (a: string, b?: string, c?: string, bold = false, colour?: string) => {
@@ -554,21 +589,44 @@ function writeTheReport(
     }
     return row;
   };
+  const putPeriods = (row: number, cell: (p: number) => string | number, bold = false) => {
+    for (let p = 0; p < periods; p++) {
+      const c = ws.getCell(row, VALUE_COL + p);
+      const v = cell(p);
+      c.value = v;
+      c.font = { name: 'Calibri', size: 11, bold };
+      if (typeof v === 'number') c.numFmt = '#,##0.0;(#,##0.0)';
+      c.alignment = { horizontal: 'right' };
+    }
+  };
 
   put(`Filled from the Marginalia template mapping "${mapping.name}"`, '', '', true);
-  put(`${filled} figures written across ${periods} period${periods === 1 ? '' : 's'}.`);
+  put(`${filled} figures written across ${periodsWritten} period${periodsWritten === 1 ? '' : 's'}.`);
   put('Your formatting is untouched. Only the cells named by the mapping were written.');
   r++;
 
+  let unmappedFigures = 0;
   put('Lines this model carries that your template has no cell for', '', '', true, 'FF8B1E1E');
   put(
     unmapped.length
-      ? `${unmapped.length} of our ${Object.keys(MODEL_SHEET_ROWS).length} lines were not carried across.`
+      ? `${unmapped.length} of our ${Object.keys(MODEL_SHEET_ROWS).length} lines were not carried across. ` +
+          'Their figures are here, because a line name on its own is not something you can act on.'
       : 'None — every line this model carries has a place in your template.'
   );
   if (unmapped.length) {
-    put('Our key', 'Our line', '');
-    for (const u of unmapped) put(u.key, u.label, '');
+    const head = put('Our key', 'Our line', '');
+    putPeriods(head, (p) => headFor(p), true);
+    for (const u of unmapped) {
+      const row = put(u.key, u.label, '');
+      putPeriods(row, (p) => {
+        const v = modelSheetValues(u.key, p);
+        // NEVER BLANK, for the same reason their cells are never blank: a gap
+        // in a column of figures reads as a nil that was reported.
+        if (!isNum(v)) return CANNOT_FILL;
+        unmappedFigures++;
+        return v;
+      });
+    }
   }
   r++;
 
@@ -589,6 +647,8 @@ function writeTheReport(
   for (const line of mapping.lines) {
     put(line.key, line.ours, `${cellAddress(line)}  (${line.how})`);
   }
+
+  return unmappedFigures;
 }
 
 // ---------------------------------------------------------------------------

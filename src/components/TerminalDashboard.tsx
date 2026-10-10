@@ -98,7 +98,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // The deeper screens open WHOLE SCREENS, not panels on the page. A
   // three-statement model is thirty schedules wide; reading it squeezed under a
   // dashboard is not reading it at all. null means no view is open.
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<'house' | 'ours' | null>(null);
   // The peer spreading file takes one fetch per peer, so it says where it is.
   const [spreading, setSpreading] = useState<string | null>(null);
   // A FIRM'S OWN LAYOUT, WHERE ONE HAS BEEN KEPT ON THIS DEVICE. When there is
@@ -148,7 +148,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   // Hand the user a working Excel model: the same run that is on screen,
   // written out with live formulas rather than pasted numbers.
-  const exportExcel = () => {
+  //
+  // A HOUSE TEMPLATE IS AN ADDITION, NOT A REPLACEMENT. When a firm has given
+  // us their layout it is what the main button produces, because that is the
+  // point of giving it to us. But their template is typically a summary -- it
+  // maps the reported lines and has no place for our drivers, schedules or
+  // opening balances -- so our own workbook stays one click away rather than
+  // being taken off the page. `format` is which one was asked for.
+  const exportExcel = (format: 'house' | 'ours' = 'house') => {
     if (!activeSource) return;
     // Built here rather than reusing the full-screen run, because the single
     // download button lives on the page and must work with no view open.
@@ -160,7 +167,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         return;
       }
     }
-    setExporting(true);
+    setExporting(format);
     void (async () => {
       try {
         const input = {
@@ -177,13 +184,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               : 'Derived model, assumptions taken from reported history',
         };
 
-        // THEIR FORMAT IF THEY HAVE GIVEN US ONE, ours otherwise.
-        const stored = houseTemplate ? await loadTemplate(houseTemplate.id) : null;
+        // THEIR FORMAT IF THEY HAVE GIVEN US ONE AND ASKED FOR IT, ours otherwise.
+        const stored =
+          format === 'house' && houseTemplate ? await loadTemplate(houseTemplate.id) : null;
         if (stored) {
           const ours = await buildWorkbook(input);
           const valueAt = await computeModelValues(ours);
-          const periods = Array.isArray(built.model?.years) ? built.model.years.length : 5;
-          const filledFile = await fillTemplate(stored.bytes, stored.mapping, valueAt, { periods });
+          const years: string[] = Array.isArray(built.model?.years)
+            ? built.model.years.map((y: any) => String(y))
+            : [];
+          const periods = years.length || 5;
+          const filledFile = await fillTemplate(stored.bytes, stored.mapping, valueAt, {
+            periods,
+            periodLabels: years,
+          });
           const blob = new Blob([filledFile.bytes], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           });
@@ -202,7 +216,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       } catch (error) {
         console.error('Excel export failed', error);
       } finally {
-        setExporting(false);
+        setExporting(null);
       }
     })();
   };
@@ -1311,17 +1325,33 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           {hasRealModel && dcfResult.applicable !== false && (
             <button
               type="button"
-              onClick={exportExcel}
-              disabled={exporting}
+              onClick={() => exportExcel('house')}
+              disabled={exporting !== null}
               className={`${LABEL} inline-flex items-center gap-2 border border-accent bg-accent/20 px-3.5 py-2 uppercase tracking-widest text-ink transition-colors hover:bg-accent/35 disabled:opacity-40`}
               title="Download the full model as one Excel workbook"
             >
               <Download className="h-3.5 w-3.5" />
-              {exporting
+              {exporting === 'house'
                 ? 'Building the workbook…'
                 : houseTemplate
                   ? `Download in ${houseTemplate.name}`
                   : 'Download Excel model'}
+            </button>
+          )}
+          {/* OUR OWN LAYOUT, STILL ONE CLICK AWAY. A firm's template maps the
+              lines it has rows for; the rest of the 138 are reported on the
+              report sheet, but the full model in our layout is the thing to
+              open when a driver or a schedule is what you are after. */}
+          {hasRealModel && dcfResult.applicable !== false && houseTemplate && (
+            <button
+              type="button"
+              onClick={() => exportExcel('ours')}
+              disabled={exporting !== null}
+              className={`${LABEL} inline-flex items-center gap-2 border border-line px-3.5 py-2 uppercase tracking-widest text-muted transition-colors hover:border-accent hover:text-ink disabled:opacity-40`}
+              title="The full 138-line model in the Marginalia layout, including the drivers and schedules your template has no rows for"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting === 'ours' ? 'Building the workbook…' : 'Also in our layout'}
             </button>
           )}
           {hasRealModel && peerSelection.length > 0 && (

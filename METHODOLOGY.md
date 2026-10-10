@@ -2581,8 +2581,8 @@ straight returned "not reported" for Apple's own net income, the exact failure
 this feature exists to avoid. The model is recalculated first, by the same
 engine `verify:workbook` uses to prove the workbook reproduces the site. That
 engine is imported dynamically, so it is fetched only by someone who actually
-fills a template: measured, the entry bundle grows 2406 KB → 2435 KB, and its
-766 KB sits in a chunk nobody else loads.
+fills a template: measured, the entry bundle grows 2406 KiB → 2437 KiB, and its
+766 KiB sits in a chunk nobody else loads.
 
 ### The three rules, and where each is enforced
 
@@ -2591,9 +2591,33 @@ It is listed on screen at mapping time, and again on a sheet written into every
 filled file — because the partner reading that model a week later has no other
 way of knowing that a hundred of our lines had nowhere to go.
 
+**And that report carries the figures, not only the names.** The first version
+listed the unmapped lines and withheld what they held, which satisfies the rule
+in letter and breaks it in substance: a row label is not something an analyst
+can act on, and for a summary template that is most of the model — 105 of the 138
+rows on the fixture. Every unmapped line is now listed with its value in each
+period, on our own sheet (so the number format is ours to set and theirs is
+still untouched), headed with the years. A period with no figure reads "not
+reported" there too; a blank in a column of figures reads as a reported nil
+wherever it appears.
+
+**Our own layout stays one click away.** A firm with a template gets their
+format from the main download button, because that is the point of giving it to
+us, and a second quieter button on the same row gives the full 138-line model in
+the Marginalia layout. The template is an addition, not a replacement: our
+workbook was already being built in the browser to source the figures, so
+withholding it was costing a click and delivering nothing.
+
 **A cell we cannot fill says so.** It gets the words "not reported", never a
 blank and never a zero. A blank in a filled model reads as nil, and a nil we
 never had is the one thing this site exists not to print.
+
+**What their cells receive is figures, not formulas.** Our own workbook is
+formula-driven and a filled template cannot be: a formula only means something
+where the cells it refers to are, and their rows are theirs. Their formulas are
+untouched and go on calculating from what we wrote. This is the reason our own
+layout stays available rather than being replaced — it is the copy with the
+model live in it.
 
 **Their formatting is theirs.** The template is loaded and written back out:
 every style, formula, merge, print range and logo it arrived with is still
@@ -2650,10 +2674,16 @@ deliberately **not** built from our labels:
   a firm's summary template does not carry. A template maps the reported lines.
 - **117 figures written** across 5 periods, with **7 cells reading "not
   reported"** where the model genuinely had no figure.
+- **471 figures carried on the report sheet** across the 105 unmapped rows, of
+  525 cells; the remaining 54 read "not reported".
 
 `verify:workbook` runs the whole flow and asserts every rule above, including
-that nothing mapped comes back blank. Leaving an unfillable cell empty instead
-of saying "not reported" makes it fail.
+that nothing mapped comes back blank, that every unmapped row carries a figure
+or "not reported" in every period, and that each of those figures is the one the
+model holds for that line in that period. Leaving an unfillable cell empty
+instead of saying "not reported" makes it fail; so does listing an unmapped line
+without its figures (105 lines × 5 periods of problems), and so does writing the
+wrong period's figure onto an unmapped row.
 
 ## 23. What the source does not give us
 
