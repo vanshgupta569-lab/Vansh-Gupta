@@ -23,7 +23,9 @@ const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
 const PAYLOADS = path.join(HERE, 'payloads');
 
 const ExcelJS = createRequire(`${REPO}/package.json`)('exceljs');
-const { buildWorkbook } = await import(`file:///${REPO}/src/data/excelExport.ts`);
+const { buildWorkbook, MODEL_SHEET_ROWS, MODEL_SHEET_ROW_LABELS, MODEL_SHEET_ROWS_VERSION } = await import(
+  `file:///${REPO}/src/data/excelExport.ts`
+);
 const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
 const { calculateDCFFor, defaultDriversFor, buildFullModel } = await import(
   `file:///${REPO}/src/data/companies.ts`
@@ -115,10 +117,13 @@ if (!cases.length) {
 
 const worst = { perpetuity: 0, exit: 0, ticker: '' };
 let checked = 0;
+let contractChecked = 0;
+const contractProblems: string[] = [];
 const problems: string[] = [];
 
 for (const c of cases) {
   let at: (key: 'perpetuity' | 'exit' | 'netDebt' | 'normalised') => number;
+  let wbForContract: any;
   try {
     const wb = await buildWorkbook({
       model: c.model, dcf: c.dcf, source: c.source,
@@ -126,9 +131,41 @@ for (const c of cases) {
       unitLabel: `${c.symbol} millions`, modelLabel: 'Verification run',
     });
     at = await readBack(wb);
+    wbForContract = wb;
   } catch (e: any) {
     problems.push(`${c.ticker}: workbook build or recalculation failed - ${e.message.slice(0, 70)}`);
     continue;
+  }
+
+  // ---- THE PUBLISHED CHART OF ACCOUNTS ----------------------------------
+  //
+  // Every contracted line must sit on the row METHODOLOGY.md section 22a says
+  // it does, carrying the name it says it carries. The generator throws if a
+  // row moves, so reaching here means the rows agreed; what this adds is that
+  // the NAMES agree too -- a line could hold its row and quietly become a
+  // different line, and a macro reading B$26 would never know.
+  //
+  // Labels are compared with digits normalised, because a few carry a figure
+  // of the company's own ("Minimum cash balance - 6.0% of revenue").
+  {
+    const Sm = wbForContract.getWorksheet('3-StatementModel');
+    const norm = (t: string) => t.replace(/[0-9][0-9.,]*/g, '#').trim();
+    for (const [key, row] of Object.entries(MODEL_SHEET_ROWS)) {
+      const want = (MODEL_SHEET_ROW_LABELS as any)[key];
+      if (want === undefined) continue;        // rows with no label of their own
+      const allowed: string[] = Array.isArray(want) ? want : [want];
+      const v: any = Sm.getRow(row as number).getCell(3).value;
+      const got = typeof v === 'string' ? v
+        : v && typeof v === 'object' && 'richText' in v ? v.richText.map((x: any) => x.text).join('')
+        : v == null ? '' : String(v);
+      if (!allowed.some((w) => norm(got) === norm(w))) {
+        contractProblems.push(
+          `${c.ticker}: row ${row} (${key}) should be "${String(allowed[0]).slice(0, 36)}" ` +
+            `but holds "${got.slice(0, 36)}"`
+        );
+      }
+    }
+    contractChecked++;
   }
 
   const sitePerp = c.dcf.perpetuity?.valuePerShare;
@@ -157,6 +194,19 @@ for (const c of cases) {
   }
 }
 
+console.log(
+  `the chart of accounts (v${MODEL_SHEET_ROWS_VERSION}): ` +
+    `${Object.keys(MODEL_SHEET_ROWS).length} contracted rows, ` +
+    `${Object.keys(MODEL_SHEET_ROW_LABELS).length} of them named, ` +
+    `checked line by line in ${contractChecked} workbooks` +
+    (contractProblems.length ? '' : ' — every line on the row the contract publishes')
+);
+if (contractProblems.length) {
+  console.log(`
+PROBLEMS WITH THE CHART OF ACCOUNTS: ${contractProblems.length}`);
+  for (const p of contractProblems.slice(0, 20)) console.log(`  ${p}`);
+  process.exit(1);
+}
 console.log(`compared ${checked} models (curated Apple plus every fetched company with a DCF value)`);
 console.log(
   `worst difference: ${worst.ticker || 'none'} ` +

@@ -67,6 +67,7 @@
 import ExcelJS from 'exceljs';
 import { addSupportingSheets } from './excelSheets';
 import { enableIterativeCalculation } from './excelIterativeCalc';
+import { NOT_REPORTED_FIELDS } from './deriveModel.js';
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 
@@ -112,6 +113,361 @@ function L(index: number): string {
   } while (n >= 0);
   return out;
 }
+
+
+/* =========================================================================
+   THE STANDARD CHART OF ACCOUNTS
+
+   Every line the 3-Statement sheet carries, and the row it sits on, in every
+   workbook this site produces. A firm writing a macro against one model can
+   run it against all of them: `B$26` is revenue for Apple, for Toyota and for
+   Reliance alike.
+
+   WHY THIS IS A CONSTANT AND NOT A COMMENT. The rows used to be wherever the
+   running counter happened to reach. Measured across 58 companies before this
+   was written, 61 of the model sheet's lines sat at a different row in a
+   different workbook and no two companies shared a layout -- not because
+   lines were missing (all 101 were present in all 58) but because a block of
+   "Not reported:" notes was as tall as the number of lines a company happened
+   not to report: nothing for Apple, three rows for Toyota. Everything below
+   moved with it. That block now reserves one row per line that CAN be
+   unreported, blank where the company reports it, which is the same rule the
+   rest of the site follows and the reason these numbers can be promised.
+
+   HOW IT IS ENFORCED. Every row registers through `line`, `calc` or `asFiled`,
+   and each of those checks the row it just took against this map. A line that
+   lands anywhere else throws while the workbook is being built, so a broken
+   contract cannot be downloaded -- it is not merely asserted in a test that
+   somebody might not run. `verify:workbook` re-checks it against every payload.
+
+   CHANGING IT IS ALLOWED, QUIETLY CHANGING IT IS NOT. Insert a line and every
+   row below moves; update this map and METHODOLOGY.md section 22a in the same
+   commit, and the published contract has a new version rather than a silent
+   edit.
+   ========================================================================= */
+export const MODEL_SHEET_ROWS: Readonly<Record<string, number>> = Object.freeze({
+  circBreaker: 9,
+  rev: 26,
+  revGrowth: 27,
+  gm: 28,
+  cogs: 29,
+  gp: 30,
+  rndPct: 31,
+  rnd: 32,
+  sgaPct: 33,
+  sga: 34,
+  otherPct: 35,
+  otherOpex: 36,
+  daCost: 37,
+  sbcCost: 38,
+  ebit: 39,
+  cashRate: 40,
+  intInc: 41,
+  debtRate: 42,
+  pikRate: 43,
+  revRate: 44,
+  intExp: 45,
+  otherIncPct: 46,
+  other: 47,
+  pbt: 48,
+  taxRate: 49,
+  tax: 50,
+  afterTax: 51,
+  ni: 52,
+  sbcPct: 54,
+  sbc: 55,
+  da: 56,
+  ebitda: 57,
+  cogsFiled: 60,
+  rndFiled: 61,
+  sgaFiled: 62,
+  otherFiled: 63,
+  pretaxFiled: 64,
+  niFiled: 65,
+  cogsEmbedded: 66,
+  cogsFiledBasis: 67,
+  arPct: 91,
+  arBop: 92,
+  arChg: 93,
+  arEnd: 94,
+  invPct: 97,
+  invBop: 98,
+  invChg: 99,
+  invEnd: 100,
+  apPct: 103,
+  apBop: 104,
+  apChg: 105,
+  apEnd: 106,
+  accPct: 109,
+  accBop: 110,
+  accChg: 111,
+  accEnd: 112,
+  ocaPct: 115,
+  ocaBop: 116,
+  ocaChg: 117,
+  ocaEnd: 118,
+  dtaPct: 121,
+  dtaBop: 122,
+  dtaChg: 123,
+  dtaEnd: 124,
+  oaMove: 127,
+  oaBop: 128,
+  oaChg: 129,
+  oaEnd: 130,
+  onclMove: 133,
+  onclBop: 134,
+  onclChg: 135,
+  onclEnd: 136,
+  capexPct: 139,
+  depPct: 140,
+  ppeIntensity: 141,
+  ppeBop: 142,
+  ppeGrowthCapex: 143,
+  ppeDep: 144,
+  ppeCapex: 145,
+  ppeOther: 146,
+  ppeEnd: 147,
+  amortAnnual: 150,
+  intangEnd: 151,
+  amort: 152,
+  debtBorrow: 162,
+  debtPik: 163,
+  debtBop: 164,
+  debtEnd: 165,
+  minCash: 168,
+  revBop: 169,
+  revDraw: 170,
+  revEnd: 171,
+  csIssue: 184,
+  csBop: 185,
+  csEnd: 186,
+  payout: 189,
+  reBop: 190,
+  reDiv: 191,
+  reEnd: 192,
+  buyback: 195,
+  tsBop: 196,
+  tsEnd: 197,
+  ociChg: 200,
+  ociBop: 201,
+  ociEnd: 202,
+  cfNi: 205,
+  cfDa: 206,
+  cfSbc: 207,
+  cfWc: 208,
+  cfPik: 209,
+  cfOther: 210,
+  cfoFiled: 211,
+  cfo: 212,
+  cfi: 213,
+  cff: 214,
+  netChange: 215,
+  cashBop: 216,
+  cashEnd: 217,
+  bsCash: 227,
+  bsAr: 228,
+  bsInv: 229,
+  bsDta: 230,
+  bsOca: 231,
+  bsPpe: 232,
+  bsOa: 233,
+  bsTa: 234,
+  bsAp: 236,
+  bsAcc: 237,
+  bsRevolver: 238,
+  bsDebt: 239,
+  bsOncl: 240,
+  bsTl: 241,
+  bsCs: 243,
+  bsTs: 244,
+  bsRe: 245,
+  bsOci: 246,
+  bsTe: 247,
+  bsCheck: 248,
+});
+
+/**
+ * The name each contracted row carries, so a reader checking the contract is
+ * checking a line and not just a number. Where a label embeds a figure of the
+ * company's own ("Minimum cash balance - 6.0% of revenue"), the digits are
+ * what differ; the check normalises them before comparing.
+ */
+export const MODEL_SHEET_ROW_LABELS: Readonly<Record<string, string | readonly string[]>> =
+  Object.freeze({
+  rev: "Revenue",
+  revGrowth: [
+    "Revenue growth",
+    "Revenue growth — fades in a straight line to the terminal rate on the DCF sheet",
+  ],
+  gm: "Gross margin before D&A and SBC",
+  cogs: "Cost of sales, excluding D&A and SBC",
+  gp: "Gross profit before D&A and SBC",
+  rndPct: "Research & development, % of revenue",
+  rnd: "Research & development, excluding D&A and SBC",
+  sgaPct: "Selling, general & administrative, % of revenue",
+  sga: "Selling, general & administrative, excluding D&A and SBC",
+  otherPct: "Other operating costs, % of revenue",
+  otherOpex: "Other operating costs, excluding D&A and SBC: operating income as filed less the lines above",
+  daCost: "Less: depreciation & amortization",
+  sbcCost: "Less: stock based compensation",
+  ebit: "Operating profit (EBIT)",
+  cashRate: "Return earned on cash",
+  intInc: "Interest income",
+  debtRate: "Cash interest rate on debt",
+  pikRate: "PIK interest rate on debt",
+  revRate: "Interest rate on revolver",
+  intExp: "Interest expense",
+  otherIncPct: "Other income / (expense), % of revenue",
+  other: "Other income / (expense), net",
+  pbt: "Pretax profit",
+  taxRate: "Tax rate",
+  tax: "Taxes",
+  afterTax: "Items after tax: non-controlling interests, discontinued operations",
+  ni: "Net income",
+  sbcPct: "Stock based compensation, % of revenue",
+  sbc: "Stock based compensation",
+  da: "Depreciation & amortization",
+  ebitda: "EBITDA",
+  cogsFiled: "Cost of sales, as filed",
+  rndFiled: "Research & development, as filed",
+  sgaFiled: "Selling, general & administrative, as filed",
+  otherFiled: "Other operating costs: operating income as filed less the lines above",
+  pretaxFiled: "Pretax income, as filed",
+  niFiled: "Net income, as filed",
+  cogsEmbedded: "D&A and SBC in cost of sales, % of revenue (last reported year)",
+  cogsFiledBasis: "Cost of sales on the filed basis, D&A and SBC included",
+  arPct: "Receivables as % of revenue",
+  arBop: "Beginning of period",
+  arChg: "Increase / (decrease)",
+  arEnd: "End of period",
+  invPct: "Inventory as % of cost of sales, as filed",
+  invBop: "Beginning of period",
+  invChg: "Increase / (decrease)",
+  invEnd: "End of period",
+  apPct: [
+    "Payables as % of revenue",
+    "Payables as % of cost of sales, as filed",
+  ],
+  apBop: "Beginning of period",
+  apChg: "Increase / (decrease)",
+  apEnd: "End of period",
+  accPct: "Accrued expenses as % of revenue",
+  accBop: "Beginning of period",
+  accChg: "Increase / (decrease)",
+  accEnd: "End of period",
+  ocaPct: "Other current assets as % of cost of sales, as filed",
+  ocaBop: "Beginning of period",
+  ocaChg: "Increase / (decrease)",
+  ocaEnd: "End of period",
+  dtaPct: "Deferred tax assets as % of revenue",
+  dtaBop: "Beginning of period",
+  dtaChg: "Increase / (decrease)",
+  dtaEnd: "End of period",
+  oaMove: "Additions / (disposals), excluding amortisation of intangibles",
+  oaBop: "Beginning of period",
+  oaChg: "Increase / (decrease)",
+  oaEnd: "End of period",
+  onclMove: "Other non-current liabilities: additions / (disposals)",
+  onclBop: "Beginning of period",
+  onclChg: "Increase / (decrease)",
+  onclEnd: "End of period",
+  capexPct: [
+    "Growth in capital expenditure, year on year",
+    "Capital expenditure as % of revenue",
+  ],
+  depPct: "Depreciation as % of the assets in service",
+  ppeIntensity: [
+    "Net PP&E as % of revenue — not used: this model projects capital spending as a single line",
+    "Net PP&E as % of revenue",
+  ],
+  ppeBop: "Beginning of period",
+  ppeGrowthCapex: [
+    "Plus: capital expenditures to add plant — not used: capital spending is projected as a single line",
+    "Plus: capital expenditures to add plant, on the increase in revenue",
+  ],
+  ppeDep: "Less: depreciation",
+  ppeCapex: [
+    "Plus: capital expenditures",
+    "Plus: capital expenditures, replacement plus growth",
+  ],
+  ppeOther: "Plus: other movements in the balance (disposals, acquisitions, leases, currency)",
+  ppeEnd: "End of period",
+  amortAnnual: "Annual amortisation of intangibles, anchored to the last reported year",
+  intangEnd: "Intangible assets excluding goodwill, end of period",
+  amort: "Amortisation of intangibles",
+  debtBorrow: "Additional borrowing / (pay down)",
+  debtPik: "PIK interest accrued to the balance",
+  debtBop: "Beginning of period",
+  debtEnd: "End of period",
+  minCash: [
+    "Minimum cash balance",
+    "Minimum cash balance — 6.0% of revenue, the least this company has operated on",
+    "Minimum cash balance — 18.7% of revenue, the least this company has operated on",
+    "Minimum cash balance — 3.9% of revenue, the least this company has operated on",
+    "Minimum cash balance — 8.5% of revenue, the least this company has operated on",
+    "Minimum cash balance — 13.5% of revenue, the least this company has operated on",
+    "Minimum cash balance — 188.2% of revenue, the least this company has operated on",
+    "Minimum cash balance — 175.3% of revenue, the least this company has operated on",
+  ],
+  revBop: "Revolver, beginning of period",
+  revDraw: "Revolver draw / (repayment)",
+  revEnd: "Revolver, end of period",
+  csIssue: "New share issuances",
+  csBop: "Beginning of period",
+  csEnd: "End of period",
+  payout: "Dividend payout ratio",
+  reBop: "Beginning of period",
+  reDiv: "Less: common dividends",
+  reEnd: "End of period",
+  buyback: "Share repurchases",
+  tsBop: "Beginning of period",
+  tsEnd: "End of period",
+  ociChg: "Income / (loss) in the period",
+  ociBop: "Beginning of period",
+  ociEnd: "End of period",
+  cfNi: "Net income",
+  cfDa: "Depreciation & amortization",
+  cfSbc: "Stock based compensation",
+  cfWc: "Movements in working capital and other items",
+  cfPik: "Non-cash PIK interest added back",
+  cfOther: "Other items in the filed statement, not carried by this model",
+  cfoFiled: "Cash from operating activities, as filed",
+  cfo: "Cash from operating activities",
+  cfi: "Cash from investing activities",
+  cff: "Cash from financing activities",
+  netChange: "Net change in cash",
+  cashBop: "Cash, beginning of period",
+  cashEnd: "Cash, end of period",
+  bsCash: "Cash & equivalents",
+  bsAr: "Accounts receivable",
+  bsInv: "Inventory",
+  bsDta: "Deferred tax assets",
+  bsOca: "Other current assets",
+  bsPpe: "Property, plant & equipment",
+  bsOa: "Other assets",
+  bsTa: "Total assets",
+  bsAp: "Accounts payable",
+  bsAcc: "Accrued expenses & deferred revenue",
+  bsRevolver: "Revolver",
+  bsDebt: "Long term debt",
+  bsOncl: "Other non-current liabilities",
+  bsTl: "Total liabilities",
+  bsCs: "Common stock & additional paid in capital",
+  bsTs: "Treasury stock",
+  bsRe: "Retained earnings",
+  bsOci: "Other comprehensive income",
+  bsTe: "Total equity",
+  bsCheck: "Balance check",
+  });
+
+/** The contract's version, bumped whenever a row number above changes. */
+export const MODEL_SHEET_ROWS_VERSION = 1;
+
+/** What a row says when the model has no use for it. Named, never omitted. */
+const NOT_USED_INTENSITY =
+  'Net PP&E as % of revenue — not used: this model projects capital spending as a single line';
+const NOT_USED_GROWTH_CAPEX =
+  'Plus: capital expenditures to add plant — not used: capital spending is projected as a single line';
 
 export interface ExportInput {
   model: any;
@@ -426,6 +782,28 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // ---- the two-pass machinery --------------------------------------------
   let r = 8;
   const R: Record<string, number> = {};
+  /**
+   * EVERY REGISTERED ROW IS CHECKED AGAINST THE PUBLISHED CONTRACT as it is
+   * taken. Throwing here is deliberate: a workbook whose rows have moved is
+   * worse than no workbook, because the macro reading it will not fail — it
+   * will read the wrong line and report a number.
+   */
+  const claim = (key: string, row: number) => {
+    const promised = MODEL_SHEET_ROWS[key];
+    if (promised === undefined) {
+      throw new Error(
+        `Excel export: the line "${key}" is not in the published chart of accounts. ` +
+          `Add it to MODEL_SHEET_ROWS and METHODOLOGY.md section 22a, or it has no row to sit on.`
+      );
+    }
+    if (promised !== row) {
+      throw new Error(
+        `Excel export: "${key}" landed on row ${row}, but the published chart of accounts ` +
+          `puts it on row ${promised}. Something above it changed height.`
+      );
+    }
+    R[key] = row;
+  };
   // The name each registered row was given, so the annexures can repeat the
   // model sheet's own label instead of keeping a second copy of it (KI-4).
   const RL: Record<string, string> = {};
@@ -463,7 +841,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     o: any = {}
   ) => {
     const row = r++;
-    R[key] = row;
+    claim(key, row);
     RL[key] = name;
     pending.push(() => {
       label(S, row, name, o.unit ?? UNIT, { indent: o.indent ?? 1, bold: o.bold, italic: o.italic });
@@ -497,7 +875,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     o: any = {}
   ) => {
     const row = r++;
-    R[key] = row;
+    claim(key, row);
     RL[key] = name;
     pending.push(() => {
       label(S, row, name, o.unit ?? UNIT, { indent: o.indent ?? 1, bold: o.bold, italic: o.italic });
@@ -537,7 +915,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     o: any = {}
   ) => {
     const row = r++;
-    R[key] = row;
+    claim(key, row);
     RL[key] = name;
     pending.push(() => {
       label(S, row, name, o.unit ?? '%', { indent: o.indent ?? 2, italic: true });
@@ -579,7 +957,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     absent?: (i: number) => boolean
   ) => {
     const row = r++;
-    R[key] = row;
+    claim(key, row);
     RL[key] = name;
     pending.push(() => {
       label(S, row, name, UNIT, { indent: 1 });
@@ -615,7 +993,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
     o: { alwaysFormula?: boolean } = {}
   ) => {
     const row = r++;
-    R[key] = row;
+    claim(key, row);
     RL[key] = name;
     pending.push(() => {
       label(S, row, name, UNIT, { indent: 1, bold: true });
@@ -942,7 +1320,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // Checks sheet, which confirms operating profit is still revenue less them.
   const asFiled = (key: string, name: string, hist: any) => {
     const row = r++;
-    R[key] = row;
+    claim(key, row);
     RL[key] = name;
     pending.push(() => {
       label(S, row, name, UNIT, { indent: 1 });
@@ -954,10 +1332,27 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       }
     });
   };
-  // The lines the filing does not report, by year, as the derivation records them.
-  const notReportedLines: string[] = (Array.isArray(source?.meta?.notReported) ? source.meta.notReported : []).map(
-    (g: any) => `Not reported: ${g.label}, ${g.years.map((y: number) => `FY${String(y).slice(2)}`).join(', ')}.`
+  // THE LINES THE FILING DOES NOT REPORT -- ONE ROW EACH, ALWAYS.
+  //
+  // This block used to be exactly as tall as the number of lines a given
+  // company happened to be missing: nothing for Apple, three rows for Toyota.
+  // Everything below it moved with it, which is why 61 of the model sheet's
+  // rows sat at a different number in a different workbook and no two of the
+  // 58 companies measured agreed on a layout.
+  //
+  // It is now one row per line that CAN be unreported, in the order
+  // NOT_REPORTED_FIELDS declares them, blank where the company reports it --
+  // the same rule the rest of the site follows, and the reason the row numbers
+  // below can be published as a contract.
+  const notReportedByField = new Map<string, any>(
+    (Array.isArray(source?.meta?.notReported) ? source.meta.notReported : []).map((g: any) => [g.field, g])
   );
+  const notReportedLines: string[] = NOT_REPORTED_FIELDS.map(([field]: any) => {
+    const g = notReportedByField.get(field);
+    return g
+      ? `Not reported: ${g.label}, ${g.years.map((y: number) => `FY${String(y).slice(2)}`).join(', ')}.`
+      : '';
+  });
   sub('As filed: reported cost lines, D&A and SBC included');
   asFiled('cogsFiled', 'Cost of sales, as filed', M.cogsReportedBasis);
   asFiled('rndFiled', 'Research & development, as filed', M.rndReportedBasis);
@@ -1192,6 +1587,12 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // the engine's own figures in reported years, where the filing gives one
   // combined number, and the formulas below drive the forecast.
   const splitCapex = M.ppe?.growthCapex?.some?.((v: any) => isNum(v));
+  // THESE THREE ROWS EXIST WHETHER THE MODEL SPLITS CAPITAL SPENDING OR NOT.
+  // They used to be emitted only when it did, which moved every row beneath
+  // them by two and put capital expenditure itself on a different line in the
+  // two cases -- a macro reading the split layout would have read depreciation
+  // out of the combined one. A model that does not split shows the rows it does
+  // not use as not reported, the same as any other line it has no figure for.
   if (splitCapex) {
     driver(
       'ppeIntensity',
@@ -1208,6 +1609,8 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       },
       PCT1
     );
+  } else {
+    line('ppeIntensity', NOT_USED_INTENSITY, null, () => null, PCT1, { indent: 2, italic: true });
   }
   // Where the filing does not report net PP&E in the last reported year, the
   // engine builds no forecast schedule at all (see its PP&E section), and
@@ -1224,20 +1627,7 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       money()
     );
   } else {
-    // A model that projects capital spending as one line: a percentage of
-    // revenue, of R&D, or a growth rate (the curated Apple file). Each writes
-    // the rule the engine used, so the row moves with the site under an edit.
-    line(
-      'ppeCapex',
-      'Plus: capital expenditures',
-      M.ppe?.capex,
-      capexMethod === 'percentOfRnD'
-        ? (c, _p, i) => (plantForecast(i) ? `-${c}${R.rndFiled}*${c}${R.capexPct}` : null)
-        : capexMethod === 'growth'
-          ? (c, p, i) => (plantForecast(i) ? `${p}${R.ppeCapex}*(1+${c}${R.capexPct})` : null)
-          : (c, _p, i) => (plantForecast(i) ? `${c}${R.rev}*${c}${R.capexPct}` : null),
-      money()
-    );
+    line('ppeGrowthCapex', NOT_USED_GROWTH_CAPEX, null, () => null, money());
   }
   // Charged on the plant already owned plus half of what is bought during the
   // year, not on the year's purchases (see the engine's PP&E schedule).
@@ -1258,15 +1648,24 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
       : (c, _p, i) => (plantForecast(i) ? `-(${c}${R.ppeBop}+${c}${R.ppeCapex}/2)*${c}${R.depPct}` : null),
     money()
   );
-  if (splitCapex) {
-    line(
-      'ppeCapex',
-      'Plus: capital expenditures, replacement plus growth',
-      M.ppe?.capex,
-      (c, _p, i) => (plantForecast(i) ? `MAX(0,-${c}${R.ppeDep}+${c}${R.ppeGrowthCapex})` : null),
-      money()
-    );
-  }
+  // CAPITAL EXPENDITURE SITS ON ONE ROW IN BOTH MODELS. Where spending is
+  // split it is replacement plus growth; where it is not, it is the single
+  // rule the engine used -- a percentage of revenue, of R&D, or a growth rate
+  // (the curated Apple file) -- written out so the row moves with the site
+  // under an edit.
+  line(
+    'ppeCapex',
+    splitCapex ? 'Plus: capital expenditures, replacement plus growth' : 'Plus: capital expenditures',
+    M.ppe?.capex,
+    splitCapex
+      ? (c, _p, i) => (plantForecast(i) ? `MAX(0,-${c}${R.ppeDep}+${c}${R.ppeGrowthCapex})` : null)
+      : capexMethod === 'percentOfRnD'
+        ? (c, _p, i) => (plantForecast(i) ? `-${c}${R.rndFiled}*${c}${R.capexPct}` : null)
+        : capexMethod === 'growth'
+          ? (c, p, i) => (plantForecast(i) ? `${p}${R.ppeCapex}*(1+${c}${R.capexPct})` : null)
+          : (c, _p, i) => (plantForecast(i) ? `${c}${R.rev}*${c}${R.capexPct}` : null),
+    money()
+  );
   // Reported years: whatever else moved the balance — disposals, impairments,
   // finance-lease additions, acquisitions, currency. Depreciation above is the
   // filed figure, so these are shown for what they are instead of being counted

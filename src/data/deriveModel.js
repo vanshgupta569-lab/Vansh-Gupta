@@ -744,6 +744,31 @@ export function listingComparability(fetched) {
   return { refusal: null, basis };
 }
 
+/**
+ * EVERY LINE THAT CAN BE "NOT REPORTED", in the order the workbook lists them.
+ *
+ * Exported because the Excel export reserves ONE ROW PER ENTRY whether the
+ * company reports the line or not. That block used to be as tall as the number
+ * of lines a given company happened to be missing, which moved every row below
+ * it by up to three — the whole reason no two workbooks agreed on where a line
+ * sat. Sizing it from this list means adding a sixth line here widens the block
+ * and shifts the published row contract on purpose, where the contract test
+ * will say so, rather than by accident one company at a time.
+ */
+export const NOT_REPORTED_FIELDS = [
+
+    ['rnd', 'research & development',
+      'shown as not reported; any such cost is inside other operating costs, which ties operating income to the filing'],
+    ['sga', 'selling, general & administrative',
+      'shown as not reported; any such cost is inside other operating costs, which ties operating income to the filing'],
+    ['stockComp', 'stock based compensation',
+      'shown as not reported; none is charged as its own line or added back to cash from operations, so any the company paid stays inside its cost lines'],
+    ['dividendsPaid', 'dividends paid',
+      'shown as not reported; the forecast payout ratio is averaged over the years that report dividends only'],
+    ['buybacks', 'share repurchases',
+      'shown as not reported; forecast repurchases are averaged over the years that report them only'],
+];
+
 export function deriveModel(fetched) {
   const { rows, excluded } = selectComparablePeriods(fetched.statements || []);
 
@@ -890,18 +915,8 @@ export function deriveModel(fetched) {
   // A blank in the filing is not a zero. These lines are carried as not
   // reported (null) in the reported years, never as nil, and each place that
   // has to do arithmetic with one says here what it does instead.
-  const NOT_REPORTED = [
-    ['rnd', 'research & development',
-      'shown as not reported; any such cost is inside other operating costs, which ties operating income to the filing'],
-    ['sga', 'selling, general & administrative',
-      'shown as not reported; any such cost is inside other operating costs, which ties operating income to the filing'],
-    ['stockComp', 'stock based compensation',
-      'shown as not reported; none is charged as its own line or added back to cash from operations, so any the company paid stays inside its cost lines'],
-    ['dividendsPaid', 'dividends paid',
-      'shown as not reported; the forecast payout ratio is averaged over the years that report dividends only'],
-    ['buybacks', 'share repurchases',
-      'shown as not reported; forecast repurchases are averaged over the years that report them only'],
-  ];
+  const NOT_REPORTED = NOT_REPORTED_FIELDS;
+
   const notReported = NOT_REPORTED
     .map(([field, label, treatment]) => ({
       field,

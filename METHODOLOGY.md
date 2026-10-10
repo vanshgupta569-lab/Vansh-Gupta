@@ -2222,6 +2222,224 @@ adding them later is a change to two columns rather than a relayout.
 
 ---
 
+## 22a. The standard chart of accounts
+
+**Every line of the 3-Statement sheet sits on the same row in every workbook
+this site produces.** `$B$26` is revenue for Apple, for Toyota and for Reliance
+alike. A firm can write a macro once and run it against every model.
+
+### Why this had to be built rather than observed
+
+Measured across 58 companies before it was: **61 of the model sheet's lines sat
+at a different row in a different workbook**, and the layouts fell into five
+groups where the most common was shared by only 20 of the 58. Two things caused
+it, and neither was a missing line — all 101 lines were present in all 58:
+
+1. **A block of "Not reported:" notes as tall as the number of lines a company
+   happened to be missing** — nothing for Apple, three rows for Toyota.
+   Everything below moved with it. It now reserves **one row for each of the
+   five lines that can be unreported** (`NOT_REPORTED_FIELDS` in
+   `deriveModel.js`), blank where the company reports it.
+2. **Three rows emitted only when the model splits capital spending** into
+   replacement and growth. Worse than a shift: capital expenditure itself sat
+   on a *different row* in the two cases, so a macro written against a split
+   model would have read depreciation out of a combined one. All three rows are
+   now always present, and the two that a combined model does not use say so in
+   their own row.
+
+The second was invisible to the payload set — all 58 fetched companies split
+their capital spending. It was the **curated Apple model** that exposed it, and
+only once the contract below was being enforced. A measurement across real
+companies alone would have shipped the bug.
+
+### How the promise is kept
+
+The schema is `MODEL_SHEET_ROWS` in `src/data/excelExport.ts`, frozen, with
+`MODEL_SHEET_ROW_LABELS` naming each row. Every row registers through `line`,
+`calc`, `driver`, `bopRow` or `asFiled`, and each of those **checks the row it
+just took against the schema and throws if it does not match**. A workbook whose
+rows have moved cannot be downloaded — the failure is at generation, not merely
+in a test somebody might not run. A line with no entry in the schema throws too,
+naming itself, so a new line cannot be added without being published here.
+
+`verify:workbook` then re-checks every contracted row in every workbook it
+builds, comparing the *name* on the row as well as the number: a line could keep
+its row and quietly become a different line, and a macro reading `$B$26` would
+never know. Digits are normalised before comparing, because a few rows carry a
+figure of the company's own ("Minimum cash balance — 6.0% of revenue"), and the
+handful of rows that name the *rule* the engine used carry every wording they
+are allowed.
+
+### What happens to a figure the schema has no row for
+
+Nothing is dropped, and nothing silently lands somewhere it does not belong.
+The engine maps a filing onto a fixed set of fields; a cost the filing reports
+that is not one of the named lines falls into **other operating costs**
+(`otherOpex`, row 36), which is defined as operating income less the lines the
+filing names, so operating profit still ties to the filing. That line is where
+unnamed costs go, by construction, and §9 sets out the rule. What cannot happen
+is a *new workbook row* appearing for it: `claim()` throws on any key the schema
+does not publish, so adding a line is a deliberate edit to this table and to
+`MODEL_SHEET_ROWS_VERSION`, not something that happens to one company's file.
+
+### A company with sparse filings
+
+Toyota reports no R&D, no stock compensation and no share repurchases. Its
+workbook is the same shape as Apple's, which reports all three:
+
+- Row 32 is `Research & development` in both. Toyota's reported-year cells are
+  **blank** — a blank is a figure the filing does not report, not a nil — and
+  the Income Statement annexure renders those cells as "not reported".
+- Rows 83–87 are the five not-reported slots. Toyota fills three of them and
+  leaves two blank; Apple leaves all five blank.
+- `Receivables as % of revenue` is row 91 in both, where before this it was
+  row 86 for Apple and row 89 for Toyota.
+
+### The contract, version 1
+
+138 rows. Bump `MODEL_SHEET_ROWS_VERSION` and this table together.
+
+| Row | Key | Line |
+|---|---|---|
+| **9** | `circBreaker` | *(no label of its own)* |
+| **26** | `rev` | Revenue |
+| **27** | `revGrowth` | Revenue growth |
+| **28** | `gm` | Gross margin before D&A and SBC |
+| **29** | `cogs` | Cost of sales, excluding D&A and SBC |
+| **30** | `gp` | Gross profit before D&A and SBC |
+| **31** | `rndPct` | Research & development, % of revenue |
+| **32** | `rnd` | Research & development, excluding D&A and SBC |
+| **33** | `sgaPct` | Selling, general & administrative, % of revenue |
+| **34** | `sga` | Selling, general & administrative, excluding D&A and SBC |
+| **35** | `otherPct` | Other operating costs, % of revenue |
+| **36** | `otherOpex` | Other operating costs, excluding D&A and SBC: operating income as filed less the li… |
+| **37** | `daCost` | Less: depreciation & amortization |
+| **38** | `sbcCost` | Less: stock based compensation |
+| **39** | `ebit` | Operating profit (EBIT) |
+| **40** | `cashRate` | Return earned on cash |
+| **41** | `intInc` | Interest income |
+| **42** | `debtRate` | Cash interest rate on debt |
+| **43** | `pikRate` | PIK interest rate on debt |
+| **44** | `revRate` | Interest rate on revolver |
+| **45** | `intExp` | Interest expense |
+| **46** | `otherIncPct` | Other income / (expense), % of revenue |
+| **47** | `other` | Other income / (expense), net |
+| **48** | `pbt` | Pretax profit |
+| **49** | `taxRate` | Tax rate |
+| **50** | `tax` | Taxes |
+| **51** | `afterTax` | Items after tax: non-controlling interests, discontinued operations |
+| **52** | `ni` | Net income |
+| **54** | `sbcPct` | Stock based compensation, % of revenue |
+| **55** | `sbc` | Stock based compensation |
+| **56** | `da` | Depreciation & amortization |
+| **57** | `ebitda` | EBITDA |
+| **60** | `cogsFiled` | Cost of sales, as filed |
+| **61** | `rndFiled` | Research & development, as filed |
+| **62** | `sgaFiled` | Selling, general & administrative, as filed |
+| **63** | `otherFiled` | Other operating costs: operating income as filed less the lines above |
+| **64** | `pretaxFiled` | Pretax income, as filed |
+| **65** | `niFiled` | Net income, as filed |
+| **66** | `cogsEmbedded` | D&A and SBC in cost of sales, % of revenue (last reported year) |
+| **67** | `cogsFiledBasis` | Cost of sales on the filed basis, D&A and SBC included |
+| **91** | `arPct` | Receivables as % of revenue |
+| **92** | `arBop` | Beginning of period |
+| **93** | `arChg` | Increase / (decrease) |
+| **94** | `arEnd` | End of period |
+| **97** | `invPct` | Inventory as % of cost of sales, as filed |
+| **98** | `invBop` | Beginning of period |
+| **99** | `invChg` | Increase / (decrease) |
+| **100** | `invEnd` | End of period |
+| **103** | `apPct` | Payables as % of revenue  /  Payables as % of cost of sales, as filed |
+| **104** | `apBop` | Beginning of period |
+| **105** | `apChg` | Increase / (decrease) |
+| **106** | `apEnd` | End of period |
+| **109** | `accPct` | Accrued expenses as % of revenue |
+| **110** | `accBop` | Beginning of period |
+| **111** | `accChg` | Increase / (decrease) |
+| **112** | `accEnd` | End of period |
+| **115** | `ocaPct` | Other current assets as % of cost of sales, as filed |
+| **116** | `ocaBop` | Beginning of period |
+| **117** | `ocaChg` | Increase / (decrease) |
+| **118** | `ocaEnd` | End of period |
+| **121** | `dtaPct` | Deferred tax assets as % of revenue |
+| **122** | `dtaBop` | Beginning of period |
+| **123** | `dtaChg` | Increase / (decrease) |
+| **124** | `dtaEnd` | End of period |
+| **127** | `oaMove` | Additions / (disposals), excluding amortisation of intangibles |
+| **128** | `oaBop` | Beginning of period |
+| **129** | `oaChg` | Increase / (decrease) |
+| **130** | `oaEnd` | End of period |
+| **133** | `onclMove` | Other non-current liabilities: additions / (disposals) |
+| **134** | `onclBop` | Beginning of period |
+| **135** | `onclChg` | Increase / (decrease) |
+| **136** | `onclEnd` | End of period |
+| **139** | `capexPct` | Growth in capital expenditure, year on year  /  Capital expenditure as % of revenue |
+| **140** | `depPct` | Depreciation as % of the assets in service |
+| **141** | `ppeIntensity` | Net PP&E as % of revenue |
+| **142** | `ppeBop` | Beginning of period |
+| **143** | `ppeGrowthCapex` | Plus: capital expenditures to add plant  /  Plus: capital expenditures to add plant… |
+| **144** | `ppeDep` | Less: depreciation |
+| **145** | `ppeCapex` | Plus: capital expenditures  /  Plus: capital expenditures, replacement plus growth |
+| **146** | `ppeOther` | Plus: other movements in the balance (disposals, acquisitions, leases, currency) |
+| **147** | `ppeEnd` | End of period |
+| **150** | `amortAnnual` | Annual amortisation of intangibles, anchored to the last reported year |
+| **151** | `intangEnd` | Intangible assets excluding goodwill, end of period |
+| **152** | `amort` | Amortisation of intangibles |
+| **162** | `debtBorrow` | Additional borrowing / (pay down) |
+| **163** | `debtPik` | PIK interest accrued to the balance |
+| **164** | `debtBop` | Beginning of period |
+| **165** | `debtEnd` | End of period |
+| **168** | `minCash` | Minimum cash balance |
+| **169** | `revBop` | Revolver, beginning of period |
+| **170** | `revDraw` | Revolver draw / (repayment) |
+| **171** | `revEnd` | Revolver, end of period |
+| **184** | `csIssue` | New share issuances |
+| **185** | `csBop` | Beginning of period |
+| **186** | `csEnd` | End of period |
+| **189** | `payout` | Dividend payout ratio |
+| **190** | `reBop` | Beginning of period |
+| **191** | `reDiv` | Less: common dividends |
+| **192** | `reEnd` | End of period |
+| **195** | `buyback` | Share repurchases |
+| **196** | `tsBop` | Beginning of period |
+| **197** | `tsEnd` | End of period |
+| **200** | `ociChg` | Income / (loss) in the period |
+| **201** | `ociBop` | Beginning of period |
+| **202** | `ociEnd` | End of period |
+| **205** | `cfNi` | Net income |
+| **206** | `cfDa` | Depreciation & amortization |
+| **207** | `cfSbc` | Stock based compensation |
+| **208** | `cfWc` | Movements in working capital and other items |
+| **209** | `cfPik` | Non-cash PIK interest added back |
+| **210** | `cfOther` | Other items in the filed statement, not carried by this model |
+| **211** | `cfoFiled` | Cash from operating activities, as filed |
+| **212** | `cfo` | Cash from operating activities |
+| **213** | `cfi` | Cash from investing activities |
+| **214** | `cff` | Cash from financing activities |
+| **215** | `netChange` | Net change in cash |
+| **216** | `cashBop` | Cash, beginning of period |
+| **217** | `cashEnd` | Cash, end of period |
+| **227** | `bsCash` | Cash & equivalents |
+| **228** | `bsAr` | Accounts receivable |
+| **229** | `bsInv` | Inventory |
+| **230** | `bsDta` | Deferred tax assets |
+| **231** | `bsOca` | Other current assets |
+| **232** | `bsPpe` | Property, plant & equipment |
+| **233** | `bsOa` | Other assets |
+| **234** | `bsTa` | Total assets |
+| **236** | `bsAp` | Accounts payable |
+| **237** | `bsAcc` | Accrued expenses & deferred revenue |
+| **238** | `bsRevolver` | Revolver |
+| **239** | `bsDebt` | Long term debt |
+| **240** | `bsOncl` | Other non-current liabilities |
+| **241** | `bsTl` | Total liabilities |
+| **243** | `bsCs` | Common stock & additional paid in capital |
+| **244** | `bsTs` | Treasury stock |
+| **245** | `bsRe` | Retained earnings |
+| **246** | `bsOci` | Other comprehensive income |
+| **247** | `bsTe` | Total equity |
+| **248** | `bsCheck` | Balance check |
+
 ## 23. What the source does not give us
 
 `src/data/dataConstraints.ts`. A figure the filing or the data source never
