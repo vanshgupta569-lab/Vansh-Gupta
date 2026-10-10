@@ -43,6 +43,8 @@ import { terminalReliance } from '../data/terminalReliance';
 import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
 import { downloadWorkbook } from '../data/excelExport';
+import { downloadPeerWorkbook, gatherPeers, MAX_PEERS } from '../data/peerSpreading';
+import { fetchCompanyPayload, buildCompanyFrom } from '../data/autoCompany';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
 import { applyVerdicts } from '../data/qualitativeFactors';
@@ -94,6 +96,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // three-statement model is thirty schedules wide; reading it squeezed under a
   // dashboard is not reading it at all. null means no view is open.
   const [exporting, setExporting] = useState(false);
+  // The peer spreading file takes one fetch per peer, so it says where it is.
+  const [spreading, setSpreading] = useState<string | null>(null);
   const [nerdView, setNerdView] = useState<
     null | 'THREE_STATEMENT' | 'DCF' | 'QUALITATIVE' | 'SAVED' | 'COMPS' | 'ASSET' | 'BATCH'
   >(null);
@@ -159,6 +163,86 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     })();
   };
 
+
+  // THE PEER SPREADING FILE: the target and the peer set on identical tabs.
+  //
+  // The peers are whichever companies are in the set ON SCREEN -- including any
+  // the reader added or took out -- rather than the set the server first
+  // proposed. Each one needs its own filings, so each one is its own fetch; the
+  // button says which peer it is on, because ten fetches is long enough that a
+  // silent button looks broken.
+  const exportPeerSpreading = () => {
+    if (!activeSource || !peerSelection.length) return;
+    let built: any = nerdModel;
+    if (!built) {
+      try {
+        built = buildFullModel(activeSource, drivers);
+      } catch {
+        return;
+      }
+    }
+    setSpreading('Reading the filings…');
+    void (async () => {
+      try {
+        const targetSymbol = company.currencySymbol;
+        const target = {
+          ticker: company.ticker,
+          name: company.name,
+          model: built.model,
+          dcf: built.dcf,
+          source: {
+            ...activeSource,
+            rawStatements: derivedSource?.rawStatements ?? activeSource.rawStatements,
+          },
+          currencySymbol: targetSymbol,
+          unitLabel: activeSource.meta?.unitLabel || `${targetSymbol} millions`,
+          price: dcfResult?.marketPrice ?? null,
+          priceDate: activeSource.meta?.priceDate ?? null,
+          dilutedShares: built.dcf?.dilutedShares ?? null,
+          refusal: dcfResult.applicable === false ? String(dcfResult.message || '') : null,
+        };
+        const wanted = peerSelection.filter((t) => t && t !== company.ticker).slice(0, MAX_PEERS);
+        const { companies: peers, missing } = await gatherPeers(wanted, async (ticker) => {
+          setSpreading(`Reading ${ticker}…`);
+          const payload = await fetchCompanyPayload(ticker);
+          const record: any = buildCompanyFrom(payload);
+          const source = record.modelData;
+          if (!source) return null;
+          const peerDrivers = { ...record.defaultDrivers, ...defaultDriversFor(source) };
+          const decision = calculateDCFFor(source, peerDrivers, record.price || null);
+          const peerBuilt: any = buildFullModel(source, peerDrivers);
+          const symbol = payload.currencySymbol || '$';
+          return {
+            ticker,
+            name: payload.name || ticker,
+            model: peerBuilt.model,
+            dcf: peerBuilt.dcf,
+            source,
+            currencySymbol: symbol,
+            unitLabel: source.meta?.unitLabel || `${symbol} millions`,
+            price: typeof record.price === 'number' ? record.price : null,
+            priceDate: payload?.quote?.date ?? null,
+            dilutedShares: peerBuilt.dcf?.dilutedShares ?? null,
+            // A PEER THE SITE WILL NOT VALUE STILL GETS ITS TAB. The comparison
+            // is of filings, not of valuations.
+            refusal: decision.applicable === false ? String(decision.message) : null,
+          };
+        });
+        if (missing.length) {
+          console.warn(
+            'Peer spreading: ' +
+              missing.map((m) => `${m.ticker} (${m.reason})`).join('; ')
+          );
+        }
+        setSpreading('Writing the workbook…');
+        await downloadPeerWorkbook({ target, peers, modelLabel: 'Peer spreading' });
+      } catch (error) {
+        console.error('Peer spreading export failed', error);
+      } finally {
+        setSpreading(null);
+      }
+    })();
+  };
 
   // Escape closes the open view.
   useEffect(() => {
@@ -1190,6 +1274,18 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             >
               <Download className="h-3.5 w-3.5" />
               {exporting ? 'Building the workbook…' : 'Download Excel model'}
+            </button>
+          )}
+          {hasRealModel && peerSelection.length > 0 && (
+            <button
+              type="button"
+              onClick={exportPeerSpreading}
+              disabled={spreading !== null}
+              className={`${LABEL} inline-flex items-center gap-2 border border-line px-3.5 py-2 uppercase tracking-widest text-muted transition-colors hover:border-accent hover:text-ink disabled:opacity-40`}
+              title={`Download ${company.ticker} and ${Math.min(peerSelection.length, MAX_PEERS)} peers on identical tabs, with a comparison tab of live formulas`}
+            >
+              <Download className="h-3.5 w-3.5" />
+              {spreading ?? `Spread against ${Math.min(peerSelection.length, MAX_PEERS)} peers`}
             </button>
           )}
           {hasRealModel && (

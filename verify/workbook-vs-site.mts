@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
+import { checkPeerSpreading, samplePeers } from './peerSpreading.mts';
 import { createRequire } from 'node:module';
 import { HyperFormula } from 'hyperformula';
 
@@ -191,6 +192,30 @@ for (const c of cases) {
         `net debt ${at('netDebt').toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
         `normalised terminal ${at('normalised').toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
     );
+  }
+}
+
+// ---- THE PEER SPREADING WORKBOOK ----------------------------------------
+// It is only sound because the chart of accounts above holds, so it is checked
+// immediately after it and in the same run.
+{
+  const { target, peers } = samplePeers();
+  if (peers.length) {
+    const r = await checkPeerSpreading(target, peers);
+    console.log(
+      `peer spreading: ${r.tabs} tabs (${target} and ${r.peers} peers, ${r.refusedKept} refused and kept), ` +
+        `${r.formulas} live formulas, ${(r.bytes / 1024).toFixed(0)} KB, built in ${r.buildMs} ms; ` +
+        `${r.checked} figures recalculated against the engine` +
+        (r.problems.length ? '' : ' — all agreeing')
+    );
+    if (r.problems.length) {
+      console.log(`
+PROBLEMS WITH PEER SPREADING: ${r.problems.length}`);
+      for (const p of r.problems.slice(0, 20)) console.log(`  ${p}`);
+      process.exit(1);
+    }
+  } else {
+    console.log('peer spreading: skipped, no peer payloads on disk');
   }
 }
 

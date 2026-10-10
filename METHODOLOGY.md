@@ -2440,6 +2440,103 @@ workbook is the same shape as Apple's, which reports all three:
 | **247** | `bsTe` | Total equity |
 | **248** | `bsCheck` | Balance check |
 
+## 22b. The peer spreading workbook
+
+**One file: the target and up to ten peers, each on its own tab, every tab laid
+out identically, plus a comparison tab that is nothing but live cross-tab
+formulas.**
+
+This is the first thing section 22a bought. Because every company's 3-Statement
+tab now puts the same line on the same row, `'MSFT'!$I$26` and `'AAPL'!$I$26`
+are both revenue, and a comparison can be written as formulas rather than as a
+second copy of the numbers. Change an assumption on a peer's tab and the
+comparison moves with it — the rule the Assumptions sheet already follows.
+
+The tabs are produced by **the same generator the single-company workbook uses**,
+so the chart of accounts is enforced on each one as it is built: a tab that laid
+its lines out differently would throw rather than produce a comparison that
+silently reads the wrong line.
+
+### What the comparison tab carries
+
+Size and growth (revenue, growth, EBITDA, EBIT, net income); margins (gross,
+EBITDA, operating, net); returns (on equity, on assets, on capital employed);
+leverage (net debt, net debt/EBITDA, liabilities/equity); and the multiples —
+market capitalisation, enterprise value, EV/EBITDA, EV/revenue, P/E. Every row
+carries a **median and a high-minus-low spread**, both computed in the sheet.
+
+### The one thing that is not a formula
+
+A share price and a diluted share count are market facts, not filing lines. They
+exist nowhere else in the workbook, so they are stated once on the comparison
+tab as dated inputs, in the same yellow the rest of the file uses for an
+assumption. **Everything computed from them is a formula** over those cells and
+the peer tabs: market capitalisation, enterprise value and all three multiples.
+Nothing that exists on a tab is copied onto the comparison.
+
+### Differing fiscal year ends: stated, not adjusted
+
+The engine carries each company's own period end, and this uses it rather than
+assuming a common one. **Each column reads that company's own last reported
+year from its own tab.** This is not cosmetic: the number of reported years
+differs between companies, so the last reported year sits in a different
+*column* on different tabs — rows are fixed by the chart of accounts, columns
+are not. In a measured eleven-company set, seven companies' last year sat in
+column I and four in column H, and the formulas differ accordingly.
+
+The period ends are printed in a row of their own at the top. In that same set
+they ran from 2025-08-31 to 2026-03-31 — seven months apart.
+
+**They are not calendarised, and the tab says so.** Restating a March filer onto
+a December basis needs quarterly filings this site does not read, and inventing
+the overlap would be the kind of silent adjustment this site exists not to make.
+What the comparison therefore compares is **each company's most recent full
+year**, which is what a spreading exercise compares; it is not a snapshot of one
+date, and a reader drawing conclusions across a cyclical turn is told to look at
+the dates first.
+
+Currencies are likewise **not converted**. Each tab reports in the currency of
+its own filings, named in a "Reported in" row. Margins, returns and multiples
+are ratios and survive the difference; revenue, EBITDA, net debt and market
+capitalisation do not, and are left in the currency filed rather than translated
+at a rate that would be stale before it was read.
+
+### A refused peer keeps its tab
+
+Where the site declines to put a value on a peer, **its tab is still built, from
+its filings, and the refusal is stated** — on the tab, and in a "Valuation" row
+on the comparison. The comparison is of filings, not of valuations: a company
+the model will not value is still a company the filings describe, and dropping
+it would quietly narrow the spread the reader asked for. In the measured set of
+ten peers, four were refused and all four kept their tabs and their figures.
+
+A peer that cannot be fetched or modelled at all is **reported to the console,
+not silently dropped**, for the same reason.
+
+### What it costs
+
+Each peer needs its own filings, which the comparison endpoint does not carry —
+it holds market multiples and nothing a model can be built from. So each peer is
+its own fetch, run in sequence rather than ten at once, and the button names the
+peer it is on.
+
+Measured on a target with ten peers, from payloads already in hand: **12 tabs,
+164 KB, 358 ms** to build and write. The fetches dominate the wall clock; the
+workbook itself is not the slow part.
+
+### Checked
+
+`verify:workbook` builds the file, loads it back, **recalculates every cell in
+HyperFormula** and compares the answers against the engine company by company —
+revenue, EBITDA, EBIT, net income, operating margin, and the median and spread.
+It also asserts that every refused peer still has a tab with revenue on it, and
+that **no figure in a company column is a typed number** apart from the two rows
+of market facts. A formula pointing at the wrong row is the failure mode that
+looks fine — the cell holds a plausible number belonging to a different line —
+so the check recalculates rather than reading the formulas and agreeing they
+look right. Pointing every cross-tab read one row low makes it fail on every
+company.
+
 ## 23. What the source does not give us
 
 `src/data/dataConstraints.ts`. A figure the filing or the data source never
