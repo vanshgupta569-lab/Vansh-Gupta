@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-26`. **Next free: `KI-27`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-27`. **Next free: `KI-28`.** Retired, meaning
   fixed and never to be reused: `KI-1` (forecast capital spending a flat share
   of revenue, fixed 2026-09-22), `KI-13` (revenue growth a clamped trailing
   average stepping into the terminal rate, fixed 2026-09-23), `KI-14` (every
@@ -92,15 +92,47 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**Neither of these moves a valuation.** They are faults on the screen, found
-while redesigning the company screen on 2026-10-02, and they are here because
-this file is the list of things this repository does incorrectly — not only the
-ones that change a number.
+**One of these moves a valuation and two do not.** `KI-27` makes a saved model
+disagree with its own stored figure; the other two are faults on the screen,
+found while redesigning the company screen on 2026-10-02, and they are here
+because this file is the list of things this repository does incorrectly — not
+only the ones that change a number.
 
 | ID | What is wrong | Measured |
 |---|---|---|
+| `KI-27` | A saved model does not save the judgements it was built on, so it reopens valuing something else | Reliance saved at 1,044.32, reopens at 706.52 — 32.3% |
 | `KI-25` | The news ticker scrolls text out of view that already fits | strip 730px inside a 1117px window |
 | `KI-26` | A render-blocking stylesheet for an icon font nothing uses | one request per page load, zero usage |
+
+### `KI-27` — a saved model reopens on judgements it was not built on
+
+**Where:** `src/data/savedModels.ts`, `SavedModel`; restored at
+`src/components/TerminalDashboard.tsx:2039`.
+
+A saved model stores `drivers`, `viewMode` and the `valuePerShare` it had when
+it was saved. It does **not** store the reader's corrections to the filed
+figures (feature 11a) or their expense classification
+(`METHODOLOGY.md` §22d). Restoring applies the drivers and the view mode and
+nothing else, so a model built on a corrected figure or a reclassified cost line
+reopens on the filed figures and the engine's default treatments — while the
+saved list goes on printing the value the model had *with* those judgements.
+
+**Measured** 2026-10-10 on RELIANCE.NS. Saved with selling, general and
+administrative excluded as non-recurring, the model values at **1,044.32** and
+the list stores that figure. Restored, the same entry rebuilds at **706.52**:
+the list and the screen disagree by **32.3%**, and nothing on either says why.
+Excluding other operating costs instead makes the gap **138%**.
+
+It predates the judgement layer — corrections have never been saved either — but
+expense classification widens it, so it is written down now rather than left as
+a shape nobody had measured.
+
+**What it would take to fix:** carry `corrections` and `classification` on
+`SavedModel` and re-apply both on restore, which means restore has to rebuild
+the company record rather than only set the sliders. The honest interim, if that
+is deferred, is for the saved list to say that a saved entry keeps its sliders
+and not its judgements — but a sentence is not the fix, and the figure in the
+list is wrong until the judgements travel with it.
 
 ### `KI-25` — the ticker scrolls away text that fits
 

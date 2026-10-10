@@ -374,9 +374,102 @@ async function openFetched(page: Page, ticker: string) {
   }
   if (was) { await page.setViewportSize(was); await page.waitForTimeout(400); }
   await checkBottomBarClearance(page, 'as opened');
+  // THE FIGURES SCREEN HAS NEVER BEEN IN THE CONTRAST PASS, which is how a
+  // whole band of new type could have arrived on it unmeasured.
+  await readContrast(page, 'the figures screen');
+  await checkClassificationOnScreen(page);
   await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
   await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
   await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
+}
+
+/**
+ * THE JUDGEMENT LAYER ON SCREEN (ROADMAP.md section 2).
+ *
+ * The arithmetic is checked below the screen by `verify/classification.mts`.
+ * What only a browser can check is that the judgement is actually offered, that
+ * making one does the four things the roadmap requires -- states where the
+ * default came from, takes a reason, offers a visible way back, and rebuilds
+ * the model at once with the previous value still beside it -- and that undoing
+ * it leaves the screen where it started.
+ */
+async function checkClassificationOnScreen(page: Page) {
+  console.log(`\n=== the figures screen: how each cost is treated ===`);
+  const band = page.getByRole('heading', { name: /say how each cost is treated/i });
+  if (!(await band.count())) {
+    fail('the classification band', 'on the figures screen', '(not there)');
+    return;
+  }
+  ok('the classification band is on the figures screen, before the model');
+
+  // Every line offers the categories, and names the one that is the default.
+  const defaults = page.locator('button', { hasText: /^(Direct|Indirect|Selling|Admin|Excluded)\s*default$/i });
+  const marked = await defaults.count();
+  if (marked >= 3) ok(`${marked} lines carry a category marked as the default`);
+  else fail('lines with a default marked', 'at least 3', String(marked));
+
+  // THE DEFAULT SAYS WHERE IT CAME FROM.
+  const body = (await page.textContent('body')) || '';
+  if (/The default is direct cost\./i.test(body)) ok('the default treatment is stated in words');
+  else fail('the stated default', 'The default is direct cost.', '(not on the page)');
+  if (/balancing line in the forecast/i.test(body)) ok('a line that cannot be excluded says why');
+  else fail('why cost of sales cannot be excluded', 'stated', '(not on the page)');
+
+  // ---- make one, and watch the model rebuild ----
+  const sgaRow = page.locator('[data-line="sga"]').first();
+  const exclude = sgaRow.getByRole('button', { name: /^excluded$/i }).first();
+  if (!(await exclude.count())) {
+    fail('an exclude button on SG&A', 'present', '(not there)');
+    return;
+  }
+  await exclude.click();
+  await page.waitForTimeout(1200);
+
+  const after = (await page.textContent('body')) || '';
+  if (/yours\s*\u00b7\s*default was Admin/i.test(after)) ok("the filed default stays beside the reader's choice");
+  else fail('the default kept beside the choice', 'yours · default was Admin', '(not on the page)');
+  if (await sgaRow.getByRole('button', { name: /back to the default/i }).count()) {
+    ok('the override has a visible way back');
+  } else {
+    fail('return to default', 'a button on the line', '(not there)');
+  }
+  const why = sgaRow.locator('input#why-sga');
+  if (await why.count()) ok('the override takes a one-line reason');
+  else fail('the reason field', 'on the overridden line', '(not there)');
+  await why.fill('their delivery fleet sits in this line');
+  await page.waitForTimeout(900);
+
+  // REBUILT AT ONCE, WITH THE PREVIOUS VALUE STILL ON SCREEN.
+  const rebuilt = (await page.textContent('body')) || '';
+  if (/Rebuilt on your judgements/i.test(rebuilt)) ok('the model is rebuilt on the judgement, on this screen');
+  else fail('the rebuilt value', 'Rebuilt on your judgements', '(not on the page)');
+  // Both apostrophes, because which one the component uses is a typographic
+  // choice and this check is about the number being there.
+  const both = rebuilt.match(
+    /Perpetuity, value per share[\s\S]{0,160}?on the engine['\u2019]s defaults\s*\S*[\d.,]+/i
+  );
+  // A COMPANY THE ENGINE REFUSES HAS NO VALUE TO PUT BESIDE ANYTHING, and must
+  // say the engine refuses rather than show a blank where a figure goes. Both
+  // outcomes are correct; neither being on the page is not.
+  const refusedHere = /the engine refuses a value/i.test(rebuilt);
+  if (both) ok(`the previous value is still beside the new one: ${both[0].replace(/\s+/g, ' ').slice(-48)}`);
+  else if (refusedHere) ok('the engine refuses a value on these judgements, and says so rather than printing a blank');
+  else fail('the previous value', 'beside the new one, or a stated refusal', '(neither on the page)');
+
+  // The figures screen with a judgement made is a distinct colour state --
+  // oxblood labels, an active button, a reason field -- so it is measured here
+  // rather than only in its resting state.
+  await readContrast(page, 'the figures screen, one cost line reclassified');
+
+  // ---- and undo it ----
+  await sgaRow.getByRole('button', { name: /back to the default/i }).first().click();
+  await page.waitForTimeout(900);
+  const undone = (await page.textContent('body')) || '';
+  if (/Rebuilt on your judgements/i.test(undone)) {
+    fail('after returning to the default', 'no rebuilt-value band', 'it is still there');
+  } else {
+    ok('returning to the default puts the screen back where it started');
+  }
 }
 
 // ------------------------------------------------------------------ the checks

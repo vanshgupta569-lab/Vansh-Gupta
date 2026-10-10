@@ -12,13 +12,21 @@ import { buildModel, buildDCF, filedBalanceSheetRefusal, listingRefusal } from '
 // @ts-ignore
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
-import { financialsFromStatements } from './companies';
+import { financialsFromStatements, defaultDriversFor, buildFullModel } from './companies';
 import {
   applyCorrections,
   correctionCount,
   correctedFields,
   type Corrections,
 } from './corrections';
+import {
+  applyClassification,
+  overrideCount,
+  reclassifiedLabels,
+  excludedLines,
+  LINE_BY_KEY,
+  type Classification,
+} from './classification';
 import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
 import { buildDataConstraints } from './dataConstraints';
 import { payloadQuery, payloadVersionProblem } from './payloadVersion';
@@ -66,9 +74,19 @@ export async function fetchCompanyPayload(ticker: string): Promise<any> {
  * income model together. A correction needing its own path through the engine
  * would have meant the design was wrong.
  */
-export function buildCompanyFrom(fetched: any, corrections?: Corrections): CompanyData {
+export function buildCompanyFrom(
+  fetched: any,
+  corrections?: Corrections,
+  classification?: Classification
+): CompanyData {
   const changed = corrections ? correctionCount(corrections) : 0;
-  const source = changed ? applyCorrections(fetched, corrections as Corrections) : fetched;
+  const corrected = changed ? applyCorrections(fetched, corrections as Corrections) : fetched;
+  // THE SECOND JUDGEMENT ON THE SAME ARRAY. Corrections patch the figures;
+  // a classification attaches the reader's treatment of each cost line to the
+  // same payload copy. One path in, one derivation, and no screen can apply a
+  // judgement the engine does not see.
+  const reclassified = overrideCount(classification);
+  const source = reclassified ? applyClassification(corrected, classification) : corrected;
 
   const modelData: any = deriveModel(source);
   // The filings themselves travel with the model, so the dashboard can show
@@ -86,6 +104,17 @@ export function buildCompanyFrom(fetched: any, corrections?: Corrections): Compa
   // every screen reads to say so.
   record.correctedInputs = changed
     ? { count: changed, fields: correctedFields(corrections as Corrections) }
+    : undefined;
+
+  // And a reclassified model must never be able to pass as the engine's own,
+  // for the same reason: reported, corrected, reclassified and modelled are
+  // four visibly separate states.
+  record.reclassified = reclassified
+    ? {
+        count: reclassified,
+        lines: reclassifiedLabels(classification),
+        excluded: excludedLines(classification).map((key) => LINE_BY_KEY[key]?.label ?? key),
+      }
     : undefined;
 
   return record;
@@ -251,4 +280,57 @@ dataSource: fetched.source,
     provenance: modelData.provenance,
     currencyBasis: modelData.meta?.currencyBasis ?? null,
   } as CompanyData;
+}
+// ---------------------------------------------------------------------------
+// WHAT A JUDGEMENT DOES TO THE VALUE
+// ---------------------------------------------------------------------------
+
+/**
+ * Value per share under one set of judgements, built the way every other
+ * screen builds it.
+ *
+ * This exists so the figures screen can rebuild the model the moment a
+ * classification changes and print the previous value beside the new one,
+ * which is the judgement layer's fourth rule. It runs the whole chain —
+ * derivation, model, discounted cash flow — rather than scaling the old
+ * answer: a classification can change which year's margin is the base, and an
+ * approximation of its effect would be a judgement of our own on top of the
+ * reader's.
+ *
+ * A refused company has no value and says so, rather than coming back nil.
+ */
+export interface ValueUnder {
+  perpetuity: number | null;
+  exitMultiple: number | null;
+  /** The engine's own words where it refuses, otherwise null. */
+  refusal: string | null;
+}
+
+export function valueUnder(
+  fetched: any,
+  corrections?: Corrections,
+  classification?: Classification
+): ValueUnder {
+  try {
+    const record = buildCompanyFrom(fetched, corrections, classification);
+    const source = record.modelData;
+    const drivers: any = { ...(record.defaultDrivers || {}), ...defaultDriversFor(source) };
+    const { dcf: D } = buildFullModel(source, drivers);
+    if (D?.applicable === false) {
+      return { perpetuity: null, exitMultiple: null, refusal: D.message || 'The engine refuses this model.' };
+    }
+    const p = D?.perpetuity?.valuePerShare;
+    const e = D?.exitMultipleValuation?.valuePerShare;
+    return {
+      perpetuity: typeof p === 'number' && isFinite(p) ? p : null,
+      exitMultiple: typeof e === 'number' && isFinite(e) ? e : null,
+      refusal: null,
+    };
+  } catch (error: any) {
+    return {
+      perpetuity: null,
+      exitMultiple: null,
+      refusal: error?.message || 'The model could not be built from those figures.',
+    };
+  }
 }

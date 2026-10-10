@@ -16,6 +16,7 @@ import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
 import { fetchCompanyPayload, buildCompanyFrom } from './data/autoCompany';
 import type { Corrections } from './data/corrections';
+import type { Classification } from './data/classification';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
 
@@ -61,6 +62,11 @@ export default function App() {
   // the figures must not cost another fetch.
   const [payload, setPayload] = useState<any | null>(null);
   const [corrections, setCorrections] = useState<Corrections>({});
+  // THE JUDGEMENT LAYER (ROADMAP.md section 2). The reader's treatment of each
+  // reported expense line lives beside the corrections and for the same reason:
+  // the badge in the header reads it, and reopening the figures must not cost
+  // another fetch or lose a judgement already made.
+  const [classification, setClassification] = useState<Classification>({});
   const [building, setBuilding] = useState(false);
   // True when the figures were opened from a finished model rather than on the
   // way to one. It decides where "back" goes, and it is why re-answering the
@@ -120,7 +126,10 @@ export default function App() {
       const fetched = await fetchCompanyPayload(ticker);
       await settle();
       setPayload(fetched);
+      // A new company gets the engine's own defaults back. A judgement made
+      // about one company's cost lines is not a judgement about another's.
       setCorrections({});
+      setClassification({});
       setFiguresFromModel(false);
       setSelectedTicker(ticker);
       setLookupState({ loading: false, error: null });
@@ -142,7 +151,7 @@ export default function App() {
     // takes the thread.
     window.setTimeout(() => {
       try {
-        const company = buildCompanyFrom(payload, corrections);
+        const company = buildCompanyFrom(payload, corrections, classification);
         setLoadedCompanies((prev) => ({ ...prev, [company.ticker]: company }));
         setBuilding(false);
         if (figuresFromModel) {
@@ -230,6 +239,7 @@ export default function App() {
         onScrollToSection={scrollToSection}
         activeSection={activeSection}
         corrected={allCompanies[selectedTicker]?.correctedInputs}
+        reclassified={allCompanies[selectedTicker]?.reclassified}
         onReviewFigures={figuresAvailable ? reopenFigures : undefined}
       />
 
@@ -288,6 +298,9 @@ export default function App() {
             statements={payload.statements || []}
             corrections={corrections}
             onChange={setCorrections}
+            classification={classification}
+            onClassify={setClassification}
+            payload={payload}
             onContinue={buildFromFigures}
             onBack={leaveFigures}
             returning={figuresFromModel}

@@ -41,6 +41,20 @@ import {
   correctionCount,
   yearChecks,
 } from '../data/corrections';
+import {
+  CATEGORIES,
+  CATEGORY_BY_KEY,
+  type Category,
+  type Classification,
+  categoryOf,
+  classifiableFor,
+  isOverridden,
+  lineAmounts,
+  overrideCount,
+  reasonOf,
+  subtotals,
+} from '../data/classification';
+import { valueUnder } from '../data/autoCompany';
 import { DARK } from '../design/tokens';
 import { Disclose, EYEBROW, LABEL, UI, useBottomBarInset } from './instrument';
 import { Mark } from '../design/Mark';
@@ -104,6 +118,16 @@ interface Props {
   statements: any[];
   corrections: Corrections;
   onChange: (next: Corrections) => void;
+  /** The reader's treatment of each reported expense line. */
+  classification: Classification;
+  onClassify: (next: Classification) => void;
+  /**
+   * The payload itself, so a classification can be REBUILT here rather than
+   * described: the judgement layer's rule is that a change rebuilds the model
+   * immediately with the previous value still beside it, and on this screen
+   * there is no model yet to rebuild unless this screen builds one.
+   */
+  payload?: any;
   onContinue: () => void;
   onBack: () => void;
   /** True when the reader came back here from a model that is already built. */
@@ -121,6 +145,9 @@ export const FiguresEditor: React.FC<Props> = ({
   statements,
   corrections,
   onChange,
+  classification,
+  onClassify,
+  payload,
   onContinue,
   onBack,
   returning,
@@ -198,6 +225,54 @@ export const FiguresEditor: React.FC<Props> = ({
   };
 
   const resetAll = () => onChange({});
+
+  // ------------------------------------------------------------------------
+  // THE JUDGEMENT LAYER: HOW EACH COST IS TREATED
+  // ------------------------------------------------------------------------
+  // Lines the filing reports nothing on are not offered: five buttons against
+  // an absence is invented work, not a judgement.
+  const lines = useMemo(() => classifiableFor(patched), [patched]);
+  const amountsByYear = useMemo(() => lineAmounts(patched), [patched]);
+  const classified = useMemo(() => subtotals(patched, classification), [patched, classification]);
+  const reclassified = overrideCount(classification);
+
+  const setCategory = (key: string, category: Category) => {
+    const next: Classification = { ...classification };
+    const existing = next[key];
+    next[key] = { category, ...(existing?.reason ? { reason: existing.reason } : {}) };
+    onClassify(next);
+  };
+  const setReason = (key: string, reason: string) => {
+    const next: Classification = { ...classification };
+    const category = categoryOf(key, classification);
+    if (!reason.trim() && !isOverridden(key, classification)) delete next[key];
+    else next[key] = { category, ...(reason.trim() ? { reason } : {}) };
+    onClassify(next);
+  };
+  /** The visible return to default, which is rule three. */
+  const toDefault = (key: string) => {
+    const next: Classification = { ...classification };
+    delete next[key];
+    onClassify(next);
+  };
+  const classificationToDefaults = () => onClassify({});
+
+  // THE MODEL IS REBUILT HERE, NOT DESCRIBED.
+  //
+  // Rule four of the judgement layer: a change rebuilds the model immediately
+  // with the previous value still visible beside it. `now` is the value on the
+  // reader's judgements; `onDefaults` is the engine's own, kept on screen
+  // beside it for as long as anything is overridden. Both run the whole chain,
+  // because scaling one answer into the other would be our judgement sitting
+  // on top of theirs.
+  const valueNow = useMemo(
+    () => (payload && reclassified ? valueUnder(payload, corrections, classification) : null),
+    [payload, corrections, classification, reclassified]
+  );
+  const valueOnDefaults = useMemo(
+    () => (payload && reclassified ? valueUnder(payload, corrections, {}) : null),
+    [payload, corrections, reclassified]
+  );
 
   // The standing bar is painted over this page, so the page is told how tall
   // it actually is rather than guessing. See useBottomBarInset.
@@ -472,6 +547,343 @@ export const FiguresEditor: React.FC<Props> = ({
           <div className="border-t" style={{ borderColor: LINE }} />
         </div>
 
+        {/* ==================================================================
+            BETWEEN REPORTED AND MODELLED: HOW EACH COST IS TREATED.
+
+            The first piece of the judgement layer (ROADMAP.md section 2). It
+            sits here, between the filed figures above and the model that has
+            not been built yet, because that is what it is: a reading of the
+            filing, not a setting on a finished model. Putting it in a panel on
+            the analysis screen would make it something a reader finds after
+            the value has already anchored them.
+            ================================================================== */}
+        {lines.length > 0 && (
+          <div className="mt-16 lg:mt-20">
+            <Eyebrow>Between reported and modelled</Eyebrow>
+            <h2 className="text-[clamp(22px,2.4vw,30px)] max-w-[26ch]" style={{ ...DISPLAY, color: INK }}>
+              Say how each cost is treated
+              <Mark />
+            </h2>
+            <p className="text-[16px] leading-[1.6] mt-4 max-w-[70ch]" style={{ color: READ }}>
+              A filing gives a carpentry expense. Whether it is a direct cost or an overhead is a
+              judgement, and until you make it the model makes it for you — by whichever tag the
+              source happened to file the figure under. Every line below carries the engine’s
+              treatment as its default, and the default says where it came from.
+            </p>
+
+            <div className="mt-6 max-w-[70ch] border-b" style={{ borderColor: LINE }}>
+              <Disclose summary="What moving a line does, and does not do" trailing="measured">
+                <p className="max-w-prose">
+                  Operating profit is the sum of these lines, and addition does not care what the
+                  terms are called. So moving a line between direct, indirect, selling and
+                  administrative changes gross profit and the subtotals below it and cannot change
+                  operating profit — not in a reported year and not in a forecast year. On
+                  Reliance, two such moves leave value per share at the same 706.52.
+                </p>
+                <p className="max-w-prose mt-2">
+                  Excluding a line as non-recurring is the one choice here that moves money: it is
+                  nil in every forecast year, so the forecast margin rises. Excluding Reliance’s
+                  other operating costs takes it from 706.52 to 1,683.09. Reported years never move:
+                  reported operating profit ties to the filing whatever you choose, and the tie is
+                  the last row of the table below.
+                </p>
+              </Disclose>
+              <Disclose summary="What the five categories mean">
+                <dl className="space-y-3">
+                  {CATEGORIES.map((c) => (
+                    <div key={c.key} className="flex flex-wrap gap-x-3">
+                      <dt className={`${EYEBROW} shrink-0 pt-0.5`} style={{ color: RED_TEXT, minWidth: '9.5rem' }}>
+                        {c.short}
+                      </dt>
+                      <dd className="flex-1 min-w-[16rem]" style={{ color: READ }}>
+                        {c.definition}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Disclose>
+            </div>
+
+            {/* ---- one line, one judgement ---- */}
+            <div className="mt-8">
+              {lines.map((line) => {
+                const chosen = categoryOf(line.key, classification);
+                const moved = isOverridden(line.key, classification);
+                const options = CATEGORIES.filter((c) => c.key !== 'excluded' || line.excludable);
+                const lastYear = classified[classified.length - 1];
+                const amount = amountsByYear[amountsByYear.length - 1]?.amounts[line.key] ?? null;
+                const share = amount !== null && lastYear?.revenue ? amount / (lastYear.revenue as number) : null;
+                return (
+                  <div
+                    key={line.key}
+                    /* Named so the browser check can find one line's controls
+                       without matching the correction table's row of the same
+                       name two sections above it. */
+                    data-line={line.key}
+                    className="border-t py-6"
+                    style={{ borderColor: LINE }}
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+                      <div className="min-w-0">
+                        <span className="text-[17px]" style={{ color: INK }}>
+                          {line.label}
+                        </span>
+                        <span className="font-mono text-[13px] ml-3" style={{ color: MUTED }}>
+                          FY{years[years.length - 1]} {fmt(amount)}
+                          {share !== null ? ` · ${(share * 100).toFixed(1)}% of revenue` : ''}
+                        </span>
+                      </div>
+                      {/* THE DEFAULT TREATMENT STAYS BESIDE THE READER'S, the same
+                          way a corrected figure keeps the filed one. */}
+                      <span
+                        className="font-mono text-[11px] uppercase tracking-[0.16em] shrink-0"
+                        style={{ color: moved ? RED_TEXT : DIM }}
+                      >
+                        {moved
+                          ? `yours · default was ${CATEGORY_BY_KEY[line.defaultCategory].short}`
+                          : 'on the default'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mt-3.5">
+                      {options.map((c) => {
+                        const on = c.key === chosen;
+                        return (
+                          <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => setCategory(line.key, c.key)}
+                            title={c.definition}
+                            aria-pressed={on}
+                            className="font-mono text-[11px] uppercase tracking-[0.14em] px-3 py-2 border transition-colors cursor-pointer"
+                            style={
+                              on
+                                ? { borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }
+                                : { borderColor: LINE, background: 'transparent', color: MUTED }
+                            }
+                          >
+                            {c.short}
+                            {c.key === line.defaultCategory && (
+                              <span className="ml-2" style={{ color: on ? RED_TEXT : DIM }}>
+                                default
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {moved && (
+                        <button
+                          type="button"
+                          onClick={() => toDefault(line.key)}
+                          title={`Put ${line.label} back on the engine's default`}
+                          className="font-mono text-[11px] uppercase tracking-[0.14em] px-3 py-2 flex items-center gap-2 cursor-pointer"
+                          style={{ color: RED_TEXT }}
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Back to the default
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mt-3 text-[13px] leading-[1.55] max-w-[76ch]" style={{ color: DIM }}>
+                      <span style={{ color: MUTED }}>
+                        The default is {CATEGORY_BY_KEY[line.defaultCategory].label.toLowerCase()}.
+                      </span>{' '}
+                      {line.defaultBasis}
+                      {!line.excludable && line.notExcludableBecause ? ` ${line.notExcludableBecause}` : ''}
+                    </div>
+
+                    {/* EVERY OVERRIDE TAKES AN OPTIONAL ONE-LINE REASON, which is
+                        rule two. Optional on purpose: a reason nobody can skip is
+                        a reason nobody reads. */}
+                    {moved && (
+                      <div className="mt-3.5 flex flex-wrap items-center gap-3">
+                        <label
+                          className="font-mono text-[11px] uppercase tracking-[0.16em] shrink-0"
+                          htmlFor={`why-${line.key}`}
+                          style={{ color: DIM }}
+                        >
+                          Why
+                        </label>
+                        <input
+                          id={`why-${line.key}`}
+                          value={reasonOf(line.key, classification)}
+                          onChange={(e) => setReason(line.key, e.target.value)}
+                          placeholder="One line, optional — it travels with the workbook"
+                          maxLength={200}
+                          className="mg-cell flex-1 min-w-[18rem] font-sans text-[14px] px-2.5 py-2 outline-none transition-colors"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="border-t" style={{ borderColor: LINE }} />
+            </div>
+
+            {/* ---- what the classification makes of each reported year ---- */}
+            <div className="mt-10 overflow-x-auto">
+              <table className="w-full border-collapse" style={{ minWidth: 640 }}>
+                <thead>
+                  <tr>
+                    <th
+                      className="text-left font-mono text-[11px] uppercase tracking-[0.18em] pb-3 pr-6"
+                      style={{ color: DIM, minWidth: 280 }}
+                    >
+                      As you have classified them
+                    </th>
+                    {classified.map((c) => (
+                      <th
+                        key={c.year}
+                        className="text-right font-mono text-[12px] pb-3 pl-6"
+                        style={{ color: INK, minWidth: 128 }}
+                      >
+                        FY{c.year}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t" style={{ borderColor: LINE }}>
+                    <td className="py-2.5 pr-6 text-[15px]" style={{ color: INK }}>
+                      Revenue
+                    </td>
+                    {classified.map((c) => (
+                      <td key={c.year} className="py-2.5 pl-6 text-right font-mono text-[14px]" style={{ color: READ }}>
+                        {fmt(c.revenue)}
+                      </td>
+                    ))}
+                  </tr>
+                  {CATEGORIES.map((cat) => (
+                    <tr key={cat.key}>
+                      <td
+                        className="py-2.5 pr-6 text-[15px]"
+                        style={{ color: cat.key === 'excluded' ? MUTED : INK, paddingLeft: 18 }}
+                      >
+                        {cat.label}
+                      </td>
+                      {classified.map((c) => (
+                        <td
+                          key={c.year}
+                          className="py-2.5 pl-6 text-right font-mono text-[14px]"
+                          style={{ color: cat.key === 'excluded' ? MUTED : READ }}
+                        >
+                          {fmt(c.byCategory[cat.key] === 0 ? 0 : -c.byCategory[cat.key])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  <tr className="border-t" style={{ borderColor: LINE }}>
+                    <td className="py-3 pr-6 text-[15px]" style={{ color: INK }}>
+                      Gross profit, on your classification
+                    </td>
+                    {classified.map((c) => (
+                      <td key={c.year} className="py-3 pl-6 text-right font-mono text-[14px]" style={{ color: INK }}>
+                        {fmt(c.grossProfit)}
+                        <div className="font-mono text-[11px] mt-0.5" style={{ color: DIM }}>
+                          {c.grossMargin === null ? '' : `${(c.grossMargin * 100).toFixed(1)}%`}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="border-t" style={{ borderColor: LINE }}>
+                    <td className="py-3 pr-6">
+                      <div className="text-[15px]" style={{ color: INK }}>
+                        Operating profit, as filed
+                      </div>
+                      <div className="text-[13px] leading-[1.5] mt-1 max-w-[46ch]" style={{ color: DIM }}>
+                        The filed figure. It does not move, whatever you classify.
+                      </div>
+                    </td>
+                    {classified.map((c) => (
+                      <td key={c.year} className="py-3 pl-6 text-right font-mono text-[14px]" style={{ color: INK }}>
+                        {fmt(c.operatingProfitReported)}
+                      </td>
+                    ))}
+                  </tr>
+                  {classified.some((c) => c.byCategory.excluded !== 0) && (
+                    <tr className="border-t" style={{ borderColor: LINE }}>
+                      <td className="py-3 pr-6">
+                        <div className="text-[15px]" style={{ color: RED_TEXT }}>
+                          Operating profit, with what you excluded set aside
+                        </div>
+                        <div className="text-[13px] leading-[1.5] mt-1 max-w-[46ch]" style={{ color: DIM }}>
+                          Shown beside the filed figure, never instead of it. This is the one the
+                          forecast is built from.
+                        </div>
+                      </td>
+                      {classified.map((c) => (
+                        <td key={c.year} className="py-3 pl-6 text-right font-mono text-[14px]" style={{ color: RED_TEXT }}>
+                          {fmt(c.operatingProfitUnderlying)}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                  <tr className="border-t border-b" style={{ borderColor: LINE }}>
+                    <td className="py-3 pr-6">
+                      <div className="text-[15px]" style={{ color: INK }}>
+                        Filed operating profit, less revenue and every classified cost
+                      </div>
+                      <div className="text-[13px] leading-[1.5] mt-1 max-w-[46ch]" style={{ color: DIM }}>
+                        Nil for every classification. Anything else would mean a line had been
+                        counted twice or dropped.
+                      </div>
+                    </td>
+                    {classified.map((c) => (
+                      <td key={c.year} className="py-3 pl-6 text-right font-mono text-[14px]" style={{ color: READ }}>
+                        {fmt(c.tie)}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* ---- the model, rebuilt on these judgements ---- */}
+            {reclassified > 0 && valueNow && (
+              <div className="mt-8 border-t pt-6" style={{ borderColor: LINE }}>
+                <div className={EYEBROW} style={{ color: RED_TEXT }}>
+                  Rebuilt on your judgements
+                </div>
+                {valueNow.refusal ? (
+                  <p className="text-[15px] leading-[1.6] mt-2 max-w-[70ch]" style={{ color: READ }}>
+                    On these judgements the engine refuses a value: {valueNow.refusal}
+                  </p>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-x-12 gap-y-4">
+                    {(
+                      [
+                        ['Perpetuity', valueNow.perpetuity, valueOnDefaults?.perpetuity],
+                        ['Exit multiple', valueNow.exitMultiple, valueOnDefaults?.exitMultiple],
+                      ] as [string, number | null, number | null | undefined][]
+                    ).map(([label, now, before]) => (
+                      <div key={label}>
+                        <div className="font-mono text-[11px] uppercase tracking-[0.16em]" style={{ color: DIM }}>
+                          {label}, value per share
+                        </div>
+                        <div className="font-mono text-[20px] mt-1" style={{ color: INK }}>
+                          {currencySymbol}
+                          {fmt(now)}
+                        </div>
+                        {/* THE PREVIOUS VALUE STAYS ON SCREEN, which is rule four. */}
+                        <div className="font-mono text-[12px] mt-1" style={{ color: MUTED }}>
+                          {typeof before === 'number'
+                            ? `on the engine's defaults ${currencySymbol}${fmt(before)}`
+                            : 'the engine refuses a value on its own defaults'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[13px] leading-[1.55] mt-4 max-w-[70ch]" style={{ color: DIM }}>
+                  Built by running the whole chain again — derivation, model, discounted cash
+                  flow — on the judgements above, not by scaling the old answer.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ---------------------------------------------------------- */}
         {/* Two subtractions, stated and left there                     */}
         {/* ---------------------------------------------------------- */}
@@ -599,20 +1011,35 @@ export const FiguresEditor: React.FC<Props> = ({
         }}
       >
         <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-4 flex items-center justify-between gap-6 flex-wrap">
-          <div className="font-mono text-[12px]" style={{ color: changed ? RED_TEXT : MUTED }}>
-            {changed === 0
-              ? 'Every figure as filed'
-              : `${changed} figure${changed === 1 ? '' : 's'} corrected — the model will be badged`}
+          {/* BOTH JUDGEMENTS, COUNTED SEPARATELY. A figure corrected and a cost
+              line classified are different claims about the model, and one
+              number covering both would hide whichever the reader did not make. */}
+          <div className="font-mono text-[12px]" style={{ color: changed || reclassified ? RED_TEXT : MUTED }}>
+            {changed === 0 && reclassified === 0
+              ? 'Every figure as filed, every cost on the default treatment'
+              : [
+                  changed ? `${changed} figure${changed === 1 ? '' : 's'} corrected` : '',
+                  reclassified ? `${reclassified} cost line${reclassified === 1 ? '' : 's'} classified` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ') + ' — the model will be badged'}
           </div>
           <div className="flex items-center gap-3">
-            {changed > 0 && (
+            {(changed > 0 || reclassified > 0) && (
               <button
                 type="button"
-                onClick={resetAll}
+                onClick={() => {
+                  resetAll();
+                  classificationToDefaults();
+                }}
                 className="font-mono text-[11px] uppercase tracking-[0.16em] px-4 py-3 border bg-transparent transition-colors hover:border-[#8B1E1E]"
                 style={{ borderColor: LINE, color: MUTED }}
               >
-                Reset to as filed
+                {changed && reclassified
+                  ? 'Reset the figures and the treatments'
+                  : reclassified
+                    ? 'Back to the default treatments'
+                    : 'Reset to as filed'}
               </button>
             )}
             <button
@@ -625,11 +1052,11 @@ export const FiguresEditor: React.FC<Props> = ({
               {building
                 ? 'Building the model…'
                 : returning
-                ? changed
-                  ? 'Rebuild with these figures'
+                ? changed || reclassified
+                  ? 'Rebuild with these judgements'
                   : 'Rebuild as filed'
-                : changed
-                ? 'Build with these figures'
+                : changed || reclassified
+                ? 'Build with these judgements'
                 : 'Build the model'}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>

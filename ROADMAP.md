@@ -56,7 +56,7 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 1. **`KNOWN_ISSUES.md` is empty again.** It stood empty from 2026-09-27, and building the Assumptions sheet on 2026-09-28 opened five and closed all five the same day: assumptions with no recorded basis (`KI-22`), the operating margin slider under-moving (`KI-23`), the discount rate and growth fade the workbook held still where the engine recomputes them (`KI-20`, `KI-21`), and the cost of debt found by sweeping for the same pattern (`KI-24`). All five are the `KI-4` shape — a workbook seeded from the engine's answer, right at rest and wrong on the first edit. Nineteen numbered defects were opened between 22 and 27 September: fourteen fixed, three established as things the filings cannot settle, one needing disclosure. The list staying empty is the work, not the milestone, and a sheet whose job is to write down what every number rests on is the kind of work that refills it.
 2. **NEXT — Primary-filings data layer** (section 1). The largest piece of work and the foundation for almost everything below.
-3. **NEXT — The judgement layer** (section 2). Can begin in parallel: the structural judgements already exist as engine defaults and need surfacing, saving and recording, which does not wait on new data.
+3. **IN FLIGHT — The judgement layer** (section 2). Expense classification shipped 10 October 2026 and built the layer's machinery with it: the default and its basis, the optional reason, the return to default, the immediate rebuild, and the workbook's two judgement columns. The next structural judgement reuses all of it. The one to take next is **what counts as non-recurring, item by item** — expense classification can exclude a whole line in every year, which is the right unit for a line a company should not have and the wrong one for a settlement it paid once.
 4. **QUEUED — Standard chart of accounts** (section 4). Cheap, and several later items depend on it.
 5. **QUEUED — `CLAUDE.md` house-rules file** (section 8).
 
@@ -116,7 +116,12 @@ Availability and terms of use must be confirmed per source before building. A wo
 
 ## 2. The judgement layer
 
-**Status: NEXT.** Raised 28 September 2026. The centre of the product.
+**Status: IN FLIGHT.** Raised 28 September 2026. The centre of the product.
+Expense classification, the first structural judgement, is LIVE
+(10 October 2026) and the layer's four rules are built with it: a default that
+says where it came from, an optional one-line reason, a visible return to the
+default, and an immediate rebuild with the previous value still beside it. Each
+judgement below inherits that machinery rather than rebuilding it.
 
 Financial modelling resists automation because it is a chain of judgements, not a calculation. This layer makes every one explicit, defaulted, overridable and recorded.
 
@@ -132,8 +137,8 @@ Financial modelling resists automation because it is a chain of judgements, not 
 
 | Judgement | Status | Notes |
 |---|---|---|
-| Expense classification — direct, indirect, selling and distribution, administrative, excluded | QUEUED | The example that started this. Stage 3 of the data layer. Filed classification always kept beside the user's. |
-| What counts as non-recurring | QUEUED | Currently a median rule; should be a per-item choice. |
+| Expense classification — direct, indirect, selling and distribution, administrative, excluded | **LIVE** | The example that started this. On the figures screen, between reported and modelled. Four lines classifiable, typically three per company; the default for each states where it came from, and the engine's treatment stays beside the user's. Moving a line between the four operating categories moves no figure (nil drift, measured); excluding one is the choice with arithmetic in it (Reliance 706.52 → 1,683.09). Reported operating profit ties to the filing under every classification. Carried into the workbook's two reserved Assumptions columns. `METHODOLOGY.md` §22d. |
+| What counts as non-recurring | QUEUED | Currently a median rule, plus a whole-line exclusion from expense classification. Still needs the per-item, per-year choice: a line excluded today is excluded in every reported year, which suits a cost the business no longer carries and not a settlement paid once. |
 | Operating versus non-operating | QUEUED | |
 | Capitalise or expense | QUEUED | |
 | Which working-capital line follows revenue and which follows cost of sales | QUEUED | The engine already declares its rule (`c60cb3a`); this exposes it. |
@@ -436,8 +441,31 @@ have shipped, and check the repository before trusting a status.**
 The rule that closes this is the first maintenance rule at the top of the file:
 an item ships with its hash, in the same commit as the work.
 
+**It drifted again.** On 10 October 2026, building expense classification, the
+log was found to be missing **fourteen** commits — everything from `7c66c96`
+onward, including four whole features: the chart of accounts, peer spreading,
+the house template and the rupee's risk-free rate. All fourteen are entered
+below. The gap is the same shape as the one this section was written about, so
+the warning above stands rather than being softened: check the repository before
+trusting a status.
+
 | Commit | What |
 |---|---|
+| *(this commit)* | **Expense classification**, the first piece of the judgement layer (section 2), on the figures screen between reported and modelled. Four cost lines, five categories, a default per line that states where it came from, an optional reason, a visible return to the default and an immediate rebuild with the previous value beside it. Grouping moves proved to move no figure; an exclusion proved to move one. The workbook's two reserved Assumptions columns filled. The figures screen added to the contrast pass, where it had never been. `METHODOLOGY.md` §22d. |
+| `bc52544` | An unmapped line in a house template carries its figures and not only its name, and our own layout stays one click away beside the firm's. |
+| `b7fbcaa` | **The house template**: a firm uploads its own Excel layout once and every export arrives in it. Mapping proposed from their own line names and corrected by them, held in their browser only, reconciled rather than rebuilt on a revision. `METHODOLOGY.md` §22c. |
+| `c66cb66` | **Peer spreading**: the target and up to ten peers on identical formula-driven tabs, with a comparison tab of live cross-tab formulas, medians and spreads. A refused peer keeps its tab and its refusal. `METHODOLOGY.md` §22b. |
+| `4a61ac2` | **The standard chart of accounts**: 138 contracted rows, every line at the same row position in every workbook, with a suite check that asserts it line by line. `METHODOLOGY.md` §22a. |
+| `23b472b` | A risk-free rate for the rupee, from the FRED OECD series, published monthly and said on screen to be monthly; the observation threshold made frequency-aware and the monthly-against-daily gap measured rather than asserted. |
+| `0f88184` | The standing bar measured rather than guessed at, and every scrollable page given padding that clears it. |
+| `9c27b9f` | Sections divided by a rule and space rather than a box each; the prose measure capped where full-bleed sections had removed the only constraint on it. |
+| `062645d` | One monospace face for figures and one sans for sentences, and a single radius throughout. |
+| `bf81dfe` | The dashboard check stopped filling the feedback form and calling it a search — a flake that would have passed against a screen that never had a model. |
+| `3bb70df` | `DESIGN.md` refreshed, and a claim it made about a figure corrected. |
+| `f571a01` | The number first on every screen that had the explanation ahead of it. |
+| `e9d73d8` | Two faults on the screen measured and fixed, and one claim withdrawn that measurement did not support. |
+| `1981959` | The number first, the explanation on demand. |
+| `7c66c96` | The operating margin slider moved the margin by the point it asks for (`KI-23`). |
 | `aca809e` | The workbook's cost of capital and growth fade computed rather than pasted: `KI-20` and `KI-21` fixed, the cash cushion fixed with them, the DCF sheet's row numbers moved into one map, and `KI-24` opened for the cost of debt. |
 | `a96b85f` | The workbook's cost of debt averaged off its own debt schedule rather than pasted: `KI-24` fixed, and the absent-rate case measured rather than assumed. |
 | `fac1d4d` | The Assumptions sheet: every assumption, its value linked live to the cell it comes from, and the basis the engine recorded for it. Four provenance sentences corrected where a clamp had replaced the measurement they named, two written where none existed (`KI-22`, opened and retired here), `METHODOLOGY.md` §10 corrected on what the buyback machinery does for a derived company, and `sbcPercentOfOpex` renamed to what it holds. `KI-20`, `KI-21` and `KI-23` opened. |

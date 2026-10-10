@@ -975,8 +975,10 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
   ws.getColumn(5).width = 15;
   ws.getColumn(6).width = 15;
   ws.getColumn(7).width = 104;
-  ws.getColumn(8).width = 20;
-  ws.getColumn(9).width = 34;
+  // Wide enough for "Yours: Selling and distribution (default: Administrative)"
+  // and a one-line reason, both of which wrap rather than spill.
+  ws.getColumn(8).width = 32;
+  ws.getColumn(9).width = 40;
   const END = 9;
 
   title(
@@ -1022,15 +1024,91 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     cell.alignment = { horizontal: c === 3 || c === 7 ? 'left' : c === 4 ? 'center' : 'right' };
     cell.border = { bottom: { style: 'thin', color: { argb: colors.BLACK } } };
   });
-  // RESERVED, NOT BUILT. The judgement layer fills these; the headers hold the
-  // room so that adding them later is a change to two columns and not a
-  // relayout of the sheet.
-  (['Default or yours', "Your reason for changing it"] as string[]).forEach((text, i) => {
+  // BUILT. These two were headed and left empty for the judgement layer
+  // (ROADMAP.md section 2); expense classification is the first piece of it and
+  // fills them. They are styled like the other headers now rather than greyed,
+  // because a column that carries something should not look reserved.
+  (['Default or yours', 'Your reason for changing it'] as string[]).forEach((text, i) => {
     const cell = ws.getCell(6, 8 + i);
     cell.value = text;
-    cell.font = { ...FONT, bold: true, italic: true, color: { argb: colors.GREY } };
-    cell.border = { bottom: { style: 'thin', color: { argb: colors.GREY } } };
+    cell.font = { ...FONT, bold: true };
+    cell.alignment = { horizontal: 'left', wrapText: true, vertical: 'bottom' };
+    cell.border = { bottom: { style: 'thin', color: { argb: colors.BLACK } } };
   });
+
+  // ---- THE READER'S JUDGEMENTS -------------------------------------------
+  //
+  // Read off the model, never composed here: `deriveModel` records the
+  // classification it was given on `meta.classification`, which is the same
+  // object the engine itself read when it decided what to forecast. A sheet
+  // that kept its own copy could describe a treatment the model does not use,
+  // and nothing would catch it (the KI-4 rule applied to a judgement).
+  const CLS: Record<string, { category?: string; reason?: string }> =
+    (source?.meta?.classification as any) || {};
+  const CATEGORY_LABEL: Record<string, string> = {
+    direct: 'Direct cost',
+    indirect: 'Indirect cost',
+    selling: 'Selling and distribution',
+    admin: 'Administrative',
+    excluded: 'Excluded as non-recurring',
+  };
+  const DEFAULT_CATEGORY: Record<string, string> = {
+    cogs: 'direct',
+    rnd: 'indirect',
+    sga: 'admin',
+    otherOperatingCosts: 'indirect',
+  };
+  /**
+   * WHICH LINES THERE IS ANYTHING TO CLASSIFY FOR.
+   *
+   * The same rule the screen uses (`classifiableFor`): a line the filing
+   * reports nothing on in any year is an absence, not a judgement waiting to be
+   * made. Read off the model's reported-basis series rather than re-derived, so
+   * the sheet cannot offer a choice the screen does not, or the other way
+   * about. Reliance reports no R&D, and a column saying its default treatment
+   * is indirect would describe a decision nobody is being asked to take.
+   */
+  const REPORTED_BASIS: Record<string, string> = {
+    cogs: 'cogsReportedBasis',
+    rnd: 'rndReportedBasis',
+    sga: 'sgaReportedBasis',
+    otherOperatingCosts: 'otherOperatingCostsReportedBasis',
+  };
+  const isClassifiable = (lineKey: string): boolean => {
+    const series = (M as any)?.[REPORTED_BASIS[lineKey]];
+    if (!Array.isArray(series)) return false;
+    for (let t = 0; t < nH; t++) {
+      const v = series[t];
+      if (isNum(v) && Math.abs(v) > 1e-6) return true;
+    }
+    return false;
+  };
+
+  /**
+   * The two judgement cells for one assumption row. `lineKey` names the cost
+   * line this assumption drives; a row with no judgement to make passes none
+   * and the cells stay empty, which the closing note says is what empty means.
+   */
+  const judgement = (atRow: number, lineKey: string) => {
+    if (!isClassifiable(lineKey)) return;
+    const chosen = CLS[lineKey]?.category;
+    const fallback = DEFAULT_CATEGORY[lineKey];
+    const yours = !!chosen && chosen !== fallback;
+    const state = ws.getCell(atRow, 8);
+    state.value = yours
+      ? `Yours: ${CATEGORY_LABEL[chosen as string] ?? chosen} (default: ${CATEGORY_LABEL[fallback]})`
+      : `Default: ${CATEGORY_LABEL[fallback]}`;
+    state.font = { ...FONT, size: 10, bold: yours, color: { argb: yours ? colors.OXBLOOD : colors.GREY } };
+    state.alignment = { wrapText: true, vertical: 'top' };
+    const why = ws.getCell(atRow, 9);
+    // A REASON THAT WAS NOT GIVEN SAYS SO. Blank would read as a reason the
+    // file failed to carry rather than one nobody wrote.
+    why.value = yours
+      ? String(CLS[lineKey]?.reason || '').trim() || 'No reason given.'
+      : '';
+    why.font = { ...FONT, size: 10, color: { argb: colors.GREY } };
+    why.alignment = { wrapText: true, vertical: 'top' };
+  };
 
   const P: Record<string, string> = (source?.provenance as Record<string, string>) || {};
   const n0 = (v: any) =>
@@ -1093,10 +1171,20 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
   // where the company is refused and that sheet carries the reason instead.
   const dd = (dcfRow: number): string | null => (refused ? null : `DCFModel!${one}${dcfRow}`);
 
-  const modelRow = (name: string, unit: string, numFmt: string, key: string, basis: string) => {
+  const modelRow = (
+    name: string,
+    unit: string,
+    numFmt: string,
+    key: string,
+    basis: string,
+    /** The classifiable cost line this assumption drives, where there is one. */
+    lineKey?: string
+  ) => {
     const [a, b] = mm(key);
     if (a === null) return;
+    const at = r;
     row(name, unit, numFmt, a, b, basis);
+    if (lineKey) judgement(at, lineKey);
   };
 
   // ---- THE FORECAST ------------------------------------------------------
@@ -1123,21 +1211,24 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     fmt.PCT1,
     'gm',
     (P.grossMargin || notRecorded('The cell holds the gross margin the engine forecast.')) +
-      ' Cost of sales is the balancing line: it is revenue less this margin, not a forecast of its own.'
+      ' Cost of sales is the balancing line: it is revenue less this margin, not a forecast of its own.',
+    'cogs'
   );
   modelRow(
     'Research & development, % of revenue',
     '%',
     fmt.PCT1,
     'rndPct',
-    P.rnd || notRecorded('The cell holds the share of revenue the engine forecast.')
+    P.rnd || notRecorded('The cell holds the share of revenue the engine forecast.'),
+    'rnd'
   );
   modelRow(
     'Selling, general & administrative, % of revenue',
     '%',
     fmt.PCT1,
     'sgaPct',
-    P.sga || notRecorded('The cell holds the share of revenue the engine forecast.')
+    P.sga || notRecorded('The cell holds the share of revenue the engine forecast.'),
+    'sga'
   );
   modelRow(
     'Other operating costs, % of revenue',
@@ -1145,7 +1236,8 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     fmt.PCT1,
     'otherPct',
     (P.otherOperatingCosts || notRecorded('The cell holds the share of revenue the engine forecast.')) +
-      (P.operatingCostReconciliation ? ` This line exists because ${P.operatingCostReconciliation}.` : '')
+      (P.operatingCostReconciliation ? ` This line exists because ${P.operatingCostReconciliation}.` : ''),
+    'otherOperatingCosts'
   );
   modelRow(
     'Stock based compensation, % of revenue',
@@ -1500,13 +1592,24 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
   }
 
   r++;
-  band(ws, r, 'What this sheet does not yet carry', colors.OXBLOOD, colors.WHITE, END);
+  band(ws, r, 'The two right-hand columns, and what this sheet does not yet carry', colors.OXBLOOD, colors.WHITE, END);
   r++;
   note([
-    'The two rightmost columns are reserved and empty. When the judgement layer lands, every assumption above becomes a',
-    'choice you can make: the value says whether it is still the default or yours, and the reason you give is recorded',
-    'beside it and travels with the file. Until then every figure here is the default the engine derived, and the basis',
-    'column is the whole of the account it can give.',
+    'DEFAULT OR YOURS, and the reason. The four operating cost rows above are judgements you make rather than figures',
+    'the engine settles: whether a reported cost is direct, indirect, selling and distribution, administrative, or',
+    'excluded as non-recurring. Each says whether it is still the engine\u2019s default or your own choice, with the default',
+    'named either way, and your one-line reason beside it. An override with no reason says so rather than leaving a',
+    'blank that could be read as a reason this file lost.',
+    '',
+    'Moving a line between the four operating categories cannot change operating profit: it is the sum of those lines,',
+    'and addition does not care what they are called. Excluding one is the choice with arithmetic in it \u2014 the line is nil',
+    'in every forecast year. Reported operating profit ties to the filing whatever is chosen, which the Checks sheet',
+    'tests year by year.',
+    '',
+    'A row with both columns empty is one where no judgement is offered yet. ROADMAP.md section 2 lists the rest:',
+    'what counts as non-recurring item by item, whether a lease is debt, how much cash is surplus, the forecast basis.',
+    'Until each lands the figure here is the default the engine derived, and the basis column is the whole of the',
+    'account it can give.',
     '',
     'A basis marked NOT RECORDED is a gap in the engine, not in this sheet. The figure is real and the model uses it;',
     'what is missing is a statement of what it was measured from, and the gap is written down rather than papered over',

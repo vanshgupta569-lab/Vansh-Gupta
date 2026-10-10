@@ -73,6 +73,7 @@ that understates.
 | Constraint | Source | Companies | Handling |
 |---|---|---|---|
 | Lines the filing does not report at all | both | 116 modelled | note; the treatment ties operating income to the filing |
+| Selling and administrative reported as one line | both | 161 of 175 payloads | note; the classification default is a stated convention, and the split moves no figure |
 | Stock compensation never broken out | Yahoo mostly | 54 modelled, 19 valued | **warn** — the value is a floor |
 | A price that must be converted | Yahoo | 46 modelled | note; no effect on value |
 | Total liabilities not tagged | both | 23 modelled | note; presentation only |
@@ -217,6 +218,31 @@ so.
 
 The workbook's statement totals read "not reported" cells through `N()`, which
 its notes state.
+
+### Selling and administrative costs reported as one line
+
+**Source:** both. **Affects:** 161 of 175 payloads report an SG&A line at all;
+every one of them reports it combined.
+
+Neither source splits selling and distribution from administration. The filings
+themselves usually do not either — "selling, general and administrative" is one
+caption in most jurisdictions — and nothing in the data says how much of it is
+which.
+
+So the expense classification layer (`METHODOLOGY.md` §22d) cannot read that
+split from the filing, and **its default for this line is a stated convention
+rather than a reading**: the whole line is treated as administrative, and the
+screen says in those words that the default is a convention. A reader who knows
+the split can move the line, or correct the figures to separate it.
+
+**It cannot move a value.** Selling and distribution and administrative are both
+operating categories, and operating profit is the sum of the same lines whatever
+they are called, so the split changes the subtotals a reader reads and no figure
+the valuation depends on. Measured: nil drift across every grouping move.
+
+What would remove it: segment and expense-note extraction from the primary
+filings, where a company does split the caption in its notes (section 1 of
+`ROADMAP.md`).
 
 ### A balance sheet line the filing stops tagging
 

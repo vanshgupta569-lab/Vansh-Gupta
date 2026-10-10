@@ -41,6 +41,10 @@ interface HeaderProps {
      them. Without this a corrected model could pass as a filed one, and that
      is the one promise the site cannot break. */
   corrected?: { count: number; fields: string[] };
+  /* Same reason, for the other judgement the figures screen now carries: a
+     model built with a cost line moved off the engine's default category is
+     not the engine's own model, and the screen that says so is every screen. */
+  reclassified?: { count: number; lines: string[]; excluded: string[] };
   onReviewFigures?: () => void;
 }
 
@@ -50,6 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
   onScrollToSection,
   activeSection,
   corrected,
+  reclassified,
   onReviewFigures,
 }) => {
   const [utcTimeStr, setUtcTimeStr] = useState<string>('');
@@ -165,30 +170,53 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onReviewFigures}
               title={
-                corrected
-                  ? `Built on ${corrected.count} figure${
-                      corrected.count === 1 ? '' : 's'
-                    } you supplied: ${corrected.fields.join(', ')}. Click to change them or put them back.`
-                  : 'See the reported figures this model was built from, and correct any of them'
+                [
+                  corrected
+                    ? `Built on ${corrected.count} figure${
+                        corrected.count === 1 ? '' : 's'
+                      } you supplied: ${corrected.fields.join(', ')}.`
+                    : '',
+                  reclassified
+                    ? `${reclassified.count} cost line${reclassified.count === 1 ? '' : 's'} classified by you: ` +
+                      `${reclassified.lines.join(', ')}` +
+                      (reclassified.excluded.length
+                        ? `, of which ${reclassified.excluded.join(' and ')} excluded from the forecast.`
+                        : '.')
+                    : '',
+                  corrected || reclassified
+                    ? 'Click to change them or put them back.'
+                    : 'See the reported figures this model was built from, and correct or classify any of them',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
               }
               className="border font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
               style={
-                corrected
+                corrected || reclassified
                   ? { borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.20)', color: '#F2F0EA' }
                   : { borderColor: '#262521', background: 'transparent', color: '#dfbfbc' }
               }
             >
-              {corrected ? (
+              {corrected || reclassified ? (
                 <PencilLine className="w-3.5 h-3.5" style={{ color: '#C0453E' }} />
               ) : (
                 <Table2 className="w-3.5 h-3.5" style={{ color: '#8A8A8F' }} />
               )}
               <span className="hidden md:inline">
-                {corrected
-                  ? `${corrected.count} corrected figure${corrected.count === 1 ? '' : 's'}`
-                  : 'Check the figures'}
+                {/* BOTH JUDGEMENTS, NAMED SEPARATELY. A combined count would read
+                    as corrected figures and hide the reclassification entirely. */}
+                {[
+                  corrected ? `${corrected.count} corrected figure${corrected.count === 1 ? '' : 's'}` : '',
+                  reclassified ? `${reclassified.count} classified line${reclassified.count === 1 ? '' : 's'}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'Check the figures'}
               </span>
-              <span className="md:hidden">{corrected ? corrected.count : 'Figures'}</span>
+              <span className="md:hidden">
+                {corrected || reclassified
+                  ? (corrected?.count ?? 0) + (reclassified?.count ?? 0)
+                  : 'Figures'}
+              </span>
             </button>
           )}
 

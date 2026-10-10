@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 import { checkPeerSpreading, samplePeers } from './peerSpreading.mts';
 import { checkHouseTemplate } from './houseTemplate.mts';
+import { checkClassification } from './classification.mts';
 import { createRequire } from 'node:module';
 import { HyperFormula } from 'hyperformula';
 
@@ -193,6 +194,30 @@ for (const c of cases) {
         `net debt ${at('netDebt').toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
         `normalised terminal ${at('normalised').toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
     );
+  }
+}
+
+// ---- EXPENSE CLASSIFICATION ---------------------------------------------
+// The judgement layer's first piece, checked here because its claim is about
+// the workbook as well as the screen: the Assumptions sheet's two judgement
+// columns are filled from the same classification the engine read.
+{
+  const r = await checkClassification();
+  console.log(
+    `expense classification: ${r.bucketMoves} grouping moves, worst value drift ` +
+      `${r.worstBucketDrift.toExponential(2)}; reported operating profit ties to the filing within ` +
+      `${r.worstTie.toExponential(2)} of itself under every classification` +
+      (r.moved
+        ? `; excluding ${r.moved.line} takes ${r.moved.ticker} from ${r.moved.base.toFixed(2)} to ` +
+          `${r.moved.excluded.toFixed(2)}`
+        : '') +
+      `; typically ${r.typical} lines are classifiable across ${r.measured} payloads` +
+      (r.problems.length ? '' : ' \u2014 every rule held')
+  );
+  if (r.problems.length) {
+    console.log(`\nPROBLEMS WITH EXPENSE CLASSIFICATION: ${r.problems.length}`);
+    for (const p of r.problems.slice(0, 20)) console.log(`  ${p}`);
+    process.exit(1);
   }
 }
 

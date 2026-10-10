@@ -2685,6 +2685,162 @@ instead of saying "not reported" makes it fail; so does listing an unmapped line
 without its figures (105 lines × 5 periods of problems), and so does writing the
 wrong period's figure onto an unmapped row.
 
+## 22d. The judgement layer: expense classification
+
+**A filing gives a carpentry expense. Whether it is a direct cost or an overhead
+is a judgement, and until the reader makes it the model makes it for them.**
+
+This is the first piece of `ROADMAP.md` section 2, and the thing it removes is a
+silent decision: which category a reported cost fell into used to depend on
+which tag the source happened to return the figure under, and nothing on the
+screen said so. `src/data/classification.ts`.
+
+### The five categories
+
+| Category | What belongs in it |
+|---|---|
+| Direct cost | A cost of producing what was sold. Above the gross profit line. |
+| Indirect cost | An operating cost that is neither a cost of the thing sold nor selling or administration. |
+| Selling and distribution | The cost of winning and delivering the sale. |
+| Administrative | The cost of running the company rather than of trading. |
+| Excluded as non-recurring | A cost the reader judges will not repeat. Nil in every forecast year. |
+
+### The four lines, and the default for each
+
+Not a wish list — these are the operating cost lines a derived model carries,
+and each is in the reported income statement the dashboard draws. **Every
+default states where it came from**, which is the first rule of the layer.
+
+| Line | Default | Where the default comes from |
+|---|---|---|
+| Cost of sales | Direct | The filing reports it as cost of sales or cost of revenue, which is a direct cost by its own description. |
+| Research and development | Indirect | The filing reports it separately from selling and administrative costs, and it is not a cost of the units sold. |
+| Selling, general and administrative | Administrative | **A stated convention, not a reading.** The filing combines two of these categories in one line and nothing in it settles the split. |
+| Other operating costs | Indirect | The engine's own line: filed operating income less the named cost lines (§4). Unattributed by construction, so it defaults to indirect rather than to a category it cannot be shown to belong in. |
+
+**Depreciation is deliberately not offered.** The sources report it in the cash
+flow statement and it is already inside these filed cost lines, so classifying
+it would classify the same money twice and break the tie to filed operating
+profit.
+
+**Cost of sales cannot be excluded**, and the screen says why: it is the
+balancing line in the forecast — the engine derives it from the gross margin
+rather than forecasting it — so there is no margin to set to nil. A one-off
+inside it is a correction to the figure, which the figures table above it makes.
+
+### What a move does to operating profit
+
+Operating profit in the engine is a sum:
+
+    EBIT = revenue + cost of sales + R&D + SG&A + other operating costs
+           (costs negative), less D&A and SBC
+
+**Addition does not care what the terms are called.** So moving a line between
+direct, indirect, selling and distribution and administrative changes gross
+profit and the subtotals below it, and **cannot change operating profit** — not
+in a reported year and not in a forecast year. Measured: 13 grouping moves on
+Reliance, including every line moved at once, and the worst drift in value per
+share is **exactly nil**. A grouping never reaches the engine at all;
+`applyClassification` carries only what changes an answer.
+
+**Excluding a line is the one choice with arithmetic in it.** The line is nil in
+every forecast year, so the forecast operating margin rises and the valuation
+with it. On Reliance, excluding selling, general and administrative takes value
+per share from **706.52 to 1,044.32**; excluding other operating costs takes it
+to **1,683.09**, because that line carries 10.1% of revenue. That is the
+measurement that says why this had to be surfaced rather than left as a default
+nobody could see.
+
+### Reported operating profit ties to the filing, whatever is chosen
+
+An exclusion **never touches a reported year**. The filed figure stays the filed
+figure, `unexplainedOperatingCosts` still reconciles built operating profit to
+it, and the underlying operating profit a reader may prefer is shown as its own
+subtotal **beside** the reported one rather than replacing it. A judgement about
+the future may not restate a filing, which is the standing decision that
+reported, corrected, reclassified and modelled are four visibly separate states.
+
+Measured across every classification of every classifiable line on Reliance and
+Microsoft: reported operating profit differs from the filed figure by at worst
+**4.56e-16 of itself** — floating point, and the same figure with no
+classification at all.
+
+### Where it sits, and the four rules
+
+On the **figures screen**, between the filed figures above it and the model that
+has not been built yet, because that is what it is: a reading of the filing
+rather than a setting on a finished model. A panel on the analysis screen would
+make it something a reader finds after the value has already anchored them.
+
+- **The default says where it came from** — the table above, printed under each
+  line, and the filed default stays on screen beside the reader's choice the
+  same way a corrected figure keeps the filed one.
+- **Every override takes an optional one-line reason.** Optional on purpose: a
+  reason nobody can skip is a reason nobody reads. It travels to the workbook.
+- **Every override has a visible return to the default**, per line and for the
+  whole screen. A return reproduces the engine's own model exactly, which
+  `verify:workbook` asserts rather than assumes.
+- **A change rebuilds the model immediately, with the previous value still
+  beside it.** The screen runs the whole chain again — derivation, model,
+  discounted cash flow (`valueUnder` in `autoCompany.ts`) — rather than scaling
+  the old answer, which would be our judgement on top of the reader's. A company
+  the engine refuses says so rather than showing a blank where a figure goes.
+
+A reclassified model is badged in the header beside a corrected one, counted
+separately, because a figure corrected and a cost line classified are different
+claims about the model.
+
+**Typically three lines are classifiable**, measured across 176 fetched
+payloads: 71 companies have four, 49 have three, 12 have two, 32 have one and 12
+have none. A line the filing never reports is not offered — five buttons against
+an absence is invented work, not a judgement.
+
+### In the workbook
+
+The Assumptions sheet's two right-hand columns were headed and left empty for
+this (§22, `fac1d4d`). They now carry, against each of the four operating cost
+rows, **whether the value is the engine's default or the reader's own — naming
+the default either way — and the reason the reader gave.** An override with no
+reason reads "No reason given." rather than coming back blank, which would read
+as a reason the file lost.
+
+The sheet reads the classification off `meta.classification`, which is the same
+object the engine itself read when it decided what to forecast. A sheet keeping
+its own copy could describe a treatment the model does not use and nothing would
+catch it, which is the `KI-4` rule applied to a judgement.
+
+A row with both columns empty is one where no judgement is offered yet, and the
+sheet says so and points at the roadmap for the rest. **The sheet offers exactly
+the choices the screen offers**: it reads the model's own reported-basis series
+to decide, so a company that reports no R&D gets no R&D judgement column — a
+column saying its default is indirect would describe a decision nobody is being
+asked to take. `verify/classification.mts` asserts the two agree line by line,
+and reports it when they do not.
+
+### Checked
+
+`verify/classification.mts`, run by `verify:workbook`. It asserts the grouping
+invariance across every line into every category, that an exclusion **does**
+move the value and does raise it, that the excluded line really is nil in every
+forecast year and untouched in every reported one, that the engine's provenance
+states the exclusion and carries the reason, that a return to the default
+reproduces the untouched model, that a choice a line does not offer is never
+applied, and that the workbook's two columns hold what they claim.
+
+Proved to fail without each fix: making the exclusion a no-op reports that
+excluding leaves the value unchanged and that the forecast still carries the
+cost; letting a grouping reach the engine reports a 47.8% and a 138% drift;
+counting one cost in two categories reports the subtotals missing filed
+operating profit by the whole of cost of sales; and leaving the workbook's
+columns unwritten reports all four rows empty.
+
+`verify:dashboard` drives the band in a real browser — the default stated, the
+reason taken, the way back present, the model rebuilt with the previous value
+beside it, and the screen returned to where it started. **The figures screen was
+never in the contrast pass before this**, which is how a whole band of new type
+could have arrived on it unmeasured; adding it took the pass from 5 screens and
+2,347 elements to 9 and 4,153.
+
 ## 23. What the source does not give us
 
 `src/data/dataConstraints.ts`. A figure the filing or the data source never

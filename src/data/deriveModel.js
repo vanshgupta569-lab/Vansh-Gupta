@@ -1324,16 +1324,46 @@ export function deriveModel(fetched) {
   const lastRow = rows[rows.length - 1] || {};
   const shareOfLastRevenue = (v) =>
     isNum(v) && isNum(lastRow.revenue) && lastRow.revenue !== 0 ? v / lastRow.revenue : null;
-  const rndMargin = clamp(shareOfLastRevenue(lastRow.rnd), 0, 0.5, 0);
-  const sgaMargin = clamp(shareOfLastRevenue(lastRow.sga), 0, 0.6, 0);
+  // THE JUDGEMENT LAYER: AN EXCLUDED LINE IS NIL IN EVERY FORECAST YEAR.
+  //
+  // Expense classification (ROADMAP.md section 2, src/data/classification.ts)
+  // is a judgement the reader makes about each reported cost line. Four of the
+  // five categories are groupings: operating profit is the sum of the same
+  // lines whatever they are called, so moving a line between direct, indirect,
+  // selling and administrative cannot change a number here, and nothing below
+  // reads them. The fifth, excluded as non-recurring, is the one with
+  // arithmetic in it, and this is where it happens.
+  //
+  // IT TOUCHES THE FORECAST ONLY. The reported years above are the filed
+  // figures and stay the filed figures: `unexplainedOperatingCosts` still ties
+  // built operating profit to filed operating income in every reported year,
+  // whatever is excluded. A judgement that restated a filing would be a
+  // different thing from a judgement about the future, and only one of those
+  // is the reader's to make.
+  const classification = fetched?.classification || null;
+  const isExcludedLine = (key) => !!classification && classification[key]?.category === 'excluded';
+  const exclusionNote = (key, label) => {
+    const reason = String(classification?.[key]?.reason || '').trim();
+    return (
+      `${label} is excluded as non-recurring by you, so it is nil in every forecast year. ` +
+      `FY${lastRow.fiscalYear} reported ${Math.round(lastRow[key] ?? 0).toLocaleString('en-US')}, ` +
+      'which is still in the reported years exactly as filed. ' +
+      (reason ? `Your reason: ${reason}` : 'No reason was given.')
+    );
+  };
+
+  const rndMargin = isExcludedLine('rnd') ? 0 : clamp(shareOfLastRevenue(lastRow.rnd), 0, 0.5, 0);
+  const sgaMargin = isExcludedLine('sga') ? 0 : clamp(shareOfLastRevenue(lastRow.sga), 0, 0.6, 0);
   const otherShares = rows
     .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 && isNum(r.operatingIncome) ? unexplainedOperatingCosts[i] / r.revenue : null))
     .filter(isNum);
   const lastOtherShare = shareOfLastRevenue(unexplainedOperatingCosts[rows.length - 1]) ?? 0;
   const otherIsIncome = lastOtherShare < 0;
-  const otherOperatingCostsMargin = !otherIsIncome
-    ? lastOtherShare
-    : Math.min(0, Math.max(lastOtherShare, median(otherShares)));
+  const otherOperatingCostsMargin = isExcludedLine('otherOperatingCosts')
+    ? 0
+    : !otherIsIncome
+      ? lastOtherShare
+      : Math.min(0, Math.max(lastOtherShare, median(otherShares)));
   const marginText = (label, field, margin, high) =>
     isNum(lastRow[field])
       ? `${label} ${(margin * 100).toFixed(1)}%${clampNote(shareOfLastRevenue(lastRow[field]), margin, 0, high, '')}`
@@ -1344,9 +1374,20 @@ export function deriveModel(fetched) {
     : `other operating costs ${(otherOperatingCostsMargin * 100).toFixed(1)}% of revenue — the last reported year, held flat`;
   // One sentence per line as well as the three together, so the workbook's
   // Assumptions sheet can give each row its own basis.
-  provenance.rnd = `${marginText('R&D', 'rnd', rndMargin, 0.5)}${isNum(lastRow.rnd) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
-  provenance.sga = `${marginText('SG&A', 'sga', sgaMargin, 0.6)}${isNum(lastRow.sga) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
-  provenance.otherOperatingCosts = otherText;
+  provenance.rnd = isExcludedLine('rnd')
+    ? exclusionNote('rnd', 'Research and development')
+    : `${marginText('R&D', 'rnd', rndMargin, 0.5)}${isNum(lastRow.rnd) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
+  provenance.sga = isExcludedLine('sga')
+    ? exclusionNote('sga', 'Selling, general and administrative')
+    : `${marginText('SG&A', 'sga', sgaMargin, 0.6)}${isNum(lastRow.sga) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
+  provenance.otherOperatingCosts = isExcludedLine('otherOperatingCosts')
+    ? `Other operating costs are excluded as non-recurring by you, so they are nil in every forecast year. ` +
+      `FY${lastRow.fiscalYear} carried ${Math.round(unexplainedOperatingCosts[rows.length - 1] ?? 0).toLocaleString('en-US')}, ` +
+      'which is still in the reported years exactly as filed and still ties reported operating profit to the filing. ' +
+      (String(classification?.otherOperatingCosts?.reason || '').trim()
+        ? `Your reason: ${String(classification.otherOperatingCosts.reason).trim()}`
+        : 'No reason was given.')
+    : otherText;
   provenance.operatingCosts =
     `${marginText('R&D', 'rnd', rndMargin, 0.5)}; ${marginText('SG&A', 'sga', sgaMargin, 0.6)}; ` +
     (otherIsIncome ? `all held flat at the last reported year; ${otherText}` : otherText);
@@ -2071,6 +2112,12 @@ export function deriveModel(fetched) {
       // Marks this as derived rather than hand-built, so the dashboard can
       // label it honestly against a curated model like Apple's.
       derived: true,
+      // THE READER'S EXPENSE CLASSIFICATION, carried on the model so that every
+      // downstream reader sees the same thing: the workbook's Assumptions sheet
+      // fills its two judgement columns from here, and anything that wants to
+      // say the model is reclassified reads it here rather than keeping its own
+      // copy. Null where every line is on the engine's default.
+      classification: classification && Object.keys(classification).length ? classification : null,
       // Every balance sheet line the filing did not report, by year, with how
       // (if at all) it was derived. The engine names these when it refuses.
       balanceSheetGaps,
