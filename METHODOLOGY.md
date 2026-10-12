@@ -2990,6 +2990,118 @@ the reason shared with the classification band, the tie nil in every year that
 has a reported EBITDA and an em dash in every year that has none. Breaking the
 bridge makes it fail on the page as well as in the file.
 
+## 22f. Saving a model, and reopening it at its own figure
+
+**A saved model carries every input that decides the valuation, and reopens at
+the figure it was saved at.** `src/data/savedModels.ts` holds the shape;
+`src/data/restoreModel.ts` holds the one path that puts it back.
+
+It used to store the sliders, the view mode, and the value per share at the
+time, and nothing else — which was `KI-27`. A model built on a corrected figure
+or a reclassified cost line reopened on the filed figures and the engine's own
+treatments, while the saved list went on printing the value it had WITH those
+judgements. Measured on Reliance: saved at 1,044.32, reopened at 706.52, the
+list and the screen 32.3% apart with nothing on either saying why.
+
+### What is on the record
+
+| Input | Where it lives on screen |
+|---|---|
+| The sliders, and the view mode they belong to | the dashboard |
+| Corrections to filed figures, and the reason for each | the figures screen (11a) |
+| The expense classification, and its reasons | the figures screen (§22d) |
+| The qualitative answers, both ticked and applied | the qualitative panel |
+| The peer set, where the reader took it over | the market approach |
+| The asset approach's recovery rates | the asset panel |
+| **The share price the valuation was struck against** | the ticker header |
+
+The adjusted EBITDA bridge (§22e) is not a separate field: it is derived from
+the corrections and the classification, so restoring those restores it.
+
+### The share price is an input, not a judgement
+
+This is the part that surprises. The cost of capital weights equity at market
+capitalisation, so where the reader has left the WACC alone the price feeds the
+WACC and the WACC feeds the value. Measured on Reliance with the model's own
+assumptions: **706.52 a share with no price given, 695.75 at 1,450, 671.07 at
+2,900.** A saved model that did not record the price it was struck against could
+not reopen at its own figure however many judgements it carried.
+
+So the price is saved, the panel says which price and when, and the valuation is
+struck against that price on reopening. Where the reader has set the WACC by
+hand the price has no route into the answer at all — measured, 651.13 at any
+price — and carrying it then costs nothing.
+
+### The list never prints a figure the entry cannot produce
+
+Every row is **reopened as it is listed**, through the same restore path the
+Open button uses, and the row shows what that reopen produced. Where the stored
+figure and the reopened one agree, one number is shown. Where they differ, both
+are shown with the reason: either the entry predates the fix, or the filings
+behind it have been fetched again since.
+
+### A record saved before the fix
+
+It is migrated on read, and **kept honest about what it lacks.** Its sliders and
+its view mode are real and are carried across. Everything else is named — "it
+did not store your corrections to the filed figures; the reasons you gave for
+them; your expense classification; your answers on the qualitative screen; your
+peer set; the asset approach recovery rates; the share price the valuation was
+struck against" — and left empty. **Nothing is guessed at and nothing is
+zeroed**, the one figure it did store is printed beside what it reopens at, and
+the row says in plain words why the two differ.
+
+### The shape is independent of where it is kept
+
+`SAVED_MODEL_VERSION` is on every record, reading and writing go through a
+`SavedModelStore` interface, and `localStore` is one implementation of it. No
+field names the browser, every value is JSON, and `serialise` / `parse` is
+already the wire format the export file uses. A server store is a second
+implementation and the shape does not change — which is also how the
+verification harness saves and reopens without a browser at all.
+
+### Checked
+
+`verify/savedModel.mts`, run by `verify:workbook`. It moves every judgement the
+shape carries — four sliders, a correction with its reason, two classified cost
+lines with theirs, the qualitative answers, the peer set, the recovery rates and
+the price — saves through `makeSavedModel`, puts the record through `serialise`
+then `parse` so what is compared is what a file or a server hands back, and
+reopens through the one restore path. Value per share on both methods and the
+bridge's adjusted EBITDA come back within **0** of what was saved.
+
+It also asserts that the check itself is not vacuous: the judgements are worth
+**695.75 against 1,812.70 a share**, so a restore that ignored them could not
+pass. And the figures it compares against are computed **the way the screen
+computes them**, not by the restore path — the first version of the check took
+both sides from the same function, and breaking the restore left the drift at
+nil.
+
+It also asserts that the reopened model is coherent, not merely numerically
+equal: **the balance sheet balances in all nine years** of the rebuilt record.
+Not by recalculating the workbook's Checks sheet — the model sheet is
+deliberately circular (interest on average balances, with the circuit breaker at
+`$E$9`), so a plain HyperFormula pass returns `#CYCLE!` on 347 cells and the
+Checks summary counts those errors as failures. `verify/scenarios.mts` owns the
+iterative machinery that resolves it and already proves all 22 Checks rows nil,
+"All checks pass", across ten scenarios; what is new here is the record, so the
+identity those rows test is read off the engine the record produced.
+
+Proved to fail without each fix: dropping the classification on restore reports
+the value 0.86% out and the adjusted EBITDA 36.8% out; ignoring the saved
+sliders reports each one by name; dropping the saved price reports the value
+1.31% out; and completing a version 1 record silently reports it as claiming to
+be complete.
+
+`verify:dashboard` drives it in a browser: a cost line excluded on the figures
+screen, the model rebuilt, the set saved, the row showing one figure because it
+reproduces itself, a record with no judgements opened to move the page off that
+figure, and then the saved row opened to bring it back. **The header badge is
+asserted either side**, because the sliders can mask a missing classification:
+on the paper fixture the forecast is identical with and without it, so the
+figure alone would have passed while the record was wrong. On Reliance the same
+omission moves the value 32.5%.
+
 ## 23. What the source does not give us
 
 `src/data/dataConstraints.ts`. A figure the filing or the data source never

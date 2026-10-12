@@ -19,6 +19,7 @@ import { checkPeerSpreading, samplePeers } from './peerSpreading.mts';
 import { checkHouseTemplate } from './houseTemplate.mts';
 import { checkClassification } from './classification.mts';
 import { checkEbitdaBridge } from './ebitdaBridge.mts';
+import { checkSavedModel } from './savedModel.mts';
 import { createRequire } from 'node:module';
 import { HyperFormula } from 'hyperformula';
 
@@ -195,6 +196,28 @@ for (const c of cases) {
         `net debt ${at('netDebt').toFixed(0)} vs ${c.dcf.netDebt.toFixed(0)}, ` +
         `normalised terminal ${at('normalised').toFixed(0)} vs ${c.dcf.normalisedFCF.toFixed(0)}`
     );
+  }
+}
+
+// ---- SAVED MODELS -------------------------------------------------------
+// Downstream of every judgement on the site, so it runs first: a saved model
+// that cannot reopen at its own figure makes every judgement below it
+// unrepeatable.
+{
+  const r = await checkSavedModel();
+  console.log(
+    `saved models: ${r.moved} sliders plus every judgement the shape carries, saved through the wire ` +
+      `format and reopened; ${r.compared} figures compared, worst drift ${r.worstDrift.toExponential(2)}` +
+      (r.example && typeof r.example.onDefaults === 'number' && typeof r.example.saved === 'number'
+        ? `; the judgements are worth ${r.example.onDefaults.toFixed(2)} against ${r.example.saved.toFixed(2)} a share`
+        : '') +
+      `; a version 1 record names ${r.v1Missing} inputs it never stored` +
+      (r.problems.length ? '' : ' \u2014 every rule held')
+  );
+  if (r.problems.length) {
+    console.log(`\nPROBLEMS WITH SAVED MODELS: ${r.problems.length}`);
+    for (const p of r.problems.slice(0, 20)) console.log(`  ${p}`);
+    process.exit(1);
   }
 }
 

@@ -47,6 +47,11 @@ import { downloadPeerWorkbook, gatherPeers, MAX_PEERS } from '../data/peerSpread
 import HouseTemplatePanel from './houseTemplatePanel';
 import { listTemplates, loadTemplate } from '../data/templateStore';
 import { fillTemplate, computeModelValues } from '../data/houseTemplate';
+import type { Corrections, CorrectionReasons } from '../data/corrections';
+import type { Classification } from '../data/classification';
+import type { SavedModel, SavedJudgements } from '../data/savedModels';
+import { emptyJudgements } from '../data/savedModels';
+import { adjustedEbitdaOf } from '../data/restoreModel';
 import { fetchCompanyPayload, buildCompanyFrom } from '../data/autoCompany';
 import { reportedRatios, forecastRatios } from '../data/ratios.js';
 import { loadDerivedModelData } from '../data/autoCompany';
@@ -82,6 +87,22 @@ interface TerminalDashboardProps {
    * site would have built on its own.
    */
   initialVerdicts?: Record<string, Verdict> | null;
+  /**
+   * The judgements that live above this screen, because they are baked into the
+   * company RECORD rather than read off the sliders: the reader's corrections to
+   * the filed figures, the reasons they gave, and their expense classification.
+   * A saved model has to carry them, so this screen has to be able to see them.
+   */
+  judgements?: { corrections: Corrections; correctionReasons: CorrectionReasons; classification: Classification };
+  /**
+   * Reopening a saved model is a REBUILD, not a slider move (`KI-27`). This
+   * screen cannot rebuild a record, so it hands the restored judgements up to
+   * whoever owns the payload and the company list.
+   */
+  onRestoreJudgements?: (
+    ticker: string,
+    judgements: { corrections: Corrections; correctionReasons: CorrectionReasons; classification: Classification }
+  ) => void;
 }
 
 export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
@@ -90,6 +111,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   onSelectTicker,
   onOpenDirectory,
   initialVerdicts,
+  judgements,
+  onRestoreJudgements,
 }) => {
   const company = companies[selectedTicker] || companies['AAPL'];
 
@@ -766,6 +789,80 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       appliedVerdicts ? applyVerdicts(activeDefaults, appliedVerdicts) : activeDefaults
     );
   }, [viewMode, derivedSource, analystSource, appliedVerdicts]);
+
+  /** Sliders off the model's own figures, for the saved-models panel to count. */
+  const slidersChanged = useMemo(
+    () =>
+      (Object.keys(activeDefaults) as (keyof ValuationDrivers)[]).filter(
+        (key) =>
+          activeDefaults[key] !== undefined &&
+          drivers[key] !== undefined &&
+          Number(drivers[key]) !== Number(activeDefaults[key])
+      ).length,
+    [drivers, activeDefaults]
+  );
+
+  // ------------------------------------------------------------------------
+  // SAVING AND REOPENING A SET OF JUDGEMENTS (`KI-27`)
+  // ------------------------------------------------------------------------
+  //
+  // `savedJudgements` is EVERY input that decides this valuation, gathered in
+  // one place so that a saved record cannot quietly miss one. It is assembled
+  // here rather than inside the panel because this is where the inputs live,
+  // and because a panel that reached into the dashboard for six pieces of state
+  // would be a second place that had to remember all six.
+  //
+  // THE SHARE PRICE IS IN IT. Not a judgement: an input. The cost of capital
+  // weights equity at market capitalisation, so where the reader has left the
+  // WACC alone the price feeds the answer, and a valuation is struck at a
+  // moment. Where they have set the WACC by hand the price has no route in, and
+  // carrying it then costs nothing.
+  const savedJudgements: SavedJudgements = useMemo(
+    () => ({
+      ...emptyJudgements(),
+      drivers: { ...(drivers as any) },
+      viewMode,
+      corrections: judgements?.corrections ?? {},
+      correctionReasons: judgements?.correctionReasons ?? {},
+      classification: judgements?.classification ?? {},
+      verdicts: { ...verdicts },
+      appliedVerdicts: appliedVerdicts ? { ...appliedVerdicts } : null,
+      peers: selectedPeers ? [...selectedPeers] : null,
+      recovery: { key: recoveryKey, rates: { ...(recoveryRates as any) } },
+      sharePrice: isNum(displayPrice) && displayPrice > 0 ? displayPrice : null,
+    }),
+    [drivers, viewMode, judgements, verdicts, appliedVerdicts, selectedPeers, recoveryKey, recoveryRates, displayPrice]
+  );
+
+  /**
+   * Reopen a saved set. Order matters and is the whole of the fix.
+   *
+   *   1. The judgements that rebuild the RECORD go up first, because the record
+   *      is what the derivation, the forecast and the EBITDA bridge come from.
+   *   2. The view mode and the applied verdicts next, because an effect
+   *      recomputes the sliders from them.
+   *   3. The sliders last, on a later tick, so that effect cannot overwrite
+   *      them. They are the final positions, whatever the verdicts did to get
+   *      there.
+   */
+  const restoreSaved = (entry: SavedModel) => {
+    const j = entry.judgements;
+    onRestoreJudgements?.(entry.ticker, {
+      corrections: j.corrections,
+      correctionReasons: j.correctionReasons,
+      classification: j.classification,
+    });
+    setViewMode(j.viewMode);
+    setVerdicts((j.verdicts ?? {}) as any);
+    setAppliedVerdicts(j.appliedVerdicts ? (j.appliedVerdicts as any) : null);
+    setSelectedPeers(j.peers ? [...j.peers] : null);
+    if (j.recovery) {
+      setRecoveryKey((j.recovery.key as any) ?? 'custom');
+      setRecoveryRates(j.recovery.rates as any);
+    }
+    window.setTimeout(() => setDrivers(j.drivers as any), 0);
+    setNerdView(null);
+  };
 
   const runDCF = React.useCallback(
     (d: ValuationDrivers) => calculateDCFFor(activeSource ?? AAPL_SOURCE, d, displayPrice),
@@ -2032,17 +2129,16 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             ticker={company.ticker}
             companyName={company.name}
             currencySymbol={company.currencySymbol}
-            viewMode={viewMode}
-            drivers={drivers}
-            defaults={activeDefaults}
-            valuePerShare={terminalMethods.perpetuity ?? dcfResult.targetPrice}
-            onRestore={(restored, mode) => {
-              setViewMode(mode);
-              // The stored set is applied after the model switch, because
-              // switching models resets the sliders to that model's defaults.
-              setTimeout(() => setDrivers(restored), 0);
-              setNerdView(null);
+            judgements={savedJudgements}
+            produced={{
+              perpetuity: terminalMethods.perpetuity,
+              exitMultiple: terminalMethods.exit,
+              adjustedEbitda: adjustedEbitdaOf(company),
             }}
+            slidersChanged={slidersChanged}
+            fetched={company.rawFetched ?? null}
+            fallbackRecord={company}
+            onRestore={restoreSaved}
           />
         </FullScreenPanel>
       )}

@@ -604,6 +604,213 @@ async function checkBridgeOnScreen(page: Page) {
   else fail('the bridge after a return to default', 'no adjustments', 'it still carries one');
 }
 
+/**
+ * SAVING A SET OF JUDGEMENTS AND REOPENING IT (`KI-27`).
+ *
+ * The arithmetic is checked below the screen by `verify/savedModel.mts`, which
+ * saves through the real wire format and reopens through the one restore path.
+ * What only a browser can check is the wiring and the honesty: that the panel
+ * gathers the judgements that are actually on screen, that a row it lists
+ * reproduces itself, that reopening puts the headline back, and that a record
+ * saved before the fix says in plain words what it never stored instead of
+ * printing a figure it cannot stand behind.
+ */
+async function checkSavedModelsOnScreen(page: Page, label: string, ticker: string) {
+  console.log(`\n=== ${label}: saving and reopening a set of judgements ===`);
+
+  // WHAT THE ROW CLAIMS IS WHAT THE PAGE MUST SHOW.
+  //
+  // The figure to check against is not read off the analysis screen — the
+  // headline there carries no label of its own, and the first money string on
+  // the page is the share price. It is the figure the saved row itself prints
+  // after being reopened to produce it, which is the promise a reader is given:
+  // the row says it reopens at this, so opening it must put this on the page.
+
+  // ---- FIRST, MAKE A JUDGEMENT, so the saved state is not the default one.
+  //
+  // Without this the check is vacuous: a restore that did nothing at all would
+  // pass, because the page would already be showing the figure the row claims.
+  // Proved by gutting `restoreSaved` and watching this pass, which is why the
+  // walk back to the figures screen is here.
+  const defaultValue = (await page.textContent('body')) || '';
+  const figuresButton = page
+    .getByRole('button', { name: /check the figures|corrected figure|classified line/i })
+    .first();
+  if (!(await figuresButton.count())) {
+    fail('the way back to the figures', 'in the header', '(not there)');
+    return;
+  }
+  await figuresButton.click();
+  await page.getByRole('heading', { name: /read the figures before the model does/i }).waitFor({ timeout: 60_000 });
+  const sgaRow = page.locator('[data-line="sga"]').first();
+  await sgaRow.getByRole('button', { name: /^excluded$/i }).first().click();
+  await page.waitForTimeout(1200);
+  await page
+    .getByRole('button', { name: /^rebuild with these judgements$/i })
+    .click({ timeout: 60_000 });
+  await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 90_000 });
+  await page.waitForTimeout(1200);
+  const judgedValue = (await page.textContent('body')) || '';
+  const moneyIn = (text: string) => (text.match(/\$[\d,]+\.\d\d/g) || []).join(' ');
+  if (moneyIn(judgedValue) !== moneyIn(defaultValue)) {
+    ok('excluding a cost line moved the figures on the analysis screen');
+  } else {
+    fail('the effect of excluding a cost line', 'different figures', 'the page is unchanged');
+  }
+
+  // A VERSION 1 RECORD, put in the store the way one left behind by the old
+  // code would be: no version, no judgements, and a stored value per share it
+  // cannot reproduce.
+  await page.evaluate(
+    `window.localStorage.setItem('marginalia.savedModels.v1', JSON.stringify([{
+       id: 'legacy-row',
+       ticker: ${JSON.stringify(ticker)},
+       companyName: 'Before the fix',
+       name: 'saved before judgements were stored',
+       viewMode: 'DERIVED',
+       drivers: {},
+       valuePerShare: 999.99,
+       currencySymbol: '$',
+       savedAt: '2026-10-01T00:00:00.000Z'
+     }]))`
+  );
+
+  const open = page.getByRole('button', { name: /^saved models$/i }).first();
+  if (!(await open.count())) {
+    fail('the saved models button', 'on the analysis screen', '(not there)');
+    return;
+  }
+  await open.click();
+  await page.getByRole('heading', { name: /^saved models$/i }).first().waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(1000);
+
+  // ---- the old record says what it never stored ----
+  const panel = (await page.textContent('body')) || '';
+  for (const [re, what] of [
+    [/Saved before judgements were stored/i, 'that it was saved before judgements were stored'],
+    [/It did not store[\s\S]{0,80}corrections to the filed figures/i, 'what it did not store, by name'],
+    [/Nothing has been guessed at on its behalf/i, 'that nothing was guessed at on its behalf'],
+  ] as [RegExp, string][]) {
+    if (re.test(panel)) ok(`an old record says ${what}`);
+    else fail(`an old record saying ${what}`, 'on the row', '(not on the page)');
+  }
+  // BOTH FIGURES, because the one it stored is not one it can reproduce.
+  if (/saved at \$999\.99 \u00b7 reopens at \$/.test(panel)) {
+    ok('it prints what it was saved at beside what it reopens at');
+  } else {
+    fail('the two figures on an old record', 'saved at $999.99 \u00b7 reopens at …', '(not on the page)');
+  }
+
+  // ---- the panel gathers the judgements that are on screen ----
+  if (/struck against a price of \$/.test(panel)) ok('the panel says which price the valuation is struck against');
+  else fail('the price the valuation is struck against', 'in the save summary', '(not on the page)');
+
+  // ---- save, and the row must reproduce itself ----
+  await page.getByPlaceholder(/name this set of judgements/i).fill('a verification set');
+  await page.getByRole('button', { name: /^save$/i }).first().click();
+  await page.waitForTimeout(1500);
+  // THE ROW'S OWN TEXT, NOT ITS NEIGHBOUR'S. The first version read 180
+  // characters past the name, which ran into the legacy row below and reported
+  // its two figures as this one's.
+  const freshRow = (
+    await page
+      .locator('div', { hasText: /^a verification set$/ })
+      .locator('xpath=ancestor::div[contains(@class,"px-4")][1]')
+      .first()
+      .textContent()
+      .catch(() => '')
+  )
+    ?.replace(/\s+/g, ' ')
+    .trim();
+  let claimed = '';
+  if (!freshRow) {
+    fail('the saved row', 'a verification set', '(not on the page)');
+  } else if (/reopens at/.test(freshRow)) {
+    fail('a freshly saved row', 'one figure, because it reproduces itself', freshRow.slice(0, 140));
+  } else {
+    claimed = (freshRow.match(/[$\u20b9\u00a3\u20ac][\d,]+\.\d\d/) || [''])[0];
+    if (claimed) ok(`a freshly saved row shows one figure, because it reopens at it: ${claimed}`);
+    else fail('the figure on the saved row', 'a value per share', freshRow.slice(0, 90));
+  }
+
+  await readContrast(page, 'the saved models panel');
+
+  // ---- reopen it, and the value comes back ----
+  //
+  // The LAST Open button, which is the legacy row's, would reopen a record that
+  // stored no judgements. The one wanted is the row just saved, so it is found
+  // inside that row rather than by position.
+  const ourOpen = page
+    .locator('div', { hasText: /^a verification set$/ })
+    .locator('xpath=ancestor::div[contains(@class,"px-4")][1]')
+    .first()
+    .getByRole('button', { name: /^open$/i });
+  if (!(await ourOpen.count())) {
+    fail('the Open button on the saved row', 'present', '(not there)');
+    return;
+  }
+  // FIRST OPEN THE LEGACY ROW, which stores no judgements and no sliders, so
+  // the screen is moved OFF the saved state before our row is opened. Without
+  // this, a restore that did nothing at all would pass: the page would already
+  // be showing the figure the row claims.
+  const legacyOpen = page
+    .locator('div', { hasText: /^saved before judgements were stored$/ })
+    .locator('xpath=ancestor::div[contains(@class,"px-4")][1]')
+    .first()
+    .getByRole('button', { name: /^open$/i });
+  if (!(await legacyOpen.count())) {
+    fail('the Open button on the old record', 'present', '(not there)');
+    return;
+  }
+  await legacyOpen.first().click();
+  await page.waitForTimeout(2500);
+  const afterLegacy = (await page.textContent('body')) || '';
+  // IT MUST LAND SOMEWHERE ELSE. The old record carries no judgements, so
+  // opening it returns the model to the engine's own treatments \u2014 a different
+  // page from the one just saved. If these agreed, the comparison below would
+  // prove nothing.
+  if (claimed && !afterLegacy.includes(claimed)) {
+    ok('opening the old record moves the page off the saved figure, as it must');
+  } else {
+    fail(
+      'opening a record with no judgements',
+      `a page without ${claimed || 'the saved figure'}`,
+      'the saved figure is still on screen'
+    );
+  }
+  await page.getByRole('button', { name: /^saved models$/i }).first().click();
+  await page.getByRole('heading', { name: /^saved models$/i }).first().waitFor({ timeout: 30_000 });
+  await page.waitForTimeout(800);
+
+  await ourOpen.first().click();
+  await page.waitForTimeout(2500);
+  const onScreen = (await page.textContent('body')) || '';
+  if (!claimed) {
+    fail('reopening', 'a figure to check against', '(the row showed none)');
+  } else if (onScreen.includes(claimed)) {
+    ok(`reopening puts ${claimed} on the page, which is what the row said it would`);
+  } else {
+    fail(
+      'the value after reopening',
+      claimed,
+      (onScreen.match(/[$\u20b9][\d,]+\.\d\d/g) || []).slice(0, 6).join(' / ') || '(no figures on the page)'
+    );
+  }
+  // And the panel is closed, so the figure above is on the analysis screen
+  // rather than still in the list that produced it.
+  if (await page.getByRole('heading', { name: /^saved models$/i }).count()) {
+    fail('the saved models panel after reopening', 'closed', 'still open');
+  } else {
+    ok('the panel closes on reopening, so the figure is the analysis screen\u2019s own');
+  }
+  // And the badge is back, because the record was rebuilt WITH the judgement.
+  if (/classified line/i.test(onScreen)) {
+    ok('reopening the saved record puts the classified-line badge back');
+  } else {
+    fail('the badge after reopening the saved record', 'it counts the classified line', '(not on the page)');
+  }
+}
+
 // ------------------------------------------------------------------ the checks
 async function checkValued(page: Page, label: string, source: any, symbol: string) {
   console.log(`\n=== ${label}: the page against the engine ===`);
@@ -1025,6 +1232,9 @@ try {
   await openFetched(page, PAPER_TICKER);
   await checkValued(page, `${PAPER_NAME}, derived`, paper.modelData, paper.currencySymbol || '$');
   await readContrast(page, 'the analysis screen, derived');
+  // Saving and reopening, on the derived company: it came through the figures
+  // screen with a cost line reclassified, so there is a judgement to carry.
+  await checkSavedModelsOnScreen(page, PAPER_NAME, PAPER_TICKER);
 
   // 3. The same company, refused.
   const refusedPayload = { ...paperPayload('refused'), ticker: REFUSED_TICKER };

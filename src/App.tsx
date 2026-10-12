@@ -181,6 +181,57 @@ export default function App() {
     }, 30);
   };
 
+  /**
+   * REOPENING A SAVED MODEL IS A REBUILD (`KI-27`).
+   *
+   * The sliders live on the dashboard, but the corrections and the expense
+   * classification are baked into the company RECORD when it is derived, and a
+   * record can only be rebuilt from the untouched payload. That payload travels
+   * with every derived record as `rawFetched`, which is exactly why it is kept.
+   *
+   * So the dashboard hands the restored judgements up here, and here the record
+   * is built again from them and put back in the company list. Everything
+   * downstream — the forecast, the health score, the asset approach, the EBITDA
+   * bridge, the workbook — follows from that one object, which is the same
+   * reason a correction never needed its own path through the engine.
+   *
+   * The figures screen's own state is moved with it, so reopening the figures
+   * after restoring a saved model shows the corrections that model was built on
+   * rather than the ones that happened to be in hand.
+   */
+  const restoreJudgements = (
+    ticker: string,
+    restored: { corrections: Corrections; correctionReasons: CorrectionReasons; classification: Classification }
+  ) => {
+    setCorrections(restored.corrections);
+    setCorrectionReasons(restored.correctionReasons);
+    setClassification(restored.classification);
+
+    const base = loadedCompanies[ticker] ?? (COMPANIES_DATA as any)[ticker];
+    const fetched = base?.rawFetched;
+    // A curated company has no payload to correct, so there is nothing to
+    // rebuild and nothing was ever saved for it beyond the sliders. Said here
+    // rather than silently skipped.
+    if (!fetched?.statements) return;
+    setPayload(fetched);
+    try {
+      const rebuilt = buildCompanyFrom(
+        fetched,
+        restored.corrections,
+        restored.classification,
+        restored.correctionReasons
+      );
+      setLoadedCompanies((prev) => ({ ...prev, [rebuilt.ticker]: rebuilt }));
+    } catch (error: any) {
+      // A payload that no longer models is a refusal, not a crash: the company
+      // list keeps the record it has and the screen says what it says.
+      setLookupState({
+        loading: false,
+        error: error?.message || 'That saved model could not be reopened from these filings.',
+      });
+    }
+  };
+
   // The payload in hand belongs to ONE company. Searching a second company
   // replaces it, so the figures may only be reopened for the company the
   // payload is actually about — otherwise the button would offer to edit
@@ -334,6 +385,8 @@ export default function App() {
             onSelectTicker={(ticker) => setSelectedTicker(ticker)}
             onOpenDirectory={() => handleNavigateToScreen('DIRECTORY')}
             initialVerdicts={initialVerdicts}
+            judgements={{ corrections, correctionReasons, classification }}
+            onRestoreJudgements={restoreJudgements}
           />
         )}
       </main>
