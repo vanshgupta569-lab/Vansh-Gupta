@@ -2,7 +2,9 @@
 
 The forward plan for Marginalia: what is built, what is next, what is waiting and why, and what was decided against. Statuses current as of 28 September 2026.
 
-**This file is the plan. It is not the defect list.** Things that are wrong with what already exists live in `KNOWN_ISSUES.md`. How the engine actually works lives in `METHODOLOGY.md`. Modelling standards live in `CONVENTIONS.md`, and how the code measures against them in `CONVENTIONS_AUDIT.md`. What the sources do not publish lives in `DATA_CONSTRAINTS.md`. Read those alongside this one.
+**This file is the plan. It is not the defect list.** Things that are wrong with what already exists live in `KNOWN_ISSUES.md`. How the engine actually works lives in `METHODOLOGY.md`. Modelling standards live in `CONVENTIONS.md`, and how the code measures against them in `CONVENTIONS_AUDIT.md`. What the sources do not publish lives in `DATA_CONSTRAINTS.md`. The house rules every session reads first are in `CLAUDE.md`. Read those alongside this one.
+
+**The product plan behind this file is `docs/VISION.md` and `docs/FEATURES.md`** (converted 17 October 2026 from the Word originals kept in `docs/plan/`). VISION is what Marginalia is, who it serves, the platform structure and every planned item with its status. FEATURES is every feature of the 27 studied tools plus FRED and Yahoo Finance, how Marginalia provides each, and the 30 combined features no single tool offers. **Where this file and those two disagree, those two are the plan and this file is behind** — say so rather than reconciling them quietly.
 
 ## How to maintain this file
 
@@ -14,15 +16,36 @@ The forward plan for Marginalia: what is built, what is next, what is waiting an
 
 ## Status words
 
+**The plan's words, from `docs/VISION.md`.** Sections 13 onward use these, and
+new entries anywhere should. The older sections keep the words they were written
+with; the mapping is below rather than a rewrite, because rewriting a hundred
+existing lines would lose the dates and hashes attached to them.
+
 | Status | Meaning |
 |---|---|
-| LIVE | Deployed and checked. |
-| IN FLIGHT | Part-built. |
-| NEXT | Agreed, and the thing after the current job. |
-| QUEUED | Agreed, not started. |
-| BLOCKED | Waiting on something specific, named on the line. |
-| IDEA | Raised, not yet decided. |
-| DROPPED | Decided against, with the reason. |
+| Built | Live on the site and verified. |
+| In flight | Part-built. |
+| Now | Next six months. |
+| Next | Six to twelve months. |
+| Later | Waits on another piece being built first. |
+| Paid · last | Needs money — licensed data or paid services. Built and tested on a small or free sample now; the paid part bought just before public launch. |
+| Idea | Raised, not yet decided. |
+| Dropped | Decided against, with the reason. |
+
+**Nothing waits on SEBI.** A regulated feature — ratings, target prices,
+recommendations, research carrying an opinion — is built now with the
+regulations designed in, and switched on at launch once the licence is in hand.
+There is no "blocked on SEBI" status because there is no such item.
+
+| Older word, used in sections 1–12 | The plan's word |
+|---|---|
+| LIVE | Built |
+| IN FLIGHT | In flight |
+| NEXT | Now |
+| QUEUED | Next, or Later where it names what it waits on |
+| BLOCKED | Later, with the thing it waits on named |
+| IDEA | Idea |
+| DROPPED | Dropped |
 
 ---
 
@@ -52,13 +75,39 @@ These shape everything below. Changing one is a decision for Nihar, not a code c
 
 ---
 
+## Launch principles
+
+Decided 12 October 2026. These govern the order of work, not its content, and
+they are the reason several items below read "built now, switched on later".
+
+1. **Nothing waits on SEBI.** Every feature is built now on the private site,
+   including ratings, recommendations and research that carries an opinion, with
+   the regulations designed in from the start. Building it later would mean
+   designing the disclosure, the track record and the audit trail later, which
+   is how they get bolted on badly.
+1. **The site goes public only after the licences are received.** Private until
+   then. A regulated feature is built and left switched off; the switch is the
+   licence, not the code.
+1. **Paid items are built last**, just before launch: licensed global prices,
+   live options data, analyst estimates, WhatsApp message delivery, document
+   storage for uploads, AI document reading at full scale, MCA document fees at
+   scale. Each is built and tested on a small or free sample first, so the money
+   buys coverage rather than discovery.
+1. **Not wanted at all**: scraped contact databases, and placing trades. See
+   section 12.
+1. **Outreach to users starts once the product is fully developed.** Not before.
+
+---
+
 ## Now and next
 
 1. **`KNOWN_ISSUES.md` holds two screen faults and nothing that moves a valuation.** `KI-27` — a saved model storing its sliders and not the judgements it was built on — was opened 10 October 2026 and closed 12 October 2026. `KI-25` and `KI-26` remain, both faults on the screen rather than in a number. The list reaching zero is the work, not the milestone, and the history of this item is the reason: it stood empty from 2026-09-27, and building the Assumptions sheet on 2026-09-28 opened five and closed all five the same day: assumptions with no recorded basis (`KI-22`), the operating margin slider under-moving (`KI-23`), the discount rate and growth fade the workbook held still where the engine recomputes them (`KI-20`, `KI-21`), and the cost of debt found by sweeping for the same pattern (`KI-24`). All five are the `KI-4` shape — a workbook seeded from the engine's answer, right at rest and wrong on the first edit. Nineteen numbered defects were opened between 22 and 27 September: fourteen fixed, three established as things the filings cannot settle, one needing disclosure. The list staying empty is the work, not the milestone, and a sheet whose job is to write down what every number rests on is the kind of work that refills it.
 2. **NEXT — Primary-filings data layer** (section 1). The largest piece of work and the foundation for almost everything below.
 3. **IN FLIGHT — The judgement layer** (section 2). Expense classification shipped 10 October 2026 and built the layer's machinery with it; the adjusted EBITDA bridge shipped 11 October 2026 and is the artefact it produces. The one to take next is **what counts as non-recurring, item by item** — an exclusion today is set aside in every reported year, which is the right unit for a line a company should not have and the wrong one for a settlement it paid once, and the bridge says so on its own face.
 4. **LIVE — Standard chart of accounts** (section 4, `4a61ac2`, 10 October 2026). It was the cheap item several later ones depended on, and three of them have since been built on it: peer spreading, the house template and the EBITDA bridge.
-5. **QUEUED — `CLAUDE.md` house-rules file** (section 8).
+5. **Built — `CLAUDE.md` house-rules file** (section 8, 17 October 2026). The house rules every session reads first: one job per session, the three-document split, the standing decisions, the traps, the launch principles, and the first design principle.
+6. **Now — the new product plan** (`docs/VISION.md`, `docs/FEATURES.md`, brought into the repository 17 October 2026). Sections 13–18 are the new areas: global company pages and the screener, research, the investor area, the deals site, the add-in and API, macro.
+7. **Next — the four decisions of 17 October 2026** (section 19): one system as an open planning item, the figures screen redesigned around model heads, the loading screen rebuilt on the company's own numbers, and the first design principle. Two of them reverse things that are Built, which section 19 says plainly.
 
 ---
 
@@ -412,7 +461,7 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 
 | Item | Reason |
 |---|---|
-| Point-in-time filings archive | A figure is restated because the first one was wrong. Modelling from superseded numbers is modelling from a known error. Restatement history survives as a by-product, not a feature. Dropped 28 September 2026. |
+| ~~Point-in-time filings archive~~ **— reversed 12 October 2026** | Dropped 28 September 2026 on the reasoning that a figure is restated because the first one was wrong, so modelling from superseded numbers is modelling from a known error. **The new plan reverses it** (`docs/VISION.md` §5b, `docs/FEATURES.md` Part D): as-first-reported against restated, with a restatement tracker, is in section 13 as Next. The reversal does not contradict the original reasoning — the model is still built on the current figures — it adds the earlier version as a FACT ABOUT THE COMPANY: a company that quietly revises its history is worth knowing about. Kept here rather than deleted, because the 28 September reasoning is still the reason the model does not forecast from superseded numbers. |
 | Branding the output ("prepared using Marginalia") | A customer who must advertise the tool could have used the tool themselves. It devalues the deliverable. Dropped 28 September 2026. |
 | Take-private screening filter | Needs a full universe of fundamentals we will not have until the data layer is complete. Revisit then. |
 | Scraping court records for litigation | Replaced by what the company disclosed in its own filings. |
@@ -421,7 +470,293 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 | Hand-built company models on the site | Models are engine-built only. |
 | Flooring WACC | A floor is a number chosen to hide a problem. Relevering beta fixed the cause (`5ecd822`). |
 | Treating a missing filed figure as zero | Zero is a claim the company reported zero. Show "not reported" or refuse. |
-| Gating the build on Nihar having learned the module first | Retired 28 September 2026. The verification standard replaces it (see standing decisions). |
+| Gating the build on Nihar having learned the module first | Retired 28 September 2026, and again as "learn it by hand in Excel first" on 11 October 2026. The verification standard replaces it (see standing decisions): verified against the identities a correct model must satisfy, then against published worked examples. |
+| Scraped or bought contact databases | Illegal or high-risk under data protection law — Lusha was fined €2 million in Italy in 2026 — and controversial with the investment banking and private equity professionals who would be in them. Replaced by an opted-in verified buyer network. Dropped 12 October 2026. |
+| Copying another database (Venture Intelligence, Tracxn) | Build from primary sources only: filings and official registers, each item linked to its own document. A database copied from a database inherits its errors and its licence. Dropped 12 October 2026. |
+| Placing trades, or any order execution | Marginalia is not a broker and does not want to be. Every tool that would need it — TradingView's broker integration, Composer's automated execution, paper trading with real accounts — is deliberately not followed. Dropped 12 October 2026. |
+| A floor on forecast capital spending | Built, measured and rejected. A floor is a number chosen to hide a problem; the same reasoning as flooring WACC. |
+| Exit multiple taken from peer medians | Built, measured and rejected. |
+| "No student-built tool has this" as marketing copy | Cannot be verified, so it cannot be said. Dropped 12 October 2026. |
+| Third-party ESG and governance risk scores | Shown by Yahoo and Simply Wall St; a score is somebody else's opinion wearing a number's clothes. Replaced by the company's own ESG filings — BRSR in India, ESEF and CSRD in Europe. |
+| PowerPoint deck-building tools (agendas, pagination, shapes) | Macabacus does this well and it is not core. Partner instead. |
+| Unchecked AI scores or opinions | DeepFundamental's paid AI scores showed NVIDIA's text on Apple's page. AI is used only where its output can be checked against a source. |
+
+---
+
+## 13. Global company pages and the screener
+
+**Status: Now.** From `docs/VISION.md` §5b and `docs/FEATURES.md` Part A. This
+supersedes section 6, which was written when the screener was India-only;
+section 6 is kept because its entries carry their own history, and where the two
+differ this section is the plan.
+
+**The correction that matters:** the screener and the company pages cover
+**every listed company in the world**, not only India. A user types a company
+name and gets everything Yahoo Finance shows, plus what Yahoo does not — actual
+reported financials with a link to the filing, a beta and cost of capital whose
+method is shown, the country's macro picture, and an editable model.
+
+| Item | Status | What it is |
+|---|---|---|
+| **The company page as the hub** | **Now** | One web address per company, one tab per section: Overview, Financials, Filings, Model, Research, Ownership, Deals, Credit, Your notes. Each tab its own address. |
+| **Quote strip and key statistics** | **Now** | Price, ranges, volume, market cap, enterprise value, the multiples with their quarterly history, margins, returns, per-share figures, growth, leverage, averages, float, holdings, dividends, splits and bonuses. |
+| **Chart** | **Now** | 1D to All, line or candles, compared with index or peers, annotated with filings and events, moving averages, total return including dividends. |
+| **Risk and cost-of-capital card** | **Now** | Beta calculated by us against the local index with the method, window and a peer-average alternative shown; the country's risk-free rate, equity risk premium and country risk premium, each sourced and dated; the resulting cost of equity and WACC. Every input editable. |
+| **Financials, ten-plus years, every number clickable to its filing** | **Now** | Annual and quarterly, as reported and standardised, TTM, units and currency switch, Sankey and waterfall. Reported, corrected and modelled side by side. |
+| **Click any number to see its filing** | **Now** | Source image or page on hover. |
+| **Profile, holders, news and filings timeline** | **Now** | Description, sector, employees, fiscal year end, executives and their pay, board, auditors; major holders, insiders, institutions; one timeline of announcements, results, transcripts and filings. |
+| **Compare up to ten companies** | **Now** | Any metric, side by side. Ten rather than Yahoo's four. |
+| **Data status panel** | **Now** | When each piece was last updated, from which source, and which automated checks it passed. |
+| **Screener, worldwide** | **Next** | Every factual filter Finviz offers — exchange, index, sector, industry, country, size, valuation, growth, dividends, returns, margins, liquidity, leverage, ownership and insider activity, short float, earnings date, performance, volatility, beta — with AND/OR logic, a pivot view, rank-within-screen, saved screens and alerts. No filter that carries an opinion. |
+| **Company FAQ pages** | **Now** | "What is Reliance's debt?" answered on the page with its source. Brings search traffic. |
+| **Seasonality, returns against industry and market** | **Next** | Average returns by month; how the stock compares. |
+| **Point-in-time: as first reported against restated** | **Next** | Each figure as originally reported and as later restated, with a restatement tracker — FRED's ALFRED applied to filings. **This reverses the 28 September 2026 decision in section 12**; see the note there. |
+| **ESG from the company's own filings** | **Later** | BRSR in India, ESEF and CSRD in Europe. Never a third-party score. |
+| **Global prices with display rights** | **Paid · last** | Built and tested on free development data; licensed end-of-day prices bought before launch, delayed intraday after. |
+| **Analyst estimates and consensus** | **Paid · last** | Licensed before launch. The screens that compare estimate, guidance and the user's own assumption are built now. |
+| **Options chain and implied volatility** | **Paid · last** | End-of-day first from NSE files; live data needs a display licence from an authorised vendor. |
+
+**Where the data comes from, by country** (FEATURES Part A): United States — SEC
+XBRL, free, already used. India — NSE and BSE XBRL, MCA for private companies.
+European Union and UK — ESEF filings via filings.xbrl.org, Companies House for
+UK accounts. Japan — EDINET, free API. South Korea — OpenDART, free API. Then
+Canada (SEDAR+), Brazil (CVM), China (CNINFO), Taiwan (MOPS), Australia (ASX).
+Risk-free rates and macro from FRED, central banks, IMF and the World Bank.
+Equity and country risk premiums from Damodaran's free annual publication, cited
+and dated, user-overridable.
+
+**Every page says which stage its country is at.** Full global coverage is a
+multi-stage build and prices are a real cost; the order follows the data.
+
+---
+
+## 14. Research
+
+**Status: Now, with the opinion parts switched on at launch.** From
+`docs/VISION.md` §6.
+
+The goal is a research report on any listed company, as good as a broker's
+initiation in structure, with every number sourced and every judgement visible.
+A report that gives an opinion on the value of a security needs SEBI Research
+Analyst registration, so every pack is built in **two modes**: user-authored
+(facts, the user's model, the user's conclusion) and Marginalia-authored (with a
+rating and a target). The second is switched on after registration.
+
+| Item | Status | What it is |
+|---|---|---|
+| **One-pager (tearsheet)** | **Now** | Description, price, ten-year key financials, ratios, multiples against peers, the user's model value, ownership changes. |
+| **Two-pager** | **Now** | Adds the three-approach valuation, the football field, the guidance record, risk factors as disclosed, insider and promoter activity. |
+| **Full research pack, 15–25 pages** | **Next** | Cover; summary written by the user; business and segments; industry; financial analysis; quality of earnings; valuation; scenarios; risks as disclosed; governance and ownership; guidance record; appendix statements; sources. Word and PDF, figures linked to the workbook. |
+| **Results note** | **Next** | Within hours of results: this quarter against last year and against guidance, what changed in the model, concall quotes. Facts only. |
+| **Concall note** | **Next** | Guidance, targets and commitments, each with the speaker and the minute. |
+| **IPO note** | **Next** | From the DRHP: offer structure, use of proceeds, pre-IPO prices, the issuer's own peer list, restated financials, litigation. Every number verified to its page. |
+| **Sector report** | **Next** | Industry structure, KPIs, peer table, recent deals. |
+| **Ratings, target prices and "our call"** | **Next** | Written by a registered analyst with every required disclosure — conflicts, holdings, extent of AI use. A public track record of every call from day one. Built now; switched on after registration. |
+| **Hindi and other languages** | **Next** | As EquiSense already offers. |
+| **AI use disclosure built into every pack** | **Now** | AI drafts only from quoted facts and every sentence carries its source. SEBI's 2024 amendment already requires registered analysts to disclose the extent of AI use, so the disclosure is designed in now rather than added at registration. |
+
+**For students:** the same pack is a strong starting point for the CFA Research
+Challenge and college competitions.
+
+**Where it lives:** the Research menu (all packs and notes), Company › Research
+(one company), Studio › Outputs (generate from your own model).
+
+---
+
+## 15. The investor area
+
+**Status: Next, after the India data layer.** From `docs/VISION.md` §5d and §7.
+
+| Item | Status | What it is |
+|---|---|---|
+| **Naive-investor section** | **Next** | Insights read off the reported statements. Mechanics, not merit. |
+| **Portfolio and holdings import** | **Next** | From broker files or contract notes. |
+| **Thesis journal** | **Next** | Why I bought, tied to the model assumptions it rests on; "I will sell if…" recorded at the time of purchase, not afterwards. |
+| **Decision scorecard** | **Next** | After a year: which reasons worked, how long winners and losers were held. |
+| **Alerts on WhatsApp and email** | **Next** | Filings, results, insider trades, thesis breaks. English and Hindi. Theme alerts across all companies, not only a watchlist. |
+| **Who bought or sold this share** | **Next** | A timeline of named people and institutions, with the date traded, the date disclosed, the amount or range, and what the price did 1 week, 1 month and 6 months after. India: insider and promoter disclosures, bulk and block deals, holders above 1% each quarter, takeover-code disclosures, monthly mutual fund portfolios. United States: Form 4, STOCK Act congressional disclosures, Form 278-T for the President and senior officials, quarterly 13F holdings. |
+| **Show the delay, always** | **Next** | Insider data is days old, congressional data up to 45 days, presidential reports months. Many presidential and fund trades are made by managers, not the person. Signal labels and interpretation are built now and switched on after registration; until then the facts alone. |
+| **Volume trends and investing strategies** | **Next** | Education, clearly labelled. Back-tests after costs. |
+| **Hedging comparator** | **Next** | Protective put, collar and short future side by side, on end-of-day data. |
+| **IPO section** | **Next** | DRHP-based, every number verified to its page. |
+| **Hedge recommendations** | **Next** | Built now; switched on after SEBI Investment Adviser registration. |
+| **Live options data** | **Paid · last** | Display licence from an NSE-authorised vendor, bought before launch. Everything around it built now on end-of-day data. |
+| **Indian politicians' election-affidavit holdings** | **Dropped** | Filed only at elections and sensitive. Left out for now. |
+
+---
+
+## 16. The deals site
+
+**Status: Later.** A separate site, `docs/VISION.md` §5e. Free to list; a
+success fee on completion.
+
+| Item | Status | What it is |
+|---|---|---|
+| **Verified buyer network with mandates** | **Later** | Funds and corporates opt in and verify. This is the moat, and it is the hard part: consent, not scraping. |
+| **Anonymous listings and teasers** | **Later** | Generated from the Marginalia model. |
+| **Information memorandum from the model** | **Later** | Every number linked to its source. |
+| **Deal-readiness check for sellers** | **Later** | Audits, MCA filings, auditor remarks, related parties, pledges. |
+| **NDA, deal room, process tracker, Q&A** | **Later** | Teaser → NDA → IM → offer → diligence → signing. |
+| **Buyer matching and buyer scoring** | **Later** | From past deals and stated mandates, each listing with a ranked list of likely buyers and the reason for each. |
+| **Buyer interest tracker** | **Later** | Sellers see which verified buyers opened the teaser and how far each has gone. |
+| **Distressed listings** | **Later** | From IBBI invitations for expressions of interest. |
+| **MCA-filing data for private companies** | **Later** | Pre-fills listings and finds sellers. |
+| **Deal terms benchmark** | **Later** | What terms are normal in Indian deals, from SEBI open-offer letters and DRHPs. |
+| **Adviser pages and tombstones** | **Later** | Opt-in profiles only. Advisers report their own deals for league-table credit. |
+
+---
+
+## 17. The Excel add-in and the API
+
+**Status: Next.** From `docs/VISION.md` §5f.
+
+| Item | Status | What it is |
+|---|---|---|
+| **Excel add-in with live formulas** | **Next** | `=MARGINALIA("RELIANCE","EBITDA",2025)`, with the source behind the cell. |
+| **Template library, link to PowerPoint and Word** | **Next** | One-click refresh of a football field, a comps table or a tearsheet from the model. |
+| **Insert ready blocks** | **Next** | Drop a Marginalia DCF, WACC or sensitivity block into any sheet. |
+| **Model auditor** | **Next** | Hard-codes, broken links, colour conventions, inconsistent formulas — with plain explanations. |
+| **Reformat a user's model to convention** | **Next** | Formatting only, never a number. |
+| **API with an AI connector (MCP)** | **Next** | For firms' systems and for AI assistants. Ships with a library of ready prompts. |
+| **Embeddable company widget** | **Later** | A "Marginalia at a glance" card for blogs and news sites. A free source of links back. |
+| **Chrome extension: PDF highlighter** | **Later** | Highlights disclosed facts in annual report PDFs. |
+| **Chrome extension: our figures on other sites** | **Later** | Verified numbers shown on any company page. |
+| **Usage pricing for the API** | **Later** | Pay for what is pulled. |
+
+---
+
+## 18. Macro
+
+**Status: Next.** From `docs/VISION.md` §5b and `docs/FEATURES.md` Part B, which
+studies FRED in depth. Macro is not a separate product here: it exists so a
+company can be read against its own economy.
+
+| Item | Status | What it is |
+|---|---|---|
+| **Country macro panel on every company page** | **Next** | Policy rate, 10-year yield, inflation, GDP growth, currency against USD and INR, unemployment, with charts and the next release date. From FRED, central banks, the IMF and the World Bank. |
+| **India macro detail** | **Next** | RBI rates, inflation, industrial production, GST collections. |
+| **FRED-style chart tools on company data** | **Next** | Growth, CAGR, index to 100, frequency conversion with the method shown, several series on one chart, user-drawn reference lines, recession and rate-cycle shading. |
+| **Formula lines mixing company and macro series** | **Next** | Reliance revenue ÷ Brent; bank loan growth against nominal GDP. One formula language across both. |
+| **Macro sensitivity card** | **Next** | For each company, its key macro drivers and a scenario slider: if crude rises 10%, the model value moves by X. |
+| **Results and macro release calendar** | **Now** | Worldwide, with corporate actions and the bonus and split adjustments that per-share history needs. |
+| **World and sector maps** | **Next** | Markets and countries coloured by valuation, return or macro reading; an implied-growth map built from the reverse DCF. |
+| **Personal dashboards** | **Next** | Mix companies, macro, notes and screens on one page; publish it for a class or a team. |
+| **Yield curves** | **Later** | By country, in the macro panel. |
+
+**Charts, downloads and embeds throughout:** every chart and table goes to
+Excel, CSV, image and PowerPoint, and can be shared or embedded — auto-updating
+or frozen. FRED data is public domain with citation requested; some series carry
+their source's own terms, so each is checked.
+
+---
+
+## 19. Decided 17 October 2026 — four items, all NEXT
+
+These four were decided in the planning conversation of 17 October 2026. Three
+are things to build; the first is a thing to plan. Each is NEXT in the plan's
+vocabulary, which is why they are numbered together rather than filed under the
+areas they touch.
+
+### 19a. One system — NEXT, and a planning item before it is a build item
+
+**The decision:** every tool works on its own, AND the tools connect into one
+journey:
+
+    screen → company → model → reasons to avoid → decide → monitor → review
+
+Each step stands alone — a user who only wants the screener gets the screener.
+But the chain is the product, and the point of the chain is that it should
+produce **combined results no single tool can**: outputs that exist only because
+the screen, the model, the reasons, the decision and the monitoring are the same
+system reading the same data.
+
+**What those combined results are is not yet decided, and must not be invented
+here.** `docs/FEATURES.md` Part D lists thirty combined features, and they are
+the right kind of thing — as-first-reported against restated, street against
+management against you, decision replay, thesis alerts — but Part D is a list of
+features, not an account of what the connected journey produces that the
+features separately do not.
+
+So this is recorded as **an open planning item, not a feature list**:
+
+- **To be explored and planned before anything is built.** What does the whole
+  journey give a user that the seven steps give separately? Name the outputs.
+- **The test for each candidate:** could it exist if the steps were seven
+  separate products? If yes, it belongs in its own section, not here.
+- **What it is not:** a menu reshuffle, a dashboard that embeds the other
+  screens, or a wizard that walks a user through steps they did not ask for.
+  Each tool must still work on its own.
+- **Where the planning output goes:** its own section in this file, with the
+  combined outputs named and statused, and the journey's shape in
+  `docs/VISION.md`.
+
+### 19b. The figures screen, redesigned — NEXT
+
+**The decision:** the figures screen shows each company's line items **exactly
+as filed**, already placed under the model heads by the engine's default
+classification, with the reason for each default shown. Where the user
+disagrees, they **drag the line to a different head**.
+
+**The heads a line can be dragged to:**
+
+| Statement | Heads |
+|---|---|
+| Profit and loss | revenue, cost of goods sold, research and development, selling general and administrative, depreciation and amortisation, other operating, other income, finance cost, one-offs, tax |
+| Balance sheet | debt (including leases), and each working-capital item |
+
+**Numbers are edited in the same row**, with the filed value kept beside any
+change — the rule that a corrected figure is never shown as filed does not move.
+
+**This removes the direct / indirect / selling / admin classification**, which
+shipped on 10 October 2026 (`9980f72`, `METHODOLOGY.md` §22d). Recorded plainly
+because it is a reversal of something Built, and because removing it is not a
+small edit:
+
+- Five categories and the four classifiable lines go; the heads above replace
+  them. The judgement becomes "which head does this filed line belong under",
+  which is the judgement an analyst actually makes.
+- The adjusted EBITDA bridge (`METHODOLOGY.md` §22e) reads the classification
+  for its exclusion lines, so "one-offs" becomes the head that drives it.
+- The workbook's two judgement columns on the Assumptions sheet, the
+  `classification` field on a saved model (§22f), `verify/classification.mts`
+  and the browser check of the classification band all follow the heads instead.
+- What must not be lost: every default states where it came from; every override
+  takes an optional one-line reason; there is a visible return to the default; a
+  change rebuilds the model at once with the previous value beside it; and
+  reported operating profit still ties to the filing whatever the user does.
+
+### 19c. The loading screen — NEXT
+
+**The decision:** replace the generic quotes with **live progress using the
+company's real numbers**, plus **one myth-versus-fact card drawn from that
+company's own data**.
+
+This supersedes the 53 did-you-know notes (`fe2256e`, Built). Those are generic
+by construction — the same 53 for every company — and a reader waiting for
+Reliance to build should be reading Reliance's figures arriving, not a general
+remark about EBITDA.
+
+- **Live progress on real numbers:** which filing is being read, which year has
+  arrived, the revenue and profit figures as they land, which checks have
+  passed. The wait becomes the first sight of the data.
+- **One myth-versus-fact card from this company's own data:** the myth stated,
+  then the company's own filed figure that settles it. One card, not a carousel.
+- The rule that holds: mechanics, not merit. A card states a fact and a
+  definition; it does not call a number good or bad.
+- The existing check that a slow build does not leave one note on screen for the
+  whole wait (`verify:dashboard`) applies to whatever replaces the notes.
+
+### 19d. The first design principle — recorded, not scheduled
+
+> **At every point, on every screen, Marginalia must look modern, highly
+> attractive and high-budget, yet simple, clear and professional. Never messy or
+> cluttered. The first impression is the look, so no screen ships unless it
+> meets this standard.**
+
+It is the **first** design principle, above everything in `DESIGN.md`, and it is
+recorded in `CLAUDE.md` as a house rule so every session reads it before
+touching a screen. It is not an item with a status: it is the bar every item
+clears.
 
 ---
 

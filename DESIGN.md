@@ -188,6 +188,22 @@ components:
 
 # Design System: Marginalia
 
+## The first design principle
+
+> **At every point, on every screen, Marginalia must look modern, highly
+> attractive and high-budget, yet simple, clear and professional. Never messy or
+> cluttered. The first impression is the look, so no screen ships unless it
+> meets this standard.**
+
+Decided 17 October 2026. It comes before everything else in this document, and
+it is repeated in `CLAUDE.md` so every session reads it before touching a screen.
+
+Everything below is how that standard is met on this product in particular --
+the warm ramp, the hairlines, the number first -- but the standard itself is the
+test, and it is a test a screen can fail while following every rule below. A
+screen that is correct and ugly is not finished. A change that makes a screen
+busier is a reason to rethink the layout, not a cost to accept.
+
 ## Overview
 
 **Creative North Star: "The Lit Ledger"**
