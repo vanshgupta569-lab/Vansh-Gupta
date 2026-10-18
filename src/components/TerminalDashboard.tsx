@@ -48,7 +48,7 @@ import HouseTemplatePanel from './houseTemplatePanel';
 import { listTemplates, loadTemplate } from '../data/templateStore';
 import { fillTemplate, computeModelValues } from '../data/houseTemplate';
 import type { Corrections, CorrectionReasons } from '../data/corrections';
-import type { Classification } from '../data/classification';
+import type { HeadAssignment } from '../data/heads';
 import type { SavedModel, SavedJudgements } from '../data/savedModels';
 import { emptyJudgements } from '../data/savedModels';
 import { adjustedEbitdaOf } from '../data/restoreModel';
@@ -90,10 +90,10 @@ interface TerminalDashboardProps {
   /**
    * The judgements that live above this screen, because they are baked into the
    * company RECORD rather than read off the sliders: the reader's corrections to
-   * the filed figures, the reasons they gave, and their expense classification.
+   * the filed figures, the reasons they gave, and their head assignment.
    * A saved model has to carry them, so this screen has to be able to see them.
    */
-  judgements?: { corrections: Corrections; correctionReasons: CorrectionReasons; classification: Classification };
+  judgements?: { corrections: Corrections; correctionReasons: CorrectionReasons; heads: HeadAssignment };
   /**
    * Reopening a saved model is a REBUILD, not a slider move (`KI-27`). This
    * screen cannot rebuild a record, so it hands the restored judgements up to
@@ -101,7 +101,7 @@ interface TerminalDashboardProps {
    */
   onRestoreJudgements?: (
     ticker: string,
-    judgements: { corrections: Corrections; correctionReasons: CorrectionReasons; classification: Classification }
+    judgements: { corrections: Corrections; correctionReasons: CorrectionReasons; heads: HeadAssignment }
   ) => void;
 }
 
@@ -824,7 +824,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       viewMode,
       corrections: judgements?.corrections ?? {},
       correctionReasons: judgements?.correctionReasons ?? {},
-      classification: judgements?.classification ?? {},
+      heads: judgements?.heads ?? {},
       verdicts: { ...verdicts },
       appliedVerdicts: appliedVerdicts ? { ...appliedVerdicts } : null,
       peers: selectedPeers ? [...selectedPeers] : null,
@@ -850,7 +850,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     onRestoreJudgements?.(entry.ticker, {
       corrections: j.corrections,
       correctionReasons: j.correctionReasons,
-      classification: j.classification,
+      heads: j.heads,
     });
     setViewMode(j.viewMode);
     setVerdicts((j.verdicts ?? {}) as any);

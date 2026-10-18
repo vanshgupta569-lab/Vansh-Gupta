@@ -125,6 +125,16 @@ export const FIELDS: FieldSpec[] = [
   { key: 'netIncome', label: 'Profit after tax', group: 'income' },
 
   { key: 'cash', label: 'Cash and equivalents', group: 'balance' },
+  // ADDED WITH THE HEADS SCREEN (ROADMAP.md §19b). The figures screen now shows
+  // every balance-sheet line the source returned, under the head it sits on,
+  // and every line it shows can be corrected. These were already on the
+  // payload and already read by the engine — short-term investments net
+  // against debt, the lease totals feed it — but there was no row to correct
+  // them on, so a reader who could see the figure was wrong could not fix it.
+  // They are registered here because this table is what names a corrected
+  // field in the EBITDA bridge, in the header badge and on a saved model.
+  { key: 'shortTermInvestments', label: 'Short-term investments', group: 'balance' },
+  { key: 'longTermInvestments', label: 'Long-term investments', group: 'balance' },
   { key: 'receivables', label: 'Receivables', group: 'balance' },
   { key: 'inventory', label: 'Inventory', group: 'balance' },
   { key: 'currentAssets', label: 'Total current assets', group: 'balance' },
@@ -139,9 +149,15 @@ export const FIELDS: FieldSpec[] = [
   { key: 'totalAssets', label: 'Total assets', group: 'balance' },
   { key: 'payables', label: 'Payables', group: 'balance' },
   { key: 'currentLiabilities', label: 'Total current liabilities', group: 'balance' },
-  { key: 'longTermDebt', label: 'Long-term debt', group: 'balance' },
+  { key: 'longTermDebt', label: 'Borrowings due beyond a year', group: 'balance' },
+  { key: 'longTermDebtCurrent', label: 'Borrowings due within a year', group: 'balance' },
+  { key: 'shortTermBorrowings', label: 'Short-term borrowings', group: 'balance' },
+  { key: 'financeLeaseTotal', label: 'Finance lease obligations', group: 'balance' },
+  { key: 'operatingLeaseTotal', label: 'Operating lease obligations', group: 'balance' },
   { key: 'totalLiabilities', label: 'Total liabilities', group: 'balance' },
   { key: 'equity', label: 'Shareholders’ equity', group: 'balance' },
+  { key: 'minorityInterest', label: 'Non-controlling interests', group: 'balance' },
+  { key: 'preferredStock', label: 'Preferred stock', group: 'balance' },
 
   { key: 'depreciation', label: 'Depreciation and amortisation', group: 'cash' },
   { key: 'capex', label: 'Capital expenditure', group: 'cash' },

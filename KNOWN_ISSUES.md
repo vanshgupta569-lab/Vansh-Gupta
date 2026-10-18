@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-27`. **Next free: `KI-28`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-28`. **Next free: `KI-29`.** Retired, meaning
   fixed and never to be reused: `KI-27` (a saved model stored its sliders and
   not the judgements it was built on, so it reopened valuing something else;
   fixed 2026-10-12), `KI-1` (forecast capital spending a flat share
@@ -94,15 +94,48 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**Neither of these moves a valuation.** They are faults on the screen, found
-while redesigning the company screen on 2026-10-02, and they are here because
-this file is the list of things this repository does incorrectly — not only the
-ones that change a number.
+**None of these moves a valuation.** The first is a hole in the verification
+itself; the other two are faults on the screen, found while redesigning the
+company screen on 2026-10-02. They are here because this file is the list of
+things this repository does incorrectly — not only the ones that change a
+number.
 
 | ID | What is wrong | Measured |
 |---|---|---|
+| `KI-28` | `tsc --noEmit` does not check component props at all, so the suite is blind to a whole class of error | a component called with two props it does not declare, and two of its required props missing, exits 0 |
 | `KI-25` | The news ticker scrolls text out of view that already fits | strip 730px inside a 1117px window |
 | `KI-26` | A render-blocking stylesheet for an icon font nothing uses | one request per page load, zero usage |
+
+### `KI-28` — the typecheck cannot see a wrong prop
+
+**Where:** `package.json` (`"lint": "tsc --noEmit"`) and its `devDependencies`.
+
+**What is wrong:** `@types/react` and `@types/react-dom` are not installed. With
+no React types, `React.FC<Props>` does not resolve to anything that constrains
+JSX, so **TypeScript checks no component's props anywhere in the build.**
+`skipLibCheck: true` hides the library errors that would otherwise say so, and
+the run exits 0 and prints nothing.
+
+**How it was measured**, on 2026-10-19 while rewiring the figures screen: `App.tsx`
+was left passing `heads` and `onHeads` to a `FiguresEditor` that still declared
+`classification` and `onClassify` as required props — two props it does not take,
+and two required props missing. `npx tsc --noEmit` exited 0. The same run
+correctly reported an ordinary type error in a `.ts` file three lines earlier, so
+the checker is running; it simply has nothing to check components against.
+
+**How many companies it affects:** none. It cannot move a valuation — it is a
+hole in the net, not a hole in the engine.
+
+**What it costs:** every component prop in the build is unchecked. The rewiring
+above happened to be caught by `npm run build` and `verify:dashboard` driving a
+real browser, which is luck rather than coverage: a prop mismatch that still
+renders would reach the screen with nothing reporting it.
+
+**Roughly what fixing it moves:** nothing in any figure. It is one line in
+`devDependencies` plus whatever errors the first honest run turns up, and that
+last part is why it is an entry rather than a side fix in this commit —
+switching props on for the first time across every component is its own job with
+its own measurements, not a change to make while replacing a live feature.
 
 ### `KI-25` — the ticker scrolls away text that fits
 

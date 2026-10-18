@@ -12,7 +12,7 @@
 //
 //   1. Build a company, then move EVERY judgement that exists: the sliders,
 //      a correction to a filed figure with its reason, an expense
-//      classification with its reason, the peer set, the recovery rates, and
+//      head assignment with its reason, the peer set, the recovery rates, and
 //      the price the valuation is struck against.
 //   2. Save it, through the real `makeSavedModel`, and put it through the real
 //      wire format (`serialise` then `parse`) so what is compared is what a
@@ -75,16 +75,21 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
   // ---- 1. a company with every judgement moved --------------------------
   const corrections: any = { [lastYear]: { operatingIncome: last.operatingIncome + 40_000 } };
   const correctionReasons: any = { operatingIncome: 'restated in the annual report' };
-  const classification: any = {
-    otherOperatingCosts: { category: 'excluded', reason: 'a port write-down that will not repeat' },
-    sga: { category: 'selling', reason: 'their distribution fleet sits in this line' },
+  // TWO MOVES OF DIFFERENT KINDS, on purpose. One under the one-offs head,
+  // which takes money out of the forecast and is the judgement with arithmetic
+  // in it; one between two operating cost heads, which changes the composition
+  // and not the value. A record that only carried the first would not prove
+  // that a move the valuation is indifferent to still survives a round trip.
+  const heads: any = {
+    otherOperatingCosts: { head: 'oneOffs', reason: 'a port write-down that will not repeat' },
+    sga: { head: 'rnd', reason: 'their development spending sits in this line' },
   };
   const verdicts: any = { moat: 'yes', cyclicality: 'no' };
   const peers: string[] = ['AAPL', 'MSFT'];
   const recovery = { key: 'orderly', rates: { receivables: 0.9, inventory: 0.7 } };
   const sharePrice = 1_450;
 
-  const record: any = buildCompanyFrom(payload, corrections, classification, correctionReasons);
+  const record: any = buildCompanyFrom(payload, corrections, heads, correctionReasons);
   const source: any = record.modelData;
   const defaults: any = R.defaultsFor(record, source);
   // The sliders, moved off the model's own figures.
@@ -109,7 +114,7 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
     viewMode: 'DERIVED',
     corrections,
     correctionReasons,
-    classification,
+    heads,
     verdicts,
     appliedVerdicts: verdicts,
     peers,
@@ -133,7 +138,7 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
   //
   // The first version of this check took `produced` from
   // `restoreFromJudgements` and then compared it against the same function's
-  // answer. Breaking the restore on purpose — dropping the classification,
+  // answer. Breaking the restore on purpose — dropping the head assignment,
   // which is exactly `KI-27` — left the drift at nil, because both sides were
   // wrong in the same way. A saved figure comes from the dashboard: it builds
   // the record, computes the model's defaults, lays the sliders over them and
@@ -141,12 +146,12 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
   // has something independent to be wrong against.
   const asTheScreenComputes = (
     corr: any,
-    cls: any,
+    hds: any,
     why: any,
     sliders: any,
     price: number | null
   ): { perpetuity: number | null; exitMultiple: number | null; adjustedEbitda: number | null; refusal: string | null } => {
-    const rec: any = buildCompanyFrom(payload, corr, cls, why);
+    const rec: any = buildCompanyFrom(payload, corr, hds, why);
     const src: any = rec.modelData;
     const defs: any = R.defaultsFor(rec, src);
     const d: any = { ...defs, ...sliders };
@@ -168,7 +173,7 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
 
   // What it is actually worth: the same company with no judgements at all.
   const plain: any = asTheScreenComputes({}, {}, {}, {}, sharePrice);
-  const asSaved: any = asTheScreenComputes(corrections, classification, correctionReasons, drivers, sharePrice);
+  const asSaved: any = asTheScreenComputes(corrections, heads, correctionReasons, drivers, sharePrice);
   if (asSaved.refusal) problems.push(`the model with judgements is refused: ${asSaved.refusal}`);
   // A CHECK THAT WOULD PASS WITH THE JUDGEMENTS IGNORED IS NO CHECK. They have
   // to be worth something, or every comparison below is trivially true.
@@ -252,15 +257,15 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
   const bridge: any = rebuilt.modelData?.meta?.ebitdaBridge;
   if (!bridge) problems.push('the reopened record carries no EBITDA bridge');
   else {
-    const lines = [...bridge.corrections, ...bridge.exclusions];
+    const lines = [...bridge.corrections, ...bridge.oneOffs];
     if (lines.length !== 2) problems.push(`the reopened bridge carries ${lines.length} adjustment lines, expected 2`);
     const why = lines.find((a: any) => a.key === 'correction:operatingIncome')?.reason;
     if (why !== correctionReasons.operatingIncome) {
       problems.push(`the reopened bridge's correction reason reads ${JSON.stringify(why)}`);
     }
-    const exWhy = lines.find((a: any) => a.key === 'exclusion:otherOperatingCosts')?.reason;
-    if (exWhy !== classification.otherOperatingCosts.reason) {
-      problems.push(`the reopened bridge's exclusion reason reads ${JSON.stringify(exWhy)}`);
+    const exWhy = lines.find((a: any) => a.key === 'oneOff:otherOperatingCosts')?.reason;
+    if (exWhy !== heads.otherOperatingCosts.reason) {
+      problems.push(`the reopened bridge's one-off reason reads ${JSON.stringify(exWhy)}`);
     }
   }
 
@@ -285,7 +290,7 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
       row.eachCell({ includeEmpty: false }, (cell: any) => text.push(String(cell.value ?? '')))
     );
     const joined = text.join(' | ');
-    for (const reason of [correctionReasons.operatingIncome, classification.otherOperatingCosts.reason]) {
+    for (const reason of [correctionReasons.operatingIncome, heads.otherOperatingCosts.reason]) {
       if (!joined.includes(reason)) problems.push(`the reopened workbook's bridge omits the reason "${reason}"`);
     }
     // And the last reported year's adjusted figure is the one that was saved.
@@ -386,7 +391,7 @@ export async function checkSavedModel(ticker = 'RELIANCE.NS'): Promise<SavedMode
     // NOTHING GUESSED AND NOTHING ZEROED.
     const j = migrated.judgements;
     if (Object.keys(j.corrections).length) problems.push('a version 1 record came back with corrections it never had');
-    if (Object.keys(j.classification).length) problems.push('a version 1 record came back with a classification it never had');
+    if (Object.keys(j.heads).length) problems.push('a version 1 record came back with a head assignment it never had');
     if (j.sharePrice !== null) problems.push(`a version 1 record came back with a share price of ${j.sharePrice}`);
     if (j.appliedVerdicts !== null) problems.push('a version 1 record came back with applied verdicts it never had');
     if (j.peers !== null) problems.push('a version 1 record came back with a peer set it never had');

@@ -23,13 +23,15 @@ import {
 } from './corrections';
 import { buildEbitdaBridge } from './ebitdaBridge';
 import {
-  applyClassification,
-  overrideCount,
-  reclassifiedLabels,
-  excludedLines,
-  LINE_BY_KEY,
-  type Classification,
-} from './classification';
+  applyHeads,
+  moveCount,
+  movedFields,
+  oneOffFields,
+  LINE_BY_FIELD,
+  HEAD_BY_KEY,
+  headOf,
+  type HeadAssignment,
+} from './heads';
 import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
 import { buildDataConstraints } from './dataConstraints';
 import { payloadQuery, payloadVersionProblem } from './payloadVersion';
@@ -80,17 +82,21 @@ export async function fetchCompanyPayload(ticker: string): Promise<any> {
 export function buildCompanyFrom(
   fetched: any,
   corrections?: Corrections,
-  classification?: Classification,
+  heads?: HeadAssignment,
   correctionReasons?: CorrectionReasons
 ): CompanyData {
   const changed = corrections ? correctionCount(corrections) : 0;
   const corrected = changed ? applyCorrections(fetched, corrections as Corrections) : fetched;
-  // THE SECOND JUDGEMENT ON THE SAME ARRAY. Corrections patch the figures;
-  // a classification attaches the reader's treatment of each cost line to the
+  // THE SECOND JUDGEMENT ON THE SAME ARRAY. Corrections patch the figures; a
+  // head assignment moves money between the fields the engine reads, on the
   // same payload copy. One path in, one derivation, and no screen can apply a
   // judgement the engine does not see.
-  const reclassified = overrideCount(classification);
-  const source = reclassified ? applyClassification(corrected, classification) : corrected;
+  //
+  // ORDER MATTERS AND IS THIS WAY ROUND: the heads are applied to the CORRECTED
+  // statements, because a reader who corrects SG&A and then sets it aside means
+  // their figure set aside, not the source's.
+  const reclassified = moveCount(heads);
+  const source = reclassified ? applyHeads(corrected, heads) : corrected;
 
   const modelData: any = deriveModel(source);
   // The filings themselves travel with the model, so the dashboard can show
@@ -120,7 +126,7 @@ export function buildCompanyFrom(
   modelData.meta.ebitdaBridge = buildEbitdaBridge(
     modelData.filedStatements,
     corrections,
-    classification,
+    heads,
     modelData.meta.correctionReasons || undefined
   );
 
@@ -143,8 +149,15 @@ export function buildCompanyFrom(
   record.reclassified = reclassified
     ? {
         count: reclassified,
-        lines: reclassifiedLabels(classification),
-        excluded: excludedLines(classification).map((key) => LINE_BY_KEY[key]?.label ?? key),
+        // THE HEAD IT WAS MOVED TO TRAVELS WITH THE LABEL, because "SG&A
+        // moved" does not say what the model did with it and "SG&A to
+        // one-offs" does.
+        lines: movedFields(heads).map(
+          (field) =>
+            `${LINE_BY_FIELD[field]?.label ?? field} → ` +
+            `${HEAD_BY_KEY[headOf(field, heads)]?.label ?? headOf(field, heads)}`
+        ),
+        excluded: oneOffFields(heads).map((field) => LINE_BY_FIELD[field]?.label ?? field),
       }
     : undefined;
 
@@ -320,13 +333,12 @@ dataSource: fetched.source,
  * Value per share under one set of judgements, built the way every other
  * screen builds it.
  *
- * This exists so the figures screen can rebuild the model the moment a
- * classification changes and print the previous value beside the new one,
- * which is the judgement layer's fourth rule. It runs the whole chain —
- * derivation, model, discounted cash flow — rather than scaling the old
- * answer: a classification can change which year's margin is the base, and an
- * approximation of its effect would be a judgement of our own on top of the
- * reader's.
+ * This exists so the figures screen can rebuild the model the moment a line is
+ * moved to another head and print the previous value beside the new one, which
+ * is the judgement layer's fourth rule. It runs the whole chain — derivation,
+ * model, discounted cash flow — rather than scaling the old answer: a move can
+ * change which year's margin is the base, and an approximation of its effect
+ * would be a judgement of our own on top of the reader's.
  *
  * A refused company has no value and says so, rather than coming back nil.
  */
@@ -340,11 +352,11 @@ export interface ValueUnder {
 export function valueUnder(
   fetched: any,
   corrections?: Corrections,
-  classification?: Classification,
+  heads?: HeadAssignment,
   correctionReasons?: CorrectionReasons
 ): ValueUnder {
   try {
-    const record = buildCompanyFrom(fetched, corrections, classification, correctionReasons);
+    const record = buildCompanyFrom(fetched, corrections, heads, correctionReasons);
     const source = record.modelData;
     const drivers: any = { ...(record.defaultDrivers || {}), ...defaultDriversFor(source) };
     const { dcf: D } = buildFullModel(source, drivers);

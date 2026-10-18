@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { requireCurrentPayloads, readPayload } from './payloadSet.mts';
 import { checkPeerSpreading, samplePeers } from './peerSpreading.mts';
 import { checkHouseTemplate } from './houseTemplate.mts';
-import { checkClassification } from './classification.mts';
+import { checkHeads } from './heads.mts';
 import { checkEbitdaBridge } from './ebitdaBridge.mts';
 import { checkSavedModel } from './savedModel.mts';
 import { createRequire } from 'node:module';
@@ -247,25 +247,28 @@ for (const c of cases) {
   }
 }
 
-// ---- EXPENSE CLASSIFICATION ---------------------------------------------
-// The judgement layer's first piece, checked here because its claim is about
+// ---- FILED LINES UNDER MODEL HEADS ---------------------------------------
+// The judgement layer's second piece, checked here because its claim is about
 // the workbook as well as the screen: the Assumptions sheet's two judgement
-// columns are filled from the same classification the engine read.
+// columns are filled from the same head assignment the engine read.
 {
-  const r = await checkClassification();
+  const r = await checkHeads();
   console.log(
-    `expense classification: ${r.bucketMoves} grouping moves, worst value drift ` +
-      `${r.worstBucketDrift.toExponential(2)}; reported operating profit ties to the filing within ` +
-      `${r.worstTie.toExponential(2)} of itself under every classification` +
-      (r.moved
-        ? `; excluding ${r.moved.line} takes ${r.moved.ticker} from ${r.moved.base.toFixed(2)} to ` +
-          `${r.moved.excluded.toFixed(2)}`
-        : '') +
-      `; typically ${r.typical} lines are classifiable across ${r.measured} payloads` +
-      (r.problems.length ? '' : ' \u2014 every rule held')
+    `heads: ${r.transfers} single moves checked field by field, worst drift in a field a move may not touch ` +
+      `${r.worstUntouchedDrift.toExponential(2)}; reported operating profit ties to the filing within ` +
+      `${r.worstTie.toExponential(2)} of itself under every assignment; ${r.movers.length} drop-target heads ` +
+      `each change a published number (${r.movers.filter((m) => m.valueMoved).length} the value, ` +
+      `${r.compositionOnly} the composition only); typically ${r.typical} lines are movable across ` +
+      `${r.measured} payloads` + (r.problems.length ? '' : ' \u2014 every rule held')
   );
+  for (const p of r.reproduced) {
+    console.log(
+      `  reproduces ${p.label}: the replaced feature published ${p.expected}, the heads give ` +
+        `${Number.isFinite(p.actual) ? p.actual.toFixed(2) : 'a refusal'}`
+    );
+  }
   if (r.problems.length) {
-    console.log(`\nPROBLEMS WITH EXPENSE CLASSIFICATION: ${r.problems.length}`);
+    console.log(`\nPROBLEMS WITH THE MODEL HEADS: ${r.problems.length}`);
     for (const p of r.problems.slice(0, 20)) console.log(`  ${p}`);
     process.exit(1);
   }

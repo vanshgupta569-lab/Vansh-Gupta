@@ -2685,161 +2685,263 @@ instead of saying "not reported" makes it fail; so does listing an unmapped line
 without its figures (105 lines × 5 periods of problems), and so does writing the
 wrong period's figure onto an unmapped row.
 
-## 22d. The judgement layer: expense classification
+## 22d. The judgement layer: the head each filed line sits under
 
-**A filing gives a carpentry expense. Whether it is a direct cost or an overhead
-is a judgement, and until the reader makes it the model makes it for them.**
+**An analyst reading a set of accounts does not ask whether a cost is
+"indirect". They ask which head of the model it belongs under — and that answer
+changes what the forecast does with the money.**
 
-This is the first piece of `ROADMAP.md` section 2, and the thing it removes is a
-silent decision: which category a reported cost fell into used to depend on
-which tag the source happened to return the figure under, and nothing on the
-screen said so. `src/data/classification.ts`.
+This replaces expense classification, which shipped on 10 October 2026
+(`9980f72`) and is reversed here. `ROADMAP.md` §19b records the reversal; this
+section records what took its place. `src/data/heads.ts`.
 
-### The five categories
+**Why it was the wrong judgement.** Three of its five categories changed nothing
+a model forecasts, and the reason is not that the arithmetic was subtle: nothing
+downstream read them. No forecast driver, no workbook row and no model line
+corresponded to "indirect". A head is a line of the model and of the 138-row
+chart of accounts (§22a), so a move now lands somewhere.
 
-| Category | What belongs in it |
-|---|---|
-| Direct cost | A cost of producing what was sold. Above the gross profit line. |
-| Indirect cost | An operating cost that is neither a cost of the thing sold nor selling or administration. |
-| Selling and distribution | The cost of winning and delivering the sale. |
-| Administrative | The cost of running the company rather than of trading. |
-| Excluded as non-recurring | A cost the reader judges will not repeat. Nil in every forecast year. |
+### What the screen shows, and what it is honest about
 
-### The four lines, and the default for each
+Every line the source returned **for this company**, grouped under the head the
+engine assigns by default, with the basis for that default, the figure editable
+in the same row, and the line draggable to another head.
 
-Not a wish list — these are the operating cost lines a derived model carries,
-and each is in the reported income statement the dashboard draws. **Every
-default states where it came from**, which is the first rule of the layer.
+**These are the fields our source provides, not yet the company's own line
+captions, and the screen says so in those words.** Which lines appear is real
+and differs company by company — Reliance reports no research and development
+and no share-based pay, and does report lease obligations — but the wording of
+each is ours. `DATA_CONSTRAINTS.md` carries the same constraint; the captions
+arrive with the primary-filings data layer (`ROADMAP.md` §1).
 
-| Line | Default | Where the default comes from |
+### The heads, and whether a line can be moved onto one
+
+A head is a **drop target** only where a move changes a number, and which heads
+those are is a measurement rather than a preference. A control that moves a line
+and changes nothing is worse than no control.
+
+| Statement | Drop target | Shown, and not a drop target |
 |---|---|---|
-| Cost of sales | Direct | The filing reports it as cost of sales or cost of revenue, which is a direct cost by its own description. |
-| Research and development | Indirect | The filing reports it separately from selling and administrative costs, and it is not a cost of the units sold. |
-| Selling, general and administrative | Administrative | **A stated convention, not a reading.** The filing combines two of these categories in one line and nothing in it settles the split. |
-| Other operating costs | Indirect | The engine's own line: filed operating income less the named cost lines (§4). Unattributed by construction, so it defaults to indirect rather than to a category it cannot be shown to belong in. |
+| Profit and loss | cost of sales, research and development, selling general and administrative, depreciation and amortisation, other operating costs, one-offs | revenue, other income, finance cost, tax |
+| Balance sheet | cash and investments, receivables, inventory, payables, fixed assets, other | debt including leases, equity |
 
-**Depreciation is deliberately not offered.** The sources report it in the cash
-flow statement and it is already inside these filed cost lines, so classifying
-it would classify the same money twice and break the tie to filed operating
-profit.
+**What decides it is the reconciling line.** The engine ties its built operating
+profit to the filed figure by carrying the difference on its own line (§4,
+`unexplainedOperatingCosts`). So money taken out of a named operating cost
+reappears in that residual, pound for pound, and the forecast margin is
+unchanged — in the reported years by design, because the filing is not restated,
+and in the forecast years too, because the residual is forecast at its own share
+of revenue.
 
-**Cost of sales cannot be excluded**, and the screen says why: it is the
-balancing line in the forecast — the engine derives it from the gross margin
-rather than forecasting it — so there is no margin to set to nil. A one-off
-inside it is a correction to the figure, which the figures table above it makes.
+Four heads are shown and refused, each saying why on screen:
 
-### What a move does to operating profit
+- **Revenue** — the forecast grows the top line rather than reading a margin off
+  it, so a cost moved here would be modelled as a sale and compounded for every
+  forecast year.
+- **Other income** and **finance cost** — measured: an operating cost moved
+  below the operating line cannot change the forecast, because the residual
+  absorbs it. Honouring them needs the engine to take the amount out of the
+  forecast operating base *and* put it below the line. Recorded in `ROADMAP.md`
+  §19b beside the debt hook.
+- **Tax** — the effective rate every forecast year is taxed at is measured on
+  the filed charge against filed pretax profit, so a cost moved here would be
+  read as tax the company paid. A cost is not tax.
+- **Debt including leases** — the total is built from up to fourteen overlapping
+  filed fields with separate US GAAP and IFRS paths. The engine hook is the next
+  job.
+- **Equity** — derived as total assets less total liabilities, which is what
+  makes the balance sheet tie in every year. Nothing assigned to it would reach
+  the model.
 
-Operating profit in the engine is a sum:
+### The re-aggregation is a transfer, not a re-sum
 
-    EBIT = revenue + cost of sales + R&D + SG&A + other operating costs
-           (costs negative), less D&A and SBC
+Each line's money sits in its own payload field. A move **subtracts** the line's
+amount from its own field and **adds** it to the field the destination head
+drives. Nothing else is touched.
 
-**Addition does not care what the terms are called.** So moving a line between
-direct, indirect, selling and distribution and administrative changes gross
-profit and the subtotals below it, and **cannot change operating profit** — not
-in a reported year and not in a forecast year. Measured: 13 grouping moves on
-Reliance, including every line moved at once, and the worst drift in value per
-share is **exactly nil**. A grouping never reaches the engine at all;
-`applyClassification` carries only what changes an answer.
+**This is the part that is easy to get wrong, and the first implementation got
+it wrong.** It re-summed instead: each engine field became the sum of every line
+assigned to its head. That reads better and is wrong, because **the payload
+fields are not a partition**. Share-based pay is already inside the filed SG&A,
+and short-term investments are read on their own field and added to cash by the
+engine. Re-summing double counted both the moment any one line was moved:
 
-**Excluding a line is the one choice with arithmetic in it.** The line is nil in
-every forecast year, so the forecast operating margin rises and the valuation
-with it. On Reliance, excluding selling, general and administrative takes value
-per share from **706.52 to 1,044.32**; excluding other operating costs takes it
-to **1,683.09**, because that line carries 10.1% of revenue. That is the
-measurement that says why this had to be surfaced rather than left as a default
-nobody could see.
+| | Filed | Re-summed |
+|---|---|---|
+| AAPL FY2025 SG&A | 27,601 | 40,464 |
+| MSFT FY2026 SG&A | 7,956 | 20,361 |
+| AAPL FY2025 cash | 35,934 | 54,697 |
+| RELIANCE FY2026 cash | 1,373,270 | 2,772,120 |
 
-### Reported operating profit ties to the filing, whatever is chosen
+None of it showed up in the obvious check, because `applyHeads(payload, {})`
+short-circuits on an empty assignment and returns the identical object — a check
+that cannot fail. A transfer is identity per line by construction, so a line
+moved to its own default head subtracts and adds the same amount to the same
+field.
 
-An exclusion **never touches a reported year**. The filed figure stays the filed
-figure, `unexplainedOperatingCosts` still reconciles built operating profit to
-it, and the underlying operating profit a reader may prefer is shown as its own
-subtotal **beside** the reported one rather than replacing it. A judgement about
-the future may not restate a filing, which is the standing decision that
-reported, corrected, reclassified and modelled are four visibly separate states.
+Two kinds of line are therefore shown and never a transfer source:
 
-Measured across every classification of every classifiable line on Reliance and
-Microsoft: reported operating profit differs from the filed figure by at worst
-**4.56e-16 of itself** — floating point, and the same figure with no
-classification at all.
+- **A component** — share-based pay inside SG&A, depreciation inside the filed
+  cost lines. The engine already extracts each at the share it took and charges
+  it as its own line, so moving one would move money its parent still reports.
+- **An anchor or filed subtotal** — operating profit, pretax profit, net income,
+  total current assets, total current liabilities, total assets, total
+  liabilities, filed equity. These are what the model ties *itself* to. They are
+  shown in a band of their own and remain editable, because the engine plugs
+  other current assets from total current assets and other liabilities from
+  total liabilities, so correcting one changes where every unnamed balance
+  lands. They are excluded from every head's total: putting the three income
+  anchors under the revenue head made it read as revenue plus operating profit
+  plus pretax profit plus net income and broke the screen's own tie row by
+  **2,627,630** on Reliance.
+
+### One-offs, and the engine hook it needs
+
+One-offs is the head that takes money out of the forecast base, and the head the
+adjusted EBITDA bridge reads (§22e). It has no payload field, and the
+reconciling line would hand the money straight back, so `deriveModel` is told
+about it directly and takes the amount out of the residual's **forecast** base:
+
+    forecast residual = 0                              where the reconciling line itself is set aside
+                      = residual − the named one-offs   otherwise
+
+The reported years are untouched, so reported operating profit still ties to the
+filing. The amounts are keyed **by fiscal year, not by index**, because
+`selectComparablePeriods` drops a year that is not comparable and the engine's
+row array is then shorter than the payload's; an index-aligned array would have
+taken one year's one-off out of another year's base, silently, and only on the
+companies that had a period set aside.
+
+**Cost of sales cannot be set aside as a one-off**, and the screen says why — it
+is the balancing line the gross margin is derived from, so there is no margin to
+take to nil. Measured: zeroing it took the gross margin to 100% and the forecast
+still carried 565,937 of cost on Reliance in the first forecast year. This is
+the same refusal expense classification made, for the same reason.
+
+### What a move actually changes, measured
+
+Reported operating profit ties to the filing under **every** assignment:
+measured across 215 single moves on Apple, Reliance, Microsoft and Walmart, the
+worst drift is **9.13e-16 of itself** — floating point, and the same figure with
+nothing moved at all.
+
+Twelve drop-target heads each change a number the model publishes. Eleven change
+value per share; one — cost of sales as a *destination* — changes the gross
+margin and the line composition without changing the value, because the three
+named cost margins sum to the same total. The screen states the distinction and
+carries these figures:
+
+| Move | Value per share |
+|---|---|
+| Reliance, SG&A to research and development | 706.52, unchanged |
+| Reliance, SG&A to one-offs | 706.52 → **1,044.32** |
+| Reliance, other operating costs to one-offs | 706.52 → **1,683.09** |
+| Apple, SG&A to depreciation and amortisation | 154.72 → **183.39** |
+| Apple, short-term investments to other assets | 154.72 → **152.86** |
+| Apple, long-term investments to cash | 154.72 → **162.44** |
+| Apple, cash to fixed assets | 154.72 → **150.57** |
+
+The first three are the figures expense classification published, and the
+one-offs head reproduces them exactly. That is the evidence that removing the
+old feature loses nothing: the mechanism it had is the mechanism one-offs has.
+
+On the balance sheet the value moves where a line **crosses** between cash,
+working capital and fixed assets, because those are the three forecast rules
+that differ — net debt reads cash, the roll-forward depreciates fixed assets,
+and every working-capital line grows at the revenue rate once the gross margin
+is held flat. A move inside the working-capital group changes the composition
+and not the value, for that reason.
+
+**With nothing moved, nothing changes.** The payload sweep over 176 companies,
+either side of this commit, reports 70 valued on both sides, **0 moved at all**,
+and no company moved on the cost of capital, EBITDA, net debt or the exit
+multiple either.
 
 ### Where it sits, and the four rules
 
-On the **figures screen**, between the filed figures above it and the model that
-has not been built yet, because that is what it is: a reading of the filing
-rather than a setting on a finished model. A panel on the analysis screen would
-make it something a reader finds after the value has already anchored them.
+On the **figures screen**, in one table, because correcting a figure and
+deciding which head a line belongs under are the two judgements a reader makes
+about the same row. They used to be two screens stacked in two vocabularies.
 
-- **The default says where it came from** — the table above, printed under each
-  line, and the filed default stays on screen beside the reader's choice the
-  same way a corrected figure keeps the filed one.
-- **Every override takes an optional one-line reason.** Optional on purpose: a
-  reason nobody can skip is a reason nobody reads. It travels to the workbook.
-- **Every override has a visible return to the default**, per line and for the
-  whole screen. A return reproduces the engine's own model exactly, which
-  `verify:workbook` asserts rather than assumes.
+- **The default says where it came from** — one disclosure per head carrying
+  every line's basis beneath it, which is where a reader goes to ask "why is
+  this here" and nowhere else. A line the reader has moved says so inline, in
+  oxblood, naming the head it left.
+- **Every move takes an optional one-line reason.** Optional on purpose. It
+  travels to the workbook.
+- **Every move has a visible return to the default**, per line and for the whole
+  screen. A return reproduces the engine's own model exactly.
 - **A change rebuilds the model immediately, with the previous value still
-  beside it.** The screen runs the whole chain again — derivation, model,
-  discounted cash flow (`valueUnder` in `autoCompany.ts`) — rather than scaling
-  the old answer, which would be our judgement on top of the reader's. A company
-  the engine refuses says so rather than showing a blank where a figure goes.
+  beside it** — the whole chain again (`valueUnder`), never a scaling of the old
+  answer. A company the engine refuses says so rather than showing a blank.
 
-A reclassified model is badged in the header beside a corrected one, counted
-separately, because a figure corrected and a cost line classified are different
-claims about the model.
+**A drag is not the only way.** Every row carries a native menu of the heads it
+may go to, which is the control a keyboard and a screen reader can reach; the
+drag is the faster one for a mouse. The field a drop carries comes out of the
+`dataTransfer`, not out of React state, because reading state made the drop
+depend on a re-render having happened between `dragstart` and `drop` — which a
+browser gives you most of the time, and which is the worst kind of bug.
 
-**Typically three lines are classifiable**, measured across 176 fetched
-payloads: 71 companies have four, 49 have three, 12 have two, 32 have one and 12
-have none. A line the filing never reports is not offered — five buttons against
-an absence is invented work, not a judgement.
+**Typically eleven lines are movable**, measured across 176 fetched payloads. A
+line the filing never reports is not offered.
 
 ### In the workbook
 
-The Assumptions sheet's two right-hand columns were headed and left empty for
-this (§22, `fac1d4d`). They now carry, against each of the four operating cost
-rows, **whether the value is the engine's default or the reader's own — naming
-the default either way — and the reason the reader gave.** An override with no
-reason reads "No reason given." rather than coming back blank, which would read
-as a reason the file lost.
+The Assumptions sheet's two right-hand columns carry, against each operating
+cost row, **whether the head is the engine's default or the reader's own —
+naming the default either way — and the reason the reader gave.** A move with no
+reason reads "No reason given." rather than coming back blank.
 
-The sheet reads the classification off `meta.classification`, which is the same
-object the engine itself read when it decided what to forecast. A sheet keeping
+The sheet reads the assignment off `meta.heads` and the head labels off
+`heads.ts`, which are the same objects the engine itself read. A sheet keeping
 its own copy could describe a treatment the model does not use and nothing would
-catch it, which is the `KI-4` rule applied to a judgement.
+catch it — the `KI-4` rule applied to a judgement.
 
-A row with both columns empty is one where no judgement is offered yet, and the
-sheet says so and points at the roadmap for the rest. **The sheet offers exactly
-the choices the screen offers**: it reads the model's own reported-basis series
-to decide, so a company that reports no R&D gets no R&D judgement column — a
-column saying its default is indirect would describe a decision nobody is being
-asked to take. `verify/classification.mts` asserts the two agree line by line,
-and reports it when they do not.
+**A line the reader has moved always carries its column, even when the move
+emptied the line.** This was a defect, and it was measured: SG&A put under
+one-offs leaves the SG&A field at nil, so the reported-basis series the column
+keyed off was nil in every year, so the row carrying the judgement disappeared.
+The judgement erased its own record, and the workbook came back with no account
+of the one decision that moved the valuation most.
 
 ### Checked
 
-`verify/classification.mts`, run by `verify:workbook`. It asserts the grouping
-invariance across every line into every category, that an exclusion **does**
-move the value and does raise it, that the excluded line really is nil in every
-forecast year and untouched in every reported one, that the engine's provenance
-states the exclusion and carries the reason, that a return to the default
-reproduces the untouched model, that a choice a line does not offer is never
-applied, and that the workbook's two columns hold what they claim.
+`verify/heads.mts`, run by `verify:workbook`. It asserts the **exact arithmetic
+of every single move, field by field** — the line's own field loses the amount,
+the destination head's gains it, every other field is the filed figure and every
+filed anchor is untouched — across 319 moves on six companies; that reported
+operating profit ties to the filing under every assignment; that every
+drop-target head changes a number the model publishes; that one-offs leaves the
+forecast and never restates a reported year's operating cost total; that the
+amounts are keyed by fiscal year; that a head the engine cannot honour is never
+applied however it got into a record; that a line naming a payload field no
+payload carries is reported rather than silently invisible; and that the
+workbook's two columns hold what they claim.
 
-Proved to fail without each fix: making the exclusion a no-op reports that
-excluding leaves the value unchanged and that the forecast still carries the
-cost; letting a grouping reach the engine reports a 47.8% and a 138% drift;
-counting one cost in two categories reports the subtotals missing filed
-operating profit by the whole of cost of sales; and leaving the workbook's
-columns unwritten reports all four rows empty.
+**Proved to fail without each fix**, by breaking each on purpose:
 
-`verify:dashboard` drives the band in a real browser — the default stated, the
-reason taken, the way back present, the model rebuilt with the previous value
-beside it, and the screen returned to where it started. **The figures screen was
-never in the contrast pass before this**, which is how a whole band of new type
-could have arrived on it unmeasured; adding it took the pass from 5 screens and
-2,347 elements to 9 and 4,153.
+| Break | What the check says |
+|---|---|
+| Re-sum share-based pay into SG&A | moving sga to cogs made sga 7,906 where the transfer gives 0 (filed 21,973) |
+| Put the filed anchors back under the revenue head | revenue less every head misses filed operating profit by 2,627,630 |
+| Key the one-off amounts by index | SG&A under one-offs left value per share unchanged |
+| Remove the engine hook | the heads give 706.52 where the replaced feature published 1,044.32 |
+| Drop the moved-line rule from the workbook column | the SG&A assumption row carries no judgement |
+| Make a refused head a drop target | revenue less every head misses filed operating profit by 6,718,980 |
+| Read the drop from React state | the head after dragging rnd: oneOffs expected, rnd found |
+
+An earlier version of the field-by-field check asserted only that the fields a
+move **may not** touch were untouched, and that check could not fail in the way
+that matters: re-summing writes `sga`, which is a field the move is allowed to
+touch, so the defect the whole file exists to catch walked straight past it.
+Breaking the transfer produced zero problems. Nothing is permitted now, only
+predicted.
+
+`verify:dashboard` drives the table in a real browser — the honesty note
+visible, the head bands drawn, a refused head marked and giving its reason, the
+basis reachable, a move made **with the keyboard**, a move made by **dispatching
+real drag events**, the model rebuilt with the previous value beside it, and the
+screen returned to where it started.
 
 ## 22e. The adjusted EBITDA bridge
 
@@ -2873,11 +2975,12 @@ reader can do on the accounts. It is the same definition the engine uses
 (`S.ebitda`) and the same one the peer multiples are computed on.
 
 **The D&A add-back is named, not assumed, and is never an adjustment.** It is
-what makes the figure EBITDA rather than EBIT. §22d deliberately does not offer
-depreciation as a classifiable line — the sources report it in the cash flow
-statement and it already sits inside the filed cost lines, so classifying it
-would classify the same money twice — and the bridge says so rather than leaving
-a reader to work out why it is absent from the list of choices. Where the filing
+what makes the figure EBITDA rather than EBIT. §22d shows depreciation and
+deliberately does not let it be moved to another head — the sources report it in
+the cash flow statement and the money already sits inside the filed cost lines,
+so moving it would move money cost of sales still reports and would classify the
+same money twice — and the bridge says so rather than leaving a reader to work
+out why it is absent from the list of choices. Where the filing
 reports no D&A in a year, the line reads **none filed** and EBITDA equals
 operating profit: an absence in the filing, not a company without depreciation.
 
@@ -2906,9 +3009,8 @@ correction's reason is a statement about the line ("the source's SG&A leaves out
 depreciation") and is the same in every year it was applied. One reason per
 field is also the unit a bridge reads in. It is typed on the bridge line itself,
 which is where a person explains an adjustment, rather than in a text box
-squeezed into a table of figures. For an exclusion the same box writes to the
-classification's own reason, so there is one place to type and one store behind
-it.
+squeezed into a table of figures. For a one-off the same box writes to the head
+assignment's own reason, so there is one place to type and one store behind it.
 
 ### The three ties
 
@@ -2986,7 +3088,7 @@ filed; and removing the "No reason given." fallback reports a blank reason.
 
 `verify:dashboard` drives it in a browser: the bridge on the screen that built
 it, what it includes and excludes, an adjustment arriving with its reason field,
-the reason shared with the classification band, the tie nil in every year that
+the reason shared with the heads table, the tie nil in every year that
 has a reported EBITDA and an em dash in every year that has none. Breaking the
 bridge makes it fail on the page as well as in the file.
 
@@ -2998,9 +3100,9 @@ the figure it was saved at.** `src/data/savedModels.ts` holds the shape;
 
 It used to store the sliders, the view mode, and the value per share at the
 time, and nothing else — which was `KI-27`. A model built on a corrected figure
-or a reclassified cost line reopened on the filed figures and the engine's own
-treatments, while the saved list went on printing the value it had WITH those
-judgements. Measured on Reliance: saved at 1,044.32, reopened at 706.52, the
+or a line moved to another head reopened on the filed figures and the engine's
+own treatments, while the saved list went on printing the value it had WITH
+those judgements. Measured on Reliance: saved at 1,044.32, reopened at 706.52, the
 list and the screen 32.3% apart with nothing on either saying why.
 
 ### What is on the record
@@ -3009,14 +3111,14 @@ list and the screen 32.3% apart with nothing on either saying why.
 |---|---|
 | The sliders, and the view mode they belong to | the dashboard |
 | Corrections to filed figures, and the reason for each | the figures screen (11a) |
-| The expense classification, and its reasons | the figures screen (§22d) |
+| The head each filed line sits under, and its reasons | the figures screen (§22d) |
 | The qualitative answers, both ticked and applied | the qualitative panel |
 | The peer set, where the reader took it over | the market approach |
 | The asset approach's recovery rates | the asset panel |
 | **The share price the valuation was struck against** | the ticker header |
 
 The adjusted EBITDA bridge (§22e) is not a separate field: it is derived from
-the corrections and the classification, so restoring those restores it.
+the corrections and the head assignment, so restoring those restores it.
 
 ### The share price is an input, not a judgement
 
@@ -3045,11 +3147,28 @@ behind it have been fetched again since.
 It is migrated on read, and **kept honest about what it lacks.** Its sliders and
 its view mode are real and are carried across. Everything else is named — "it
 did not store your corrections to the filed figures; the reasons you gave for
-them; your expense classification; your answers on the qualitative screen; your
+them; the head you put each filed line under; your answers on the qualitative screen; your
 peer set; the asset approach recovery rates; the share price the valuation was
 struck against" — and left empty. **Nothing is guessed at and nothing is
 zeroed**, the one figure it did store is printed beside what it reopens at, and
 the row says in plain words why the two differ.
+
+### A record saved at version 2, and what its classification becomes
+
+Version 2 stored an expense classification. Version 3 stores a head assignment,
+and the migration is not a guess:
+
+- **`excluded` becomes the one-offs head**, which carries over **exactly**: the
+  one-offs hook reproduces what the exclusion did, figure for figure. A record
+  saved with Reliance's SG&A excluded reopens at 1,044.32, which is what it was
+  saved at, and one with other operating costs excluded at 1,683.09.
+- **`direct`, `indirect`, `selling` and `admin` become nothing**, and that is
+  the honest migration rather than a dropped field. Those four changed no number
+  in any model, so the record still reopens at the figure it was saved at with
+  every line on its default head.
+
+The record **says which happened, in words**, through `carriedOver`. A migration
+a reader cannot see is a migration they cannot check.
 
 ### The shape is independent of where it is kept
 
@@ -3063,9 +3182,11 @@ verification harness saves and reopens without a browser at all.
 ### Checked
 
 `verify/savedModel.mts`, run by `verify:workbook`. It moves every judgement the
-shape carries — four sliders, a correction with its reason, two classified cost
-lines with theirs, the qualitative answers, the peer set, the recovery rates and
-the price — saves through `makeSavedModel`, puts the record through `serialise`
+shape carries — four sliders, a correction with its reason, two moved lines with
+theirs (one under the one-offs head, which moves the value, and one between two
+operating cost heads, which does not, so a move the valuation is indifferent to
+is also shown to survive a round trip), the qualitative answers, the peer set,
+the recovery rates and the price — saves through `makeSavedModel`, puts the record through `serialise`
 then `parse` so what is compared is what a file or a server hands back, and
 reopens through the one restore path. Value per share on both methods and the
 bridge's adjusted EBITDA come back within **0** of what was saved.
@@ -3087,17 +3208,18 @@ iterative machinery that resolves it and already proves all 22 Checks rows nil,
 "All checks pass", across ten scenarios; what is new here is the record, so the
 identity those rows test is read off the engine the record produced.
 
-Proved to fail without each fix: dropping the classification on restore reports
+Proved to fail without each fix: dropping the head assignment on restore reports
 the value 0.86% out and the adjusted EBITDA 36.8% out; ignoring the saved
 sliders reports each one by name; dropping the saved price reports the value
 1.31% out; and completing a version 1 record silently reports it as claiming to
 be complete.
 
-`verify:dashboard` drives it in a browser: a cost line excluded on the figures
-screen, the model rebuilt, the set saved, the row showing one figure because it
-reproduces itself, a record with no judgements opened to move the page off that
-figure, and then the saved row opened to bring it back. **The header badge is
-asserted either side**, because the sliders can mask a missing classification:
+`verify:dashboard` drives it in a browser: a cost line set aside as a one-off on
+the figures screen, the model rebuilt, the set saved, the row showing one figure
+because it reproduces itself, a record with no judgements opened to move the
+page off that figure, and then the saved row opened to bring it back. **The
+header badge is asserted either side**, because the sliders can mask a missing
+head assignment:
 on the paper fixture the forecast is identical with and without it, so the
 figure alone would have passed while the record was wrong. On Reliance the same
 omission moves the value 32.5%.

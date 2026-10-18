@@ -172,10 +172,11 @@ export interface CompanyData {
   // one, which is the site's central promise.
   correctedInputs?: { count: number; fields: string[] };
 
-  // Set only when the reader has moved a reported expense line off the
-  // engine's default category (src/data/classification.ts). `lines` are the
-  // filed names of every line moved; `excluded` are the ones taken out of the
-  // forecast operating base, which are the only ones that change a figure.
+  // Set only when the reader has moved a filed line off the head the engine
+  // assigns by default (src/data/heads.ts). `lines` read "Selling, general and
+  // administrative → One-offs", because the line's name alone does not say what
+  // the model did with it; `excluded` are the lines put under the one-offs
+  // head, which are the ones taken out of the forecast operating base.
   reclassified?: { count: number; lines: string[]; excluded: string[] };
 
   // The payload exactly as the fetcher returned it, kept so the figures can be

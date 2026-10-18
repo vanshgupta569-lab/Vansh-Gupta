@@ -5,9 +5,9 @@
 // WHY THIS EXISTS
 //
 // The figures screen already does the work. Correcting a filed figure
-// (`corrections.ts`) and excluding a line as non-recurring
-// (`classification.ts`) are, between them, exactly how an adjusted EBITDA is
-// arrived at — and the screen never named what the reader had built.
+// (`corrections.ts`) and putting a line under the one-offs head (`heads.ts`)
+// are, between them, exactly how an adjusted EBITDA is arrived at — and the
+// screen never named what the reader had built.
 //
 // The bridge is the artefact. A valuer, a lender or a buyer does not receive a
 // model; they receive a page that starts at the EBITDA in the accounts, lists
@@ -23,14 +23,13 @@
 // definition the engine uses (`src/engine/model.js`, `S.ebitda`), and the same
 // one the peer multiples are computed on.
 //
-// **The D&A added back is named rather than assumed.** The screen deliberately
-// does not offer depreciation as a classifiable line, because the sources
-// report it in the cash flow statement and it already sits inside the filed
-// cost lines; classifying it would classify the same money twice. So it is
-// never an *adjustment* here. It is the add-back that makes this EBITDA rather
-// than EBIT, it is shown on its own line, and where the filing reports none the
-// line says so instead of printing a nil that reads as "there was no
-// depreciation".
+// **The D&A added back is named rather than assumed.** Depreciation is shown on
+// the screen but cannot be moved, because the sources report it in the cash
+// flow statement and the money already sits inside the filed cost lines; moving
+// it would move money cost of sales still reports. So it is never an
+// *adjustment* here. It is the add-back that makes this EBITDA rather than EBIT,
+// it is shown on its own line, and where the filing reports none the line says
+// so instead of printing a nil that reads as "there was no depreciation".
 //
 // **Stock compensation is not added back.** This is EBITDA, not EBITDA before
 // share-based pay. The engine leaves it in costs because the peers' multiples
@@ -59,20 +58,22 @@
 // formulas so the file cannot drift from itself after a reader edits it.
 import { applyCorrections, FIELD_BY_KEY, type Corrections, type CorrectionReasons } from './corrections';
 import {
-  CLASSIFIABLE_LINES,
-  LINE_BY_KEY,
-  categoryOf,
-  lineAmounts,
-  type Classification,
-} from './classification';
+  LINES,
+  LINE_BY_FIELD,
+  RECONCILING_LINE,
+  headOf,
+  reasonOf,
+  reconcilingLine,
+  type HeadAssignment,
+} from './heads';
 
 const num = (v: any): number | null => (typeof v === 'number' && isFinite(v) ? v : null);
 
-export type AdjustmentKind = 'correction' | 'exclusion';
+export type AdjustmentKind = 'correction' | 'oneOff';
 
 export interface Adjustment {
   kind: AdjustmentKind;
-  /** `correction:<field>` or `exclusion:<lineKey>`. Stable, for a reason input. */
+  /** `correction:<field>` or `oneOff:<field>`. Stable, for a reason input. */
   key: string;
   label: string;
   /** The reader's one line. Empty where they gave none. */
@@ -97,7 +98,8 @@ export interface EbitdaBridge {
   corrections: Adjustment[];
   /** Reported EBITDA with the corrections applied. */
   afterCorrections: (number | null)[];
-  exclusions: Adjustment[];
+  /** The lines put under the one-offs head, which is what an adjustment is. */
+  oneOffs: Adjustment[];
   adjustedEbitda: (number | null)[];
   /** adjusted − (reported + every adjustment). Nil in every year, or it is broken. */
   tie: (number | null)[];
@@ -142,7 +144,7 @@ const fmtNum = (v: number | null): string =>
 export function buildEbitdaBridge(
   filedStatements: any[],
   corrections?: Corrections,
-  classification?: Classification,
+  heads?: HeadAssignment,
   reasons?: CorrectionReasons
 ): EbitdaBridge {
   const filed = Array.isArray(filedStatements) ? filedStatements : [];
@@ -200,39 +202,46 @@ export function buildEbitdaBridge(
   }
   corrs.sort((a, b) => a.label.localeCompare(b.label));
 
-  // ---- the exclusions, one line per excluded cost line ------------------
+  // ---- the one-offs, one line per line under that head ------------------
   //
-  // An exclusion adds the cost back: the reader is saying the business does not
+  // A one-off adds the cost back: the reader is saying the business does not
   // carry it. The amount is read off the CORRECTED statements, because by this
-  // point in the bridge the corrections have already been made.
-  const amounts = lineAmounts(corrected as any[]);
-  const excls: Adjustment[] = [];
-  for (const line of CLASSIFIABLE_LINES) {
-    if (!line.excludable) continue;
-    if (categoryOf(line.key, classification) !== 'excluded') continue;
-    const byYear = amounts.map((a) => {
-      const v = a.amounts[line.key];
-      return v === null ? null : v;
-    });
+  // point in the bridge the corrections have already been made — a reader who
+  // corrected SG&A and then set it aside set their figure aside, not the
+  // source's.
+  //
+  // THE RECONCILING LINE IS COMPUTED, NOT READ. It is filed operating profit
+  // less the named cost lines, from `heads.ts`, which is the same function the
+  // screen groups by and the same arithmetic `deriveModel` ties with. A second
+  // derivation of it here could disagree with those and nothing would catch it.
+  const residual = reconcilingLine(corrected as any[]);
+  const oneOffs: Adjustment[] = [];
+  for (const line of LINES) {
+    if (!line.movable) continue;
+    if (headOf(line.field, heads) !== 'oneOffs') continue;
+    const byYear =
+      line.field === RECONCILING_LINE
+        ? residual.slice()
+        : (corrected as any[]).map((r) => num(r?.[line.field]));
     const moves = byYear.filter((v) => v !== null && Math.abs(v) > 1e-6).length;
-    excls.push({
-      kind: 'exclusion',
-      key: `exclusion:${line.key}`,
-      label: LINE_BY_KEY[line.key]?.label || line.key,
-      reason: classification?.[line.key]?.reason?.trim() || '',
+    oneOffs.push({
+      kind: 'oneOff',
+      key: `oneOff:${line.field}`,
+      label: LINE_BY_FIELD[line.field]?.label || line.field,
+      reason: reasonOf(line.field, heads).trim(),
       byYear,
       yearsMoved: moves,
       detail:
-        'excluded as non-recurring: the cost is added back in every reported year, and is nil in every ' +
+        'under the one-offs head: the cost is added back in every reported year, and is nil in every ' +
         'forecast year of the model',
     });
   }
 
   let adjustedEbitda = afterCorrections.slice();
-  for (const e of excls) adjustedEbitda = addInto(adjustedEbitda, e.byYear);
+  for (const e of oneOffs) adjustedEbitda = addInto(adjustedEbitda, e.byYear);
 
   // ---- the tie ----------------------------------------------------------
-  const every = [...corrs, ...excls];
+  const every = [...corrs, ...oneOffs];
   const tie = adjustedEbitda.map((adj, i) => {
     if (adj === null || reportedEbitda[i] === null) return null;
     let sum = reportedEbitda[i] as number;
@@ -251,7 +260,7 @@ export function buildEbitdaBridge(
     reportedEbitda,
     corrections: corrs,
     afterCorrections,
-    exclusions: excls,
+    oneOffs,
     adjustedEbitda,
     tie,
     neutral,
@@ -261,6 +270,6 @@ export function buildEbitdaBridge(
 
 /** The lines a reason can be attached to, for a screen to render inputs for. */
 export const adjustmentKeys = (b: EbitdaBridge): string[] =>
-  [...b.corrections, ...b.exclusions].map((a) => a.key);
+  [...b.corrections, ...b.oneOffs].map((a) => a.key);
 
 export default { buildEbitdaBridge, ebitdaOf, adjustmentKeys };

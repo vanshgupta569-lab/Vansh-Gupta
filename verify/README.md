@@ -267,6 +267,9 @@ and skipped.
 | `compare.mts` | Two snapshots measured against each other. |
 | `workbook-vs-site.mts` | The workbook's value per share against the engine's. |
 | `dashboard.mts` | The rendered page against the engine, in a real browser. |
+| `heads.mts` | The head each filed line sits under: every single move checked field by field, the reported tie, and the figures the replaced feature published. |
+| `ebitdaBridge.mts` | Reported EBITDA, every adjustment and the three ties, in the model and in the written file. |
+| `savedModel.mts` | Every judgement a saved record carries, through the wire format and back. |
 | `payloadSet.mts` | What shape the payloads on disk are, and the refusal to measure a stale set. |
 | `fixtures/paperCompany.mts` | Five years of statements for a company that does not exist. |
 | `fetch-payloads.mts` | Fetches the sweep set through the site's own API handler. |

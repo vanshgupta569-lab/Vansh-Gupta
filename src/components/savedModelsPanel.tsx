@@ -90,7 +90,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
     );
     return {
       corrections,
-      classified: Object.keys(j.classification || {}).length,
+      classified: Object.keys(j.heads || {}).length,
       verdicts: Object.keys(j.appliedVerdicts || {}).length,
       peers: j.peers ? j.peers.length : 0,
     };
@@ -147,7 +147,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
       <p className="text-[14px] leading-relaxed text-[#A1A1AA] mb-6 max-w-2xl">
         Save a set of judgements and come back to it. A saved model carries everything that decides
         the valuation — the sliders, your corrections to the filed figures and the reasons you gave,
-        your expense classification, your answers on the qualitative screen, your peer set, the
+        the head you put each filed line under, your answers on the qualitative screen, your peer set, the
         recovery rates, and the share price the valuation was struck against — so it reopens at the
         figure it was saved at. Saved models live in this browser on this device, so clearing your
         browsing data removes them. Use export to keep a copy or to move them to another machine.

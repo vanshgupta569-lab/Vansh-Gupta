@@ -21,7 +21,7 @@
 //
 //   · the sliders, and the view mode they belong to
 //   · the reader's corrections to filed figures, and their reasons
-//   · their expense classification, and its reasons
+//   · the model head they put each filed line under, and their reasons
 //   · the qualitative answers, both ticked and applied
 //   · the peer set, where they took it over
 //   · the asset approach's recovery rates
@@ -53,9 +53,32 @@
 // entry never has its missing judgements guessed at or filled with zeros. It
 // comes back with `missing` naming what was not stored, and every screen that
 // shows it says so.
+//
+// ---------------------------------------------------------------------------
+// VERSION 3, AND WHAT A VERSION 2 RECORD CARRIES OVER
+// ---------------------------------------------------------------------------
+//
+// Version 2 stored an EXPENSE CLASSIFICATION: each cost line as direct,
+// indirect, selling, administrative or excluded. Version 3 stores a HEAD
+// ASSIGNMENT instead (`heads.ts`), because that is what the model reads now.
+// The migration is not a guess, and it is less lossy than it looks:
+//
+//   · `excluded` becomes the ONE-OFFS head. This carries over EXACTLY, not
+//     approximately: the one-offs hook in `deriveModel` reproduces what the
+//     exclusion did, figure for figure. Measured on Reliance, a record saved
+//     with SG&A excluded reopens at 1,044.32, which is what it was saved at,
+//     and one with other operating costs excluded at 1,683.09.
+//
+//   · `direct`, `indirect`, `selling` and `admin` become NOTHING, and that is
+//     the honest migration rather than a dropped field. Those four categories
+//     changed no number in any model: operating profit is the sum of the same
+//     lines whatever they are called, and nothing downstream read them. So a
+//     record carrying them reopens at exactly the value it was saved at, with
+//     every line on its default head. The record SAYS SO through `carriedOver`
+//     rather than leaving a reader to wonder where their choice went.
 
 import type { Corrections, CorrectionReasons } from './corrections';
-import type { Classification } from './classification';
+import type { HeadAssignment, HeadKey } from './heads';
 
 const KEY = 'marginalia.savedModels.v1';
 
@@ -64,9 +87,12 @@ const KEY = 'marginalia.savedModels.v1';
  *
  *   1 — sliders, view mode and the value per share. Judgements were not stored.
  *   2 — every input that decides the valuation, including the share price it
- *       was struck against, and what the model produced under them.
+ *       was struck against, and what the model produced under them. The
+ *       judgement about each cost line was an expense classification.
+ *   3 — the same, with the head each filed line sits under in place of that
+ *       classification (ROADMAP.md §19b).
  */
-export const SAVED_MODEL_VERSION = 2;
+export const SAVED_MODEL_VERSION = 3;
 
 /** What was ticked on the qualitative screen. Kept loose: the engine owns the values. */
 export type SavedVerdicts = Record<string, any>;
@@ -79,8 +105,8 @@ export interface SavedJudgements {
   corrections: Corrections;
   /** One line per corrected field. */
   correctionReasons: CorrectionReasons;
-  /** The treatment of each reported expense line, with its reason. */
-  classification: Classification;
+  /** The model head each filed line sits under, with its reason. */
+  heads: HeadAssignment;
   /** What the reader ticked on the qualitative screen. */
   verdicts: SavedVerdicts;
   /** What was actually applied to the model. Null where nothing was. */
@@ -118,10 +144,17 @@ export interface SavedModel {
   savedAt: string;
   /**
    * Inputs this record does not carry, by name, because the version that wrote
-   * it did not store them. Empty on anything written at version 2 or later.
+   * it did not store them. Empty on anything written at the current version.
    * NEVER filled in with a guess: an absent judgement is an absence.
    */
   missing: string[];
+  /**
+   * What an older record's judgements became on the way in, in words, wherever
+   * the answer is not simply "they are still here". Empty on anything written
+   * at the current version. A migration a reader cannot see is a migration they
+   * cannot check.
+   */
+  carriedOver?: string[];
 }
 
 export const emptyJudgements = (): SavedJudgements => ({
@@ -129,7 +162,7 @@ export const emptyJudgements = (): SavedJudgements => ({
   viewMode: 'DERIVED',
   corrections: {},
   correctionReasons: {},
-  classification: {},
+  heads: {},
   verdicts: {},
   appliedVerdicts: null,
   peers: null,
@@ -141,7 +174,7 @@ export const emptyJudgements = (): SavedJudgements => ({
 export const V1_MISSING: readonly string[] = Object.freeze([
   'your corrections to the filed figures',
   'the reasons you gave for them',
-  'your expense classification',
+  'the head you put each filed line under',
   'your answers on the qualitative screen',
   'your peer set',
   'the asset approach recovery rates',
@@ -150,6 +183,53 @@ export const V1_MISSING: readonly string[] = Object.freeze([
 
 const num = (v: any): number | null => (typeof v === 'number' && isFinite(v) ? v : null);
 const obj = (v: any): any => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+
+/**
+ * A version 2 expense classification, read as a head assignment.
+ *
+ * `excluded` is the one category with arithmetic in it, and it becomes the
+ * one-offs head, which reproduces it exactly. The four grouping categories
+ * changed no number in any model, so they become nothing at all — and the
+ * record says that in words rather than letting a reader guess.
+ *
+ * Exported because `verify/savedModel.mts` checks the carry-over against a
+ * record built the old way, and a migration that only existed inside `migrate`
+ * could not be checked without re-implementing it.
+ */
+export function headsFromClassification(classification: any): {
+  heads: HeadAssignment;
+  carriedOver: string[];
+} {
+  const heads: HeadAssignment = {};
+  const grouped: string[] = [];
+  for (const [line, choice] of Object.entries(obj(classification))) {
+    const category = (choice as any)?.category;
+    const reason = String((choice as any)?.reason || '').trim();
+    if (category === 'excluded') {
+      heads[line] = { head: 'oneOffs' as HeadKey, ...(reason ? { reason } : {}) };
+    } else if (category) {
+      grouped.push(line);
+    }
+  }
+  const carriedOver: string[] = [];
+  const setAside = Object.keys(heads).length;
+  if (setAside) {
+    carriedOver.push(
+      `${setAside} line${setAside === 1 ? '' : 's'} you had excluded as non-recurring now sit under the ` +
+        'one-offs head, which the model treats identically: nil in every forecast year, and in the reported ' +
+        'years exactly as filed. This record reopens at the figure it was saved at.'
+    );
+  }
+  if (grouped.length) {
+    carriedOver.push(
+      `${grouped.length} line${grouped.length === 1 ? '' : 's'} you had marked direct, indirect, selling or ` +
+        'administrative came back on the default head. Those four categories changed no number in any model — ' +
+        'operating profit is the sum of the same lines whatever they are called — so this record still reopens ' +
+        'at the figure it was saved at.'
+    );
+  }
+  return { heads, carriedOver };
+}
 
 /**
  * Bring any stored record up to the current shape.
@@ -165,6 +245,11 @@ export function migrate(raw: any): SavedModel | null {
 
   if (version >= 2) {
     const j = obj(raw.judgements);
+    // A VERSION 2 RECORD CARRIES A CLASSIFICATION AND NO HEADS. Read it as
+    // heads rather than dropped, and say in words what became of it. A record
+    // written at version 3 has `heads` already and nothing to convert, so the
+    // conversion only ever runs on what it is for.
+    const converted = j.heads ? null : headsFromClassification(j.classification);
     return {
       id: String(raw.id),
       version: SAVED_MODEL_VERSION,
@@ -178,7 +263,7 @@ export function migrate(raw: any): SavedModel | null {
         drivers: obj(j.drivers),
         corrections: obj(j.corrections),
         correctionReasons: obj(j.correctionReasons),
-        classification: obj(j.classification),
+        heads: converted ? converted.heads : obj(j.heads),
         verdicts: obj(j.verdicts),
         appliedVerdicts: j.appliedVerdicts ? obj(j.appliedVerdicts) : null,
         peers: Array.isArray(j.peers) ? j.peers.map(String) : null,
@@ -194,6 +279,7 @@ export function migrate(raw: any): SavedModel | null {
       currencySymbol: String(raw.currencySymbol ?? '$'),
       savedAt: String(raw.savedAt ?? new Date(0).toISOString()),
       missing: Array.isArray(raw.missing) ? raw.missing.map(String) : [],
+      ...(converted && converted.carriedOver.length ? { carriedOver: converted.carriedOver } : {}),
     };
   }
 
@@ -375,6 +461,7 @@ export async function importSaved(file: File): Promise<{ added: number; older: n
 export default {
   SAVED_MODEL_VERSION,
   emptyJudgements,
+  headsFromClassification,
   migrate,
   isComplete,
   makeSavedModel,

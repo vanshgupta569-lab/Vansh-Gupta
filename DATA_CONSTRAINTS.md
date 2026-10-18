@@ -205,6 +205,36 @@ debt is at worst too high, so the value is a floor.
 
 ## Noted, because they cannot move a value
 
+### The company's own line captions
+
+**Source:** both. **Affects:** every company, every line on the figures screen.
+
+Neither source returns the captions the company actually filed. Both return a
+**normalised schema** — the same field names for every company — so the figures
+screen shows the fields our source provides, under names of our own writing,
+rather than the wording of the annual report.
+
+**What is real about it, and what is not.** Which lines appear genuinely differs
+company by company, because it is what the source returned for that company:
+Reliance reports no research and development and no share-based pay, and does
+report lease obligations; another company is the other way round. That is a
+per-company list of real filed figures. What is ours rather than the filing's is
+the **wording of each line**, and a reader who took these for the annual
+report's own captions would have no way to find out otherwise.
+
+**So the screen says it, in those words**, visible above the table rather than
+folded into a disclosure: "These are the fields our source provides for
+&lt;ticker&gt;, not yet its own line captions."
+
+**It cannot move a value.** A caption is a name, not a figure; every number
+under it is the filed one and every head it sits under is stated with its basis
+(`METHODOLOGY.md` §22d). What it costs is recognition — a reader comparing the
+screen against the annual report in front of them has to match our wording to
+theirs line by line, and on a filing with unusual captions that is real work.
+
+What would remove it: the primary-filings data layer, which reads the filing's
+own tags and the labels attached to them (`ROADMAP.md` section 1).
+
 ### Lines the filing does not report at all
 
 **Source:** both. **Affects:** 116 modelled.
@@ -623,6 +653,7 @@ vendor. Counted against this payload set, that would remove:
 | A cost of debt that cannot be read | **Partly** — the interest is in the filing, but a bank's interest is still mostly its depositors' |
 | Finance leases with no readable liability | **No** — if the filer does not disclose the liability, no source has it |
 | Cost of sales for a bank | **No** — banks do not report one |
+| The company's own line captions | **Yes** — the caption is attached to the tag in the filing, which is the whole point of reading one |
 
 The first five are vendor gaps. They are the argument for the data layer stated
 in figures rather than in principle.

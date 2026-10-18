@@ -29,6 +29,10 @@
 //    a number, so a COUNTIF for the word "Error" matches nothing.
 
 import ExcelJS from 'exceljs';
+// The head labels and each line's default head, so the Assumptions sheet does
+// not keep a second table of them. See `checkHeadRows` in heads.ts for why the
+// import runs the way round it does.
+import { HEADS, LINES } from './heads';
 
 type Sheet = ExcelJS.Worksheet;
 
@@ -1025,9 +1029,9 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     cell.border = { bottom: { style: 'thin', color: { argb: colors.BLACK } } };
   });
   // BUILT. These two were headed and left empty for the judgement layer
-  // (ROADMAP.md section 2); expense classification is the first piece of it and
-  // fills them. They are styled like the other headers now rather than greyed,
-  // because a column that carries something should not look reserved.
+  // (ROADMAP.md §2); the head each filed line sits under fills them. They are
+  // styled like the other headers now rather than greyed, because a column that
+  // carries something should not look reserved.
   (['Default or yours', 'Your reason for changing it'] as string[]).forEach((text, i) => {
     const cell = ws.getCell(6, 8 + i);
     cell.value = text;
@@ -1038,35 +1042,33 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
 
   // ---- THE READER'S JUDGEMENTS -------------------------------------------
   //
-  // Read off the model, never composed here: `deriveModel` records the
-  // classification it was given on `meta.classification`, which is the same
-  // object the engine itself read when it decided what to forecast. A sheet
-  // that kept its own copy could describe a treatment the model does not use,
-  // and nothing would catch it (the KI-4 rule applied to a judgement).
-  const CLS: Record<string, { category?: string; reason?: string }> =
-    (source?.meta?.classification as any) || {};
-  const CATEGORY_LABEL: Record<string, string> = {
-    direct: 'Direct cost',
-    indirect: 'Indirect cost',
-    selling: 'Selling and distribution',
-    admin: 'Administrative',
-    excluded: 'Excluded as non-recurring',
-  };
-  const DEFAULT_CATEGORY: Record<string, string> = {
-    cogs: 'direct',
-    rnd: 'indirect',
-    sga: 'admin',
-    otherOperatingCosts: 'indirect',
-  };
+  // Read off the model, never composed here: `deriveModel` records the head
+  // assignment it was given on `meta.heads`, which is the same object the engine
+  // itself read when it decided what to forecast. A sheet that kept its own copy
+  // could describe a treatment the model does not use, and nothing would catch
+  // it (the KI-4 rule applied to a judgement).
+  //
+  // The head LABELS and the DEFAULT for each line come from `heads.ts` for the
+  // same reason. A second table of head names here is the two-copies trap: a
+  // head renamed in one place and not the other would print a treatment under a
+  // name the model does not use.
+  const ASSIGNED: Record<string, { head?: string; reason?: string }> =
+    (source?.meta?.heads as any) || {};
+  const HEAD_LABEL: Record<string, string> = Object.fromEntries(
+    HEADS.map((h) => [h.key, h.label])
+  );
+  const DEFAULT_HEAD: Record<string, string> = Object.fromEntries(
+    LINES.map((l) => [l.field, l.defaultHead])
+  );
   /**
    * WHICH LINES THERE IS ANYTHING TO CLASSIFY FOR.
    *
-   * The same rule the screen uses (`classifiableFor`): a line the filing
-   * reports nothing on in any year is an absence, not a judgement waiting to be
-   * made. Read off the model's reported-basis series rather than re-derived, so
-   * the sheet cannot offer a choice the screen does not, or the other way
-   * about. Reliance reports no R&D, and a column saying its default treatment
-   * is indirect would describe a decision nobody is being asked to take.
+   * The same rule the screen uses (`linesFor`): a line the filing reports
+   * nothing on in any year is an absence, not a judgement waiting to be made.
+   * Read off the model's reported-basis series rather than re-derived, so the
+   * sheet cannot offer a choice the screen does not, or the other way about.
+   * Reliance reports no R&D, and a column naming its default head would describe
+   * a decision nobody is being asked to take.
    */
   const REPORTED_BASIS: Record<string, string> = {
     cogs: 'cogsReportedBasis',
@@ -1075,6 +1077,14 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     otherOperatingCosts: 'otherOperatingCostsReportedBasis',
   };
   const isClassifiable = (lineKey: string): boolean => {
+    // A LINE THE READER HAS MOVED ALWAYS CARRIES ITS COLUMN, even when the move
+    // emptied the line. This is not belt and braces, it is a defect that was
+    // measured: SG&A put under one-offs leaves the SG&A field at nil, so the
+    // reported-basis series below is nil in every year, so the row carrying the
+    // judgement disappeared — the judgement erased its own record, and the
+    // workbook came back with no account of the one decision that moved the
+    // valuation most.
+    if (ASSIGNED[lineKey]?.head) return true;
     const series = (M as any)?.[REPORTED_BASIS[lineKey]];
     if (!Array.isArray(series)) return false;
     for (let t = 0; t < nH; t++) {
@@ -1091,21 +1101,19 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
    */
   const judgement = (atRow: number, lineKey: string) => {
     if (!isClassifiable(lineKey)) return;
-    const chosen = CLS[lineKey]?.category;
-    const fallback = DEFAULT_CATEGORY[lineKey];
+    const chosen = ASSIGNED[lineKey]?.head;
+    const fallback = DEFAULT_HEAD[lineKey];
     const yours = !!chosen && chosen !== fallback;
     const state = ws.getCell(atRow, 8);
     state.value = yours
-      ? `Yours: ${CATEGORY_LABEL[chosen as string] ?? chosen} (default: ${CATEGORY_LABEL[fallback]})`
-      : `Default: ${CATEGORY_LABEL[fallback]}`;
+      ? `Yours: ${HEAD_LABEL[chosen as string] ?? chosen} (default: ${HEAD_LABEL[fallback] ?? fallback})`
+      : `Default: ${HEAD_LABEL[fallback] ?? fallback}`;
     state.font = { ...FONT, size: 10, bold: yours, color: { argb: yours ? colors.OXBLOOD : colors.GREY } };
     state.alignment = { wrapText: true, vertical: 'top' };
     const why = ws.getCell(atRow, 9);
     // A REASON THAT WAS NOT GIVEN SAYS SO. Blank would read as a reason the
     // file failed to carry rather than one nobody wrote.
-    why.value = yours
-      ? String(CLS[lineKey]?.reason || '').trim() || 'No reason given.'
-      : '';
+    why.value = yours ? String(ASSIGNED[lineKey]?.reason || '').trim() || 'No reason given.' : '';
     why.font = { ...FONT, size: 10, color: { argb: colors.GREY } };
     why.alignment = { wrapText: true, vertical: 'top' };
   };
@@ -1177,7 +1185,7 @@ function buildAssumptionsSheet(ctx: SupportingSheetsContext) {
     numFmt: string,
     key: string,
     basis: string,
-    /** The classifiable cost line this assumption drives, where there is one. */
+    /** The filed line this assumption drives, where there is one. */
     lineKey?: string
   ) => {
     const [a, b] = mm(key);
@@ -1971,7 +1979,7 @@ function buildEbitdaBridgeSheet(ctx: SupportingSheetsContext) {
   r++;
 
   // ---- the adjustments ---------------------------------------------------
-  const every: any[] = [...(B.corrections || []), ...(B.exclusions || [])];
+  const every: any[] = [...(B.corrections || []), ...(B.oneOffs || [])];
   heading(
     every.length
       ? `Your adjustments (${every.length})`
@@ -2125,15 +2133,15 @@ function buildEbitdaBridgeSheet(ctx: SupportingSheetsContext) {
   r++;
   note(
     'IN: filed operating profit, filed depreciation and amortisation added back, every figure you replaced, and every ' +
-      'cost line you excluded as non-recurring.'
+      'line you put under the one-offs head.'
   );
   note(
     'NOT IN: stock-based compensation, which stays a cost. Rent, management charges and other normalisations nobody ' +
-      'has filed a figure for. Any adjustment to a forecast year \u2014 this bridge is about reported years, and an ' +
-      'exclusion\u2019s effect on the forecast is on the model sheet and the Assumptions sheet.'
+      'has filed a figure for. Any adjustment to a forecast year \u2014 this bridge is about reported years, and a ' +
+      'one-off\u2019s effect on the forecast is on the model sheet and the Assumptions sheet.'
   );
   note(
-    'An exclusion is set aside in EVERY reported year. A cost paid once needs the per-item, per-year choice that ' +
+    'A one-off is set aside in EVERY reported year. A cost paid once needs the per-item, per-year choice that ' +
       'ROADMAP.md section 2 lists next; until it lands, a single year\u2019s one-off is better handled as a correction to ' +
       'that year\u2019s operating profit, which this bridge will show as a correction line.'
   );

@@ -1324,42 +1324,72 @@ export function deriveModel(fetched) {
   const lastRow = rows[rows.length - 1] || {};
   const shareOfLastRevenue = (v) =>
     isNum(v) && isNum(lastRow.revenue) && lastRow.revenue !== 0 ? v / lastRow.revenue : null;
-  // THE JUDGEMENT LAYER: AN EXCLUDED LINE IS NIL IN EVERY FORECAST YEAR.
+  // THE JUDGEMENT LAYER: A ONE-OFF IS NIL IN EVERY FORECAST YEAR.
   //
-  // Expense classification (ROADMAP.md section 2, src/data/classification.ts)
-  // is a judgement the reader makes about each reported cost line. Four of the
-  // five categories are groupings: operating profit is the sum of the same
-  // lines whatever they are called, so moving a line between direct, indirect,
-  // selling and administrative cannot change a number here, and nothing below
-  // reads them. The fifth, excluded as non-recurring, is the one with
-  // arithmetic in it, and this is where it happens.
+  // The reader puts each filed line under a model head (ROADMAP.md §19b,
+  // src/data/heads.ts). Most heads need nothing here: `applyHeads` has already
+  // moved the money between the payload fields this function reads, so a line
+  // moved to cost of sales is in `cogs` and a line moved to fixed assets is in
+  // `ppeNet` before the derivation starts.
+  //
+  // ONE-OFFS IS THE EXCEPTION, AND THIS IS THE HOOK IT NEEDS. The head has no
+  // payload field, and THE RECONCILING LINE WOULD HAND THE MONEY STRAIGHT BACK:
+  // `unexplainedOperatingCosts` is filed operating profit less the named cost
+  // lines, so an amount taken out of SG&A reappears in it, pound for pound, and
+  // the forecast margin would be exactly what it was. Measured on the payloads
+  // on disk before this hook existed, every move to one-offs changed value per
+  // share by nothing at all.
+  //
+  // So the amount is taken out of the residual's FORECAST base. Three cases,
+  // and they are exact rather than approximate:
+  //
+  //   · a named cost line set aside — its field is already nil, so its own
+  //     margin is nil, and the residual's base loses what the residual gained;
+  //   · the reconciling line itself set aside — the whole residual leaves the
+  //     forecast base, so the base is nil;
+  //   · nothing set aside — the base is the residual, unchanged.
   //
   // IT TOUCHES THE FORECAST ONLY. The reported years above are the filed
   // figures and stay the filed figures: `unexplainedOperatingCosts` still ties
   // built operating profit to filed operating income in every reported year,
-  // whatever is excluded. A judgement that restated a filing would be a
-  // different thing from a judgement about the future, and only one of those
-  // is the reader's to make.
-  const classification = fetched?.classification || null;
-  const isExcludedLine = (key) => !!classification && classification[key]?.category === 'excluded';
-  const exclusionNote = (key, label) => {
-    const reason = String(classification?.[key]?.reason || '').trim();
+  // whatever is set aside. A judgement that restated a filing would be a
+  // different thing from a judgement about the future, and only one of those is
+  // the reader's to make.
+  const headsIn = fetched?.heads || null;
+  const assignment = headsIn?.assignment || null;
+  // By fiscal year, because `selectComparablePeriods` above may have dropped a
+  // year and `rows` is then shorter than the array these were measured over.
+  const oneOffNamed = (row) => {
+    const v = headsIn?.oneOffNamedCosts?.[String(row?.fiscalYear)];
+    return isNum(v) ? v : 0;
+  };
+  const residualIsOneOff = !!headsIn?.oneOffReconcilingLine;
+  /** The residual the FORECAST is struck on, which is not the reported residual. */
+  const residualForecastBasis = rows.map((r, i) =>
+    residualIsOneOff ? 0 : unexplainedOperatingCosts[i] - oneOffNamed(r)
+  );
+  const oneOffHead = (field) => assignment?.[field]?.head === 'oneOffs';
+  const headNote = (field, label) => {
+    const reason = String(assignment?.[field]?.reason || '').trim();
+    const amount = field === 'otherOperatingCosts'
+      ? unexplainedOperatingCosts[rows.length - 1] ?? 0
+      : oneOffNamed(lastRow);
     return (
-      `${label} is excluded as non-recurring by you, so it is nil in every forecast year. ` +
-      `FY${lastRow.fiscalYear} reported ${Math.round(lastRow[key] ?? 0).toLocaleString('en-US')}, ` +
+      `${label} is under the one-offs head by you, so it is nil in every forecast year. ` +
+      `FY${lastRow.fiscalYear} reported ${Math.round(amount).toLocaleString('en-US')}, ` +
       'which is still in the reported years exactly as filed. ' +
       (reason ? `Your reason: ${reason}` : 'No reason was given.')
     );
   };
 
-  const rndMargin = isExcludedLine('rnd') ? 0 : clamp(shareOfLastRevenue(lastRow.rnd), 0, 0.5, 0);
-  const sgaMargin = isExcludedLine('sga') ? 0 : clamp(shareOfLastRevenue(lastRow.sga), 0, 0.6, 0);
+  const rndMargin = clamp(shareOfLastRevenue(lastRow.rnd), 0, 0.5, 0);
+  const sgaMargin = clamp(shareOfLastRevenue(lastRow.sga), 0, 0.6, 0);
   const otherShares = rows
-    .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 && isNum(r.operatingIncome) ? unexplainedOperatingCosts[i] / r.revenue : null))
+    .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 && isNum(r.operatingIncome) ? residualForecastBasis[i] / r.revenue : null))
     .filter(isNum);
-  const lastOtherShare = shareOfLastRevenue(unexplainedOperatingCosts[rows.length - 1]) ?? 0;
+  const lastOtherShare = shareOfLastRevenue(residualForecastBasis[rows.length - 1]) ?? 0;
   const otherIsIncome = lastOtherShare < 0;
-  const otherOperatingCostsMargin = isExcludedLine('otherOperatingCosts')
+  const otherOperatingCostsMargin = residualIsOneOff
     ? 0
     : !otherIsIncome
       ? lastOtherShare
@@ -1374,18 +1404,18 @@ export function deriveModel(fetched) {
     : `other operating costs ${(otherOperatingCostsMargin * 100).toFixed(1)}% of revenue — the last reported year, held flat`;
   // One sentence per line as well as the three together, so the workbook's
   // Assumptions sheet can give each row its own basis.
-  provenance.rnd = isExcludedLine('rnd')
-    ? exclusionNote('rnd', 'Research and development')
+  provenance.rnd = oneOffHead('rnd')
+    ? headNote('rnd', 'Research and development')
     : `${marginText('R&D', 'rnd', rndMargin, 0.5)}${isNum(lastRow.rnd) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
-  provenance.sga = isExcludedLine('sga')
-    ? exclusionNote('sga', 'Selling, general and administrative')
+  provenance.sga = oneOffHead('sga')
+    ? headNote('sga', 'Selling, general and administrative')
     : `${marginText('SG&A', 'sga', sgaMargin, 0.6)}${isNum(lastRow.sga) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
-  provenance.otherOperatingCosts = isExcludedLine('otherOperatingCosts')
-    ? `Other operating costs are excluded as non-recurring by you, so they are nil in every forecast year. ` +
+  provenance.otherOperatingCosts = residualIsOneOff
+    ? `Other operating costs are under the one-offs head by you, so they are nil in every forecast year. ` +
       `FY${lastRow.fiscalYear} carried ${Math.round(unexplainedOperatingCosts[rows.length - 1] ?? 0).toLocaleString('en-US')}, ` +
       'which is still in the reported years exactly as filed and still ties reported operating profit to the filing. ' +
-      (String(classification?.otherOperatingCosts?.reason || '').trim()
-        ? `Your reason: ${String(classification.otherOperatingCosts.reason).trim()}`
+      (String(assignment?.otherOperatingCosts?.reason || '').trim()
+        ? `Your reason: ${String(assignment.otherOperatingCosts.reason).trim()}`
         : 'No reason was given.')
     : otherText;
   provenance.operatingCosts =
@@ -2112,12 +2142,15 @@ export function deriveModel(fetched) {
       // Marks this as derived rather than hand-built, so the dashboard can
       // label it honestly against a curated model like Apple's.
       derived: true,
-      // THE READER'S EXPENSE CLASSIFICATION, carried on the model so that every
+      // THE READER'S HEAD ASSIGNMENT, carried on the model so that every
       // downstream reader sees the same thing: the workbook's Assumptions sheet
       // fills its two judgement columns from here, and anything that wants to
       // say the model is reclassified reads it here rather than keeping its own
       // copy. Null where every line is on the engine's default.
-      classification: classification && Object.keys(classification).length ? classification : null,
+      heads: assignment && Object.keys(assignment).length ? assignment : null,
+      // The lines set aside as one-offs, by year, so the workbook and the
+      // bridge name the same amounts the forecast dropped.
+      oneOffs: headsIn?.oneOffs && Object.keys(headsIn.oneOffs).length ? headsIn.oneOffs : null,
       // Every balance sheet line the filing did not report, by year, with how
       // (if at all) it was derived. The engine names these when it refuses.
       balanceSheetGaps,

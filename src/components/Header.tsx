@@ -44,6 +44,7 @@ interface HeaderProps {
   /* Same reason, for the other judgement the figures screen now carries: a
      model built with a cost line moved off the engine's default category is
      not the engine's own model, and the screen that says so is every screen. */
+  /** Lines put under another head, each read as "line → head". */
   reclassified?: { count: number; lines: string[]; excluded: string[] };
   onReviewFigures?: () => void;
 }
@@ -177,15 +178,15 @@ export const Header: React.FC<HeaderProps> = ({
                       } you supplied: ${corrected.fields.join(', ')}.`
                     : '',
                   reclassified
-                    ? `${reclassified.count} cost line${reclassified.count === 1 ? '' : 's'} classified by you: ` +
+                    ? `${reclassified.count} line${reclassified.count === 1 ? '' : 's'} put under another head by you: ` +
                       `${reclassified.lines.join(', ')}` +
                       (reclassified.excluded.length
-                        ? `, of which ${reclassified.excluded.join(' and ')} excluded from the forecast.`
+                        ? `, of which ${reclassified.excluded.join(' and ')} set aside as one-offs and so nil in every forecast year.`
                         : '.')
                     : '',
                   corrected || reclassified
                     ? 'Click to change them or put them back.'
-                    : 'See the reported figures this model was built from, and correct or classify any of them',
+                    : 'See the reported figures this model was built from, correct any of them, and move a line to another head',
                 ]
                   .filter(Boolean)
                   .join(' ')
@@ -207,7 +208,7 @@ export const Header: React.FC<HeaderProps> = ({
                     as corrected figures and hide the reclassification entirely. */}
                 {[
                   corrected ? `${corrected.count} corrected figure${corrected.count === 1 ? '' : 's'}` : '',
-                  reclassified ? `${reclassified.count} classified line${reclassified.count === 1 ? '' : 's'}` : '',
+                  reclassified ? `${reclassified.count} moved line${reclassified.count === 1 ? '' : 's'}` : '',
                 ]
                   .filter(Boolean)
                   .join(' · ') || 'Check the figures'}

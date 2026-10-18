@@ -16,7 +16,7 @@ import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
 import { fetchCompanyPayload, buildCompanyFrom } from './data/autoCompany';
 import type { Corrections } from './data/corrections';
-import type { Classification } from './data/classification';
+import type { HeadAssignment } from './data/heads';
 import type { CorrectionReasons } from './data/corrections';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
@@ -63,11 +63,11 @@ export default function App() {
   // the figures must not cost another fetch.
   const [payload, setPayload] = useState<any | null>(null);
   const [corrections, setCorrections] = useState<Corrections>({});
-  // THE JUDGEMENT LAYER (ROADMAP.md section 2). The reader's treatment of each
-  // reported expense line lives beside the corrections and for the same reason:
-  // the badge in the header reads it, and reopening the figures must not cost
+  // THE JUDGEMENT LAYER (ROADMAP.md §19b). The head the reader has put each
+  // filed line under lives beside the corrections and for the same reason: the
+  // badge in the header reads it, and reopening the figures must not cost
   // another fetch or lose a judgement already made.
-  const [classification, setClassification] = useState<Classification>({});
+  const [heads, setHeads] = useState<HeadAssignment>({});
   // One line per corrected field, which the adjusted EBITDA bridge carries.
   const [correctionReasons, setCorrectionReasons] = useState<CorrectionReasons>({});
   const [building, setBuilding] = useState(false);
@@ -132,7 +132,7 @@ export default function App() {
       // A new company gets the engine's own defaults back. A judgement made
       // about one company's cost lines is not a judgement about another's.
       setCorrections({});
-      setClassification({});
+      setHeads({});
       setCorrectionReasons({});
       setFiguresFromModel(false);
       setSelectedTicker(ticker);
@@ -155,7 +155,7 @@ export default function App() {
     // takes the thread.
     window.setTimeout(() => {
       try {
-        const company = buildCompanyFrom(payload, corrections, classification, correctionReasons);
+        const company = buildCompanyFrom(payload, corrections, heads, correctionReasons);
         setLoadedCompanies((prev) => ({ ...prev, [company.ticker]: company }));
         setBuilding(false);
         if (figuresFromModel) {
@@ -184,8 +184,8 @@ export default function App() {
   /**
    * REOPENING A SAVED MODEL IS A REBUILD (`KI-27`).
    *
-   * The sliders live on the dashboard, but the corrections and the expense
-   * classification are baked into the company RECORD when it is derived, and a
+   * The sliders live on the dashboard, but the corrections and the head
+   * assignment are baked into the company RECORD when it is derived, and a
    * record can only be rebuilt from the untouched payload. That payload travels
    * with every derived record as `rawFetched`, which is exactly why it is kept.
    *
@@ -201,11 +201,11 @@ export default function App() {
    */
   const restoreJudgements = (
     ticker: string,
-    restored: { corrections: Corrections; correctionReasons: CorrectionReasons; classification: Classification }
+    restored: { corrections: Corrections; correctionReasons: CorrectionReasons; heads: HeadAssignment }
   ) => {
     setCorrections(restored.corrections);
     setCorrectionReasons(restored.correctionReasons);
-    setClassification(restored.classification);
+    setHeads(restored.heads);
 
     const base = loadedCompanies[ticker] ?? (COMPANIES_DATA as any)[ticker];
     const fetched = base?.rawFetched;
@@ -218,7 +218,7 @@ export default function App() {
       const rebuilt = buildCompanyFrom(
         fetched,
         restored.corrections,
-        restored.classification,
+        restored.heads,
         restored.correctionReasons
       );
       setLoadedCompanies((prev) => ({ ...prev, [rebuilt.ticker]: rebuilt }));
@@ -353,8 +353,8 @@ export default function App() {
             statements={payload.statements || []}
             corrections={corrections}
             onChange={setCorrections}
-            classification={classification}
-            onClassify={setClassification}
+            heads={heads}
+            onHeads={setHeads}
             correctionReasons={correctionReasons}
             onReason={setCorrectionReasons}
             payload={payload}
@@ -385,7 +385,7 @@ export default function App() {
             onSelectTicker={(ticker) => setSelectedTicker(ticker)}
             onOpenDirectory={() => handleNavigateToScreen('DIRECTORY')}
             initialVerdicts={initialVerdicts}
-            judgements={{ corrections, correctionReasons, classification }}
+            judgements={{ corrections, correctionReasons, heads }}
             onRestoreJudgements={restoreJudgements}
           />
         )}

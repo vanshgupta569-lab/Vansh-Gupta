@@ -10,7 +10,7 @@
 //      else. Checked against the raw payload AND against the engine's own
 //      EBITDA, which is a separate code path that arrives at the same figure.
 //   2. REPORTED PLUS EVERY ADJUSTMENT TIES TO ADJUSTED, in every reported year,
-//      under every combination of corrections and exclusions.
+//      under every combination of corrections and one-offs.
 //
 // Both are also checked INSIDE the written file: the bridge sheet carries them
 // as live Excel formulas, and this recalculates the whole workbook in
@@ -93,18 +93,18 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
 
   // Every shape of adjustment, including none, including one that cannot move
   // EBITDA, including several at once and across more than one year.
-  const combos: { label: string; corrections: any; classification: any; reasons: any }[] = [
-    { label: 'nothing adjusted', corrections: {}, classification: {}, reasons: {} },
+  const combos: { label: string; corrections: any; heads: any; reasons: any }[] = [
+    { label: 'nothing adjusted', corrections: {}, heads: {}, reasons: {} },
     {
       label: 'operating profit corrected in one year',
       corrections: { [lastYear]: { operatingIncome: last.operatingIncome + 50_000 } },
-      classification: {},
+      heads: {},
       reasons: { operatingIncome: 'restated after the demerger' },
     },
     {
       label: 'a cost line corrected, which cannot move EBITDA',
       corrections: { [lastYear]: { sga: (last.sga ?? 0) + 9_000 } },
-      classification: {},
+      heads: {},
       reasons: { sga: 'the source omits depreciation here' },
     },
     {
@@ -113,30 +113,30 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
         [lastYear]: { depreciation: (last.depreciation ?? 0) + 7_000 },
         [firstYear]: { depreciation: (filed[0].depreciation ?? 0) + 3_000 },
       },
-      classification: {},
+      heads: {},
       reasons: {},
     },
     {
-      label: 'other operating costs excluded',
+      label: 'other operating costs under one-offs',
       corrections: {},
-      classification: { otherOperatingCosts: { category: 'excluded', reason: 'a write-down that will not repeat' } },
+      heads: { otherOperatingCosts: { head: 'oneOffs', reason: 'a write-down that will not repeat' } },
       reasons: {},
     },
     {
-      label: 'SG&A excluded with no reason given',
+      label: 'SG&A under one-offs with no reason given',
       corrections: {},
-      classification: { sga: { category: 'excluded' } },
+      heads: { sga: { head: 'oneOffs' } },
       reasons: {},
     },
     {
-      label: 'two corrections and two exclusions together',
+      label: 'two corrections and two one-offs together',
       corrections: {
         [lastYear]: { operatingIncome: last.operatingIncome + 50_000, sga: (last.sga ?? 0) + 9_000 },
         [firstYear]: { depreciation: (filed[0].depreciation ?? 0) + 3_000 },
       },
-      classification: {
-        otherOperatingCosts: { category: 'excluded', reason: 'a port write-down' },
-        sga: { category: 'excluded', reason: 'the promoter salary comes out' },
+      heads: {
+        otherOperatingCosts: { head: 'oneOffs', reason: 'a port write-down' },
+        sga: { head: 'oneOffs', reason: 'the promoter salary comes out' },
       },
       reasons: { operatingIncome: 'restated', sga: 'the source omits depreciation' },
     },
@@ -146,7 +146,7 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
 
   for (const combo of combos) {
     cases++;
-    const B: any = BR.buildEbitdaBridge(filed, combo.corrections, combo.classification, combo.reasons);
+    const B: any = BR.buildEbitdaBridge(filed, combo.corrections, combo.heads, combo.reasons);
 
     // ---- 1. REPORTED EBITDA TIES TO THE FILING -------------------------
     for (let i = 0; i < filed.length; i++) {
@@ -207,14 +207,14 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
         problems.push(`${combo.label}: FY${B.years[i]} does not say whether D&A was filed`);
       }
     }
-    for (const a of [...B.corrections, ...B.exclusions]) {
-      if (!/^(correction|exclusion):/.test(a.key)) {
-        problems.push(`${combo.label}: the adjustment ${a.key} is not keyed as a correction or an exclusion`);
+    for (const a of [...B.corrections, ...B.oneOffs]) {
+      if (!/^(correction|oneOff):/.test(a.key)) {
+        problems.push(`${combo.label}: the adjustment ${a.key} is not keyed as a correction or a one-off`);
       }
       if (a.yearsMoved < 1) problems.push(`${combo.label}: ${a.key} is listed as an adjustment but moves nothing`);
       if (!a.detail || a.detail.length < 20) problems.push(`${combo.label}: ${a.key} does not say what moved it`);
-      if (a.kind !== 'correction' && a.kind !== 'exclusion') {
-        problems.push(`${combo.label}: ${a.key} is neither a correction nor an exclusion`);
+      if (a.kind !== 'correction' && a.kind !== 'oneOff') {
+        problems.push(`${combo.label}: ${a.key} is neither a correction nor a one-off`);
       }
     }
     // A reason given reaches the line it belongs to.
@@ -226,9 +226,9 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
         problems.push(`${combo.label}: the reason for ${field} reads ${JSON.stringify(line.reason)}`);
       }
     }
-    for (const [key, choice] of Object.entries(combo.classification as Record<string, any>)) {
-      if (choice.category !== 'excluded' || !choice.reason) continue;
-      const line = B.exclusions.find((a: any) => a.key === `exclusion:${key}`);
+    for (const [key, choice] of Object.entries(combo.heads as Record<string, any>)) {
+      if (choice.head !== 'oneOffs' || !choice.reason) continue;
+      const line = B.oneOffs.find((a: any) => a.key === `oneOff:${key}`);
       if (line && line.reason !== choice.reason) {
         problems.push(`${combo.label}: the reason for excluding ${key} reads ${JSON.stringify(line.reason)}`);
       }
@@ -270,7 +270,7 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
       example = {
         ticker,
         years: B.years.length,
-        lines: B.corrections.length + B.exclusions.length,
+        lines: B.corrections.length + B.oneOffs.length,
         reported: B.reportedEbitda[B.years.length - 1],
         adjusted: B.adjustedEbitda[B.years.length - 1],
       };
@@ -279,7 +279,7 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
 
   // ---- 3. THE SAME TWO TIES, RECALCULATED INSIDE THE WRITTEN FILE -------
   const worked = combos[combos.length - 1];
-  const rec: any = buildCompanyFrom(payload, worked.corrections, worked.classification, worked.reasons);
+  const rec: any = buildCompanyFrom(payload, worked.corrections, worked.heads, worked.reasons);
   const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
   const built: any = buildFullModel(rec.modelData, drivers);
   const wb: any = await buildWorkbook({
@@ -401,8 +401,8 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
     ] as [RegExp, string][]) {
       if (!must.test(joined)) problems.push(`the bridge sheet does not state ${what}`);
     }
-    // An exclusion with no reason says so rather than coming back blank.
-    const silent: any = buildCompanyFrom(payload, {}, { sga: { category: 'excluded' } }, {});
+    // A one-off with no reason says so rather than coming back blank.
+    const silent: any = buildCompanyFrom(payload, {}, { sga: { head: 'oneOffs' } }, {});
     const sd: any = { ...silent.defaultDrivers, ...defaultDriversFor(silent.modelData) };
     const sb: any = buildFullModel(silent.modelData, sd);
     const wb2: any = await buildWorkbook({
@@ -428,7 +428,7 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
       }
     });
     if (said !== 'No reason given.') {
-      problems.push(`an exclusion with no reason reads ${JSON.stringify(said)} rather than saying so`);
+      problems.push(`a one-off with no reason reads ${JSON.stringify(said)} rather than saying so`);
     }
   }
 

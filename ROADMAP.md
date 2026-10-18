@@ -650,12 +650,14 @@ their source's own terms, so each is checked.
 
 ---
 
-## 19. Decided 17 October 2026 — four items, all NEXT
+## 19. Decided 17 October 2026 — four items
 
 These four were decided in the planning conversation of 17 October 2026. Three
-are things to build; the first is a thing to plan. Each is NEXT in the plan's
-vocabulary, which is why they are numbered together rather than filed under the
-areas they touch.
+were things to build; the first is a thing to plan. They are numbered together
+rather than filed under the areas they touch because they were decided together.
+
+**19b is now Built** (19 October 2026). 19a and 19c are still NEXT, and 19d is
+the bar every item clears rather than an item with a status.
 
 ### 19a. One system — NEXT, and a planning item before it is a build item
 
@@ -690,7 +692,7 @@ So this is recorded as **an open planning item, not a feature list**:
   combined outputs named and statused, and the journey's shape in
   `docs/VISION.md`.
 
-### 19b. The figures screen, redesigned — NEXT
+### 19b. The figures screen, redesigned — BUILT
 
 **The decision:** the figures screen shows each company's line items **exactly
 as filed**, already placed under the model heads by the engine's default
@@ -724,6 +726,52 @@ small edit:
   takes an optional one-line reason; there is a visible return to the default; a
   change rebuilds the model at once with the previous value beside it; and
   reported operating profit still ties to the filing whatever the user does.
+
+**Built on 19 October 2026.** `METHODOLOGY.md` §22d carries the method and every
+measurement; the headline numbers are that the payload sweep over 176 companies
+shows **zero drift with nothing moved**, that reported operating profit ties to
+the filing within **9.13e-16 of itself** under every one of 215 assignments, and
+that the one-offs head reproduces the three figures expense classification
+published (706.52, 1,044.32 and 1,683.09 on Reliance) exactly — which is the
+evidence that removing the old feature lost nothing.
+
+**What was built, and what was deliberately left:**
+
+- **Built as drop targets**, each proved to change a number the model publishes:
+  cost of sales, research and development, selling general and administrative,
+  depreciation and amortisation, other operating costs and one-offs on the
+  profit and loss; cash and investments, receivables, inventory, payables, fixed
+  assets and other on the balance sheet. Twelve heads; eleven of them move value
+  per share and one moves the gross margin and the line composition without
+  moving the value, which the screen states rather than glossing.
+- **Shown and refused, each saying why on screen**: revenue, other income,
+  finance cost, tax, debt including leases, and equity.
+- **One engine hook was needed and built**: one-offs. The engine's reconciling
+  line would otherwise hand the money straight back, so `deriveModel` takes the
+  amount out of that residual's forecast base while the reported years keep it.
+  Without it every move to one-offs changed value per share by nothing at all.
+- The saved model is at **version 3**. A version 2 record's `excluded` lines
+  become one-offs and reopen at the figure they were saved at; its four grouping
+  categories become nothing, because they changed no number in any model, and
+  the record says so in words rather than dropping a field silently.
+
+**The two hooks this job did not do, which are the next job:**
+
+1. **The debt hook.** The engine builds the debt total from up to fourteen
+   overlapping filed fields with separate US GAAP and IFRS paths — combined
+   debt-and-lease figures where a filing publishes them, debt-only where it does
+   not, finance leases netted and operating leases never netted. A move cannot
+   be honoured by rewriting one field. Until it exists the debt head is shown
+   with its filed lines and is not a drop target.
+2. **The below-the-line hook.** Moving an operating cost to other income or to
+   finance cost cannot change the forecast today, because the reconciling line
+   absorbs it. Honouring it needs the engine to take the amount out of the
+   forecast operating base *and* add it below the line. Revenue needs the same
+   shape of hook before a one-off sale can be set aside.
+
+Both are recorded here rather than built, because each touches engine code that
+this job was already replacing a live feature in, and because a control that
+moves a line and changes no number is worse than no control.
 
 ### 19c. The loading screen — NEXT
 
@@ -793,6 +841,7 @@ trusting a status.
 
 | Commit | What |
 |---|---|
+| _pending_ | **The figures screen, redesigned (§19b)**: every filed line under the model head the engine assigns, with the basis for each default, draggable to another head and with a keyboard menu beside it, the figure editable in the same row. Replaces expense classification (`9980f72`), reversed here. The re-aggregation is a transfer of one line's own amount rather than a re-sum by head, which is what the first implementation did and what double counted share-based pay into SG&A and short-term investments into cash; one engine hook built, for one-offs, which reproduces the replaced feature's figures exactly. Zero drift across 176 payloads with nothing moved; reported operating profit ties to the filing within 9.13e-16 under every assignment. Saved model at version 3. `METHODOLOGY.md` §22d. |
 | `6cb1c29` | **`KI-27` fixed: a saved model reopens at the figure it was saved at.** The record now carries every input that decides the valuation — the sliders, the corrections and their reasons, the expense classification and its reasons, the qualitative answers, the peer set, the recovery rates, and the share price the valuation was struck against, which moves the answer through the cost of capital. Reopening rebuilds the company record rather than setting the sliders, through one path the harness uses too. The saved list reopens every row as it lists it, so it never prints a figure the entry cannot produce; a record saved before the fix names what it never stored and nothing is guessed at. Versioned and behind a store interface, so it moves to an account unchanged. `METHODOLOGY.md` §22f. |
 | `216265e` | **The adjusted EBITDA bridge**: reported EBITDA from the filing, every correction and every exclusion as its own line with the reader's reason, adjusted EBITDA at the foot, every reported year. Three live ties, recalculated inside the written file. Its own workbook sheet, and reasons added to corrections for the first time. Two defects fixed with it: the bridge's own top line linking to the corrected model, and the Sources sheet printing corrected figures under “what the filing actually said”. `METHODOLOGY.md` §22e. |
 | `9980f72` | **Expense classification**, the first piece of the judgement layer (section 2), on the figures screen between reported and modelled. Four cost lines, five categories, a default per line that states where it came from, an optional reason, a visible return to the default and an immediate rebuild with the previous value beside it. Grouping moves proved to move no figure; an exclusion proved to move one. The workbook's two reserved Assumptions columns filled. The figures screen added to the contrast pass, where it had never been. `METHODOLOGY.md` §22d. |

@@ -6,7 +6,7 @@
 //
 // `KI-27` was not a missing field, it was a missing path. Restoring used to set
 // the sliders and stop, because the sliders were the only thing the dashboard
-// owned: the corrections and the classification are baked into the company
+// owned: the corrections and the head assignment are baked into the company
 // RECORD at build time, and nothing on the dashboard could rebuild a record.
 //
 // So reopening a saved model is a rebuild, and it happens here rather than in a
@@ -18,7 +18,7 @@
 // WHAT IT REPRODUCES, AND IN WHAT ORDER
 //
 //   1. The company record, built from the UNTOUCHED payload plus the reader's
-//      corrections, their reasons and their classification. This is where the
+//      corrections, their reasons and their head assignment. This is where the
 //      derivation, the forecast, the health score, the asset approach and the
 //      EBITDA bridge all come from, so all of them are restored by rebuilding
 //      the one array the engine is downstream of.
@@ -96,7 +96,7 @@ export function restoreFromJudgements(
   const j = judgements;
   let record: CompanyData;
   if (fetched?.statements) {
-    record = buildCompanyFrom(fetched, j.corrections, j.classification as any, j.correctionReasons);
+    record = buildCompanyFrom(fetched, j.corrections, j.heads, j.correctionReasons);
   } else if (fallbackRecord) {
     record = fallbackRecord;
   } else {
