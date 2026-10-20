@@ -2,10 +2,28 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Playfair Display", Georgia, serif;
-  --font-serif: "Playfair Display", Georgia, serif;
-  --font-mono: "JetBrains Mono", monospace;
-  --font-sans: "Inter", sans-serif;
+  /* ONE PAIRING, TWO FACES, AND NO MONOSPACE ANYWHERE.
+     Newsreader for titles, Source Sans 3 for everything else including every
+     number. Both are free (OFL), both carry ₹ in the base latin subset — read
+     off the stylesheet Google serves rather than assumed — and Source Sans 3
+     has true tabular figures, measured in a browser. `--font-figure` is the
+     same stack as the body face and exists so a call site can say "this is a
+     number" and get tabular lining figures with it; it was `--font-mono` and
+     pointed at JetBrains Mono, which is the monospace this pairing removes. */
+  --font-display: "Newsreader", Georgia, serif;
+  --font-serif: "Newsreader", Georgia, serif;
+  --font-figure: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+
+  /* THE WHOLE TYPE SCALE. Four steps, and nothing between them.
+     The site had twenty-five sizes between 9px and 62px; neighbouring panels
+     set 14px and 15px, which reads as a mistake rather than a distinction. The
+     remapping block further down snaps every arbitrary size a screen still
+     asks for onto one of these, so a screen cannot introduce a twenty-sixth. */
+  --m-size-title: clamp(28px, 2.8vw, 36px);
+  --m-size-section: 20px;
+  --m-size-body: 15px;
+  --m-size-small: 13px;
 
   /* THE RAMP, AS UTILITY NAMES — `text-ink`, `bg-panel`, `border-line`.
      Screens were written with the hex in the class (`text-[#8A8A8F]`), which
@@ -38,12 +56,12 @@
   body {
     background-color: #0B0B0D;
     color: #F2F0EA;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     /* Reading text on a near-black background needs more room to breathe than
        the same text on white. These three lines are the whole readability fix:
-       nothing smaller than 13px anywhere, generous line height, and letters
-       spaced very slightly apart so thin strokes do not close up. */
-    font-size: 16px;
+       nothing smaller than the small step anywhere, generous line height, and
+       letters spaced very slightly apart so thin strokes do not close up. */
+    font-size: var(--m-size-body);
     line-height: 1.65;
     letter-spacing: 0.005em;
     -webkit-font-smoothing: antialiased;
@@ -51,7 +69,7 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: var(--font-display);
     line-height: 1.25;
   }
 
@@ -69,23 +87,29 @@
     font-size: 13px;
   }
 
-  /* Monospace figures carry the numbers, so they get a touch more size and a
-     touch less tracking than the labels around them. */
-  .font-mono {
-    letter-spacing: 0;
-  }
 }
 
-.font-display {
-  font-family: 'Playfair Display', Georgia, serif;
+/* THE THREE FAMILIES, AND THE ONLY PLACE THEY ARE NAMED.
+   Every one of these used to repeat a literal family name, which is what let
+   the site carry four faces and change its mind between screens. They read the
+   tokens now, so the pairing is changed in one place. */
+.font-display,
+.font-serif {
+  font-family: var(--font-display);
 }
 
-.font-mono {
-  font-family: 'JetBrains Mono', monospace;
+/* A FIGURE IS NOT A TYPEFACE, IT IS A SETTING. The numbers are the body face
+   with lining tabular figures asked for, so a column of them lines up because
+   the figures are tabular and not because the letters are all one width. */
+.font-figure {
+  font-family: var(--font-figure);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: 0;
 }
 
 .font-sans {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
 }
 
 .hairline-border {
@@ -461,28 +485,34 @@ textarea,
 .text-4xl { font-size: 38px; line-height: 1.14; }
 .text-5xl { font-size: 48px; line-height: 1.08; }
 
-/* Playfair is a high-contrast face. It was drawn to be set tight and large,
-   and the default spacing leaves it looking loose at heading sizes. */
+/* Newsreader is a high-contrast face drawn to be set tight and large, and the
+   default spacing leaves it looking loose at heading sizes. */
 h1, h2, h3, h4, h5, h6, .font-serif, .font-display {
   letter-spacing: -0.012em;
   color: var(--m-ink);
 }
 
-/* Every small-caps label on the site, set identically. These were carrying
-   four different tracking values, which is exactly the sort of thing nobody
-   notices individually and everybody notices in aggregate.
+/* NO UPPERCASE LETTER-SPACED LABELS, ANYWHERE.
 
-   NARROWED FROM 0.16em TO 0.11em. Monospace is already evenly spaced -- that is
-   what it is for -- so wide tracking on top of it spaces the same letters
-   twice, and at 0.16em a label stopped reading as a word and started reading as
-   a row of characters. Spread across every eyebrow, every tile name, every tab
-   and every unit, that was most of what made the site feel shouted rather than
-   set. 0.11em still separates small caps enough to breathe, which is the whole
-   job of tracking them, and it buys back real width: "Intrinsic value ·
-   perpetuity growth" and "Net debt / EBITDA" stop wrapping at the sizes their
-   columns actually get. */
-.uppercase.font-mono {
-  letter-spacing: 0.11em;
+   The site set every eyebrow, tile name, tab and unit in spaced small capitals
+   — first at 0.16em, then narrowed to 0.11em when that read as a row of
+   characters rather than a word. Narrowing it treated the symptom. Spaced caps
+   are a device, and a device used on every label on every screen stops being
+   emphasis and becomes the voice of the site: shouted rather than set, and the
+   single thing that most made it look machine-made.
+
+   So they are switched off at the source rather than unpicked across three
+   hundred call sites, and a screen that still asks for them gets sentence case
+   at the small step. A label is a word; it is set like one. */
+.uppercase {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* The eyebrow keeps its one job — naming what follows — through weight and
+   colour rather than through capitals. */
+.font-figure.uppercase,
+.uppercase.font-figure {
   font-weight: 500;
 }
 
@@ -491,28 +521,20 @@ h1, h2, h3, h4, h5, h6, .font-serif, .font-display {
    second line, which is the sort of thing that makes a site look unfinished
    however good the rest of it is. It keeps the tighter setting and is never
    allowed to break a label across lines. */
-header .uppercase.font-mono,
-header .font-mono {
-  /* The 13px floor exists so that nothing anyone has to READ is small. The top
-     bar is not read, it is glanced at: seven labels, a clock and two buttons on
-     a fixed 1440px rule. Held at 13px they wrap onto a second line, which looks
-     far worse than a 12px label. It is the one exemption, and it is stated here
-     rather than left as a mystery in a component. */
-  font-size: 12px !important;
-  letter-spacing: 0.08em;
+header .uppercase.font-figure,
+header .font-figure {
+  /* THE TOP BAR IS GLANCED AT, NOT READ: seven labels, a clock and two buttons
+     on a fixed 1440px rule. It used to need an exemption below the 13px floor
+     because spaced capitals are wide. Without the capitals and without the
+     tracking the same seven labels fit at the small step, so the exemption is
+     gone and the floor holds everywhere. */
   white-space: nowrap;
 }
 
-/* Sentences set in the monospace face. Monospace is for figures and for the
-   small capital labels that sit above them — a paragraph set in it reads as a
-   terminal dump, and there were seven of them scattered through the site,
-   carrying some of the most important explanations on the page. Any monospace
-   block with relaxed leading and no small caps is prose, and is set in the
-   reading face instead. Labels, tickers and every number are untouched. */
-.font-mono.leading-relaxed:not(.uppercase) {
-  font-family: 'Inter', sans-serif;
-  letter-spacing: 0.005em;
-}
+/* There is no second face to rescue a paragraph from any more: prose and
+   figures are the same family, and what distinguishes a column of numbers is
+   that it asks for tabular figures. The rule that used to pull monospace
+   paragraphs back into the reading face has nothing left to do. */
 
 /* ------------------------------------------------------------------ */
 /* Landing page anchors                                                */
@@ -640,12 +662,7 @@ header .font-mono {
   letter-spacing: -0.018em;
 }
 
-/* The chapter marks on the kept sections match the rebuilt ones. */
-#methodology .font-mono.uppercase.tracking-\[0\.2em\],
-#coverage .font-mono.uppercase.tracking-\[0\.2em\],
-#about .font-mono.uppercase.tracking-\[0\.2em\] {
-  letter-spacing: 0.22em;
-}
+
 
 /* ================================================================== */
 /* ONE DISPLAY FACE, EVERY SCREEN                                      */
@@ -667,16 +684,16 @@ header .font-mono {
 h1, h2, h3, h4, h5, h6,
 h1.font-serif, h2.font-serif, h3.font-serif, h4.font-serif, h5.font-serif, h6.font-serif,
 h1.font-display, h2.font-display, h3.font-display, h4.font-display {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.04;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
 }
 
 /* Larger headings want the tracking pulled in further; small ones fall
    apart if it is. */
-h1 { letter-spacing: -0.045em; }
-h4, h5, h6 { letter-spacing: -0.02em; line-height: 1.2; }
+h1 { letter-spacing: -0.028em; }
+h4, h5, h6 { letter-spacing: -0.012em; line-height: 1.2; }
 
 /* The serif, where it belongs. */
 blockquote.font-serif,
@@ -684,7 +701,7 @@ p.font-serif,
 span.font-serif,
 .editorial,
 .wordmark-serif {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-display);
   letter-spacing: -0.012em;
 }
 
@@ -700,18 +717,70 @@ span.font-serif,
    meant for a link or a button. Only the object itself is draggable. */
 canvas[aria-hidden="true"] { touch-action: pan-y; }
 
-/* The headline figures on the model screen carried .font-display, which
-   still resolves to Playfair. Every other number on the site is set in
-   JetBrains Mono, and his own convention is that figures are mono — so a
-   serif price sitting above a mono ratio row was the last place the site
-   changed its mind about itself. Only SPANs are caught here; headings keep
-   the display face set above. */
-span.font-display,
-div.font-display {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: -0.01em;
-  font-weight: 500;
+/* THE RULE THAT USED TO SIT HERE IS GONE, and that is the fix rather than the
+   loss it looks like.
+
+   It caught `span.font-display` and `div.font-display` and set them in the
+   monospace face, because the headline figures on the model screen carry that
+   class and every other number was mono. With one pairing and no monospace it
+   had nothing left to do — and it was never only catching figures: the landing
+   page's own headline is a <span> inside an <h1>, so the rule quietly took the
+   serif off the first words anybody reads on the site.
+
+   `font-display` now means the display face, on any element, which is what the
+   name says. A number that lands on it still lines up: Newsreader has tabular
+   figures, measured, like the body face. */
+
+/* ================================================================== */
+/* ONE TYPE SCALE, AND THE BLOCK THAT HOLDS SCREENS TO IT             */
+/*                                                                     */
+/* Four steps: title, section, body, small. Measured before this was   */
+/* written, the site asked for TWENTY-FIVE sizes between 9px and 62px  */
+/* -- 91 uses of 13px, 90 of 12px, 86 of 11px, 74 of 14px, 47 of 15px  */
+/* and so on down to single uses of 22, 26, 46 and 62. Neighbouring    */
+/* panels set 14px and 15px, which reads as a mistake rather than as a */
+/* distinction, and nothing anywhere said which size a new screen      */
+/* should reach for.                                                   */
+/*                                                                     */
+/* Rewriting six hundred call sites across thirty components would be  */
+/* a very large diff for a change nobody could check, so the scale is  */
+/* imposed HERE, the way the palette already remaps stray hex values   */
+/* further up this file. A screen may still write text-[11px]; it gets */
+/* the small step. That is the point -- a twenty-sixth size cannot be  */
+/* introduced by writing one.                                          */
+/*                                                                     */
+/* The 13px floor is now real rather than aspirational: everything     */
+/* below it lands on 13px, including the top bar, which no longer      */
+/* needs its exemption because sentence-case labels are narrower than  */
+/* the spaced capitals it was granted the exemption for.               */
+/* ================================================================== */
+
+.text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-\[13px\] {
+  font-size: var(--m-size-small);
 }
+.text-\[14px\], .text-\[15px\], .text-\[16px\], .text-\[17px\] {
+  font-size: var(--m-size-body);
+}
+.text-\[18px\], .text-\[19px\], .text-\[20px\], .text-\[21px\], .text-\[22px\], .text-\[24px\] {
+  font-size: var(--m-size-section);
+}
+.text-\[26px\], .text-\[28px\], .text-\[30px\], .text-\[32px\], .text-\[34px\],
+.text-\[36px\], .text-\[40px\], .text-\[44px\], .text-\[46px\], .text-\[48px\],
+.text-\[56px\], .text-\[62px\],
+.text-\[clamp\(27px\,3\.2vw\,40px\)\],
+.text-\[clamp\(22px\,2\.4vw\,30px\)\],
+.text-\[clamp\(1\.25rem\,2\.4vw\,1\.75rem\)\],
+.text-\[clamp\(1\.625rem\,3vw\,2\.375rem\)\],
+.text-\[clamp\(2\.5rem\,5vw\,3\.75rem\)\],
+.text-\[clamp\(34px\,4\.2vw\,54px\)\] {
+  font-size: var(--m-size-title);
+}
+
+/* The named Tailwind steps the build still uses, onto the same four. */
+.text-xs, .text-sm { font-size: var(--m-size-small); }
+.text-base, .text-lg { font-size: var(--m-size-body); }
+.text-xl, .text-2xl { font-size: var(--m-size-section); }
+.text-3xl, .text-4xl, .text-5xl, .text-6xl { font-size: var(--m-size-title); }
 
 /* A FIXED BOTTOM BAR IS PAINTED OVER THIS PAGE, so the page is told how tall
    the bar actually is. `useBottomBarInset` measures the bar and writes the

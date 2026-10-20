@@ -165,7 +165,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 transition-colors"
+            className="inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 hover:bg-[#8B1E1E]/35 transition-colors"
           >
             <Save className="w-4 h-4" />
             Save
@@ -173,7 +173,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
         </div>
         {/* WHAT WOULD BE SAVED, counted out, so nobody has to guess whether a
             judgement they made is going into the record. */}
-        <div className="font-mono text-[13px] text-[#8A8A8F] mt-3 leading-relaxed">
+        <div className="font-figure text-[13px] text-[#8A8A8F] mt-3 leading-relaxed">
           {[
             slidersChanged
               ? `${slidersChanged} assumption${slidersChanged === 1 ? '' : 's'} changed`
@@ -196,7 +196,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
         </div>
       </div>
 
-      {message && <p className="font-mono text-[13px] text-[#8B1E1E] mb-4">{message}</p>}
+      {message && <p className="font-figure text-[13px] text-[#8B1E1E] mb-4">{message}</p>}
 
       {rows.length === 0 ? (
         <p className="text-[14px] text-[#8A8A8F] mb-6">Nothing saved for {companyName} yet.</p>
@@ -210,7 +210,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-[14px] text-[#F2F0EA] truncate">{entry.name}</div>
-                    <div className="font-mono text-[13px] text-[#8A8A8F]">
+                    <div className="font-figure text-[13px] text-[#8A8A8F]">
                       {/* ONE FIGURE WHERE THEY AGREE, BOTH WHERE THEY DO NOT. */}
                       {now.error ? (
                         <span className="text-[#D05E58]">reopens with no value</span>
@@ -231,7 +231,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => onRestore(entry)}
-                      className="inline-flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-widest px-3 py-1.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
+                      className="inline-flex items-center gap-1.5 font-figure text-[12px] uppercase tracking-widest px-3 py-1.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
                     >
                       <RotateCcw className="w-3.5 h-3.5" />
                       Open
@@ -242,7 +242,7 @@ export const SavedModelsPanel: React.FC<Props> = ({
                         deleteSaved(entry.id);
                         refresh();
                       }}
-                      className="inline-flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-widest px-3 py-1.5 border border-[#222228] text-[#8A8A8F] hover:text-[#8B1E1E] hover:border-[#8B1E1E] transition-colors"
+                      className="inline-flex items-center gap-1.5 font-figure text-[12px] uppercase tracking-widest px-3 py-1.5 border border-[#222228] text-[#8A8A8F] hover:text-[#8B1E1E] hover:border-[#8B1E1E] transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Delete
@@ -289,12 +289,12 @@ export const SavedModelsPanel: React.FC<Props> = ({
         <button
           type="button"
           onClick={exportSaved}
-          className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+          className="inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
         >
           <Download className="w-4 h-4" />
           Export all saved models
         </button>
-        <label className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors cursor-pointer">
+        <label className="inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors cursor-pointer">
           <Upload className="w-4 h-4" />
           Import
           <input

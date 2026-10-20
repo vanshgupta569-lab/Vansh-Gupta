@@ -68,7 +68,7 @@ const Figure: React.FC<{ label: string; value: string; note?: string }> = ({
         <span className="block text-[12px] text-[#8A8A8F]/80 mt-0.5">{note}</span>
       ) : null}
     </span>
-    <span className="font-mono text-[15px] text-[#F2F0EA] text-right tabular-nums shrink-0">
+    <span className="font-figure text-[15px] text-[#F2F0EA] text-right tabular-nums shrink-0">
       {value}
     </span>
   </div>
@@ -579,7 +579,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                 far better than a paragraph does. */}
             {onRecoveryKey && (
               <div className="mt-4 pt-3 border-t border-[#222228]">
-                <div className="font-mono text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase mb-2">
+                <div className="font-figure text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase mb-2">
                   Liquidation assumes
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -588,7 +588,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                       key={preset.key}
                       type="button"
                       onClick={() => onRecoveryKey(preset.key)}
-                      className={`font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors ${
+                      className={`font-figure text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors ${
                         recoveryKey === preset.key
                           ? 'border-[#8B1E1E] bg-[#8B1E1E]/15 text-[#F2F0EA]'
                           : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8A8A8F]'
@@ -634,7 +634,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           How this was calculated
         </h2>
-        <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           04 — the working
         </span>
       </div>
@@ -653,14 +653,14 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-[#222228] border border-[#222228] mb-4">
         {cards.map((card) => (
           <div key={card.key} className="bg-[#0B0B0D] p-4 sm:p-5">
-            <div className="font-mono text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase">
+            <div className="font-figure text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase">
               {card.name}
             </div>
             <div className="text-[13px] leading-snug text-[#8A8A8F] mt-1.5 mb-3 min-h-[2.4em]">
               {card.question}
             </div>
             {isNum(card.value) ? (
-              <div className="font-mono text-[24px] text-[#F2F0EA] tabular-nums leading-none">
+              <div className="font-figure text-[24px] text-[#F2F0EA] tabular-nums leading-none">
                 {perShare(card.value)}
               </div>
             ) : (
@@ -741,7 +741,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                       </div>
                       {step.figures ? (
                         <div className="border border-[#222228] bg-[#0B0B0D] p-4 self-start">
-                          <div className="font-mono text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase mb-2">
+                          <div className="font-figure text-[11px] tracking-[0.18em] text-[#8A8A8F] uppercase mb-2">
                             {companyName}
                           </div>
                           {step.figures}

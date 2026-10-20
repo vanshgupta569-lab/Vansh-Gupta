@@ -75,7 +75,7 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
     <section id="margin-notes" className="w-full" style={{ background: PAPER }}>
       <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
         <p
-          className="font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
+          className="font-figure text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
           style={{ color: RED_TEXT }}
         >
           <span className="h-px w-8 shrink-0" style={{ background: RED }} />
@@ -113,7 +113,7 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
                 {note.answer}
               </div>
               <div
-                className="font-mono text-[11px] tracking-[0.2em] uppercase mt-6 group-hover:text-[#8B1E1E] transition-colors"
+                className="font-figure text-[11px] tracking-[0.2em] uppercase mt-6 group-hover:text-[#8B1E1E] transition-colors"
                 style={{ color: RED_TEXT }}
               >
                 Read the note
@@ -125,14 +125,14 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
         <button
           type="button"
           onClick={() => onOpenNotes()}
-          className="font-mono text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border mb-16 hover:border-[#8B1E1E] transition-colors"
+          className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border mb-16 hover:border-[#8B1E1E] transition-colors"
           style={{ borderColor: PAPER_LINE, color: PAPER_READ }}
         >
           All {MARGIN_NOTES.length} notes
         </button>
 
         <div
-          className="font-mono text-[12px] tracking-[0.2em] uppercase mb-6 pt-8 border-t"
+          className="font-figure text-[12px] tracking-[0.2em] uppercase mb-6 pt-8 border-t"
           style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
         >
           What is being built next
@@ -146,7 +146,7 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
             >
               <div className="flex items-baseline gap-6 lg:gap-12 min-w-0">
                 <span
-                  className="font-mono text-[12px] tracking-[0.16em] shrink-0"
+                  className="font-figure text-[12px] tracking-[0.16em] shrink-0"
                   style={{ color: PAPER_DIM }}
                 >
                   {quarters[i]}
@@ -156,7 +156,7 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
                 </span>
               </div>
               <span
-                className="font-mono text-[12px] tracking-[0.16em] uppercase shrink-0"
+                className="font-figure text-[12px] tracking-[0.16em] uppercase shrink-0"
                 style={{ color: item.status === 'In build' ? RED_TEXT : PAPER_DIM }}
               >
                 {item.status}

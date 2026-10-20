@@ -148,7 +148,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
             className="flex-1 bg-transparent text-[14px] text-[#F2F0EA] placeholder:text-[#8A8A8F] focus:outline-none"
           />
           {searching && (
-            <span className="font-mono text-[12px] text-[#8A8A8F] shrink-0">searching…</span>
+            <span className="font-figure text-[12px] text-[#8A8A8F] shrink-0">searching…</span>
           )}
         </div>
 
@@ -162,7 +162,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
                 className="w-full text-left px-4 py-3 border-b border-[#222228] last:border-b-0 hover:bg-[#8B1E1E]/15 transition-colors"
               >
                 <span className="text-[14px] text-[#F2F0EA]">{entry.name}</span>
-                <span className="ml-3 font-mono text-[12px] text-[#8A8A8F]">
+                <span className="ml-3 font-figure text-[12px] text-[#8A8A8F]">
                   {entry.ticker}
                   {entry.exchange ? ` · ${entry.exchange}` : ''}
                 </span>
@@ -178,7 +178,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
           {tickerList.map((ticker) => (
             <span
               key={ticker}
-              className="inline-flex items-center gap-2 font-mono text-[13px] px-3 py-1.5 border border-[#222228] text-[#F2F0EA]"
+              className="inline-flex items-center gap-2 font-figure text-[13px] px-3 py-1.5 border border-[#222228] text-[#F2F0EA]"
             >
               {ticker}
               <button
@@ -195,7 +195,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
       )}
 
       <details className="mb-4">
-        <summary className="font-mono text-[12px] uppercase tracking-widest text-[#8A8A8F] hover:text-[#F2F0EA] cursor-pointer">
+        <summary className="font-figure text-[12px] uppercase tracking-widest text-[#8A8A8F] hover:text-[#F2F0EA] cursor-pointer">
           Or paste a list of tickers
         </summary>
         <textarea
@@ -203,7 +203,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
           onChange={(e) => setInput(e.target.value)}
           rows={3}
           placeholder="AAPL, NVDA, MSFT, RELIANCE.NS, HDFCBANK.NS"
-          className="w-full mt-3 bg-[#0B0B0D] border border-[#222228] px-4 py-3 font-mono text-[14px] text-[#F2F0EA] placeholder:text-[#8A8A8F] focus:outline-none focus:border-[#8B1E1E]"
+          className="w-full mt-3 bg-[#0B0B0D] border border-[#222228] px-4 py-3 font-figure text-[14px] text-[#F2F0EA] placeholder:text-[#8A8A8F] focus:outline-none focus:border-[#8B1E1E]"
         />
       </details>
 
@@ -212,7 +212,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
           type="button"
           onClick={start}
           disabled={running}
-          className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-4 py-2.5 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 disabled:opacity-40 font-semibold transition-colors"
+          className="inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-4 py-2.5 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 disabled:opacity-40 font-semibold transition-colors"
         >
           <Play className="w-4 h-4" />
           {running ? `Modelling ${progress.done} of ${progress.total}…` : 'Run'}
@@ -222,7 +222,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
           <button
             type="button"
             onClick={() => downloadBatchCsv(sorted)}
-            className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+            className="inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-4 py-2.5 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
           >
             <Download className="w-4 h-4" />
             Download CSV
@@ -230,7 +230,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
         )}
 
         {rows.length > 1 && (
-          <div className="flex items-center gap-1 font-mono text-[12px] text-[#8A8A8F]">
+          <div className="flex items-center gap-1 font-figure text-[12px] text-[#8A8A8F]">
             <span className="uppercase tracking-widest mr-1">Sort</span>
             {([
               ['gap', 'by gap'],
@@ -262,7 +262,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
                 {['Company', 'Price', 'Model value', 'Gap', 'Method'].map((h, i) => (
                   <th
                     key={h}
-                    className={`font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3 ${
+                    className={`font-figure text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3 ${
                       i === 0 ? 'text-left' : 'text-right'
                     }`}
                   >
@@ -276,21 +276,21 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
                 <tr key={row.ticker} className="border-b border-[#222228]/60 align-top">
                   <td className="py-3 px-3">
                     <div className="text-[14px] text-[#F2F0EA]">{row.name || row.ticker}</div>
-                    <div className="font-mono text-[12px] text-[#8A8A8F]">{row.ticker}</div>
+                    <div className="font-figure text-[12px] text-[#8A8A8F]">{row.ticker}</div>
                     {row.error && (
                       <div className="text-[13px] text-[#8A8A8F] mt-1 max-w-md leading-relaxed">
                         {row.error}
                       </div>
                     )}
                   </td>
-                  <td className="py-3 px-3 text-right font-mono text-[14px] text-[#A1A1AA]">
+                  <td className="py-3 px-3 text-right font-figure text-[14px] text-[#A1A1AA]">
                     {money(row.price, row.currencySymbol)}
                   </td>
-                  <td className="py-3 px-3 text-right font-mono text-[14px] text-[#F2F0EA]">
+                  <td className="py-3 px-3 text-right font-figure text-[14px] text-[#F2F0EA]">
                     {money(row.value, row.currencySymbol)}
                   </td>
                   <td
-                    className={`py-3 px-3 text-right font-mono text-[14px] ${
+                    className={`py-3 px-3 text-right font-figure text-[14px] ${
                       !isNum(row.premiumPct)
                         ? 'text-[#8A8A8F]'
                         : row.premiumPct > 0
@@ -302,7 +302,7 @@ export const BatchPanel: React.FC<{ seedTickers?: string[] }> = ({ seedTickers =
                       ? `${row.premiumPct > 0 ? '+' : ''}${row.premiumPct}%`
                       : '—'}
                   </td>
-                  <td className="py-3 px-3 text-right font-mono text-[12px] text-[#8A8A8F]">
+                  <td className="py-3 px-3 text-right font-figure text-[12px] text-[#8A8A8F]">
                     {row.method || '—'}
                   </td>
                 </tr>

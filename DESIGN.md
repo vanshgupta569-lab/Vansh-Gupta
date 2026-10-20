@@ -22,80 +22,41 @@ colors:
   paper-line: "#DAD6CC"
   paper-accent-text: "#A23A34"
 typography:
-  display:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "clamp(34px, 4.2vw, 54px)"
-    fontWeight: 700
-    lineHeight: 1.06
-    letterSpacing: "-0.045em"
-  screen-title:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "clamp(27px, 3.2vw, 40px)"
-    fontWeight: 800
-    lineHeight: 0.98
-    letterSpacing: "-0.045em"
-  headline:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "24px"
-    fontWeight: 700
-    lineHeight: 1.04
-    letterSpacing: "-0.035em"
   title:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: "20px"
-    fontWeight: 700
-    lineHeight: 1.2
-    letterSpacing: "-0.02em"
-  editorial:
-    fontFamily: "'Playfair Display', Georgia, serif"
-    fontSize: "18px"
-    fontWeight: 500
-    lineHeight: 1.5
-    letterSpacing: "-0.012em"
-  hero-figure:
-    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "clamp(2.5rem, 5vw, 3.75rem)"
+    fontFamily: "'Newsreader', Georgia, serif"
+    fontSize: "clamp(28px, 2.8vw, 36px)"
     fontWeight: 600
-    lineHeight: 1
-    letterSpacing: "-0.03em"
-    fontFeature: "tabular-nums"
-  figure:
-    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "clamp(1.625rem, 3vw, 2.375rem)"
-    fontWeight: 500
-    lineHeight: 1
+    lineHeight: 1.08
     letterSpacing: "-0.02em"
-    fontFeature: "tabular-nums"
-  tile-figure:
-    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "17px"
-    fontWeight: 500
-    lineHeight: 1
-    fontFeature: "tabular-nums"
+  section:
+    fontFamily: "'Newsreader', Georgia, serif"
+    fontSize: "20px"
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: "-0.012em"
   body:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
-    fontSize: "16px"
+    fontFamily: "'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: "15px"
     fontWeight: 400
-    lineHeight: 1.7
+    lineHeight: 1.65
     letterSpacing: "0.005em"
-  body-dense:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+  small:
+    fontFamily: "'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
     fontSize: "13px"
     fontWeight: 400
     lineHeight: 1.55
     letterSpacing: "0.005em"
+  figure:
+    fontFamily: "'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
+    fontSize: "inherit"
+    fontWeight: 400
+    fontFeature: "tabular-nums lining-nums"
   label:
-    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontFamily: "'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
     fontSize: "13px"
     fontWeight: 500
     lineHeight: 1.55
-    letterSpacing: "0.16em"
-  label-chrome:
-    fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "12px"
-    fontWeight: 500
-    lineHeight: 1.55
-    letterSpacing: "0.08em"
+    letterSpacing: "normal"
 rounded:
   none: "0px"
   full: "9999px"
@@ -221,7 +182,7 @@ Density is a value here, not a side effect. An eyebrow label, a figure at 17px, 
 hairline and no shadow: a professional reads a row of tiles at a glance and wants
 them close together, and the airy version of the same card says "dashboard"
 rather than "terminal". The governing pattern of the shipped company screen is
-**the number first, the explanation on demand**. A figure is large, monospaced
+**the number first, the explanation on demand**. A figure is large, tabular
 and alone; everything that accounts for it sits behind a disclosure that opens
 beside the figure rather than in a footnote at the bottom of the panel. The prose
 was never the fault — it is the reason to trust the number — but a reader who
@@ -238,7 +199,7 @@ square.
 - Two grounds, two ramps: a warm near-black instrument, warm paper for reading.
 - Hairlines and tonal layering only. Not one `box-shadow` in the build.
 - Square corners. Radius appears only as a full circle, on a status dot or a diagram ring.
-- Every figure monospace and tabular; every heading Inter at 700, cut tight.
+- Every figure tabular; every title Newsreader at 600, cut tight. One pairing, four sizes.
 - One red, one green, one amber. Their rarity is what makes them mean anything.
 - A red square, not a full stop, ends a heading.
 - Even the surfaces nobody draws — scrollbar, selection, caret, focus ring — come from the palette.
@@ -318,110 +279,121 @@ built and one that was assembled.
 
 ## Typography
 
-**Display Font:** Inter (with system-ui, sans-serif) — cut tight and heavy
-**Body Font:** Inter (with ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial)
-**Label/Figure Font:** JetBrains Mono (with ui-monospace, SFMono-Regular, Menlo, Consolas)
-**Editorial Font:** Playfair Display (with Georgia, serif) — opt-in only
+**Title Font:** Newsreader (with Georgia, serif) — the display face, for titles only
+**Text and Figure Font:** Source Sans 3 (with ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial)
+**There is no third face, and there is no monospace.**
 
-**Character:** An institution, not a magazine. Headings are Inter at 700 pulled in
-hard, because an editorial serif at display size reads as a periodical and this is
-meant to read as an institution; if the search screen kept the serif, the site
-would change register the moment somebody opened a company. Playfair Display is
-still loaded and still earns three opt-in places — the wordmark, a blockquote, and
-anything marked `.editorial` — and that is where the system's one flourish lives.
-Every number is JetBrains Mono.
+### The pairing, and why it is this one
 
-### Hierarchy
-- **Display** (Inter 700, `clamp(34px, 4.2vw, 54px)`, 1.06, -0.02em at section
-  level, -0.045em at `h1`): landing-page and long-section headings.
-- **Screen Title** (Inter 800, `clamp(27px, 3.2vw, 40px)`, 0.98, -0.045em): the
-  one heading that names a working screen — the figures editor, the questions.
+Chosen 20 October 2026, from three candidates rendered on the real landing page
+and the real figures screen rather than on a specimen sheet. The site had been
+carrying four faces — Inter for headings, Inter for body, JetBrains Mono for
+every number and label, Playfair Display opt-in — and changed register between
+screens because of it.
 
-  **Why this step exists, and why it must not be removed.** Display is the
-  landing-page voice and is too loud for a screen somebody works in: the figures
-  editor opened with a 56px centred headline above two paragraphs and three
-  definition cards, so a reader who came to check what the source returned
-  scrolled past a screen and a half of preamble to reach the first figure, every
-  visit. The obvious correction is to drop that heading to Headline at 24px — and
-  that is wrong, because the section heading immediately under it (`PAPER as
-  filed`) is also 24px, and a page title the same size as the section inside it is
-  not a hierarchy, it is two headings. This step is the gap between the two: large
-  enough to name the screen, quiet enough not to compete with the table that is
-  the screen's reason to exist. Added 2026-10-03 after the figures screen was
-  rebuilt; `impeccable detect` flags any size off this ramp, so a step used by a
-  screen and absent here reads as drift and gets "corrected" back into a
-  collision.
-- **Headline** (Inter 700, 24px, 1.04, -0.035em): screen headings.
-- **Title** (Inter 700, 20px, 1.2, -0.02em): panel headings.
-- **Hero Figure** (JetBrains Mono 600, `clamp(2.5rem, 5vw, 3.75rem)`, 1, -0.03em,
-  tabular): the one figure a screen exists to show — the intrinsic value. A clamp
-  rather than three breakpoint steps, because the hero should simply fill the
-  width it is given and three `sm:text-` steps describe that worse.
-- **Figure** (JetBrains Mono 500, `clamp(1.625rem, 3vw, 2.375rem)`, 1, -0.02em,
-  tabular): the figures beside the hero — exit multiple, live price.
-- **Tile Figure** (JetBrains Mono 500, 17px, 1, tabular): the measure in a metric
-  tile.
-- **Body** (Inter 400, 16px, 1.7, 0.005em): paragraphs. Reading text on a
-  near-black ground needs more room to breathe than the same text on white; the
-  slight positive tracking stops thin strokes closing up.
-- **Body Dense** (Inter 400, 13px, 1.55): the sentence inside a disclosure.
-- **Label / Eyebrow** (JetBrains Mono 500, 13px, 0.16em, uppercase): what a thing
-  is — a figure's name, a row's unit, a tile's label, a chip's ticker.
-- **Chrome Label** (JetBrains Mono 500, 12px, 0.08em, uppercase, nowrap): the top
-  bar only.
+**Newsreader** for titles. It is drawn by Production Type for reading on
+screens, and at the one size the scale gives it the high-contrast cut reads as
+a masthead: newspaper-grade, which is the register a company's accounts should
+arrive in. It is not one of the faces an AI-built site reaches for.
+
+**Source Sans 3** for everything else, including every figure. The product
+lives at 13px — a table of sixty numbers, a label beside each — and Source Sans
+3 is exceptional at that size: open apertures, unambiguous 1/l/I, and it holds
+its colour on a near-black ground where a higher-contrast sans goes thin. It
+has **true tabular figures**, measured in a browser rather than assumed, so a
+column lines up because the figures are tabular and not because the letters are
+all one width.
+
+Both are free (SIL Open Font License), and **both carry ₹ in Google's base
+latin subset** — read off the stylesheet Google actually serves, not inferred,
+because ₹ sits at U+20B9 and a face that only carries it in latin-ext would
+render it from a fallback on a page of Indian accounts. Indian digit grouping
+(87,78,350) is the browser's `en-IN` formatting and works in any face that has
+the digits; what the face has to supply is the grouping commas at tabular
+width, which both do.
+
+### The four steps, and nothing between them
+
+| Step | Size | Face | What it is |
+|---|---|---|---|
+| **Title** | `clamp(28px, 2.8vw, 36px)` | Newsreader 600 | The one heading that names a page |
+| **Section** | 20px | Newsreader 600 | A heading inside a page |
+| **Body** | 15px | Source Sans 3 400 | Paragraphs, table rows, controls |
+| **Small** | 13px | Source Sans 3 400 | Captions, labels, secondary lines |
+
+**Measured before this replaced the old ramp: the site asked for twenty-five
+sizes between 9px and 62px** — 91 uses of 13px, 90 of 12px, 86 of 11px, 74 of
+14px, 47 of 15px, and single uses of 22, 26, 46 and 62. Neighbouring panels set
+14px and 15px, which reads as a mistake rather than a distinction, and nothing
+told a new screen which size to reach for.
+
+**How the scale is held, and why it is held there.** Rewriting six hundred call
+sites across thirty components would have been a very large diff for a change
+nobody could check, so the scale is imposed in `src/index.css`, the way that
+file already remaps stray hex values onto the palette. A screen may still write
+`text-[11px]`; it gets the small step. That is the point — **a twenty-sixth size
+cannot be introduced by writing one.** `src/design/tokens.ts` exports the four as
+`SIZE` and `src/index.css` mirrors them as `--m-size-*`.
 
 ### Named Rules
-**The Figures Are Mono Rule.** Every number is JetBrains Mono with `tabular-nums`.
-Inter's digits are proportional, so a column of them does not line up and a figure
-that tweens as a slider drags jitters sideways. A `span` or `div` marked
-`.font-display` is resolved to mono for exactly this reason: a serif price above a
-mono ratio row was the last place the build changed its mind about itself.
 
-**The 13px Floor Rule.** Nothing anyone has to read is set below 13px. Section
-labels at 9, 10 and 11px read fine on a large monitor and are work on a laptop or
-a phone. There is one exemption and it is stated in the stylesheet rather than
-left as a mystery in a component: the top bar carries seven labels, a clock and
-two buttons on a fixed 1440px rule, is glanced at rather than read, and is held at
-12px with `white-space: nowrap` because at 13px its last three labels wrap.
+**The One Pairing Rule.** Newsreader for titles, Source Sans 3 for everything
+else. A screen that wants a third voice uses weight, colour or size from the
+four steps. There is no editorial face, no label face and no code face, because
+four faces is what made the site read as assembled rather than designed.
 
-**The Seven Sizes Rule.** 13 / 15 / 16 / 18 / 20 / 24, plus 30-48 on the landing
-page only, each declared with its own line height — leading that suits a 13px
-label suffocates a 16px paragraph. Thirteen sizes between 8px and 24px is not a
-hierarchy; 14px and 15px in neighbouring panels read as a mistake rather than a
-distinction.
+**The Figures Are Tabular Rule.** Every number is set with
+`font-variant-numeric: tabular-nums lining-nums`, carried by the `.font-figure`
+class. This replaces *The Figures Are Mono Rule*, which required JetBrains Mono
+for the same purpose. The purpose was always alignment, and alignment is a
+font *feature*, not a font: a monospace face buys a lined-up column by making
+every letter the same width, which is a heavy price paid in the letters around
+the numbers. Source Sans 3's tabular figures line up exactly as well, and the
+prose beside them stays prose. `.font-figure` is the former `.font-mono`,
+renamed across 343 call sites in 30 files, because a class that said "mono"
+while resolving to a proportional face would be a lie in the markup.
 
-**The Uniform Label Rule.** Every uppercase mono label is 0.16em and weight 500,
-set once in the stylesheet. Four different tracking values is the sort of thing
-nobody notices individually and everybody notices in aggregate. A tracking
-utility written on an uppercase mono element does not win against it.
+**The Uniform Label Rule.** A label is a word, and it is set like one: sentence
+case, at the small step, at weight 500, with normal letter-spacing. **No
+uppercase and no tracking.**
 
-**The Prose Is Not Mono Rule.** Monospace carries **numbers, tickers, codes,
-units and labels of a word or two**. Everything that reads as a sentence is
-Inter, whatever its size, weight or colour, and whether or not it is secondary.
+This reverses the old rule, which set every label in spaced small capitals and
+spent its text arguing about *how much* tracking — 0.16em, then narrowed to
+0.11em when that read as a row of characters rather than a word. Narrowing
+treated the symptom. Spaced capitals are a device, and a device used on every
+eyebrow, tile name, tab and unit on every screen stops being emphasis and
+becomes the voice of the site: shouted rather than set, and the single thing
+that most made it look machine-made. The capitals are switched off at the
+source (`.uppercase` in `index.css`, and the `EYEBROW` and `LABEL` constants in
+`instrument.tsx`) rather than unpicked across three hundred call sites, so a
+screen that still writes `uppercase` gets sentence case.
 
-**The test is the text, not the class.** Not the length, not the weight, not
-whether it sits in the chrome: read it aloud, and if it is a sentence it is
-Inter. `NASDAQ`, `US0378331005`, `0.29x net cash`, `FY2025`, `Net debt / EBITDA`
-and `25% · 5%` are mono. "Click one and type over it", "the two methods are 12%
-apart", "Why there are two values, and what the gap means" and "Don't know this
-company yet?" are Inter — the middle one despite carrying a figure, because a
-figure inside a sentence does not make the sentence a figure.
+**The No Red Labels Rule.** The accent never carries a label. An eyebrow keeps
+its oxblood hairline — the 8px rule beside the words — and the words themselves
+are muted. Oxblood as text survives only where it is a signal that is meant: a
+link, a changed figure, a refusal. A label set in the accent colour on every
+section is the same mistake as spaced capitals, made in colour.
 
-**Why, and it is not only taste.** Measured across the five screens on
-2026-10-08: **103 passages of four words or more were set in JetBrains Mono, 94
-of them ordinary lowercase prose** — disclosure summaries, instructional lines,
-trailing hints, the units note, the empty state of the news ticker. At that
-density the monospace stops reading as precision and starts reading as a
-terminal costume, which is the opposite of what this product is. It is also
-harder work: the even advance width that makes a column of digits line up is the
-same property that flattens the word-shapes a reader scans by, which is why the
-13px floor exists two rules above.
+**The 13px Floor Rule, and no exemptions.** Nothing is set below 13px, and the
+top bar no longer needs the exemption it used to be granted. It carries seven
+labels, a clock and two buttons on a fixed 1440px rule, and at 13px in spaced
+capitals the last three wrapped — so it was held at 12px. Sentence-case labels
+without tracking are narrower than spaced capitals, so the same seven fit at
+the small step. **The floor is now true everywhere on the site.**
 
-The split is enforced at the source rather than per screen: `instrument.tsx`
-exports `LABEL` (mono, for the things that earn it) and `UI` (Inter, same size,
-for every secondary sentence). Reaching for `LABEL` on a sentence is the mistake
-this rule exists to prevent. After the pass the count was 77, and what remains
-is labels — eyebrows, tab names, metric names, section numbering.
+**The Prose Is Not A Table Rule.** What distinguishes a column of figures from
+a sentence is the tabular setting, not the family. Both are Source Sans 3, so a
+disclosure summary, a basis sentence and a figure can sit in one row without the
+row changing its mind about itself. The old rule here — that monospace carries
+numbers, tickers, codes and units while sentences take Inter — was a boundary
+that had to be policed on five screens and 103 passages; it needs no policing
+now, because there is no second face to cross into.
+
+**The Families Live In The Tokens Rule.** `src/design/tokens.ts` exports `TYPE`
+and `SIZE`; `src/index.css` mirrors them as `--font-*` and `--m-size-*`; every
+rule and every component reads those. **No component and no stylesheet rule
+names a font family literally.** Changing the pairing is changing `TYPE`, the
+four `--font-*` properties and the one `<link>` in `index.html`.
 
 ## Layout
 
@@ -657,8 +629,8 @@ size and the space the company name used to take went to the figure.
 - **Do** take colour from the ramp by utility name (`text-ink`, `bg-panel`,
   `border-line`, `text-accent-text`), which resolves through `--m-*` to
   `src/design/tokens.ts`.
-- **Do** set every number in JetBrains Mono with `tabular-nums`, including any
-  number that tweens.
+- **Do** set every number with `.font-figure`, which carries `tabular-nums` and
+  `lining-nums`, including any number that tweens.
 - **Do** use `accent-text` for oxblood words and `accent` for the mark, rules and
   fills.
 - **Do** separate with a 1px warm hairline or a one-step tonal change.
@@ -680,13 +652,13 @@ size and the space the company name used to take went to the figure.
 - **Don't** declare a palette hex inside a component; verification fails it.
 - **Don't** add a second green, a second red, a second panel black, or a cool grey.
   The ground is warm, and a cool grey on it reads as faintly dirty.
-- **Don't** use Playfair Display for a heading. Headings are Inter 700; the serif
-  is opt-in for the wordmark, a blockquote and `.editorial`.
+- **Don't** name a font family in a component or a stylesheet rule. Families come
+  from `TYPE` in `src/design/tokens.ts` and nowhere else.
 - **Don't** add a `box-shadow`, a glow or a gradient to lift a surface.
-- **Don't** set type below 13px outside the top bar's stated 12px exemption.
-- **Don't** add a font size between the seven steps, or set a size without its
-  line height.
-- **Don't** set a paragraph in the monospace face.
+- **Don't** set type below 13px. There is no exemption any more, including the top bar.
+- **Don't** add a font size between the four steps; the remapping block in
+  `index.css` will snap it onto one of them anyway.
+- **Don't** set a label in capitals, track it out, or colour it with the accent.
 - **Don't** leave a browser default on the scrollbar, the selection, the caret or
   the focus ring.
 - **Don't** loosen tile or row padding into an airy grid; density is the register.

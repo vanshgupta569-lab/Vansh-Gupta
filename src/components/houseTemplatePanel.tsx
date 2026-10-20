@@ -216,7 +216,7 @@ export function HouseTemplatePanel({ companyName, onClose }: Props) {
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
             <span className={`${EYEBROW} text-quiet`}>What we found</span>
             <span className={`${UI} text-read`}>
-              <span className="font-mono text-ink">{detection.mapping.length}</span> of your lines
+              <span className="font-figure text-ink">{detection.mapping.length}</span> of your lines
               matched ours, over {detection.sheets.length} tab
               {detection.sheets.length === 1 ? '' : 's'}
               {detection.periodColumns ? `, ${detection.periodColumns} periods wide` : ''}.
@@ -258,7 +258,7 @@ export function HouseTemplatePanel({ companyName, onClose }: Props) {
               <ul className={`${UI} mt-2 space-y-1 text-read`}>
                 {detection.conflicts.map((c) => (
                   <li key={c.key}>
-                    <span className="font-mono text-ink">{c.key}</span> — {c.at.join(', ')}. We used
+                    <span className="font-figure text-ink">{c.key}</span> — {c.at.join(', ')}. We used
                     the strongest match; untick it below if we chose the wrong one.
                   </li>
                 ))}
@@ -295,7 +295,7 @@ export function HouseTemplatePanel({ companyName, onClose }: Props) {
               <ul className={`${UI} mt-3 grid gap-x-6 gap-y-1 text-quiet sm:grid-cols-2`}>
                 {detection.unmapped.map((u) => (
                   <li key={u.key}>
-                    <span className="font-mono text-read">{u.key}</span> — {u.label}
+                    <span className="font-figure text-read">{u.key}</span> — {u.label}
                   </li>
                 ))}
               </ul>

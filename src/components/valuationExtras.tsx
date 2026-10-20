@@ -55,7 +55,7 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
         <h3 className="font-serif text-lg sm:text-xl text-[#F2F0EA]">
           Market approach
         </h3>
-        <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           03 — what buyers pay
         </span>
       </div>
@@ -69,7 +69,7 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
       </p>
 
       {loading && (
-        <p className="font-mono text-[13px] text-[#8A8A8F]">Finding the peer set…</p>
+        <p className="font-figure text-[13px] text-[#8A8A8F]">Finding the peer set…</p>
       )}
 
       {!loading && (!result || !result.available) && (
@@ -85,16 +85,16 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
             <table className="w-full min-w-[560px] border-collapse tabular-nums">
               <thead>
                 <tr className="border-b border-[#222228]">
-                  <th className="text-left font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pr-4">
+                  <th className="text-left font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pr-4">
                     Multiple
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 px-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 px-3">
                     Peer median
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 px-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 px-3">
                     This company
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pl-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pl-3">
                     Value per share
                   </th>
                 </tr>
@@ -118,11 +118,11 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[15px] text-[#A1A1AA]">
+                      <td className="py-2.5 px-3 text-right font-figure text-[15px] text-[#A1A1AA]">
                         {mult(m.median)}
                       </td>
                       <td className="py-2.5 px-3 text-right">
-                        <span className="font-mono text-[15px] text-[#A1A1AA]">
+                        <span className="font-figure text-[15px] text-[#A1A1AA]">
                           {m.key === 'priceToEarnings' ? money(m.metric) : bulk(m.metric)}
                         </span>
                         <span className="block text-[12px] text-[#8A8A8F] mt-0.5">
@@ -130,7 +130,7 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
                         </span>
                       </td>
                       <td
-                        className={`py-2.5 pl-3 text-right font-mono text-[15px] ${
+                        className={`py-2.5 pl-3 text-right font-figure text-[15px] ${
                           absent ? 'text-[#8A8A8F]' : 'text-[#F2F0EA]'
                         }`}
                       >
@@ -145,26 +145,26 @@ export const MarketApproachPanel: React.FC<MarketProps> = ({
 
           <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 mt-5 pt-4 border-t border-[#222228]">
             <div>
-              <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+              <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
                 Market approach range
               </div>
-              <div className="font-mono text-[17px] text-[#F2F0EA] tabular-nums mt-0.5">
+              <div className="font-figure text-[17px] text-[#F2F0EA] tabular-nums mt-0.5">
                 {money(result.low)} – {money(result.high)}
               </div>
             </div>
             <div>
-              <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+              <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
                 Midpoint
               </div>
-              <div className="font-mono text-[17px] text-[#F2F0EA] tabular-nums mt-0.5">
+              <div className="font-figure text-[17px] text-[#F2F0EA] tabular-nums mt-0.5">
                 {money(result.mid)}
               </div>
             </div>
             <div>
-              <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+              <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
                 Peers used
               </div>
-              <div className="font-mono text-[17px] text-[#F2F0EA] tabular-nums mt-0.5">
+              <div className="font-figure text-[17px] text-[#F2F0EA] tabular-nums mt-0.5">
                 {result.peerCount}
               </div>
             </div>
@@ -214,7 +214,7 @@ export const ImpliedByPrice: React.FC<ImpliedProps> = ({ result, currencySymbol 
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           What the price already assumes
         </h2>
-        <span className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           04 — the model, run backwards
         </span>
       </div>
@@ -241,13 +241,13 @@ export const ImpliedByPrice: React.FC<ImpliedProps> = ({ result, currencySymbol 
             <table className="w-full min-w-[560px] border-collapse tabular-nums">
               <thead>
                 <tr className="border-b border-[#222228]">
-                  <th className="text-left font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pr-4">
+                  <th className="text-left font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pr-4">
                     Assumption
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 px-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 px-3">
                     This model assumes
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pl-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2.5 pl-3">
                     The price implies
                   </th>
                 </tr>
@@ -263,11 +263,11 @@ export const ImpliedByPrice: React.FC<ImpliedProps> = ({ result, currencySymbol 
                           : `${f.question} · ${f.method}`}
                       </span>
                     </td>
-                    <td className="py-3 px-3 text-right font-mono text-[15px] text-[#A1A1AA]">
+                    <td className="py-3 px-3 text-right font-figure text-[15px] text-[#A1A1AA]">
                       {show(f.base, f.unit)}
                     </td>
                     <td
-                      className={`py-3 pl-3 text-right font-mono text-[15px] ${
+                      className={`py-3 pl-3 text-right font-figure text-[15px] ${
                         f.outOfRange ? 'text-[#8A8A8F]' : 'text-[#F2F0EA]'
                       }`}
                     >

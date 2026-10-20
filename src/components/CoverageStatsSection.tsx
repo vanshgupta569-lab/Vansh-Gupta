@@ -78,7 +78,7 @@ export const CoverageStatsSection: React.FC = () => {
         <div className="max-w-3xl mb-8">
           <div className="flex items-center gap-2 mb-2">
             <MessageSquare className="w-4 h-4 text-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#8B1E1E] tracking-[0.2em] font-semibold uppercase">
+            <span className="font-figure text-[11px] text-[#8B1E1E] tracking-[0.2em] font-semibold uppercase">
               DIRECT RESEARCH DISPATCH
             </span>
           </div>
@@ -99,7 +99,7 @@ export const CoverageStatsSection: React.FC = () => {
                 name="email"
                 required
                 placeholder="Your email address (e.g. analyst@domain.com)"
-                className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-xs pl-12 pr-4 py-3.5 outline-none placeholder:text-[#52525B] transition-colors"
+                className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-figure text-xs pl-12 pr-4 py-3.5 outline-none placeholder:text-[#52525B] transition-colors"
               />
             </div>
 
@@ -107,7 +107,7 @@ export const CoverageStatsSection: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full md:w-auto bg-[#8B1E1E] text-[#F2F0EA] font-mono text-xs px-8 py-3.5 uppercase tracking-widest hover:bg-[#6a1515] transition-colors flex items-center justify-center gap-2 cursor-pointer font-semibold disabled:opacity-50 shadow-[0_0_15px_rgba(139,30,30,0.3)]"
+                className="w-full md:w-auto bg-[#8B1E1E] text-[#F2F0EA] font-figure text-xs px-8 py-3.5 uppercase tracking-widest hover:bg-[#6a1515] transition-colors flex items-center justify-center gap-2 cursor-pointer font-semibold disabled:opacity-50 shadow-[0_0_15px_rgba(139,30,30,0.3)]"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{isSubmitting ? 'Transmitting...' : 'Dispatch Feedback'}</span>
@@ -121,17 +121,17 @@ export const CoverageStatsSection: React.FC = () => {
               required
               rows={3}
               placeholder="Enter your detailed feedback, bug reports, or ticker suggestions here..."
-              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-mono text-xs p-4 outline-none placeholder:text-[#52525B] transition-colors resize-none"
+              className="w-full bg-[#0B0B0D] border hairline-border focus:border-[#8B1E1E] text-[#F2F0EA] font-figure text-xs p-4 outline-none placeholder:text-[#52525B] transition-colors resize-none"
             />
           </div>
 
           {result && (
-            <div className={`p-4 font-mono text-xs border ${result.includes("Success") ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" : "bg-[#0B0B0D] border-[#222228] text-[#dfbfbc]"}`}>
+            <div className={`p-4 font-figure text-xs border ${result.includes("Success") ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" : "bg-[#0B0B0D] border-[#222228] text-[#dfbfbc]"}`}>
               {result}
             </div>
           )}
           
-          <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+          <div className="font-figure text-[9px] text-[#8A8A8F] uppercase tracking-widest">
             * SECURE WEB3FORMS ENDPOINT · RESPONSES ROUTED DIRECTLY TO YOUR INBOX
           </div>
         </form>

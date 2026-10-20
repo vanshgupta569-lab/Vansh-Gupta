@@ -80,10 +80,10 @@ const DiscountingFigure: React.FC = () => {
                 />
               </div>
 
-              <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 tracking-widest">
+              <div className="font-figure text-[10px] text-[#8A8A8F] mt-3 tracking-widest">
                 Y{year}
               </div>
-              <div className="font-mono text-[10px] text-[#F2F0EA] mt-1 tabular-nums">
+              <div className="font-figure text-[10px] text-[#F2F0EA] mt-1 tabular-nums">
                 {shown.toFixed(2)}
               </div>
             </div>
@@ -91,7 +91,7 @@ const DiscountingFigure: React.FC = () => {
         })}
       </div>
 
-      <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
+      <div className="font-figure text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
         Discount factor at {(DISCOUNT_RATE * 100).toFixed(0)}% · illustrative rate
       </div>
     </div>
@@ -176,7 +176,7 @@ const BalanceFigure: React.FC = () => {
                     segmentIndex === 1 ? 'border-b border-[#0B0B0D]/60' : ''
                   }`}
                 >
-                  <span className="font-mono text-[8px] text-[#F2F0EA]/80 uppercase tracking-widest px-1 truncate">
+                  <span className="font-figure text-[8px] text-[#F2F0EA]/80 uppercase tracking-widest px-1 truncate">
                     {segment.name}
                   </span>
                 </div>
@@ -203,14 +203,14 @@ const BalanceFigure: React.FC = () => {
         {columns.map((column) => (
           <div
             key={column.label}
-            className="flex-1 max-w-[130px] font-mono text-[10px] text-[#8A8A8F] tracking-widest uppercase text-center leading-snug"
+            className="flex-1 max-w-[130px] font-figure text-[10px] text-[#8A8A8F] tracking-widest uppercase text-center leading-snug"
           >
             {column.label}
           </div>
         ))}
       </div>
 
-      <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
+      <div className="font-figure text-[10px] text-[#8A8A8F] uppercase tracking-widest mt-5 pt-4 hairline-border-t">
         Checked in every forecast year, for every company
       </div>
     </div>
@@ -236,7 +236,7 @@ export const MechanismSection: React.FC = () => {
           className="flex items-center gap-3 mb-3"
         >
           <span className="w-2 h-2 bg-[#8B1E1E]" />
-          <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+          <span className="font-figure text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
             03 — HOW A VALUATION IS BUILT
           </span>
         </motion.div>
@@ -264,7 +264,7 @@ export const MechanismSection: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mt-14">
         <div className="border hairline-border bg-[#111114] p-7 sm:p-9 shadow-lg">
-          <div className="font-mono text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
+          <div className="font-figure text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
             A rupee later is worth less now
           </div>
           <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed mb-8 max-w-md">
@@ -275,7 +275,7 @@ export const MechanismSection: React.FC = () => {
         </div>
 
         <div className="border hairline-border bg-[#111114] p-7 sm:p-9 shadow-lg">
-          <div className="font-mono text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
+          <div className="font-figure text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
             The two sides must agree
           </div>
           <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed mb-8 max-w-md">

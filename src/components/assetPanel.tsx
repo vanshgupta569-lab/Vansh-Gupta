@@ -103,7 +103,7 @@ export const AssetPanel: React.FC<Props> = ({
               <div className="text-[16px] text-[#F2F0EA]">{m.label}</div>
               <div className="text-[13px] text-[#8A8A8F] mt-0.5">{m.question}</div>
             </div>
-            <div className="font-mono text-[20px] text-[#F2F0EA] tabular-nums">
+            <div className="font-figure text-[20px] text-[#F2F0EA] tabular-nums">
               {isNum(m.perShare) ? money(m.perShare) : 'not shown'}
             </div>
           </div>
@@ -124,13 +124,13 @@ export const AssetPanel: React.FC<Props> = ({
                   >
                     {line.label}
                     {line.note ? (
-                      <span className="block font-mono text-[12px] text-[#8A8A8F]/80 mt-0.5">
+                      <span className="block font-figure text-[12px] text-[#8A8A8F]/80 mt-0.5">
                         {line.note}
                       </span>
                     ) : null}
                   </span>
                   <span
-                    className={`font-mono text-[14px] tabular-nums shrink-0 ${
+                    className={`font-figure text-[14px] tabular-nums shrink-0 ${
                       line.emphasis ? 'text-[#F2F0EA] font-semibold' : 'text-[#A1A1AA]'
                     }`}
                   >
@@ -155,7 +155,7 @@ export const AssetPanel: React.FC<Props> = ({
 
       {/* ---------------- THE RECOVERY RATES ---------------- */}
       <div className="border border-[#8B1E1E]/40 bg-[#8B1E1E]/[0.06] p-5 mb-8">
-        <h4 className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
+        <h4 className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
           Your recovery rates
         </h4>
         <p className="text-[13px] leading-relaxed text-[#8A8A8F] mb-4 max-w-2xl">
@@ -171,7 +171,7 @@ export const AssetPanel: React.FC<Props> = ({
               key={preset.key}
               type="button"
               onClick={() => onPreset(preset.key)}
-              className={`font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors ${
+              className={`font-figure text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors ${
                 presetKey === preset.key
                   ? 'border-[#8B1E1E] bg-[#8B1E1E]/20 text-[#F2F0EA]'
                   : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8A8A8F]'
@@ -180,7 +180,7 @@ export const AssetPanel: React.FC<Props> = ({
               {preset.label}
             </button>
           ))}
-          <span className="font-mono text-[11px] uppercase tracking-wider px-3 py-2 text-[#8A8A8F]">
+          <span className="font-figure text-[11px] uppercase tracking-wider px-3 py-2 text-[#8A8A8F]">
             {presetKey === 'custom'
               ? 'your own rates'
               : RECOVERY_PRESETS.find((p) => p.key === presetKey)?.description}
@@ -202,7 +202,7 @@ export const AssetPanel: React.FC<Props> = ({
                   className="w-28 accent-[#8B1E1E]"
                   aria-label={label}
                 />
-                <span className="font-mono text-[14px] text-[#F2F0EA] tabular-nums w-12 text-right">
+                <span className="font-figure text-[14px] text-[#F2F0EA] tabular-nums w-12 text-right">
                   {Math.round((rates[key] ?? 0) * 100)}%
                 </span>
               </span>
@@ -214,28 +214,28 @@ export const AssetPanel: React.FC<Props> = ({
       {/* ---------------- THE SUMMARY ---------------- */}
       <div className="flex flex-wrap items-baseline gap-x-10 gap-y-3 border-t border-[#222228] pt-5">
         <div>
-          <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+          <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
             Asset approach range
           </div>
-          <div className="font-mono text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
+          <div className="font-figure text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
             {result.available
               ? `${money(result.low)} – ${money(result.high)}`
               : 'nothing shown'}
           </div>
         </div>
         <div>
-          <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+          <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
             Midpoint
           </div>
-          <div className="font-mono text-[18px] text-[#8B1E1E] tabular-nums mt-0.5">
+          <div className="font-figure text-[18px] text-[#8B1E1E] tabular-nums mt-0.5">
             {money(result.mid)}
           </div>
         </div>
         <div>
-          <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+          <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
             For comparison, the income approach
           </div>
-          <div className="font-mono text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
+          <div className="font-figure text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
             {money(dcfValuePerShare)}
           </div>
         </div>

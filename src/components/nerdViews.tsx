@@ -86,11 +86,11 @@ export const Adjust: React.FC<{
         }}
         className={`${width} bg-[#0B0B0D] border ${
           changed ? 'border-[#8B1E1E]' : 'border-[#222228]'
-        } px-2 py-1 font-mono text-[14px] text-[#F2F0EA] text-right focus:outline-none focus:border-[#8B1E1E]`}
+        } px-2 py-1 font-figure text-[14px] text-[#F2F0EA] text-right focus:outline-none focus:border-[#8B1E1E]`}
       />
-      <span className="font-mono text-[13px] text-[#8A8A8F]">{suffix}</span>
+      <span className="font-figure text-[13px] text-[#8A8A8F]">{suffix}</span>
       {changed && (
-        <span className="font-mono text-[12px] text-[#8A8A8F]">
+        <span className="font-figure text-[12px] text-[#8A8A8F]">
           was {String(fallback)}
           {suffix}
         </span>
@@ -124,11 +124,11 @@ const Schedule: React.FC<{
 }> = ({ title, subtitle, years, firstForecast, rows }) => (
   <section className="mb-12">
     <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
-      <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase">
+      <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase">
         {title}
       </h3>
       {subtitle && (
-        <span className="font-mono text-[12px] text-[#8A8A8F]">{subtitle}</span>
+        <span className="font-figure text-[12px] text-[#8A8A8F]">{subtitle}</span>
       )}
     </div>
 
@@ -136,13 +136,13 @@ const Schedule: React.FC<{
       <table className="w-full min-w-[820px] border-collapse">
         <thead>
           <tr className="border-b border-[#222228]">
-            <th className="text-left font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2 pr-4 w-[34%]">
+            <th className="text-left font-figure text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2 pr-4 w-[34%]">
               &nbsp;
             </th>
             {years.map((year, i) => (
               <th
                 key={String(year) + i}
-                className={`text-right font-mono text-[12px] tracking-[0.15em] uppercase pb-2 px-2 ${
+                className={`text-right font-figure text-[12px] tracking-[0.15em] uppercase pb-2 px-2 ${
                   i >= firstForecast ? 'text-[#8B1E1E]' : 'text-[#8A8A8F]'
                 }`}
               >
@@ -192,7 +192,7 @@ const Schedule: React.FC<{
                   {years.map((_, i) => (
                     <td
                       key={i}
-                      className={`py-2 px-2 text-right font-mono text-[14px] ${
+                      className={`py-2 px-2 text-right font-figure text-[14px] ${
                         row.bold
                           ? 'text-[#F2F0EA] font-semibold'
                           : i >= firstForecast
@@ -258,7 +258,7 @@ export const FullScreenPanel: React.FC<{
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-3 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
+          className="shrink-0 inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-3 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E] transition-colors"
         >
           <X className="w-4 h-4" />
           <span className="hidden sm:inline">Close</span>
@@ -778,7 +778,7 @@ export const DCFView: React.FC<ViewProps> = ({
       />
 
       <section className="mb-12">
-        <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
+        <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
           The discount rate
         </h3>
         <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
@@ -836,7 +836,7 @@ export const DCFView: React.FC<ViewProps> = ({
                 <span className="flex items-baseline gap-4">
                   {line.adjuster}
                   <span
-                    className={`font-mono text-[15px] ${
+                    className={`font-figure text-[15px] ${
                       line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
                     }`}
                   >
@@ -855,7 +855,7 @@ export const DCFView: React.FC<ViewProps> = ({
 
         {Array.isArray(w.comps) && w.comps.length > 0 && (
           <div className="mt-5">
-            <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
+            <div className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
               Comparable companies used to unlever beta
             </div>
             <div className="overflow-x-auto">
@@ -865,7 +865,7 @@ export const DCFView: React.FC<ViewProps> = ({
                     {['Company', 'Equity beta', 'Debt / equity', 'Unlevered beta'].map((h) => (
                       <th
                         key={h}
-                        className="text-right first:text-left font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2 px-2"
+                        className="text-right first:text-left font-figure text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-2 px-2"
                       >
                         {h}
                       </th>
@@ -876,13 +876,13 @@ export const DCFView: React.FC<ViewProps> = ({
                   {w.comps.map((c: any, i: number) => (
                     <tr key={i} className="border-b border-[#222228]/50">
                       <td className="py-2 px-2 text-[14px] text-[#A1A1AA]">{c.name}</td>
-                      <td className="py-2 px-2 text-right font-mono text-[14px] text-[#F2F0EA]">
+                      <td className="py-2 px-2 text-right font-figure text-[14px] text-[#F2F0EA]">
                         {num(c.equityBeta) ? c.equityBeta.toFixed(2) : '—'}
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-[14px] text-[#A1A1AA]">
+                      <td className="py-2 px-2 text-right font-figure text-[14px] text-[#A1A1AA]">
                         {num(c.debtToEquity) ? c.debtToEquity.toFixed(2) : '—'}
                       </td>
-                      <td className="py-2 px-2 text-right font-mono text-[14px] text-[#F2F0EA]">
+                      <td className="py-2 px-2 text-right font-figure text-[14px] text-[#F2F0EA]">
                         {num(c.unleveredBeta) ? c.unleveredBeta.toFixed(2) : '—'}
                       </td>
                     </tr>
@@ -896,7 +896,7 @@ export const DCFView: React.FC<ViewProps> = ({
 
       <section className="mb-12 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="border border-[#222228] p-5">
-          <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-4">
+          <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-4">
             Method one — growing forever
           </h3>
           {[
@@ -923,7 +923,7 @@ export const DCFView: React.FC<ViewProps> = ({
               <span className="flex items-baseline gap-3">
                 {line.adjuster}
                 <span
-                  className={`font-mono text-[14px] ${
+                  className={`font-figure text-[14px] ${
                     line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
                   }`}
                 >
@@ -935,7 +935,7 @@ export const DCFView: React.FC<ViewProps> = ({
         </div>
 
         <div className="border border-[#222228] p-5">
-          <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-4">
+          <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-4">
             Method two — sold at the end
           </h3>
           {[
@@ -966,7 +966,7 @@ export const DCFView: React.FC<ViewProps> = ({
               <span className="flex items-baseline gap-3">
                 {line.adjuster}
                 <span
-                  className={`font-mono text-[14px] ${
+                  className={`font-figure text-[14px] ${
                     line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
                   }`}
                 >
@@ -979,7 +979,7 @@ export const DCFView: React.FC<ViewProps> = ({
               number that sets one of the two headline values should not be the
               one number on the page with nothing behind it (KI-19). */}
           {source?.provenance?.exitMultiple && (
-            <p className="font-mono text-[11px] leading-relaxed text-[#8A8A8F] mt-3">
+            <p className="font-figure text-[11px] leading-relaxed text-[#8A8A8F] mt-3">
               {source.provenance.exitMultiple}.
             </p>
           )}
@@ -990,7 +990,7 @@ export const DCFView: React.FC<ViewProps> = ({
           together with the gap between them means the disagreement can be read
           in one place instead of being averaged away. */}
       <section className="mb-12">
-        <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
+        <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
           The two terminal methods, side by side
         </h3>
         <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
@@ -1043,7 +1043,7 @@ export const DCFView: React.FC<ViewProps> = ({
                   {line.label}
                 </span>
                 <span
-                  className={`font-mono text-[15px] ${
+                  className={`font-figure text-[15px] ${
                     line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
                   }`}
                 >
@@ -1061,7 +1061,7 @@ export const DCFView: React.FC<ViewProps> = ({
       </section>
 
       <section className="mb-12">
-        <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
+        <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
           From the whole company to one share
         </h3>
         <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
@@ -1101,7 +1101,7 @@ export const DCFView: React.FC<ViewProps> = ({
                 {line.label}
               </span>
               <span
-                className={`font-mono text-[15px] ${
+                className={`font-figure text-[15px] ${
                   line.bold ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
                 }`}
               >
@@ -1111,7 +1111,7 @@ export const DCFView: React.FC<ViewProps> = ({
           ))}
         </div>
         {source?.provenance?.netDebt && (
-          <p className="font-mono text-[12px] leading-relaxed text-[#8A8A8F] mt-3 max-w-3xl">
+          <p className="font-figure text-[12px] leading-relaxed text-[#8A8A8F] mt-3 max-w-3xl">
             {source.provenance.netDebt}.
           </p>
         )}
@@ -1119,7 +1119,7 @@ export const DCFView: React.FC<ViewProps> = ({
 
       {D.sensitivity?.perpetuity && D.sensitivityAxes && (
         <section className="mb-4">
-          <h3 className="font-mono text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
+          <h3 className="font-figure text-[13px] tracking-[0.2em] text-[#F2F0EA] uppercase mb-1">
             Sensitivity
           </h3>
           <p className="text-[14px] text-[#8A8A8F] mb-4 max-w-3xl">
@@ -1143,19 +1143,19 @@ export const DCFView: React.FC<ViewProps> = ({
               },
             ].map((block) => (
               <div key={block.title} className="overflow-x-auto">
-                <div className="font-mono text-[12px] text-[#8A8A8F] uppercase tracking-widest mb-2">
+                <div className="font-figure text-[12px] text-[#8A8A8F] uppercase tracking-widest mb-2">
                   {block.title}
                 </div>
                 <table className="w-full min-w-[420px] border-collapse">
                   <thead>
                     <tr>
-                      <th className="font-mono text-[12px] text-[#8A8A8F] p-1.5 text-left">
+                      <th className="font-figure text-[12px] text-[#8A8A8F] p-1.5 text-left">
                         WACC
                       </th>
                       {(block.axis || []).map((a: number, i: number) => (
                         <th
                           key={i}
-                          className="font-mono text-[12px] text-[#8A8A8F] p-1.5 text-right"
+                          className="font-figure text-[12px] text-[#8A8A8F] p-1.5 text-right"
                         >
                           {block.label(a)}
                         </th>
@@ -1165,7 +1165,7 @@ export const DCFView: React.FC<ViewProps> = ({
                   <tbody>
                     {(block.grid || []).map((row: number[], ri: number) => (
                       <tr key={ri}>
-                        <td className="font-mono text-[12px] text-[#8A8A8F] p-1.5">
+                        <td className="font-figure text-[12px] text-[#8A8A8F] p-1.5">
                           {fmtPct(D.sensitivityAxes.wacc?.[ri], 2)}
                         </td>
                         {row.map((cell, ci) => {
@@ -1175,7 +1175,7 @@ export const DCFView: React.FC<ViewProps> = ({
                           return (
                             <td
                               key={ci}
-                              className={`font-mono text-[13px] p-1.5 text-right border ${
+                              className={`font-figure text-[13px] p-1.5 text-right border ${
                                 centre
                                   ? 'border-[#F2F0EA] text-[#F2F0EA]'
                                   : 'border-[#222228] text-[#A1A1AA]'

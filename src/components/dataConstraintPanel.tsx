@@ -39,7 +39,7 @@ export function DataConstraintBanner({
       <div className="flex items-start gap-3">
         <AlertTriangle className="w-4 h-4 text-[#C79A2E] mt-0.5 shrink-0" />
         <div className="min-w-0">
-          <div className="font-mono text-[10px] text-[#C79A2E] uppercase tracking-widest mb-2">
+          <div className="font-figure text-[10px] text-[#C79A2E] uppercase tracking-widest mb-2">
             {shown.length === 1
               ? 'One figure this model needs is not published'
               : `${shown.length} figures this model needs are not published`}
@@ -52,7 +52,7 @@ export function DataConstraintBanner({
               </li>
             ))}
           </ul>
-          <div className="font-mono text-[10px] text-[#8A8A8F] mt-3 leading-relaxed">
+          <div className="font-figure text-[10px] text-[#8A8A8F] mt-3 leading-relaxed">
             These are gaps in what the source publishes, not faults in the company and not
             assumptions the model chose. Where one could move the value per share further than the
             two terminal methods ordinarily disagree, no value is shown at all.
@@ -147,7 +147,7 @@ export function DataConstraintPanel({ constraints }: { constraints: DataConstrai
             flagged.
           </p>
           <p className="mt-2 max-w-prose text-quiet">
-            <code className="font-mono">DATA_CONSTRAINTS.md</code> records every constraint and
+            <code className="font-figure">DATA_CONSTRAINTS.md</code> records every constraint and
             which source it comes from.
           </p>
         </Disclose>

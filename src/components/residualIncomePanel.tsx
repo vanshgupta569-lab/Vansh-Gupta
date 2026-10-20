@@ -57,7 +57,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
         <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
           Valued as a bank, not as a business selling goods
         </h2>
-        <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+        <span className="font-figure text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
           residual income
         </span>
       </div>
@@ -80,7 +80,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
       </div>
 
       <div className="border border-[#222228] bg-[#0B0B0D] p-5 mb-7">
-        <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+        <div className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
           {companyName}
         </div>
         {[
@@ -121,7 +121,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
               {k}
             </span>
             <span
-              className={`font-mono text-[14px] ${
+              className={`font-figure text-[14px] ${
                 String(k) === 'Value per share' ? 'text-[#8B1E1E] font-semibold' : 'text-[#F2F0EA]'
               }`}
             >
@@ -140,7 +140,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
                   (h, i) => (
                     <th
                       key={h + i}
-                      className={`font-mono text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3 ${
+                      className={`font-figure text-[12px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3 ${
                         i === 0 ? 'text-left' : 'text-right'
                       }`}
                     >
@@ -153,14 +153,14 @@ export const ResidualIncomePanel: React.FC<Props> = ({
             <tbody>
               {model.years.map((row: any) => (
                 <tr key={row.year} className="border-b border-[#222228]/60">
-                  <td className="py-2.5 px-3 font-mono text-[13px] text-[#8A8A8F]">
+                  <td className="py-2.5 px-3 font-figure text-[13px] text-[#8A8A8F]">
                     FY{String(row.year).slice(2)}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-[13px] text-[#A1A1AA]">{money(row.openingBook)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-[13px] text-[#A1A1AA]">{money(row.netIncome)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-[13px] text-[#A1A1AA]">{money(row.requiredReturn)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-[13px] text-[#F2F0EA]">{money(row.residualIncome)}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-[13px] text-[#F2F0EA]">{money(row.presentValue)}</td>
+                  <td className="py-2.5 px-3 text-right font-figure text-[13px] text-[#A1A1AA]">{money(row.openingBook)}</td>
+                  <td className="py-2.5 px-3 text-right font-figure text-[13px] text-[#A1A1AA]">{money(row.netIncome)}</td>
+                  <td className="py-2.5 px-3 text-right font-figure text-[13px] text-[#A1A1AA]">{money(row.requiredReturn)}</td>
+                  <td className="py-2.5 px-3 text-right font-figure text-[13px] text-[#F2F0EA]">{money(row.residualIncome)}</td>
+                  <td className="py-2.5 px-3 text-right font-figure text-[13px] text-[#F2F0EA]">{money(row.presentValue)}</td>
                 </tr>
               ))}
             </tbody>
@@ -181,7 +181,7 @@ export const ResidualIncomePanel: React.FC<Props> = ({
           actually limits whether a bank can grow, and it does not model
           regulatory limits on dividends.
         </p>
-        <p className="font-mono text-[12px]">
+        <p className="font-figure text-[12px]">
           {model.provenance?.roe}. {model.provenance?.costOfEquity}.
           {model.provenance?.preferred ? ` ${model.provenance.preferred}.` : ''}
           {model.provenance?.minority ? ` ${model.provenance.minority}.` : ''}

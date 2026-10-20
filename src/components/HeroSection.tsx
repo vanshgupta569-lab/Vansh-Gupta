@@ -130,7 +130,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                   className="flex items-center gap-3"
                 >
                   <span className="w-2 h-2 bg-[#8B1E1E]" />
-                  <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+                  <span className="font-figure text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
                     {slide.tag}
                   </span>
                 </motion.div>
@@ -162,7 +162,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 1, ease: customEase, delay: 0.4 }}
-                  className="font-mono text-[11px] text-[#8A8A8F] max-w-lg leading-loose uppercase tracking-wider mt-2"
+                  className="font-figure text-[11px] text-[#8A8A8F] max-w-lg leading-loose uppercase tracking-wider mt-2"
                 >
                   {slide.detail}
                 </motion.p>
@@ -188,7 +188,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
               whileHover={{ scale: 1.02, backgroundColor: "#6a1515" }}
               whileTap={{ scale: 0.98 }}
               onClick={onSearchCompany}
-              className="bg-[#8B1E1E] text-[#F2F0EA] font-mono text-xs px-6 py-3 uppercase tracking-wider transition-colors flex items-center gap-3 cursor-pointer ml-auto font-semibold shadow-[0_0_20px_rgba(139,30,30,0.15)] hover:shadow-[0_0_25px_rgba(139,30,30,0.3)]"
+              className="bg-[#8B1E1E] text-[#F2F0EA] font-figure text-xs px-6 py-3 uppercase tracking-wider transition-colors flex items-center gap-3 cursor-pointer ml-auto font-semibold shadow-[0_0_20px_rgba(139,30,30,0.15)] hover:shadow-[0_0_25px_rgba(139,30,30,0.3)]"
             >
               <Search className="w-4 h-4" />
               <span>Search Company</span>
@@ -232,10 +232,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
                 <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-[#222228]/50" />
               </div>
 
-              <span className="absolute top-3 left-3 font-mono text-[9px] tracking-widest text-[#8A8A8F]">HISTORICAL</span>
-              <span className="absolute top-3 right-3 font-mono text-[9px] tracking-widest text-[#8A8A8F]">FORECAST</span>
-              <span className="absolute bottom-3 left-3 font-mono text-[9px] tracking-widest text-[#8A8A8F]">3-STATEMENT</span>
-              <span className="absolute bottom-3 right-3 font-mono text-[9px] tracking-widest text-[#8B1E1E] flex items-center gap-1">
+              <span className="absolute top-3 left-3 font-figure text-[9px] tracking-widest text-[#8A8A8F]">HISTORICAL</span>
+              <span className="absolute top-3 right-3 font-figure text-[9px] tracking-widest text-[#8A8A8F]">FORECAST</span>
+              <span className="absolute bottom-3 left-3 font-figure text-[9px] tracking-widest text-[#8A8A8F]">3-STATEMENT</span>
+              <span className="absolute bottom-3 right-3 font-figure text-[9px] tracking-widest text-[#8B1E1E] flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#8B1E1E] animate-pulse"></span> DCF
               </span>
 
@@ -246,7 +246,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => 
 
       <motion.div 
         style={{ opacity: heroOpacity }}
-        className="flex justify-between items-center mt-12 pt-8 hairline-border-t text-xs font-mono text-[#8A8A8F] relative z-10"
+        className="flex justify-between items-center mt-12 pt-8 hairline-border-t text-xs font-figure text-[#8A8A8F] relative z-10"
       >
         <div className="flex items-center gap-3">
           <motion.div 

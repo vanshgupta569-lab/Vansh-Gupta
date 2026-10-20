@@ -45,7 +45,7 @@ export function TerminalReliancePanel({
           title="the modelled years"
         >
           {100 - bar > 12 && (
-            <span className="font-mono text-[10px] text-[#A1A1AA] uppercase tracking-widest">
+            <span className="font-figure text-[10px] text-[#A1A1AA] uppercase tracking-widest">
               {pct(1 - reliance.share)} modelled
             </span>
           )}
@@ -55,12 +55,12 @@ export function TerminalReliancePanel({
           style={{ width: `${bar}%` }}
           title="beyond the forecast"
         >
-          <span className="font-mono text-[10px] text-[#F2F0EA] uppercase tracking-widest">
+          <span className="font-figure text-[10px] text-[#F2F0EA] uppercase tracking-widest">
             {pct(reliance.share)} beyond the forecast
           </span>
         </div>
       </div>
-      <div className="font-mono text-[10px] text-[#8A8A8F] mb-6">
+      <div className="font-figure text-[10px] text-[#8A8A8F] mb-6">
         an ordinary {reliance.forecastYears}-year forecast at this discount rate would put about{' '}
         {pct(reliance.benchmark)} beyond the window
         {reliance.unusual ? ' — this one is further' : ''}
@@ -70,39 +70,39 @@ export function TerminalReliancePanel({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {reliance.growth && (
           <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mb-2">
+            <div className="font-figure text-[10px] text-[#8A8A8F] uppercase tracking-widest mb-2">
               Growth after the forecast
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-mono text-[11px] text-[#A1A1AA]">{(reliance.growth.low * 100).toFixed(1)}%</span>
-              <span className="font-mono text-[11px] text-[#A1A1AA]">{(reliance.growth.high * 100).toFixed(1)}%</span>
+              <span className="font-figure text-[11px] text-[#A1A1AA]">{(reliance.growth.low * 100).toFixed(1)}%</span>
+              <span className="font-figure text-[11px] text-[#A1A1AA]">{(reliance.growth.high * 100).toFixed(1)}%</span>
             </div>
             <div className="flex items-baseline justify-between gap-3 mt-1">
               <span className="font-display text-xl text-[#F2F0EA]">{money(reliance.growth.lowValue)}</span>
-              <span className="font-mono text-[10px] text-[#8A8A8F]">a share</span>
+              <span className="font-figure text-[10px] text-[#8A8A8F]">a share</span>
               <span className="font-display text-xl text-[#F2F0EA]">{money(reliance.growth.highValue)}</span>
             </div>
           </div>
         )}
         {reliance.wacc && (
           <div className="bg-[#0B0B0D] border hairline-border p-4">
-            <div className="font-mono text-[10px] text-[#8A8A8F] uppercase tracking-widest mb-2">
+            <div className="font-figure text-[10px] text-[#8A8A8F] uppercase tracking-widest mb-2">
               Discount rate
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-mono text-[11px] text-[#A1A1AA]">{(reliance.wacc.low * 100).toFixed(2)}%</span>
-              <span className="font-mono text-[11px] text-[#A1A1AA]">{(reliance.wacc.high * 100).toFixed(2)}%</span>
+              <span className="font-figure text-[11px] text-[#A1A1AA]">{(reliance.wacc.low * 100).toFixed(2)}%</span>
+              <span className="font-figure text-[11px] text-[#A1A1AA]">{(reliance.wacc.high * 100).toFixed(2)}%</span>
             </div>
             <div className="flex items-baseline justify-between gap-3 mt-1">
               <span className="font-display text-xl text-[#F2F0EA]">{money(reliance.wacc.lowValue)}</span>
-              <span className="font-mono text-[10px] text-[#8A8A8F]">a share</span>
+              <span className="font-figure text-[10px] text-[#8A8A8F]">a share</span>
               <span className="font-display text-xl text-[#F2F0EA]">{money(reliance.wacc.highValue)}</span>
             </div>
           </div>
         )}
       </div>
 
-      <p className="font-mono text-[10px] text-[#8A8A8F] mt-5 leading-relaxed max-w-3xl">
+      <p className="font-figure text-[10px] text-[#8A8A8F] mt-5 leading-relaxed max-w-3xl">
         {value !== null && (
           <>
             The headline is {money(value)}. {' '}

@@ -7,14 +7,14 @@ export const FeedbackFormSection: React.FC = () => {
       <div className="max-w-[1440px] mx-auto px-6 lg:px-12">
         <div className="flex items-center gap-2 mb-8">
           <span className="w-2 h-2 bg-[#8B1E1E]" />
-          <span className="font-mono text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
+          <span className="font-figure text-[11px] text-[#dfbfbc] tracking-[0.2em] uppercase">
             04 — ABOUT THE ANALYST
           </span>
         </div>
 
         {/* Analyst Profile Card */}
         <div className="max-w-3xl mx-auto border hairline-border p-8 sm:p-12 bg-[#0B0B0D] shadow-2xl relative">
-          <div className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest mb-6 border-b hairline-border-b pb-4 flex justify-between items-center">
+          <div className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest mb-6 border-b hairline-border-b pb-4 flex justify-between items-center">
             <span>ANALYST PROFILE</span>
             <span className="text-[#8B1E1E] flex items-center gap-1.5 font-semibold">
               <ShieldCheck className="w-4 h-4" /> VERIFIED LEAD

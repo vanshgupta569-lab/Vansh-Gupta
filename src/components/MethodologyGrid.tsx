@@ -18,6 +18,7 @@
 // The Keynes line closes the section, which is where it belongs: it is the
 // argument for the whole method, not a decoration halfway down a page.
 
+import { TYPE } from '../design/tokens';
 import React, { useRef } from 'react';
 import { Database, Sliders, Cpu, Calculator, ArrowRight } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
@@ -79,7 +80,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
         {/* Chapter mark, set to match the rebuilt sections above and below. */}
         <div className="mb-10 lg:mb-14">
           <div className="h-px w-14 mb-4" style={{ background: '#8B1E1E' }} />
-          <div className="flex items-baseline gap-4 font-mono text-[13px] tracking-[0.22em] uppercase">
+          <div className="flex items-baseline gap-4 font-figure text-[13px] tracking-[0.22em] uppercase">
             <span style={{ color: '#C0453E' }}>04</span>
             <span style={{ color: '#A8A29A' }}>Methodology</span>
           </div>
@@ -89,7 +90,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
           className="text-[34px] sm:text-[46px] lg:text-[60px] mb-16 lg:mb-20 max-w-[18ch]"
           style={{
             color: '#F2F0EA',
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: TYPE.body,
             fontWeight: 700,
             letterSpacing: '-0.04em',
             lineHeight: 0.98,
@@ -142,7 +143,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
                   <div>
                     <div className="flex items-baseline gap-4 mb-3">
                       <span
-                        className="font-mono text-[13px] tracking-[0.2em]"
+                        className="font-figure text-[13px] tracking-[0.2em]"
                         style={{ color: '#C0453E' }}
                       >
                         {step.phase}
@@ -151,7 +152,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
                         className="flex-1 flex items-center justify-between gap-4 text-[22px] lg:text-[26px]"
                         style={{
                           color: '#F2F0EA',
-                          fontFamily: "'Inter', sans-serif",
+                          fontFamily: TYPE.body,
                           fontWeight: 700,
                           letterSpacing: '-0.03em',
                         }}
@@ -197,7 +198,7 @@ export const MethodologyGrid: React.FC<MethodologyGridProps> = ({ onSelectStep }
           </blockquote>
           <span className="block h-px w-12 my-8" style={{ background: '#8B1E1E' }} />
           <p
-            className="font-mono text-[13px] uppercase tracking-[0.18em]"
+            className="font-figure text-[13px] uppercase tracking-[0.18em]"
             style={{ color: '#A8A29A' }}
           >
             John Maynard Keynes

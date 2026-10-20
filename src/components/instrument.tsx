@@ -38,7 +38,7 @@ import { motion, AnimatePresence } from 'motion/react';
 //     .text-[9px], .text-[10px], .text-[11px] { font-size: 13px !important }
 //
 // — a deliberate accessibility decision (nothing anyone has to read is smaller
-// than 13px on a near-black ground), and an unlayered `.uppercase.font-mono`
+// than 13px on a near-black ground), and an unlayered `.uppercase.font-figure`
 // rule then supplies 0.16em tracking and weight 500. So the two label steps
 // rendered at 13px however they were declared, and a constant that names a size
 // the screen never draws is the same defect as a workbook row that names a rule
@@ -61,7 +61,7 @@ import { motion, AnimatePresence } from 'motion/react';
 // column of them does not line up, and a number that changes as you drag a
 // slider jitters sideways. JetBrains Mono is tabular.
 //
-// EYEBROW takes its tracking and weight from the shared `.uppercase.font-mono`
+// EYEBROW takes its tracking and weight from the shared `.uppercase.font-figure`
 // rule rather than restating them, so every small-caps label on the site stays
 // set identically — which is why that rule exists.
 // MONO IS FOR FIGURES, NOT FOR SENTENCES.
@@ -134,8 +134,13 @@ export function useBottomBarInset(gap = 48) {
   return { ref: ref as React.RefObject<any> };
 }
 
-export const EYEBROW = 'font-mono text-[13px] uppercase';
-export const LABEL = 'font-mono text-[13px] tracking-wide';
+/* NO CAPITALS AND NO TRACKING. An eyebrow names what follows; it does it with
+   weight and colour, the way a printed statement does, rather than by spacing
+   the same word out into a row of characters. The `uppercase` class is also
+   switched off in `index.css` for the three hundred call sites that still
+   write it directly, so the two cannot disagree. */
+export const EYEBROW = 'font-figure text-[13px] font-medium';
+export const LABEL = 'font-figure text-[13px]';
 /** Secondary sentences in the chrome: hints, summaries, foots, captions. */
 export const UI = 'font-sans text-[13px] leading-snug';
 export const BODY = 'font-sans text-[13px] leading-relaxed';
@@ -279,7 +284,7 @@ export const Figure: React.FC<FigureProps> = ({
     <div className={`${EYEBROW} text-quiet mb-1.5`}>{eyebrow}</div>
     <div className="flex items-baseline gap-2.5 flex-wrap">
       <span
-        className={`font-mono tabular-nums leading-none ${
+        className={`font-figure tabular-nums leading-none ${
           scale === 'hero'
             ? 'text-[clamp(2.5rem,5vw,3.75rem)] font-semibold tracking-[-0.03em]'
             : 'text-[clamp(1.625rem,3vw,2.375rem)] font-medium tracking-[-0.02em]'
@@ -349,7 +354,7 @@ export const MetricTile: React.FC<MetricTileProps> = ({ label, value, note, deta
     <div className={`${EYEBROW} text-quiet mb-1.5 truncate`} title={label}>
       {label}
     </div>
-    <div className="font-mono text-[19px] font-medium tabular-nums text-ink leading-none tracking-[-0.01em]">
+    <div className="font-figure text-[19px] font-medium tabular-nums text-ink leading-none tracking-[-0.01em]">
       {value}
     </div>
     {note && <div className={`${UI} text-quiet mt-1.5`}>{note}</div>}

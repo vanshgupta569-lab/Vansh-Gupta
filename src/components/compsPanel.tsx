@@ -88,7 +88,7 @@ export const CompsPanel: React.FC<Props> = ({
       </p>
 
       {loading && (
-        <p className="font-mono text-[13px] text-[#8A8A8F]">Loading the peer set…</p>
+        <p className="font-figure text-[13px] text-[#8A8A8F]">Loading the peer set…</p>
       )}
 
       {!loading && !candidates.length && (
@@ -102,14 +102,14 @@ export const CompsPanel: React.FC<Props> = ({
         <>
           {/* ---------------- 1. THE PEER SET ---------------- */}
           <div className="flex flex-wrap items-baseline justify-between gap-3 mb-3">
-            <h4 className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+            <h4 className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase">
               The peer set — tick the companies you consider comparable
             </h4>
             {result?.edited && (
               <button
                 type="button"
                 onClick={onReset}
-                className="font-mono text-[11px] uppercase tracking-wider text-[#8A8A8F] hover:text-[#F2F0EA] border border-[#222228] hover:border-[#8A8A8F] px-3 py-1.5 transition-colors"
+                className="font-figure text-[11px] uppercase tracking-wider text-[#8A8A8F] hover:text-[#F2F0EA] border border-[#222228] hover:border-[#8A8A8F] px-3 py-1.5 transition-colors"
               >
                 Reset to the site’s choice
               </button>
@@ -120,17 +120,17 @@ export const CompsPanel: React.FC<Props> = ({
             <table className="w-full min-w-[720px] border-collapse tabular-nums">
               <thead>
                 <tr className="border-b border-[#222228]">
-                  <th className="text-left font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 pr-3 w-10" />
-                  <th className="text-left font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                  <th className="text-left font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 pr-3 w-10" />
+                  <th className="text-left font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
                     Company
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
                     EV / EBITDA
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
                     EV / Sales
                   </th>
-                  <th className="text-right font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
+                  <th className="text-right font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase pb-3 px-3">
                     P / E
                   </th>
                 </tr>
@@ -168,10 +168,10 @@ export const CompsPanel: React.FC<Props> = ({
                         <span className={`text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#A1A1AA]'}`}>
                           {peer.name || peer.symbol}
                         </span>
-                        <span className="ml-2 font-mono text-[12px] text-[#8A8A8F]">
+                        <span className="ml-2 font-figure text-[12px] text-[#8A8A8F]">
                           {peer.symbol}
                         </span>
-                        <span className="block font-mono text-[11px] text-[#8A8A8F] mt-0.5">
+                        <span className="block font-figure text-[11px] text-[#8A8A8F] mt-0.5">
                           {peer.matchesIndustry
                             ? `same industry · ${peer.industry}`
                             : peer.matchesSector
@@ -179,13 +179,13 @@ export const CompsPanel: React.FC<Props> = ({
                             : `different business · ${peer.industry || peer.sector || 'not classified'}`}
                         </span>
                       </td>
-                      <td className={`py-2.5 px-3 text-right font-mono text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
+                      <td className={`py-2.5 px-3 text-right font-figure text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
                         {mult(peer.evToEbitda)}
                       </td>
-                      <td className={`py-2.5 px-3 text-right font-mono text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
+                      <td className={`py-2.5 px-3 text-right font-figure text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
                         {mult(peer.evToSales)}
                       </td>
-                      <td className={`py-2.5 px-3 text-right font-mono text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
+                      <td className={`py-2.5 px-3 text-right font-figure text-[14px] ${on ? 'text-[#F2F0EA]' : 'text-[#8A8A8F]'}`}>
                         {mult(peer.priceToEarnings)}
                       </td>
                     </tr>
@@ -202,7 +202,7 @@ export const CompsPanel: React.FC<Props> = ({
                     return (
                       <td
                         key={k}
-                        className="py-3 px-3 text-right font-mono text-[14px] text-[#8B1E1E] font-semibold"
+                        className="py-3 px-3 text-right font-figure text-[14px] text-[#8B1E1E] font-semibold"
                       >
                         {mult(m?.median)}
                       </td>
@@ -224,7 +224,7 @@ export const CompsPanel: React.FC<Props> = ({
           {/* ---------------- 2. THE WORKING ---------------- */}
           {result?.available ? (
             <>
-              <h4 className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+              <h4 className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
                 What that implies for {companyName}
               </h4>
 
@@ -233,12 +233,12 @@ export const CompsPanel: React.FC<Props> = ({
                   <div key={m.key} className="border-b border-[#222228] last:border-0 p-5">
                     <div className="flex flex-wrap items-baseline justify-between gap-3 mb-2">
                       <span className="text-[15px] text-[#F2F0EA]">{m.label}</span>
-                      <span className="font-mono text-[17px] text-[#F2F0EA] tabular-nums">
+                      <span className="font-figure text-[17px] text-[#F2F0EA] tabular-nums">
                         {isNum(m.perShare) ? money(m.perShare) : '—'}
                       </span>
                     </div>
                     {isNum(m.perShare) ? (
-                      <div className="font-mono text-[13px] text-[#8A8A8F] leading-relaxed">
+                      <div className="font-figure text-[13px] text-[#8A8A8F] leading-relaxed">
                         {mult(m.median)} ×{' '}
                         {m.key === 'priceToEarnings' ? money(m.metric) : bulk(m.metric)}{' '}
                         {m.metricLabel}
@@ -255,26 +255,26 @@ export const CompsPanel: React.FC<Props> = ({
 
               <div className="flex flex-wrap items-baseline gap-x-10 gap-y-3 border-t border-[#222228] pt-5 mb-6">
                 <div>
-                  <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+                  <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
                     Market approach range
                   </div>
-                  <div className="font-mono text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
+                  <div className="font-figure text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
                     {money(result.low)} – {money(result.high)}
                   </div>
                 </div>
                 <div>
-                  <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+                  <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
                     Midpoint
                   </div>
-                  <div className="font-mono text-[18px] text-[#8B1E1E] tabular-nums mt-0.5">
+                  <div className="font-figure text-[18px] text-[#8B1E1E] tabular-nums mt-0.5">
                     {money(result.mid)}
                   </div>
                 </div>
                 <div>
-                  <div className="font-mono text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
+                  <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">
                     For comparison, the income approach
                   </div>
-                  <div className="font-mono text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
+                  <div className="font-figure text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
                     {money(dcfValuePerShare)}
                   </div>
                 </div>

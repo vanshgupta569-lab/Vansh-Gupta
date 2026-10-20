@@ -115,17 +115,38 @@ export const MARK = {
 // a build script that never loads the application, so it reads these rather
 // than repeating the stacks.
 export const TYPE = {
-  display: "'Playfair Display', Georgia, serif",
-  body: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif",
-  mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+  display: "'Newsreader', Georgia, serif",
+  body: "'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif",
+  /**
+   * THE FIGURE FACE IS THE BODY FACE. There is no monospace on this site any
+   * more: a column of numbers lines up because Source Sans 3 has true tabular
+   * figures and they are asked for, not because every letter is one width.
+   * Kept as its own name so a call site can say "this is a number" and get the
+   * tabular setting with it.
+   */
+  figure: "'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif",
+} as const;
+
+/**
+ * THE WHOLE TYPE SCALE. Four steps, and nothing between them.
+ *
+ * Mirrored in `src/index.css` as `--m-size-*`, which also carries the block
+ * that snaps every arbitrary size a screen still asks for onto one of these.
+ * The explainer build script reads these rather than repeating them.
+ */
+export const SIZE = {
+  title: 'clamp(28px, 2.8vw, 36px)',
+  section: '20px',
+  body: '15px',
+  small: '13px',
 } as const;
 
 /** A display heading, as both reading screens set one. */
 export const DISPLAY_HEADING = {
   fontFamily: TYPE.display,
-  fontWeight: 500,
-  letterSpacing: '-0.01em',
-  lineHeight: 1.04,
+  fontWeight: 600,
+  letterSpacing: '-0.02em',
+  lineHeight: 1.08,
 } as const;
 
 // ---------------------------------------------------------------------------

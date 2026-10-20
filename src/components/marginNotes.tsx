@@ -85,7 +85,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
         <button
           type="button"
           onClick={onBack}
-          className="font-mono text-[12px] tracking-[0.16em] uppercase flex items-center gap-2 mb-12 hover:text-[#8B1E1E] transition-colors"
+          className="font-figure text-[12px] tracking-[0.16em] uppercase flex items-center gap-2 mb-12 hover:text-[#8B1E1E] transition-colors"
           style={{ color: PAPER_DIM }}
         >
           <ArrowLeft size={14} />
@@ -93,7 +93,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
         </button>
 
         <p
-          className="font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
+          className="font-figure text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
           style={{ color: RED_TEXT }}
         >
           <span className="h-px w-8 shrink-0" style={{ background: RED }} />
@@ -122,7 +122,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
               return (
                 <div key={group.key} className="mb-10">
                   <div
-                    className="font-mono text-[11px] tracking-[0.2em] uppercase mb-4 pb-3 border-b"
+                    className="font-figure text-[11px] tracking-[0.2em] uppercase mb-4 pb-3 border-b"
                     style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
                   >
                     {group.label}
@@ -159,7 +159,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
                 which is the honest cost of making them findable. */}
             <div className="mb-10">
               <div
-                className="font-mono text-[11px] tracking-[0.2em] uppercase mb-4 pb-3 border-b"
+                className="font-figure text-[11px] tracking-[0.2em] uppercase mb-4 pb-3 border-b"
                 style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
               >
                 How a company is valued
@@ -184,7 +184,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
               ))}
               <a
                 href={EXPLAINERS_PATH}
-                className="block w-full text-left font-mono text-[11px] tracking-[0.16em] uppercase mt-3 pt-3 border-t transition-colors hover:text-[#8B1E1E]"
+                className="block w-full text-left font-figure text-[11px] tracking-[0.16em] uppercase mt-3 pt-3 border-t transition-colors hover:text-[#8B1E1E]"
                 style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
               >
                 All {EXPLAINERS.length} explainers
@@ -225,7 +225,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
                 style={{ borderColor: RED }}
               >
                 <div
-                  className="font-mono text-[11px] tracking-[0.2em] uppercase mb-3"
+                  className="font-figure text-[11px] tracking-[0.2em] uppercase mb-3"
                   style={{ color: RED_TEXT }}
                 >
                   The Buffett lens
@@ -238,7 +238,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
 
             {active.onSite && (
               <div
-                className="mt-12 pt-6 border-t font-mono text-[12px] leading-[1.6]"
+                className="mt-12 pt-6 border-t font-figure text-[12px] leading-[1.6]"
                 style={{ color: PAPER_DIM, borderColor: PAPER_LINE }}
               >
                 On Marginalia &mdash; {active.onSite}
@@ -254,7 +254,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
           style={{ borderColor: PAPER_LINE }}
         >
           <div
-            className="font-mono text-[11px] tracking-[0.2em] uppercase mb-3"
+            className="font-figure text-[11px] tracking-[0.2em] uppercase mb-3"
             style={{ color: PAPER_DIM }}
           >
             Further reading

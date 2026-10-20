@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-04T00:00:00.000Z",
+  "generatedAt": "2026-10-20T00:00:00.000Z",
   "title": "Design System: Marginalia",
   "extensions": {
     "colorMeta": {
@@ -230,54 +230,29 @@
       }
     },
     "typographyMeta": {
-      "display": {
-        "displayName": "Display",
-        "purpose": "Landing-page and long-section headings. Inter 700 cut hard, because an editorial serif at display size reads as a magazine and this reads as an institution."
-      },
-      "screen-title": {
-        "displayName": "Screen Title",
-        "purpose": "The one heading that names a working screen — the figures editor, the questions. Why this step exists, and why it must not be removed: Display is the landing-page voice and is too loud for a screen somebody works in. The figures editor opened with a 56px centred headline above two paragraphs and three definition cards, so a reader who came to check what the source returned scrolled past a screen and a half of preamble to reach the first figure, every visit. The obvious correction is to drop that heading to Headline at 24px — and that is wrong, because the section heading immediately under it (PAPER as filed) is also 24px, and a page title the same size as the section inside it is not a hierarchy, it is two headings. This step is the gap between the two: large enough to name the screen, quiet enough not to compete with the table that is the screen’s reason to exist. Added 2026-10-03 after the figures screen was rebuilt; impeccable detect flags any size off this ramp, so a step used by a screen and absent here reads as drift and gets \"corrected\" back into a collision. It is a different step from title (20px), which is a panel heading and is neither renumbered nor renamed by its arrival.",
-        "shippedIn": "src/components/figuresEditor.tsx h1: text-[clamp(27px,3.2vw,40px)] over an inline DISPLAY style of Inter, weight 800, letterSpacing -0.045em, lineHeight 0.98."
-      },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Screen headings."
-      },
       "title": {
         "displayName": "Title",
-        "purpose": "Panel headings."
+        "purpose": "The one heading that names a page. Newsreader 600 — a screen face with a newspaper cut, which is the register a company's accounts should arrive in."
       },
-      "editorial": {
-        "displayName": "Editorial",
-        "purpose": "Playfair Display, opt-in only: the wordmark, a blockquote, anything marked .editorial."
-      },
-      "hero-figure": {
-        "displayName": "Hero Figure",
-        "purpose": "The one figure a screen exists to show. A clamp, not three breakpoint steps, because the hero should fill the width it is given."
-      },
-      "figure": {
-        "displayName": "Figure",
-        "purpose": "The figures beside the hero: exit multiple, live price."
-      },
-      "tile-figure": {
-        "displayName": "Tile Figure",
-        "purpose": "The measure in a metric tile. Dense on purpose."
+      "section": {
+        "displayName": "Section",
+        "purpose": "A heading inside a page. Newsreader 600 at 20px."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Paragraphs. Generous leading and slight positive tracking, because reading text on a near-black ground needs more room than the same text on white."
+        "purpose": "Paragraphs, table rows and controls. Source Sans 3 at 15px."
       },
-      "body-dense": {
-        "displayName": "Body Dense",
-        "purpose": "The sentence inside a disclosure."
+      "small": {
+        "displayName": "Small",
+        "purpose": "Captions, labels and secondary lines. Source Sans 3 at 13px, which is the floor — there is no exemption below it anywhere, including the top bar."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Not a step and not a face: the .font-figure class, which sets tabular and lining numerals on the body face. Alignment is a font feature rather than a font, so a column of numbers lines up without the prose beside it turning into a terminal dump."
       },
       "label": {
-        "displayName": "Label / Eyebrow",
-        "purpose": "What a thing is: a figure's name, a row's unit, a tile's label, a chip's ticker. Uniformly 0.16em at weight 500."
-      },
-      "label-chrome": {
-        "displayName": "Chrome Label",
-        "purpose": "The top bar only: the stated 12px exemption from the 13px floor, because it is glanced at rather than read and wraps at 13px."
+        "displayName": "Label",
+        "purpose": "The small step at weight 500, sentence case, normal tracking, never the accent colour. A label is a word and is set like one."
       }
     },
     "shadows": [],
@@ -355,7 +330,7 @@
       "refersTo": "figure-hero",
       "description": "The one figure a screen exists to show: an eyebrow above, the number large, monospaced and alone, an optional pill on its baseline. A FIGURE IS ALWAYS INK and there is no prop to make it otherwise — the tone prop was removed rather than left unused. The oxblood is reserved for the mark and for a signal that is meant: the premium badge beside the figure, where being red is the point.",
       "html": "<div class=\"ds-figure\"><div class=\"ds-figure-eyebrow\">Intrinsic value · perpetuity growth</div><div class=\"ds-figure-row\"><span class=\"ds-figure-value\">$184.26</span><span class=\"ds-pill ds-pill-negative\">12% premium</span></div><div class=\"ds-figure-foot\">valued from its own cash flows</div></div>",
-      "css": ".ds-figure { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-figure-eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-figure-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; } .ds-figure-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: clamp(2.5rem, 5vw, 3.75rem); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--m-ink, #F2F0EA); } .ds-figure-foot { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.04em; color: var(--m-quiet, #85816F); margin-top: 8px; } .ds-pill { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-negative { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); }"
+      "css": ".ds-figure { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-figure-eyebrow { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-figure-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; } .ds-figure-value { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-variant-numeric: tabular-nums; font-size: clamp(2.5rem, 5vw, 3.75rem); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--m-ink, #F2F0EA); } .ds-figure-foot { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.04em; color: var(--m-quiet, #85816F); margin-top: 8px; } .ds-pill { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 600; letter-spacing: normal; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-negative { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); }"
     },
     {
       "name": "State Pill",
@@ -363,7 +338,7 @@
       "refersTo": "pill-positive",
       "description": "A square hairline capsule beside a figure. Four tones and no more: positive, negative, neutral, warn. A discount reads positive and a premium reads oxblood — a measurement, never a verdict.",
       "html": "<span class=\"ds-pill ds-pill-positive\">8% discount</span> <span class=\"ds-pill ds-pill-neg\">12% premium</span> <span class=\"ds-pill ds-pill-neutral\">exit multiple</span> <span class=\"ds-pill ds-pill-warn\">basis not reported</span>",
-      "css": ".ds-pill { display: inline-block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-positive { color: var(--m-positive, #5FA37B); border-color: var(--m-positive-line, #2F5C45); background: var(--m-positive-fill, #12211A); } .ds-pill-neg { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); } .ds-pill-neutral { color: var(--m-muted, #A8A29A); border-color: var(--m-line, #262521); background: var(--m-page, #0B0B0D); } .ds-pill-warn { color: var(--m-amber, #C79A2E); border-color: rgba(199,154,46,0.4); background: rgba(199,154,46,0.1); }"
+      "css": ".ds-pill { display: inline-block; font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 600; letter-spacing: normal; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-positive { color: var(--m-positive, #5FA37B); border-color: var(--m-positive-line, #2F5C45); background: var(--m-positive-fill, #12211A); } .ds-pill-neg { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); } .ds-pill-neutral { color: var(--m-muted, #A8A29A); border-color: var(--m-line, #262521); background: var(--m-page, #0B0B0D); } .ds-pill-warn { color: var(--m-amber, #C79A2E); border-color: rgba(199,154,46,0.4); background: rgba(199,154,46,0.1); }"
     },
     {
       "name": "Metric Tile",
@@ -371,7 +346,7 @@
       "refersTo": "metric-tile",
       "description": "One measure. Dense on purpose: an eyebrow label, a 17px mono figure, a hairline, no shadow. A professional reads a row of these at a glance and wants them close together.",
       "html": "<div class=\"ds-tile\"><div class=\"ds-tile-label\" title=\"Net debt / EBITDA\">Net debt / EBITDA</div><div class=\"ds-tile-value\">1.84x</div><div class=\"ds-tile-note\">reported FY24, lease-adjusted</div></div>",
-      "css": ".ds-tile { border: 1px solid var(--m-line, #262521); background: var(--m-page, #0B0B0D); padding: 12px 14px; border-radius: 0; transition: border-color 0.2s; } .ds-tile:hover { border-color: rgba(133,129,111,0.4); } .ds-tile-label { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-tile-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 500; line-height: 1; color: var(--m-ink, #F2F0EA); } .ds-tile-note { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.4; color: var(--m-quiet, #85816F); margin-top: 6px; }"
+      "css": ".ds-tile { border: 1px solid var(--m-line, #262521); background: var(--m-page, #0B0B0D); padding: 12px 14px; border-radius: 0; transition: border-color 0.2s; } .ds-tile:hover { border-color: rgba(133,129,111,0.4); } .ds-tile-label { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-quiet, #85816F); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-tile-value { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 500; line-height: 1; color: var(--m-ink, #F2F0EA); } .ds-tile-note { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; line-height: 1.4; color: var(--m-quiet, #85816F); margin-top: 6px; }"
     },
     {
       "name": "Disclose Row",
@@ -379,7 +354,7 @@
       "refersTo": "disclose-row",
       "description": "Where the prose went, and now the shape four screens are built out of. A real button with aria-expanded over a controlled region; the chevron rotates rather than swapping glyph so the control cannot reflow. A measurement may stay visible on the closed row — a trailing phrase, a figure, or a Pill carrying the effect. The body is capped at 68ch HERE, on the disclosure, not on the paragraph inside it. A dense variant drops the top rule and halves the padding, for a disclosure nested inside another or sitting under a question.",
       "html": "<div class=\"ds-disclose\"><button type=\"button\" class=\"ds-disclose-btn\" aria-expanded=\"false\"><svg class=\"ds-disclose-chev\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg><span class=\"ds-disclose-summary\">Why there are two values, and what the gap means</span><span class=\"ds-disclose-trailing\">the two methods are 14% apart</span></button><div class=\"ds-disclose-body\">The perpetuity method grows the last forecast year for ever at the terminal rate; the exit multiple capitalises that year’s EBITDA at an assumed multiple. They are never averaged, because an average is neither method’s answer.</div></div><div class=\"ds-disclose ds-disclose-dense\"><button type=\"button\" class=\"ds-disclose-btn ds-disclose-btn-dense\" aria-expanded=\"false\"><svg class=\"ds-disclose-chev\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg><span class=\"ds-disclose-summary\">what this moves, and why</span></button></div>",
-      "css": ".ds-disclose { border-top: 1px solid var(--m-line, #262521); } .ds-disclose-dense { border-top: none; } .ds-disclose-btn { display: flex; width: 100%; flex-wrap: wrap; align-items: center; column-gap: 12px; text-align: left; padding: 12px 0; background: none; border: none; cursor: pointer; transition: color 0.2s; } .ds-disclose-btn-dense { padding: 8px 0; } .ds-disclose-chev { flex-shrink: 0; width: 12px; height: 12px; color: var(--m-quiet, #85816F); transition: transform 0.2s, color 0.2s; } .ds-disclose-btn[aria-expanded=\"true\"] .ds-disclose-chev { transform: rotate(90deg); } .ds-disclose-btn:hover .ds-disclose-chev { color: var(--m-accent-text, #D05E58); } .ds-disclose-summary { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.025em; color: var(--m-muted, #A8A29A); transition: color 0.2s; } .ds-disclose-btn:hover .ds-disclose-summary { color: var(--m-ink, #F2F0EA); } .ds-disclose-trailing { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.025em; font-variant-numeric: tabular-nums; width: 100%; padding-left: 24px; color: var(--m-quiet, #85816F); } @media (min-width: 640px) { .ds-disclose-trailing { width: auto; margin-left: auto; padding-left: 0; text-align: right; } } .ds-disclose-btn:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-disclose-body { max-width: 68ch; padding: 0 0 16px 24px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; line-height: 1.625; color: var(--m-read, #C6C1B7); } .ds-disclose-dense .ds-disclose-body { padding-bottom: 8px; }",
+      "css": ".ds-disclose { border-top: 1px solid var(--m-line, #262521); } .ds-disclose-dense { border-top: none; } .ds-disclose-btn { display: flex; width: 100%; flex-wrap: wrap; align-items: center; column-gap: 12px; text-align: left; padding: 12px 0; background: none; border: none; cursor: pointer; transition: color 0.2s; } .ds-disclose-btn-dense { padding: 8px 0; } .ds-disclose-chev { flex-shrink: 0; width: 12px; height: 12px; color: var(--m-quiet, #85816F); transition: transform 0.2s, color 0.2s; } .ds-disclose-btn[aria-expanded=\"true\"] .ds-disclose-chev { transform: rotate(90deg); } .ds-disclose-btn:hover .ds-disclose-chev { color: var(--m-accent-text, #D05E58); } .ds-disclose-summary { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.025em; color: var(--m-muted, #A8A29A); transition: color 0.2s; } .ds-disclose-btn:hover .ds-disclose-summary { color: var(--m-ink, #F2F0EA); } .ds-disclose-trailing { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.025em; font-variant-numeric: tabular-nums; width: 100%; padding-left: 24px; color: var(--m-quiet, #85816F); } @media (min-width: 640px) { .ds-disclose-trailing { width: auto; margin-left: auto; padding-left: 0; text-align: right; } } .ds-disclose-btn:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-disclose-body { max-width: 68ch; padding: 0 0 16px 24px; font-family: var(--font-display); font-size: 13px; line-height: 1.625; color: var(--m-read, #C6C1B7); } .ds-disclose-dense .ds-disclose-body { padding-bottom: 8px; }",
       "notes": "The 68ch cap is literal and must not be \"simplified\" to max-w-prose: src/index.css redefines .max-w-prose as max-width: none; text-align: justify, so that class WIDENS a column here. max-w-prose may still be written on a paragraph inside a disclosure, where it means only \"justify this\". The trailing slot goes full-width under the summary below 640px and to the far end of the row above it; left as one flex line it became two cramped columns of wrapped text at 414px."
     },
     {
@@ -388,16 +363,16 @@
       "refersTo": "disclose-row",
       "description": "One data constraint as one Disclose row, with a Pill in the trailing slot carrying the largest effect it could have on the value per share. Pill tone encodes severity and nothing else: negative is a refusal (no value shown), warn is a warning (flagged above the model), neutral is a note (listed only). Every entry used to be expanded at once — a label, two size tags, a detail paragraph, an effect paragraph and a source line, in a filled box, for each of up to a dozen constraints — which could not answer the reader’s actual question (\"how many, and does any of them matter to the number I am looking at\"), because answering it meant reading all of it. The account of a constraint now opens on the row it belongs to.",
       "html": "<div class=\"ds-constraints\"><div class=\"ds-disclose\"><button type=\"button\" class=\"ds-disclose-btn\" aria-expanded=\"false\"><svg class=\"ds-disclose-chev\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg><span class=\"ds-disclose-summary\">Operating lease maturities beyond five years</span><span class=\"ds-disclose-trailing\"><span class=\"ds-pill ds-pill-warn\">up to 3.4% of the value</span></span></button></div><div class=\"ds-disclose\"><button type=\"button\" class=\"ds-disclose-btn\" aria-expanded=\"false\"><svg class=\"ds-disclose-chev\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg><span class=\"ds-disclose-summary\">Segment capital employed</span><span class=\"ds-disclose-trailing\"><span class=\"ds-pill ds-pill-negative\">size not knowable</span></span></button></div><div class=\"ds-disclose\"><button type=\"button\" class=\"ds-disclose-btn\" aria-expanded=\"false\"><svg class=\"ds-disclose-chev\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg><span class=\"ds-disclose-summary\">Share-based payment forfeiture rate</span><span class=\"ds-disclose-trailing\"><span class=\"ds-pill ds-pill-neutral\">no effect on the value</span></span></button></div></div>",
-      "css": ".ds-constraints { border-top: 1px solid var(--m-line, #262521); } .ds-constraints .ds-disclose:first-child { border-top: none; } .ds-disclose { border-top: 1px solid var(--m-line, #262521); } .ds-disclose-btn { display: flex; width: 100%; flex-wrap: wrap; align-items: center; column-gap: 12px; text-align: left; padding: 12px 0; background: none; border: none; cursor: pointer; } .ds-disclose-chev { flex-shrink: 0; color: var(--m-quiet, #85816F); transition: transform 0.2s, color 0.2s; } .ds-disclose-btn:hover .ds-disclose-chev { color: var(--m-accent-text, #D05E58); } .ds-disclose-summary { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.025em; color: var(--m-muted, #A8A29A); transition: color 0.2s; } .ds-disclose-btn:hover .ds-disclose-summary { color: var(--m-ink, #F2F0EA); } .ds-disclose-trailing { width: 100%; padding-left: 24px; } @media (min-width: 640px) { .ds-disclose-trailing { width: auto; margin-left: auto; padding-left: 0; text-align: right; } } .ds-disclose-btn:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-pill { display: inline-block; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-negative { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); } .ds-pill-warn { color: var(--m-amber, #C79A2E); border-color: rgba(199,154,46,0.4); background: rgba(199,154,46,0.1); } .ds-pill-neutral { color: var(--m-muted, #A8A29A); border-color: var(--m-line, #262521); background: var(--m-page, #0B0B0D); }"
+      "css": ".ds-constraints { border-top: 1px solid var(--m-line, #262521); } .ds-constraints .ds-disclose:first-child { border-top: none; } .ds-disclose { border-top: 1px solid var(--m-line, #262521); } .ds-disclose-btn { display: flex; width: 100%; flex-wrap: wrap; align-items: center; column-gap: 12px; text-align: left; padding: 12px 0; background: none; border: none; cursor: pointer; } .ds-disclose-chev { flex-shrink: 0; color: var(--m-quiet, #85816F); transition: transform 0.2s, color 0.2s; } .ds-disclose-btn:hover .ds-disclose-chev { color: var(--m-accent-text, #D05E58); } .ds-disclose-summary { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.025em; color: var(--m-muted, #A8A29A); transition: color 0.2s; } .ds-disclose-btn:hover .ds-disclose-summary { color: var(--m-ink, #F2F0EA); } .ds-disclose-trailing { width: 100%; padding-left: 24px; } @media (min-width: 640px) { .ds-disclose-trailing { width: auto; margin-left: auto; padding-left: 0; text-align: right; } } .ds-disclose-btn:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-pill { display: inline-block; font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 600; letter-spacing: normal; font-variant-numeric: tabular-nums; white-space: nowrap; border: 1px solid; border-radius: 0; padding: 3px 8px; } .ds-pill-negative { color: var(--m-accent-text, #D05E58); border-color: rgba(139,30,30,0.5); background: rgba(139,30,30,0.1); } .ds-pill-warn { color: var(--m-amber, #C79A2E); border-color: rgba(199,154,46,0.4); background: rgba(199,154,46,0.1); } .ds-pill-neutral { color: var(--m-muted, #A8A29A); border-color: var(--m-line, #262521); background: var(--m-page, #0B0B0D); }"
     },
     {
       "name": "Build Pipeline Overlay",
       "kind": "custom",
       "refersTo": "panel",
-      "description": "The loading state, as a centred overlay on the page colour at 85% with a small backdrop blur. The five-row labelled checklist became ONE capped progress rule: a 1px hairline rail with an oxblood fill, the count on the right, the current stage named beneath it in the quietest type on the card. A reader cannot act on \"Discounting cash flows\" and only needs to know the thing is alive and roughly how far along; the stage names stay because the argument of this site is that the workings are visible. The did-you-know note is the content of the card now, not a 12px line under an eyebrow reading \"While you wait\": the belief in italic body, the fact set like the headline it is in the Playfair display face, the mechanism beneath it in reading grey. The progress is the furniture. The card announces its own progress through aria-live=\"polite\"; the note is aria-live=\"off\" deliberately, because a note changing every six seconds would talk over it.",
+      "description": "The loading state, as a centred overlay on the page colour at 85% with a small backdrop blur. The five-row labelled checklist became ONE capped progress rule: a 1px hairline rail with an oxblood fill, the count on the right, the current stage named beneath it in the quietest type on the card. A reader cannot act on \"Discounting cash flows\" and only needs to know the thing is alive and roughly how far along; the stage names stay because the argument of this site is that the workings are visible. The did-you-know note is the content of the card now, not a 12px line under an eyebrow reading \"While you wait\": the belief in italic body, the fact set like the headline it is in the Newsreader display face, the mechanism beneath it in reading grey. The progress is the furniture. The card announces its own progress through aria-live=\"polite\"; the note is aria-live=\"off\" deliberately, because a note changing every six seconds would talk over it.",
       "html": "<div class=\"ds-build\"><div class=\"ds-build-head\"><span class=\"ds-build-eyebrow\">Building the model</span><span class=\"ds-build-count\">3/5</span></div><div class=\"ds-build-rail\"><div class=\"ds-build-fill\"></div></div><div class=\"ds-build-stage\">Deriving assumptions from history</div><div class=\"ds-build-note\"><p class=\"ds-build-belief\">Most people assume a loss-making company is burning cash.</p><p class=\"ds-build-fact\">Depreciation is a loss on the income statement and not a payment.</p><p class=\"ds-build-why\">A company can report a loss for years and still collect more cash than it spends, which is why the valuation is built on the cash flow statement rather than on earnings.</p></div><div class=\"ds-build-foot\">Reading the filings, running the same engine used for every company</div></div>",
-      "css": ".ds-build { max-width: 36rem; border: 1px solid var(--m-line, #262521); background: var(--m-panel, #111114); border-radius: 0; padding: 28px; max-height: 90vh; overflow-y: auto; } @media (min-width: 640px) { .ds-build { padding: 36px; } } .ds-build-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; } .ds-build-eyebrow, .ds-build-count { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); } .ds-build-count { font-variant-numeric: tabular-nums; } .ds-build-rail { height: 1px; width: 100%; background: var(--m-line, #262521); } .ds-build-fill { height: 1px; width: 60%; max-width: 92%; background: var(--m-accent, #8B1E1E); transition: width 0.5s ease-out; } .ds-build-stage { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.025em; color: var(--m-quiet, #85816F); margin-top: 10px; } .ds-build-note { margin-top: 28px; } .ds-build-belief { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; line-height: 1.625; font-style: italic; color: var(--m-muted, #A8A29A); margin: 0; } .ds-build-fact { font-family: 'Playfair Display', Georgia, serif; font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 500; line-height: 1.2; letter-spacing: -0.012em; color: var(--m-ink, #F2F0EA); margin: 12px 0 0; } .ds-build-why { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; line-height: 1.625; color: var(--m-read, #C6C1B7); margin: 14px 0 0; } .ds-build-foot { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.025em; line-height: 1.625; color: var(--m-quiet, #85816F); margin-top: 28px; border-top: 1px solid var(--m-line, #262521); padding-top: 16px; }",
-      "notes": "The shipped card carries a Tailwind shadow-2xl in src/components/motionPrimitives.tsx. It is NOT reproduced here and is not a system rule: this system declares no shadows and conveys depth tonally plus hairline. The fact’s clamp(1.25rem, 2.4vw, 1.75rem) is what the component draws and is recorded as a component literal, not promoted to a type token; it is not a declared step on the DESIGN.md ramp. The foot line is deliberately sentence case rather than the tracked uppercase the eyebrows use: at 13px with 0.16em it ran to three shouting lines on a phone, for the least important sentence on the card."
+      "css": ".ds-build { max-width: 36rem; border: 1px solid var(--m-line, #262521); background: var(--m-panel, #111114); border-radius: 0; padding: 28px; max-height: 90vh; overflow-y: auto; } @media (min-width: 640px) { .ds-build { padding: 36px; } } .ds-build-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; } .ds-build-eyebrow, .ds-build-count { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-quiet, #85816F); } .ds-build-count { font-variant-numeric: tabular-nums; } .ds-build-rail { height: 1px; width: 100%; background: var(--m-line, #262521); } .ds-build-fill { height: 1px; width: 60%; max-width: 92%; background: var(--m-accent, #8B1E1E); transition: width 0.5s ease-out; } .ds-build-stage { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.025em; color: var(--m-quiet, #85816F); margin-top: 10px; } .ds-build-note { margin-top: 28px; } .ds-build-belief { font-family: var(--font-display); font-size: 13px; line-height: 1.625; font-style: italic; color: var(--m-muted, #A8A29A); margin: 0; } .ds-build-fact { font-family: var(--font-display); font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 500; line-height: 1.2; letter-spacing: -0.012em; color: var(--m-ink, #F2F0EA); margin: 12px 0 0; } .ds-build-why { font-family: var(--font-display); font-size: 13px; line-height: 1.625; color: var(--m-read, #C6C1B7); margin: 14px 0 0; } .ds-build-foot { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.025em; line-height: 1.625; color: var(--m-quiet, #85816F); margin-top: 28px; border-top: 1px solid var(--m-line, #262521); padding-top: 16px; }",
+      "notes": "The shipped card carries a Tailwind shadow-2xl in src/components/motionPrimitives.tsx. It is NOT reproduced here and is not a system rule: this system declares no shadows and conveys depth tonally plus hairline. The fact’s clamp(1.25rem, 2.4vw, 1.75rem) is what the component draws and is recorded as a component literal, not promoted to a type token; it is not a declared step on the DESIGN.md ramp. The foot line is sentence case, like every label on the site since the one-pairing pass: tracked capitals at 13px ran to three shouting lines on a phone, for the least important sentence on the card."
     },
     {
       "name": "Primary Button",
@@ -405,7 +380,7 @@
       "refersTo": "button-primary",
       "description": "The one action a screen exists for: downloading the workbook. Oxblood border over an oxblood wash, square, with an inline SVG icon.",
       "html": "<button type=\"button\" class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/></svg>Download Excel model</button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-ink, #F2F0EA); background: rgba(139,30,30,0.2); border: 1px solid var(--m-accent, #8B1E1E); border-radius: 0; padding: 8px 14px; cursor: pointer; transition: background-color 0.2s; } .ds-btn-primary:hover { background: rgba(139,30,30,0.35); } .ds-btn-primary:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.4; cursor: default; }"
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-ink, #F2F0EA); background: rgba(139,30,30,0.2); border: 1px solid var(--m-accent, #8B1E1E); border-radius: 0; padding: 8px 14px; cursor: pointer; transition: background-color 0.2s; } .ds-btn-primary:hover { background: rgba(139,30,30,0.35); } .ds-btn-primary:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.4; cursor: default; }"
     },
     {
       "name": "Ghost Button",
@@ -413,7 +388,7 @@
       "refersTo": "button-ghost",
       "description": "The default secondary action: hairline border, muted label, border goes oxblood on hover.",
       "html": "<button type=\"button\" class=\"ds-btn-ghost\">Saved models</button>",
-      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-muted, #A8A29A); background: transparent; border: 1px solid var(--m-line, #262521); border-radius: 0; padding: 8px 14px; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-btn-ghost:hover { color: var(--m-ink, #F2F0EA); border-color: var(--m-accent, #8B1E1E); } .ds-btn-ghost:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; }"
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-muted, #A8A29A); background: transparent; border: 1px solid var(--m-line, #262521); border-radius: 0; padding: 8px 14px; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-btn-ghost:hover { color: var(--m-ink, #F2F0EA); border-color: var(--m-accent, #8B1E1E); } .ds-btn-ghost:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; }"
     },
     {
       "name": "Ticker Chip",
@@ -421,7 +396,7 @@
       "refersTo": "chip-ticker",
       "description": "The company switch. Unselected is the panel ground inside a hairline; selected is a solid oxblood ground with an ink label. The escape chip that leaves the set carries read oxblood.",
       "html": "<button type=\"button\" class=\"ds-chip ds-chip-selected\">AAPL</button> <button type=\"button\" class=\"ds-chip\">MSFT</button> <button type=\"button\" class=\"ds-chip ds-chip-escape\">+ All</button>",
-      "css": ".ds-chip { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-muted, #A8A29A); background: var(--m-panel, #111114); border: 1px solid var(--m-line, #262521); border-radius: 0; padding: 4px 10px; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-chip:hover { color: var(--m-ink, #F2F0EA); border-color: rgba(133,129,111,0.4); } .ds-chip-selected { background: var(--m-accent, #8B1E1E); border-color: var(--m-accent, #8B1E1E); color: var(--m-ink, #F2F0EA); font-weight: 600; } .ds-chip-escape { color: var(--m-accent-text, #D05E58); background: transparent; } .ds-chip-escape:hover { border-color: var(--m-accent, #8B1E1E); color: var(--m-ink, #F2F0EA); } .ds-chip:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; }"
+      "css": ".ds-chip { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: normal; color: var(--m-muted, #A8A29A); background: var(--m-panel, #111114); border: 1px solid var(--m-line, #262521); border-radius: 0; padding: 4px 10px; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-chip:hover { color: var(--m-ink, #F2F0EA); border-color: rgba(133,129,111,0.4); } .ds-chip-selected { background: var(--m-accent, #8B1E1E); border-color: var(--m-accent, #8B1E1E); color: var(--m-ink, #F2F0EA); font-weight: 600; } .ds-chip-escape { color: var(--m-accent-text, #D05E58); background: transparent; } .ds-chip-escape:hover { border-color: var(--m-accent, #8B1E1E); color: var(--m-ink, #F2F0EA); } .ds-chip:focus-visible { outline: 1px solid var(--m-accent-text, #D05E58); outline-offset: 2px; }"
     },
     {
       "name": "Reference Strip",
@@ -429,7 +404,7 @@
       "refersTo": "panel",
       "description": "Identity as reference rather than headline: exchange, sector, ISIN as key/value pairs at label size, because a reader who typed the ticker already knows which company this is.",
       "html": "<dl class=\"ds-refstrip\"><div class=\"ds-refstrip-item\"><dt>exch</dt><dd>NASDAQ</dd></div><div class=\"ds-refstrip-item\"><dt>sector</dt><dd>Technology</dd></div><div class=\"ds-refstrip-item\"><dt>isin</dt><dd>US0378331005</dd></div></dl>",
-      "css": ".ds-refstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0; } .ds-refstrip-item { display: flex; align-items: baseline; gap: 6px; } .ds-refstrip dt { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); } .ds-refstrip dd { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: var(--m-muted, #A8A29A); margin: 0; }"
+      "css": ".ds-refstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0; } .ds-refstrip-item { display: flex; align-items: baseline; gap: 6px; } .ds-refstrip dt { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-quiet, #85816F); } .ds-refstrip dd { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; color: var(--m-muted, #A8A29A); margin: 0; }"
     },
     {
       "name": "The Mark",
@@ -437,7 +412,7 @@
       "refersTo": "mark",
       "description": "The red square that ends a heading in place of a full stop. marginRight -0.21em gives it zero advance width, so it hangs into the gutter instead of being pushed onto a line of its own. A word joiner precedes it.",
       "html": "<h2 class=\"ds-heading\">How the value was calculated⁠<span class=\"ds-mark\"></span></h2>",
-      "css": ".ds-heading { font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 24px; line-height: 1.04; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); margin: 0; } .ds-mark { display: inline-block; vertical-align: baseline; width: 0.13em; height: 0.13em; background: var(--m-accent, #8B1E1E); margin-left: 0.08em; margin-right: -0.21em; }"
+      "css": ".ds-heading { font-family: var(--font-display); font-weight: 600; font-size: 24px; line-height: 1.04; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); margin: 0; } .ds-mark { display: inline-block; vertical-align: baseline; width: 0.13em; height: 0.13em; background: var(--m-accent, #8B1E1E); margin-left: 0.08em; margin-right: -0.21em; }"
     },
     {
       "name": "Valuation Panel",
@@ -445,7 +420,7 @@
       "refersTo": "panel",
       "description": "The container form: square, hairline-bordered, panel ground, divided internally by hairlines. Figure columns separate with a 1px gap over a hairline background rather than with more borders.",
       "html": "<section class=\"ds-panel\" aria-label=\"Valuation\"><div class=\"ds-panel-head\"><span class=\"ds-panel-ticker\">AAPL</span><span class=\"ds-panel-name\">Apple Inc.</span></div><div class=\"ds-panel-grid\"><div class=\"ds-panel-cell\"><div class=\"ds-cell-eyebrow\">Intrinsic value</div><div class=\"ds-cell-value\">$184.26</div></div><div class=\"ds-panel-cell\"><div class=\"ds-cell-eyebrow\">Live price · USD</div><div class=\"ds-cell-value\">$209.41</div></div></div></section>",
-      "css": ".ds-panel { border: 1px solid var(--m-line, #262521); background: var(--m-panel, #111114); border-radius: 0; } .ds-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--m-line, #262521); padding: 16px 20px; } .ds-panel-ticker { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.16em; color: var(--m-accent-text, #D05E58); } .ds-panel-name { font-family: Inter, system-ui, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); } .ds-panel-grid { display: grid; gap: 1px; background: var(--m-line, #262521); grid-template-columns: 1.25fr 1fr; } .ds-panel-cell { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-cell-eyebrow { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-cell-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: clamp(1.625rem, 3vw, 2.375rem); font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--m-ink, #F2F0EA); }"
+      "css": ".ds-panel { border: 1px solid var(--m-line, #262521); background: var(--m-panel, #111114); border-radius: 0; } .ds-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--m-line, #262521); padding: 16px 20px; } .ds-panel-ticker { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 700; letter-spacing: normal; color: var(--m-accent-text, #D05E58); } .ds-panel-name { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); } .ds-panel-grid { display: grid; gap: 1px; background: var(--m-line, #262521); grid-template-columns: 1.25fr 1fr; } .ds-panel-cell { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-cell-eyebrow { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-cell-value { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-variant-numeric: tabular-nums; font-size: clamp(1.625rem, 3vw, 2.375rem); font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--m-ink, #F2F0EA); }"
     }
   ],
   "narrative": {
@@ -455,7 +430,7 @@
       "Two grounds, two ramps: a warm near-black instrument, warm paper for reading.",
       "Hairlines and tonal layering only. Not one box-shadow in the build.",
       "Square corners. Radius appears only as a full circle, on a status dot or a diagram ring.",
-      "Every figure monospace and tabular; every heading Inter at 700, cut tight.",
+      "Every figure tabular; every title Newsreader at 600, cut tight. One pairing, four sizes.",
       "One red, one green, one amber. Their rarity is what makes them mean anything.",
       "A red square, not a full stop, ends a heading.",
       "Even the surfaces nobody draws — scrollbar, selection, caret, focus ring — come from the palette."
@@ -492,31 +467,6 @@
         "section": "colors"
       },
       {
-        "name": "The Figures Are Mono Rule",
-        "body": "Every number is JetBrains Mono with tabular-nums. Inter's digits are proportional, so a column of them does not line up and a figure that tweens as a slider drags jitters sideways. A span or div marked .font-display is resolved to mono for exactly this reason: a serif price above a mono ratio row was the last place the build changed its mind about itself.",
-        "section": "typography"
-      },
-      {
-        "name": "The 13px Floor Rule",
-        "body": "Nothing anyone has to read is set below 13px. There is one exemption and it is stated in the stylesheet rather than left as a mystery in a component: the top bar carries seven labels, a clock and two buttons on a fixed 1440px rule, is glanced at rather than read, and is held at 12px with nowrap because at 13px its last three labels wrap.",
-        "section": "typography"
-      },
-      {
-        "name": "The Seven Sizes Rule",
-        "body": "13 / 15 / 16 / 18 / 20 / 24, plus 30-48 on the landing page only, each declared with its own line height. Thirteen sizes between 8px and 24px is not a hierarchy; 14px and 15px in neighbouring panels read as a mistake rather than a distinction.",
-        "section": "typography"
-      },
-      {
-        "name": "The Uniform Label Rule",
-        "body": "Every uppercase mono label is 0.16em and weight 500, set once in the stylesheet. Four different tracking values is the sort of thing nobody notices individually and everybody notices in aggregate.",
-        "section": "typography"
-      },
-      {
-        "name": "The Prose Is Not Mono Rule",
-        "body": "Monospace carries figures and the small-caps labels above them. A paragraph set in it reads as a terminal dump, so any monospace block with relaxed leading and no small caps is reset to the reading face.",
-        "section": "typography"
-      },
-      {
         "name": "The Density Rule",
         "body": "Rows of measures sit close. If a surface feels airy it is reading as a dashboard rather than a terminal, and the padding is wrong.",
         "section": "layout"
@@ -550,11 +500,51 @@
         "name": "The Severity Is The Tone Rule",
         "body": "On a constraint row the Pill tone carries severity and nothing else: negative is a refusal (no value is shown), warn is a warning (flagged above the model as well), neutral is a note (listed only). The badge states the largest effect the missing figure could have on the value per share, so the row answers \"does this matter to the number I am looking at\" without being opened.",
         "section": "components"
+      },
+      {
+        "name": "The One Pairing Rule",
+        "body": "Newsreader for titles, Source Sans 3 for everything else including every number. A screen that wants a third voice uses weight, colour or size from the four steps. There is no editorial face, no label face and no code face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Figures Are Tabular Rule",
+        "body": "Every number is set with font-variant-numeric: tabular-nums lining-nums, carried by .font-figure. This replaces The Figures Are Mono Rule: the purpose was always alignment, and alignment is a font feature rather than a font.",
+        "section": "typography"
+      },
+      {
+        "name": "The Uniform Label Rule",
+        "body": "A label is sentence case, at the small step, at weight 500, with normal letter-spacing. No uppercase and no tracking. Switched off at the source in index.css and in the EYEBROW and LABEL constants, so a screen that still writes uppercase gets sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The No Red Labels Rule",
+        "body": "The accent never carries a label. An eyebrow keeps its oxblood hairline and the words themselves are muted. Oxblood as text survives only where it is a signal that is meant: a link, a changed figure, a refusal.",
+        "section": "typography"
+      },
+      {
+        "name": "The 13px Floor Rule",
+        "body": "Nothing is set below 13px, and there are no exemptions. The top bar needed one while its labels were spaced capitals; sentence case is narrower and the same seven labels fit at the small step.",
+        "section": "typography"
+      },
+      {
+        "name": "The Prose Is Not A Table Rule",
+        "body": "What distinguishes a column of figures from a sentence is the tabular setting, not the family. Both are Source Sans 3, so a summary, a basis sentence and a figure sit in one row without the row changing its mind about itself.",
+        "section": "typography"
+      },
+      {
+        "name": "The Families Live In The Tokens Rule",
+        "body": "tokens.ts exports TYPE and SIZE; index.css mirrors them as --font-* and --m-size-*; every rule and component reads those. No component and no stylesheet rule names a font family literally.",
+        "section": "typography"
+      },
+      {
+        "name": "The Four Steps Rule",
+        "body": "Title, section, body, small, and nothing between them. The site asked for twenty-five sizes between 9px and 62px before this; the remapping block in index.css snaps any stray arbitrary size onto one of the four, so a twenty-sixth cannot be introduced by writing one.",
+        "section": "typography"
       }
     ],
     "dos": [
-      "Do take colour from the ramp by utility name (text-ink, bg-panel, border-line, text-accent-text), which resolves through --m-* to src/design/tokens.ts.",
-      "Do set every number in JetBrains Mono with tabular-nums, including any number that tweens.",
+      "Do take colour from the ramp by utility name (text-ink, bg-panel, border-line, text-accent-text), which resolves through --m- to src/design/tokens.ts.",
+      "Do set every number with .font-figure, which carries tabular-nums and lining-nums, including any number that tweens.",
       "Do use accent-text for oxblood words and accent for the mark, rules and fills.",
       "Do separate with a 1px warm hairline or a one-step tonal change.",
       "Do keep square corners (0px) on panels, tiles, chips, pills and buttons.",
@@ -569,11 +559,11 @@
       "Don't set accent (#8B1E1E) as text at any size. It is 2.16:1 on the page.",
       "Don't declare a palette hex inside a component; verification fails it.",
       "Don't add a second green, a second red, a second panel black, or a cool grey. The ground is warm, and a cool grey on it reads as faintly dirty.",
-      "Don't use Playfair Display for a heading. Headings are Inter 700; the serif is opt-in for the wordmark, a blockquote and .editorial.",
+      "Don't name a font family in a component or a stylesheet rule. Families come from TYPE in src/design/tokens.ts and nowhere else.",
       "Don't add a box-shadow, a glow or a gradient to lift a surface.",
-      "Don't set type below 13px outside the top bar's stated 12px exemption.",
-      "Don't add a font size between the seven steps, or set a size without its line height.",
-      "Don't set a paragraph in the monospace face.",
+      "Don't set type below 13px. There is no exemption any more, including the top bar.",
+      "Don't add a font size between the four steps; the remapping block in index.css will snap it onto one of them anyway.",
+      "Don't set a label in capitals, track it out, or colour it with the accent.",
       "Don't leave a browser default on the scrollbar, the selection, the caret or the focus ring.",
       "Don't loosen tile or row padding into an airy grid; density is the register.",
       "Don't round, rename or re-derive a token hex. The frontmatter values are the measured ones."

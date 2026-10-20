@@ -19,7 +19,7 @@ export const EtymologySection: React.FC = () => {
             className="flex items-center gap-2 mb-3"
           >
             <span className="w-2 h-2 bg-[#8B1E1E]" />
-            <span className="font-mono text-[11px] text-[#A1A1AA] tracking-[0.2em] uppercase">
+            <span className="font-figure text-[11px] text-[#A1A1AA] tracking-[0.2em] uppercase">
               01 — PHILOSOPHY & ETYMOLOGY
             </span>
           </motion.div>
@@ -40,7 +40,7 @@ export const EtymologySection: React.FC = () => {
                 initial={{ opacity: 0 }}
                 animate={isInView ? { opacity: 1 } : {}}
                 transition={{ duration: 0.8, delay: 0.3 }}
-                className="font-mono text-sm text-[#8B1E1E] font-semibold tracking-wider uppercase mt-3 flex items-center gap-3"
+                className="font-figure text-sm text-[#8B1E1E] font-semibold tracking-wider uppercase mt-3 flex items-center gap-3"
               >
                 <span>OUR PURPOSE:</span>
                 <span className="bg-[#8B1E1E]/10 border border-[#8B1E1E]/40 text-[#F2F0EA] px-4 py-1.5 font-serif italic text-base capitalize">
@@ -53,7 +53,7 @@ export const EtymologySection: React.FC = () => {
               initial={{ opacity: 0, x: 20 }}
               animate={isInView ? { opacity: 1, x: 0 } : {}}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="font-mono text-xs text-[#8A8A8F] border-l-2 border-[#8B1E1E] pl-5 max-w-sm leading-relaxed"
+              className="font-figure text-xs text-[#8A8A8F] border-l-2 border-[#8B1E1E] pl-5 max-w-sm leading-relaxed"
             >
               <strong className="text-[#F2F0EA] block tracking-widest mb-1 uppercase">mar·gi·na·li·a</strong>
               <span className="italic">noun</span> /ˌmɑːrdʒɪˈneɪliə/ · Notes, commentary, and critical disclosures written in the margins of a text.

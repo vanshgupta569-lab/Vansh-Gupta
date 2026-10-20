@@ -159,7 +159,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     <button
       type="button"
       onClick={() => setNerdView(view)}
-      className={`inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest px-4 py-2.5 border transition-colors ${
+      className={`inline-flex items-center gap-2 font-figure text-[11px] uppercase tracking-widest px-4 py-2.5 border transition-colors ${
         strong
           ? 'border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 font-semibold'
           : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8B1E1E]'
@@ -1123,7 +1123,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           >
             <div className="max-w-[1440px] mx-auto px-6 lg:px-12 py-3 flex items-center justify-between gap-6">
               <div className="flex items-baseline gap-3 min-w-0">
-                <span className="font-mono text-[11px] text-[#8B1E1E] font-bold tracking-widest shrink-0">
+                <span className="font-figure text-[11px] text-[#8B1E1E] font-bold tracking-widest shrink-0">
                   {company.ticker}
                 </span>
                 <span className="font-sans text-sm text-[#A1A1AA] font-light truncate hidden sm:block">
@@ -1133,20 +1133,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
               <div className="flex items-center gap-6 shrink-0">
                 <div className="text-right">
-                  <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+                  <div className="font-figure text-[9px] text-[#8A8A8F] uppercase tracking-widest">
                     Price
                   </div>
-                  <div className="font-mono text-sm text-[#F2F0EA]">
+                  <div className="font-figure text-sm text-[#F2F0EA]">
                     <TweenNumber value={displayPrice} prefix={company.currencySymbol} />
                   </div>
                 </div>
 
                 {hasRealModel && (
                   <div className="text-right">
-                    <div className="font-mono text-[9px] text-[#8A8A8F] uppercase tracking-widest">
+                    <div className="font-figure text-[9px] text-[#8A8A8F] uppercase tracking-widest">
                       Implied
                     </div>
-                    <div className="font-mono text-sm text-[#8B1E1E] font-semibold">
+                    <div className="font-figure text-sm text-[#8B1E1E] font-semibold">
                       <TweenNumber
                         value={dcfResult.targetPrice}
                         prefix={company.currencySymbol}
@@ -1221,7 +1221,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-line px-5 py-4 lg:px-6">
           <div className="min-w-0">
             <div className="mb-1.5 flex items-baseline gap-2.5">
-              <span className="font-mono text-[13px] font-bold tracking-[0.16em] text-accent-text">
+              <span className="font-figure text-[13px] font-bold tracking-[0.16em] text-accent-text">
                 {company.ticker}
               </span>
               <h1 className="truncate font-display text-[19px] font-medium tracking-tight text-ink sm:text-[22px]">
@@ -1555,7 +1555,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   .getElementById(entry.id)
                   ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }
-              className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
+              className="font-figure text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
             >
               {entry.label}
             </button>
@@ -1566,7 +1566,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <button
             type="button"
             onClick={() => setNerdView('BATCH')}
-            className="font-mono text-[11px] uppercase tracking-widest px-3 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/15 hover:bg-[#8B1E1E]/35 whitespace-nowrap transition-colors"
+            className="font-figure text-[11px] uppercase tracking-widest px-3 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/15 hover:bg-[#8B1E1E]/35 whitespace-nowrap transition-colors"
           >
             Model a list
           </button>
@@ -1575,7 +1575,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
       {/* Live News Ticker Marquee */}
       <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
-      <div className="font-mono text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
+      <div className="font-figure text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
           <Activity className="w-3.5 h-3.5 animate-pulse" />
           <span>NEWS DISPATCH:</span>
         </div>
@@ -1585,7 +1585,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               {newsLoading ? 'Loading the news…' : 'No recent headlines found for this company.'}
             </span>
           ) : (
-          <div className="animate-marquee flex gap-12 font-mono text-xs text-[#A1A1AA]">
+          <div className="animate-marquee flex gap-12 font-figure text-xs text-[#A1A1AA]">
             {newsToShow.map((news) =>
               news.url ? (
                 <a
@@ -1629,10 +1629,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-4">
-              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
+              <span className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
                 REV & MARGIN TREND
               </span>
-              <span className="font-mono text-[9px] tracking-widest text-[#8B1E1E] border border-[#8B1E1E]/40 px-2 py-0.5 uppercase bg-[#8B1E1E]/5">
+              <span className="font-figure text-[9px] tracking-widest text-[#8B1E1E] border border-[#8B1E1E]/40 px-2 py-0.5 uppercase bg-[#8B1E1E]/5">
                 5-YEAR GAAP
               </span>
             </div>
@@ -1660,7 +1660,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   >
                     {/* Hover Inspect Tooltip */}
                     {hoveredBarIndex === idx && (
-                      <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-3 z-20 font-mono text-[10px] text-[#A1A1AA] whitespace-nowrap shadow-xl">
+                      <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-3 z-20 font-figure text-[10px] text-[#A1A1AA] whitespace-nowrap shadow-xl">
                         <div className="text-[#8B1E1E] font-bold tracking-widest uppercase mb-1">{yr} Metrics</div>
                         <div className="tracking-wider">Rev: <span className="text-[#F2F0EA]">{typeof thisRev === 'number' ? `${company.currencySymbol}${(thisRev / 1000).toFixed(1)}B` : '—'}</span></div>
                         <div className="tracking-wider">EBITDA Margin: <span className="text-[#F2F0EA]">{margin}%</span></div>
@@ -1688,7 +1688,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#8B1E1E]" />
                     </motion.div>
 
-                    <span className="font-mono text-[10px] tracking-widest text-[#8A8A8F] mt-3 group-hover:text-[#F2F0EA] transition-colors">
+                    <span className="font-figure text-[10px] tracking-widest text-[#8A8A8F] mt-3 group-hover:text-[#F2F0EA] transition-colors">
                       {yr}
                     </span>
                   </div>
@@ -1697,7 +1697,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
           </div>
 
-          <div className="flex justify-between items-center font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4">
+          <div className="flex justify-between items-center font-figure text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4">
             <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 bg-[#222228] border border-[#8B1E1E]" /> Revenue
             </span>
@@ -1711,10 +1711,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-3">
-              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
+              <span className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
                 DCF SENSITIVITY MATRIX
               </span>
-              <span className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F]">WACC vs. G%</span>
+              <span className="font-figure text-[9px] tracking-widest uppercase text-[#8A8A8F]">WACC vs. G%</span>
             </div>
 
             {/* 5x5 Cell Matrix */}
@@ -1751,7 +1751,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                         isCurrentDriver ? 'ring-1 ring-[#F2F0EA]' : ''
                       }`}
                     >
-                      <span className="font-mono text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
+                      <span className="font-figure text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
                         {usable ? `${company.currencySymbol}${Math.round(val)}` : '—'}
                       </span>
                     </motion.div>
@@ -1761,7 +1761,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
 
             {/* Matrix Cell Inspector */}
-            <div className="bg-[#0B0B0D] border hairline-border p-3 font-mono text-[10px] text-[#A1A1AA] tracking-wider flex justify-between items-center min-h-[42px] shadow-inner mt-4">
+            <div className="bg-[#0B0B0D] border hairline-border p-3 font-figure text-[10px] text-[#A1A1AA] tracking-wider flex justify-between items-center min-h-[42px] shadow-inner mt-4">
               {hoveredMatrixCell ? (
                 <>
                   <span className="uppercase tracking-widest">
@@ -1781,7 +1781,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
           </div>
 
-          <div className="font-mono text-[9px] tracking-widest uppercase text-[#8A8A8F] flex justify-between items-center pt-3">
+          <div className="font-figure text-[9px] tracking-widest uppercase text-[#8A8A8F] flex justify-between items-center pt-3">
             <span>Y-Axis: WACC (+/-1%)</span>
             <span>X-Axis: Term Growth (+/-1%)</span>
           </div>
@@ -1791,10 +1791,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-2">
-              <span className="font-mono text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
+              <span className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
                 FINANCIAL HEALTH SCORE
               </span>
-              <span className="font-mono text-[12px] text-[#8B1E1E] font-bold border border-[#8B1E1E] px-2 py-0.5 bg-[#8B1E1E]/5">
+              <span className="font-figure text-[12px] text-[#8B1E1E] font-bold border border-[#8B1E1E] px-2 py-0.5 bg-[#8B1E1E]/5">
                 {company.healthMetrics.overallScore}/100
               </span>
             </div>
@@ -1849,7 +1849,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               {Object.values(company.healthDetail.components).map((c: any) => (
                 <div
                   key={c.label}
-                  className="flex items-baseline justify-between gap-3 font-mono text-[10px]"
+                  className="flex items-baseline justify-between gap-3 font-figure text-[10px]"
                   title={c.basis}
                 >
                   <span className="text-[#8A8A8F] uppercase tracking-widest truncate">
@@ -1866,14 +1866,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   </span>
                 </div>
               ))}
-              <div className="font-mono text-[9px] text-[#8A8A8F] pt-2 leading-relaxed">
+              <div className="font-figure text-[9px] text-[#8A8A8F] pt-2 leading-relaxed">
                 Five reported ratios scored against fixed thresholds, then
                 averaged. Hover any line for its basis. Nothing here uses the
                 share price.
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-figure text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
               <div>Bal Sheet: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.balanceSheetStrength}%</span></div>
               <div>Earnings Quality: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.earningsQuality}%</span></div>
               <div>Cash Flow: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.cashFlowCoverage}%</span></div>
@@ -1973,7 +1973,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <h2 className="font-serif text-xl sm:text-2xl text-[#F2F0EA]">
             For the nerds
           </h2>
-          <span className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
+          <span className="font-figure text-[10px] tracking-[0.2em] text-[#8A8A8F] uppercase">
             04 — the full working
           </span>
         </div>

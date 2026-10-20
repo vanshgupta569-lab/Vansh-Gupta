@@ -27,7 +27,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ParticleField } from './particleField';
 import { MarginNotesSection } from './marginNotesSection';
-import { DARK, PAPER } from '../design/tokens';
+import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
 
 /* The sections the object is bound to, in page order. Every id here must be
@@ -50,7 +50,7 @@ const OBJECT_SECTIONS = [
 const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, line: LINE } = DARK;
 
 const DISPLAY: React.CSSProperties = {
-  fontFamily: "'Inter', sans-serif",
+  fontFamily: TYPE.display,
   fontWeight: 800,
   letterSpacing: '-0.045em',
   lineHeight: 0.96,
@@ -65,10 +65,15 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
   centred,
 }) => (
   <p
-    className={`font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3 ${
+    /* NO RED LABEL TEXT. The red stays on the rule beside the words rather
+       than in them: one oxblood hairline is the accent, and the label itself
+       is read. A label set in the accent colour on every section is the same
+       mistake spaced capitals were — a device used everywhere, which stops
+       being emphasis and becomes the voice of the page. */
+    className={`font-figure text-[13px] mb-6 flex items-center gap-3 ${
       centred ? 'justify-center' : ''
     }`}
-    style={{ color: RED_TEXT }}
+    style={{ color: MUTED }}
   >
     <span className="h-px w-8 shrink-0" style={{ background: RED }} />
     {children}
@@ -157,7 +162,7 @@ const Block: React.FC<{
 
 const Readout: React.FC<{ rows: [string, string][]; centred?: boolean }> = ({ rows, centred }) => (
   <div
-    className={`font-mono text-[13px] border-t pt-4 mt-7 grid gap-2 ${
+    className={`font-figure text-[13px] border-t pt-4 mt-7 grid gap-2 ${
       centred ? 'justify-items-center' : ''
     }`}
     style={{ borderColor: LINE, color: MUTED }}
@@ -421,7 +426,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <button
               type="button"
               onClick={launch}
-              className="font-mono text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border transition-colors"
+              className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border transition-colors"
               style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
             >
               Value a listed company
@@ -429,14 +434,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <button
               type="button"
               onClick={launch}
-              className="font-mono text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent transition-colors hover:border-[#8B1E1E]"
+              className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent transition-colors hover:border-[#8B1E1E]"
               style={{ borderColor: LINE, color: MUTED }}
             >
               Value a private company
             </button>
           </div>
           <p
-            className="font-mono text-[12px] tracking-[0.16em] uppercase mt-8"
+            className="font-figure text-[12px] tracking-[0.16em] uppercase mt-8"
             style={{ color: MUTED }}
           >
             Scroll to see how it works
@@ -459,7 +464,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 className={`text-left ${r.n === '01' ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <div className="flex items-baseline gap-4">
-                  <span className="font-mono text-[13px] tracking-[0.2em] shrink-0" style={{ color: RED_TEXT }}>
+                  <span className="font-figure text-[13px] tracking-[0.2em] shrink-0" style={{ color: RED_TEXT }}>
                     {r.n}
                   </span>
                   <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
@@ -623,7 +628,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                     {item.title}
                   </span>
                   <span
-                    className="font-mono text-[10px] tracking-[0.18em] uppercase px-2 py-1 border"
+                    className="font-figure text-[10px] tracking-[0.18em] uppercase px-2 py-1 border"
                     style={{
                       color: item.status === 'In build' ? RED_TEXT : MUTED,
                       borderColor: item.status === 'In build' ? 'rgba(139,30,30,0.55)' : LINE,
@@ -673,7 +678,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 &ldquo;I would rather be vaguely right than precisely wrong.&rdquo;
               </p>
               <p
-                className="font-mono text-[12px] tracking-[0.18em] uppercase mt-5"
+                className="font-figure text-[12px] tracking-[0.18em] uppercase mt-5"
                 style={{ color: MUTED }}
               >
                 John Maynard Keynes
@@ -707,7 +712,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         >
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-10 lg:pb-12">
             <p
-              className="font-mono text-[12px] tracking-[0.22em] uppercase mb-12 flex items-center gap-3"
+              className="font-figure text-[12px] tracking-[0.22em] uppercase mb-12 flex items-center gap-3"
               style={{ color: PAPER.accentText }}
             >
               <span className="h-px w-8" style={{ background: RED }} />
@@ -720,12 +725,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                     <CountUp to={s.to} suffix={s.suffix} />
                   </div>
                   <div
-                    className="font-mono text-[12px] tracking-[0.2em] uppercase mt-4"
+                    className="font-figure text-[12px] tracking-[0.2em] uppercase mt-4"
                     style={{ color: PAPER.ink }}
                   >
                     {s.label}
                   </div>
-                  <div className="font-mono text-[12px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
+                  <div className="font-figure text-[12px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
                     {s.detail}
                   </div>
                 </div>
@@ -749,7 +754,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           <div className="sticky top-0 h-screen flex items-start overflow-hidden">
             <div className="w-full max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-24">
               <p
-                className="font-mono text-[12px] tracking-[0.22em] uppercase mb-5 flex items-center gap-3"
+                className="font-figure text-[12px] tracking-[0.22em] uppercase mb-5 flex items-center gap-3"
                 style={{ color: PAPER.accentText }}
               >
                 <span className="h-px w-8" style={{ background: RED }} />
@@ -765,7 +770,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-0">
                 <div>
-                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: PAPER.quiet }}>
+                  <div className="font-figure text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: PAPER.quiet }}>
                     Sample output
                   </div>
                   <div className="relative border-t" style={{ borderColor: PAPER.line }}>
@@ -783,11 +788,11 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                             background: on ? 'rgba(139,30,30,0.05)' : 'transparent',
                           }}
                         >
-                          <span className="font-mono text-[14px]" style={{ color: on ? PAPER.ink : PAPER.quiet }}>
+                          <span className="font-figure text-[14px]" style={{ color: on ? PAPER.ink : PAPER.quiet }}>
                             {item.label}
                           </span>
                           <span
-                            className="font-mono text-[19px] lg:text-[22px] tabular-nums"
+                            className="font-figure text-[19px] lg:text-[22px] tabular-nums"
                             style={{ color: on ? PAPER.accentText : PAPER.ink }}
                           >
                             {item.figure}
@@ -808,7 +813,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 </div>
 
                 <div className="lg:pl-28 lg:pt-16">
-                  <div className="font-mono text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: PAPER.accentText }}>
+                  <div className="font-figure text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: PAPER.accentText }}>
                     {line.label}
                   </div>
                   <p
@@ -818,7 +823,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                     {line.note}
                   </p>
                   <div
-                    className="font-mono text-[12px] mt-6 pt-4 border-t inline-block"
+                    className="font-figure text-[12px] mt-6 pt-4 border-t inline-block"
                     style={{ color: PAPER.quiet, borderColor: PAPER.line }}
                   >
                     {line.source}
@@ -853,7 +858,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               <button
                 type="button"
                 onClick={onOpenCompany}
-                className="font-mono text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border"
+                className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border"
                 style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
               >
                 Value a listed company
@@ -861,7 +866,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               <button
                 type="button"
                 onClick={onOpenNotes}
-                className="font-mono text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent hover:border-[#8B1E1E] transition-colors"
+                className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent hover:border-[#8B1E1E] transition-colors"
                 style={{ borderColor: LINE, color: MUTED }}
               >
                 Read the margin notes

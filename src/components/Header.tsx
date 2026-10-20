@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* The clocks are the first thing to go when the bar gets tight.
               They are pleasant, not load-bearing. */}
-          <div className="hidden 2xl:flex items-center gap-3 font-mono text-[11px] text-[#8A8A8F] border-l hairline-border-l pl-6 whitespace-nowrap">
+          <div className="hidden 2xl:flex items-center gap-3 font-figure text-[11px] text-[#8A8A8F] border-l hairline-border-l pl-6 whitespace-nowrap">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[#F2F0EA] font-medium">{istTimeStr}</span>
             <span className="text-[#52525B]">|</span>
@@ -145,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
                     ? onNavigateToScreen('NOTES')
                     : goHomeAnd(item.id)
                 }
-                className={`font-mono text-[11px] tracking-wider uppercase transition-colors relative py-1 cursor-pointer whitespace-nowrap ${
+                className={`font-figure text-[11px] tracking-wider uppercase transition-colors relative py-1 cursor-pointer whitespace-nowrap ${
                   activeSection === item.id
                     ? 'text-[#8B1E1E] font-semibold border-b-2 border-[#8B1E1E]'
                     : 'text-[#dfbfbc] hover:text-[#F2F0EA]'
@@ -191,7 +191,7 @@ export const Header: React.FC<HeaderProps> = ({
                   .filter(Boolean)
                   .join(' ')
               }
-              className="border font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
+              className="border font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
               style={
                 corrected || reclassified
                   ? { borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.20)', color: '#F2F0EA' }
@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
           {currentScreen !== 'DIRECTORY' && (
             <button
               onClick={() => onNavigateToScreen('DIRECTORY')}
-              className="border text-[#F2F0EA] font-mono text-[11px] px-4 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              className="border text-[#F2F0EA] font-figure text-[11px] px-4 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
               style={{ borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.22)' }}
             >
               <Search className="w-3.5 h-3.5" />
@@ -235,7 +235,7 @@ export const Header: React.FC<HeaderProps> = ({
           {currentScreen !== 'HOME' && (
             <button
               onClick={() => onNavigateToScreen('HOME')}
-              className="bg-transparent border hairline-border text-[#F2F0EA] font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              className="bg-transparent border hairline-border text-[#F2F0EA] font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
             >
               <Home className="w-3.5 h-3.5 text-[#8A8A8F]" />
               <span className="hidden sm:inline">Home</span>
@@ -245,7 +245,7 @@ export const Header: React.FC<HeaderProps> = ({
           {currentScreen === 'ANALYSIS' && (
             <button
               onClick={() => onNavigateToScreen('DIRECTORY')}
-              className="bg-transparent border hairline-border text-[#F2F0EA] font-mono text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              className="bg-transparent border hairline-border text-[#F2F0EA] font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
             >
               <Building2 className="w-3.5 h-3.5 text-[#8A8A8F]" />
               <span className="hidden sm:inline">All companies</span>

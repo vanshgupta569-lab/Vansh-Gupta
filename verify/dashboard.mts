@@ -369,7 +369,11 @@ async function openFetched(page: Page, ticker: string) {
     await field.blur();
     await page.waitForTimeout(600);
     await checkBottomBarClearance(page, '360px, one figure corrected');
-    const reset = page.getByRole('button', { name: /reset to as filed/i });
+    // THE LINK IS CALLED "Reset all" NOW, and the old name matched nothing —
+    // so the figure this check corrects stayed corrected, and the next check
+    // along counted two changes where it expected one. A selector that no
+    // longer matches fails silently; the count downstream is what caught it.
+    const reset = page.getByRole('button', { name: /^reset all$/i });
     if (await reset.count()) { await reset.click(); await page.waitForTimeout(500); }
   }
   if (was) { await page.setViewportSize(was); await page.waitForTimeout(400); }
@@ -394,198 +398,236 @@ async function openFetched(page: Page, ticker: string) {
  * once with the previous value still beside it -- that it can be made WITHOUT A
  * MOUSE, and that undoing it leaves the screen where it started.
  */
+/**
+ * OPEN A ⓘ AND READ WHAT IT SAYS.
+ *
+ * Every explanation on the figures screen moved behind one of these, so a
+ * check that reads the page text finds none of them — the panel is not in the
+ * DOM until the ⓘ is hovered, focused or tapped. Scoped to a container rather
+ * than the page, because every row has one and a body-wide search would open
+ * somebody else's.
+ */
+async function readHint(page: Page, within: any, nth = 0): Promise<string> {
+  const hint = within.locator('[data-hint]').nth(nth);
+  if (!(await hint.count())) return '';
+  await hint.click();
+  await page.waitForTimeout(260);
+  const text = (await page.locator('[role="tooltip"]').first().textContent().catch(() => '')) || '';
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(160);
+  return text;
+}
+
+/** Move a line to a head through its ⋯ menu, which is the keyboard's way in. */
+async function moveLineTo(page: Page, field: string, headLabel: RegExp): Promise<boolean> {
+  const row = page.locator(`[data-line="${field}"]`).first();
+  const menu = row.locator('[data-row-menu]').first();
+  if (!(await menu.count())) return false;
+  await menu.click();
+  await page.waitForTimeout(300);
+  const item = page.locator('[role="menuitem"]', { hasText: headLabel }).first();
+  if (!(await item.count())) {
+    await page.keyboard.press('Escape');
+    return false;
+  }
+  await item.click();
+  await page.waitForTimeout(1100);
+  return true;
+}
+
+/**
+ * THE JUDGEMENT LAYER ON SCREEN (ROADMAP.md §19b).
+ *
+ * The arithmetic is checked below the screen by `verify/heads.mts`. What only a
+ * browser can check is that the judgement is actually offered, that making one
+ * does the four things the roadmap requires -- states where the default came
+ * from, takes a reason, offers a visible way back, and rebuilds the model at
+ * once with the previous value still beside it -- that it can be made WITHOUT A
+ * MOUSE, that a figure can be edited BY CLICKING IT, and that undoing it all
+ * leaves the screen where it started.
+ */
 async function checkHeadsOnScreen(page: Page) {
   console.log(`\n=== the figures screen: the lines under their heads ===`);
-  const band = page.getByRole('heading', { name: /as filed/i });
-  if (!(await band.count())) {
-    fail('the as-filed table', 'on the figures screen', '(not there)');
+  const title = page.getByRole('heading', { name: /^reported figures/i });
+  if (!(await title.count())) {
+    fail('the Reported figures table', 'on the figures screen', '(not there)');
     return;
   }
-  ok('the as-filed table is on the figures screen, before the model');
+  ok('the figures table is on the screen, before the model');
 
-  const body = (await page.textContent('body')) || '';
-
-  // THE HONESTY NOTE IS VISIBLE, NOT FOLDED AWAY. A reader who took these
-  // captions for the filing's own wording would be wrong, so the sentence has
-  // to be on the page without opening anything.
-  if (/not yet its own line captions/i.test(body)) {
-    ok('the screen says these are the source\u2019s fields and not the filing\u2019s own captions');
+  // THE SCREEN IS SHORT. The whole profit and loss is meant to fit a laptop
+  // screen without scrolling, and "meant to" is not a measurement: the table's
+  // own height is read off the page.
+  const tableHeight = await page.evaluate(
+    `(() => { const t = document.querySelector('.mg-table'); return t ? Math.round(t.getBoundingClientRect().height) : -1; })()`
+  );
+  if (typeof tableHeight === 'number' && tableHeight > 0 && tableHeight <= 720) {
+    ok(`the profit and loss is ${tableHeight}px tall, inside a 1080p screen`);
   } else {
-    fail('the honesty note about the captions', 'visible on the page', '(not there)');
+    fail('the height of the profit and loss', 'at most 720px', `${tableHeight}px`);
   }
 
-  // THE HEADS ARE BANDS WITH THEIR FORECAST RULE BESIDE THEM.
+  // NO EXPLANATORY PARAGRAPHS ARE LEFT ON THE SCREEN. The prose moved behind
+  // the ⓘ, and the way to tell it actually moved is to count what is left.
+  const strayProse = await page.evaluate(
+    `(() => {
+       const out = [];
+       document.querySelectorAll('.mg-table td, .mg-table th').forEach(function (cell) {
+         const t = (cell.textContent || '').trim();
+         if (t.split(/\s+/).length > 14) out.push(t.slice(0, 60));
+       });
+       return out;
+     })()`
+  );
+  if (Array.isArray(strayProse) && strayProse.length === 0) {
+    ok('no cell in the table carries a paragraph; the prose is behind the ⓘ');
+  } else {
+    fail('prose left in the table', 'none', JSON.stringify(strayProse).slice(0, 160));
+  }
+
+  // THE HONESTY NOTE IS REACHABLE, in the ⓘ beside the one line of instruction.
+  const intro = await readHint(page, page.locator('p', { hasText: /As filed by/i }).first());
+  if (/not yet .*own line captions/i.test(intro)) {
+    ok('the hint says these are the source fields and not the filing own captions');
+  } else {
+    fail('the honesty note about the captions', 'in the hint beside the instruction', intro.slice(0, 80) || '(not there)');
+  }
+  if (/four states/i.test(intro)) ok('the same hint carries the four states');
+  else fail('the four states', 'in the intro hint', '(not there)');
+
+  // THE HEADS ARE ROWS, with their forecast rule behind a ⓘ.
   const bands = page.locator('[data-head-band]');
   const bandCount = await bands.count();
-  if (bandCount >= 6) ok(`${bandCount} head bands on the statement in view`);
-  else fail('head bands', 'at least 6', String(bandCount));
+  if (bandCount >= 6) ok(`${bandCount} heads on the statement in view`);
+  else fail('heads', 'at least 6', String(bandCount));
 
-  // A HEAD THE ENGINE CANNOT HONOUR SAYS SO, rather than offering a dead
-  // control. Both of these are on the balance sheet, so the tab is switched.
+  // A HEAD THE ENGINE CANNOT HONOUR SAYS SO, in its own ⓘ. Both are on the
+  // balance sheet, so the tab is switched.
   await page.getByRole('tab', { name: /balance sheet/i }).click();
   await page.waitForTimeout(500);
-  const balance = (await page.textContent('body')) || '';
-  if (/Not a drop target/i.test(balance)) ok('a head the engine cannot honour is marked as not a drop target');
-  else fail('the not-a-drop-target marker', 'on a head the engine cannot honour', '(not there)');
-
-  // AND EVERY ONE OF THEM GIVES A REASON, WHICH HAS TO BE OPENED TO BE READ.
-  //
-  // The reason moved behind a per-head disclosure when the table was cut back
-  // to figures-first, and `Disclose` does not render a closed region at all --
-  // so a check that read the page text found nothing and would have reported
-  // the reasons missing when they were one click away. Opening it is also the
-  // honest assertion: "every default states where it came from" means a reader
-  // can reach it, not that it is shouted at them.
-  //
-  // Scoped to the band, never to the page: the same summary appears on every
-  // head, and a body-wide search would pass on somebody else's disclosure.
-  const marked = page.locator('[data-head-band]', { hasText: /Not a drop target/ });
-  const markedCount = await marked.count();
-  if (!markedCount) {
-    fail('a head band marked as not a drop target', 'at least one', '0');
-  } else {
-    let reasoned = 0;
-    for (let i = 0; i < markedCount; i++) {
-      const band = marked.nth(i);
-      await band.getByRole('button', { name: /why nothing can be moved here/i }).first().click();
-      await page.waitForTimeout(350);
-      const text = (await band.textContent()) || '';
-      const after = text.split(/Not a drop target\./)[1] || '';
-      if (after.trim().length > 60) reasoned++;
-    }
-    if (reasoned === markedCount) {
-      ok(`${markedCount} head${markedCount === 1 ? '' : 's'} the engine cannot honour, each giving its reason`);
+  const debtBand = page.locator('[data-head-band="debt"]');
+  if (await debtBand.count()) {
+    const said = await readHint(page, debtBand, 0);
+    if (/not a drop target/i.test(said)) ok('a head the engine cannot honour says so in its hint');
+    else fail('the not-a-drop-target note', 'in the debt head hint', said.slice(0, 80) || '(not there)');
+    if (said.replace(/.*Not a drop target\./i, '').trim().length > 60) {
+      ok('and gives the reason with it');
     } else {
-      fail('a reason on every head that is not a drop target', `${markedCount} of ${markedCount}`, `${reasoned}`);
+      fail('the reason a head is not a drop target', 'stated in the hint', '(too short or absent)');
     }
+  } else {
+    fail('the debt head', 'on the balance sheet', '(not there)');
   }
   await page.getByRole('tab', { name: /profit and loss/i }).click();
   await page.waitForTimeout(500);
 
-  // THE DEFAULT SAYS WHERE IT CAME FROM, in the disclosure on its own head.
-  const cogsBand = page.locator('[data-head-band="cogs"]');
-  if (await cogsBand.count()) {
-    await cogsBand.getByRole('button', { name: /where these defaults came from/i }).first().click();
-    await page.waitForTimeout(400);
-    const opened = (await cogsBand.textContent()) || '';
-    if (/which is a cost of the units sold by its own description/i.test(opened)) {
-      ok('the basis for a default head is stated in words');
-    } else {
-      fail('the stated basis', 'cost of the units sold by its own description', '(not under the head)');
-    }
-    if (/balancing line the gross margin is derived from/i.test(opened)) {
-      ok('a line that cannot be set aside as a one-off says why');
-    } else {
-      fail('why cost of sales cannot be a one-off', 'stated', '(not under the head)');
-    }
+  // THE DEFAULT SAYS WHERE IT CAME FROM, in the ⓘ on the line itself.
+  const cogsRow = page.locator('[data-line="cogs"]').first();
+  const cogsSaid = await readHint(page, cogsRow, 0);
+  if (/cost of the units sold by its own description/i.test(cogsSaid)) {
+    ok('the basis for a default head is stated in the line hint');
   } else {
-    fail('the cost of sales head band', 'on the profit and loss statement', '(not there)');
+    fail('the stated basis', 'cost of the units sold by its own description', cogsSaid.slice(0, 80) || '(not there)');
+  }
+  if (/balancing line the gross margin is derived from/i.test(cogsSaid)) {
+    ok('a line that cannot be set aside as a one-off says why');
+  } else {
+    fail('why cost of sales cannot be a one-off', 'in its hint', '(not there)');
   }
 
-  // ---- make one WITH THE KEYBOARD, and watch the model rebuild ----
+  // ====================================================================
+  // A FIGURE IS EDITED BY CLICKING IT
+  // ====================================================================
   //
-  // The drag is checked separately below. This is the control a keyboard and a
-  // screen reader can reach, and a judgement that can only be made by dragging
-  // is a judgement some readers cannot make at all.
-  const sgaRow = page.locator('[data-line="sga"]').first();
-  const select = page.locator('[data-head-select="sga"]').first();
-  if (!(await select.count())) {
-    fail('the head control on SG&A', 'present', '(not there)');
+  // This is the bug the redesign fixed, and it is why the check drives the
+  // whole gesture rather than taking it on trust. The row used to be a
+  // component declared inside the screen's own render, so every keystroke gave
+  // React a new component type and it REMOUNTED the input — measured, clicking
+  // a cell left `document.activeElement` on BODY and typing changed nothing.
+  await editAFigure(page, 'the figures screen');
+
+  // ---- move a line WITHOUT A MOUSE, and watch the model rebuild ----
+  if (!(await moveLineTo(page, 'sga', /^One-offs$/))) {
+    fail('the row menu on SG&A', 'offering the heads it may move to', '(not there)');
     return;
   }
-  await select.selectOption('oneOffs');
-  await page.waitForTimeout(1200);
+  const landedOn = await page.locator('[data-line="sga"]').first().getAttribute('data-head');
+  if (landedOn === 'oneOffs') ok('the row menu moved the line, so a keyboard can make the judgement');
+  else fail('the head after the menu move', 'oneOffs', String(landedOn));
 
-  const after = (await page.textContent('body')) || '';
-  if (/Yours\. The default is selling, general and administrative\./i.test(after)) {
-    ok("the filed default stays beside the reader's choice");
+  const movedSaid = await readHint(page, page.locator('[data-line="sga"]').first(), 0);
+  if (/Yours\. The default is selling, general and administrative\./i.test(movedSaid)) {
+    ok('the filed default stays beside the reader choice');
   } else {
-    fail('the default kept beside the choice', 'Yours. The default is selling, general and administrative.', '(not on the page)');
+    fail('the default kept beside the choice', 'Yours. The default is ...', movedSaid.slice(0, 80) || '(not there)');
   }
-  if (await sgaRow.locator('xpath=following-sibling::tr[1]').getByRole('button', { name: /back to the default/i }).count()) {
-    ok('the move has a visible way back');
-  } else {
-    fail('return to default', 'a button on the line', '(not there)');
-  }
+
   const why = page.locator('input#why-sga');
-  if (await why.count()) ok('the move takes a one-line reason');
+  if (await why.count()) ok('the move takes an optional one-line reason, inline');
   else fail('the reason field', 'on the moved line', '(not there)');
   await why.fill('their delivery fleet sits in this line');
-  await page.waitForTimeout(900);
-
-  // AND THE LINE IS ACTUALLY UNDER THE NEW HEAD, not merely labelled. Asserted
-  // on the row's own attribute, because a sentence saying "one-offs" could be
-  // anywhere on the page -- including in the explanatory prose above the table.
-  const landedOn = await page.locator('[data-line="sga"]').first().getAttribute('data-head');
-  if (landedOn === 'oneOffs') ok('the row reports itself under the head it was moved to');
-  else fail('the row\u2019s head after the move', 'oneOffs', String(landedOn));
+  await page.waitForTimeout(800);
 
   // REBUILT AT ONCE, WITH THE PREVIOUS VALUE STILL ON SCREEN.
+  // REBUILT AT ONCE — or refused, which is also an answer. A company the
+  // engine cannot value on these judgements has no figure to put beside
+  // anything and must say so; the paper fixture is one. Both outcomes are
+  // correct, and the two used to be asserted in the wrong order, so a refusal
+  // reported a missing rebuild before reporting itself.
   const rebuilt = (await page.textContent('body')) || '';
-  if (/Rebuilt on your judgements/i.test(rebuilt)) ok('the model is rebuilt on the judgement, on this screen');
-  else fail('the rebuilt value', 'Rebuilt on your judgements', '(not on the page)');
-  // Both apostrophes, because which one the component uses is a typographic
-  // choice and this check is about the number being there.
-  const both = rebuilt.match(
-    /Perpetuity, value per share[\s\S]{0,160}?on the engine['\u2019]s defaults\s*\S*[\d.,]+/i
-  );
-  // A COMPANY THE ENGINE REFUSES HAS NO VALUE TO PUT BESIDE ANYTHING, and must
-  // say the engine refuses rather than show a blank where a figure goes. Both
-  // outcomes are correct; neither being on the page is not.
+  const both = rebuilt.match(/Perpetuity[\s\S]{0,120}?was\s*\S*[\d.,]+/i);
   const refusedHere = /the engine refuses a value/i.test(rebuilt);
-  if (both) ok(`the previous value is still beside the new one: ${both[0].replace(/\s+/g, ' ').slice(-48)}`);
-  else if (refusedHere) ok('the engine refuses a value on these judgements, and says so rather than printing a blank');
-  else fail('the previous value', 'beside the new one, or a stated refusal', '(neither on the page)');
+  if (both) {
+    ok('the model is rebuilt on the judgement, on this screen');
+    ok(`the previous value is still beside the new one: ${both[0].replace(/\s+/g, ' ').slice(-46)}`);
+  } else if (refusedHere) {
+    ok('the engine refuses a value on these judgements, and says so rather than printing a blank');
+  } else {
+    fail('the rebuilt value', 'the new figure beside the old one, or a stated refusal', '(neither on the page)');
+  }
 
-  // The figures screen with a judgement made is a distinct colour state --
-  // oxblood labels, an active control, a reason field -- so it is measured here
-  // rather than only in its resting state.
   await readContrast(page, 'the figures screen, one line moved to another head');
 
-  // ---- and undo it ----
-  await page
-    .locator('[data-line="sga"]')
-    .first()
-    .locator('xpath=following-sibling::tr[1]')
-    .getByRole('button', { name: /back to the default/i })
-    .first()
-    .click();
-  await page.waitForTimeout(900);
+  // ---- a visible way back, through the same menu ----
+  if (await moveLineTo(page, 'sga', /Back to Selling, general/i)) {
+    const back = await page.locator('[data-line="sga"]').first().getAttribute('data-head');
+    if (back === 'sga') ok('the row menu offers the way back to the engine default');
+    else fail('the head after going back', 'sga', String(back));
+  } else {
+    fail('the way back', 'in the row menu', '(not offered)');
+  }
+
   // ---- AND THE DRAG, which is the other half of the control ----
   //
   // Checked by dispatching the real drag events rather than by moving the
   // mouse: Playwright's `dragTo` does not drive HTML5 drag-and-drop, and a
   // mouse-move that silently does nothing would leave this check passing while
-  // the drag was broken. The handler reads `dataTransfer`, so a real one is
-  // constructed and shared between the three events.
-  //
-  // The body is passed as a STRING, not an arrow function: esbuild wraps a
-  // named function inside `evaluate` in a `__name()` call that does not exist
-  // in the page (CLAUDE.md).
+  // the drag was broken. The grip is what carries `draggable` now — the row no
+  // longer does, because a draggable ancestor is what stopped the figures in
+  // it being clicked into.
   const dragged = await page.evaluate(
     `(() => {
        const row = document.querySelector('[data-line="rnd"]') || document.querySelector('[data-line="sga"]');
        const band = document.querySelector('[data-head-band="oneOffs"]');
        if (!row || !band) return 'no row or no band';
+       const grip = row.querySelector('.mg-grip');
+       if (!grip) return 'no grip on the row';
        const dt = new DataTransfer();
-       row.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+       dt.setData('text/plain', row.getAttribute('data-line'));
+       grip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
        band.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
        band.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
        return row.getAttribute('data-line');
      })()`
   );
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1100);
   if (typeof dragged === 'string' && /^(rnd|sga)$/.test(dragged)) {
     const landed = await page.locator(`[data-line="${dragged}"]`).first().getAttribute('data-head');
-    if (landed === 'oneOffs') ok(`dragging ${dragged} onto the one-offs head moved it there`);
+    if (landed === 'oneOffs') ok(`dragging ${dragged} by its grip onto the one-offs head moved it there`);
     else fail(`the head after dragging ${dragged}`, 'oneOffs', String(landed));
-    // And put it back, so the screen is left as it was found.
-    await page.locator(`[data-head-select="${dragged}"]`).first().selectOption(
-      dragged === 'rnd' ? 'rnd' : 'sga'
-    );
-    await page.waitForTimeout(900);
+    await moveLineTo(page, dragged, dragged === 'rnd' ? /Back to Research/i : /Back to Selling/i);
   } else {
-    fail('the drag', 'a row and a one-offs band to drag between', String(dragged));
+    fail('the drag', 'a grip and a one-offs head to drag between', String(dragged));
   }
 
   const undone = (await page.textContent('body')) || '';
@@ -593,6 +635,69 @@ async function checkHeadsOnScreen(page: Page) {
     fail('after returning to the default', 'no rebuilt-value band', 'it is still there');
   } else {
     ok('returning to the default puts the screen back where it started');
+  }
+}
+
+/**
+ * CLICK A FIGURE, TYPE OVER IT, AND SEE THE SCREEN ANSWER.
+ *
+ * Driven on two companies, because the bug it guards was in the screen rather
+ * than in any one company's data and a single fixture could pass by luck.
+ */
+async function editAFigure(page: Page, label: string) {
+  const row = page.locator('[data-line="cogs"]').first();
+  const cell = row.locator('input.mg-cell').first();
+  if (!(await cell.count())) {
+    fail(`an editable figure, ${label}`, 'a cell on the cost of sales line', '(not there)');
+    return;
+  }
+  await cell.scrollIntoViewIfNeeded();
+  const num = (t: string) => Number(String(t).replace(/,/g, ''));
+  const was = num(await cell.inputValue());
+  const box = await cell.boundingBox();
+  if (!box) {
+    fail(`an editable figure, ${label}`, 'a cell with a box', '(none)');
+    return;
+  }
+  // A REAL CLICK, not `.fill()`. `fill` sets the value through the DOM and
+  // would pass against a cell no person could put a caret in, which is exactly
+  // the state this screen was in.
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(280);
+  const focused = await page.evaluate(`document.activeElement ? document.activeElement.tagName : 'none'`);
+  if (focused === 'INPUT') ok(`${label}: clicking a figure puts the caret in it`);
+  else fail(`${label}: clicking a figure`, 'focuses the input', `focus went to ${focused}`);
+
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type(String(Math.round(was * 0.8) || 1234));
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(1200);
+  const now = num(await cell.inputValue());
+  if (now !== was) ok(`${label}: typing over it changed the figure, ${was} to ${now}`);
+  else fail(`${label}: typing over a figure`, 'changes it', `it stayed at ${was}`);
+
+  // THE COUNT SAYS SO, and the filed figure is one hover away.
+  const counted = ((await page.locator('[data-change-count]').first().textContent()) || '').trim();
+  if (/1 figure changed/i.test(counted)) ok(`${label}: the change is counted at the top of the screen`);
+  else fail(`${label}: the change count`, '1 figure changed', counted || '(empty)');
+
+  const marker = await readHint(page, row, 1);
+  if (/Filed/i.test(marker) && /yours/i.test(marker)) {
+    ok(`${label}: the edited cell keeps the filed figure behind its marker`);
+  } else {
+    fail(`${label}: the filed figure beside the change`, 'Filed ... yours ...', marker.slice(0, 70) || '(not there)');
+  }
+
+  // Put it back, so the next check starts where this one found the screen.
+  const reset = page.getByRole('button', { name: /^reset all$/i }).first();
+  if (await reset.count()) {
+    await reset.click();
+    await page.waitForTimeout(800);
+    const after = ((await page.locator('[data-change-count]').first().textContent()) || '').trim();
+    if (/no changes/i.test(after)) ok(`${label}: Reset all puts every figure back`);
+    else fail(`${label}: Reset all`, 'No changes', after);
+  } else {
+    fail(`${label}: the Reset all link`, 'beside the change count', '(not there)');
   }
 }
 
@@ -642,7 +747,16 @@ async function checkBridgeTies(page: Page, label: string) {
  */
 async function checkBridgeOnScreen(page: Page) {
   console.log(`\n=== the figures screen: the adjusted EBITDA bridge ===`);
-  const head = page.getByRole('heading', { name: /the adjusted ebitda bridge/i });
+  // THE BRIDGE IS FOLDED AWAY NOW, so it is opened before it is read. It is
+  // not what a reader comes to this screen for, and leaving it open was most
+  // of what made the page four screens long — but it is still the artefact a
+  // valuer receives, so it is still here and still checked.
+  const section = page.getByRole('button', { name: /the adjusted ebitda bridge/i }).first();
+  if (await section.count()) {
+    await section.click();
+    await page.waitForTimeout(500);
+  }
+  const head = page.getByRole('button', { name: /the adjusted ebitda bridge/i });
   if (!(await head.count())) {
     fail('the EBITDA bridge', 'on the figures screen', '(not there)');
     return;
@@ -662,11 +776,13 @@ async function checkBridgeOnScreen(page: Page) {
     if (re.test(body)) ok(`the bridge shows ${what}`);
     else fail(`the bridge's ${what}`, 'on the page', '(not there)');
   }
-  const whatsIn = page.getByText(/What is in this bridge, and what is not/i).first();
+  const whatsIn = page.locator('[data-hint]').last();
   if (await whatsIn.count()) {
-    await whatsIn.click();
+    const bridgeHint = page.locator('table').last().locator('[data-hint]').first();
+    await bridgeHint.click();
     await page.waitForTimeout(400);
-    const open = (await page.textContent('body')) || '';
+    const open = (await page.locator('[role="tooltip"]').first().textContent().catch(() => '')) || '';
+    await page.keyboard.press('Escape').catch(() => {});
     if (/not EBITDA before share-based pay/i.test(open)) ok('it says stock compensation is not added back');
     else fail('the stock-compensation statement', 'in the bridge', '(not there)');
     if (/classify the same money twice/i.test(open)) ok('it says why depreciation cannot be moved to another head');
@@ -684,17 +800,14 @@ async function checkBridgeOnScreen(page: Page) {
   await checkBridgeTies(page, 'with nothing adjusted');
 
   // WITH NOTHING ADJUSTED, it says so rather than hiding.
-  if (/You have made no adjustments/i.test(body)) ok('with nothing adjusted, the bridge says so');
+  if (/you have made no adjustments/i.test(body)) ok('with nothing adjusted, the bridge says so');
   else fail('the no-adjustments sentence', 'on an untouched screen', '(not there)');
 
   // ---- make one, and watch it arrive on the bridge with a reason field ----
-  const select = page.locator('[data-head-select="sga"]').first();
-  if (!(await select.count())) {
-    fail('the head control on SG&A', 'present', '(not there)');
+  if (!(await moveLineTo(page, 'sga', /^One-offs$/))) {
+    fail('the row menu on SG&A', 'present', '(not there)');
     return;
   }
-  await select.selectOption('oneOffs');
-  await page.waitForTimeout(1200);
   const line = page.locator('input[data-adjustment="oneOff:sga"]');
   if (await line.count()) ok('the one-off arrives on the bridge with a place for its reason');
   else fail('the one-off on the bridge', 'a reason field', '(not there)');
@@ -703,8 +816,12 @@ async function checkBridgeOnScreen(page: Page) {
   const after = (await page.textContent('body')) || '';
   if (/One-off \u00b7 Selling, general and administrative/i.test(after)) ok('the bridge names the line and what kind of adjustment it is');
   else fail('the adjustment line', 'named on the bridge', '(not there)');
-  if (/It moves EBITDA in/i.test(after)) ok('the line says in how many years it moves EBITDA');
-  else fail('the recurrence count', 'on the adjustment line', '(not there)');
+  // The recurrence count moved into the adjustment's own ⓘ with the rest of
+  // the prose, so it is opened rather than read off the page.
+  const adjRow = page.locator('tr', { hasText: /One-off · Selling, general/i }).first();
+  const adjSaid = await readHint(page, adjRow, 0);
+  if (/It moves EBITDA in/i.test(adjSaid)) ok('the adjustment says in how many years it moves EBITDA');
+  else fail('the recurrence count', 'in the adjustment hint', adjSaid.slice(0, 70) || '(not there)');
   await checkBridgeTies(page, 'with an adjustment on it');
 
   // The reason typed on the bridge is the same store the heads table reads, so
@@ -719,10 +836,9 @@ async function checkBridgeOnScreen(page: Page) {
   await readContrast(page, 'the figures screen, with an EBITDA bridge adjustment');
 
   // ---- and put it back ----
-  await page.locator('[data-head-select="sga"]').first().selectOption('sga');
-  await page.waitForTimeout(900);
+  await moveLineTo(page, 'sga', /Back to Selling, general/i);
   const undone = (await page.textContent('body')) || '';
-  if (/You have made no adjustments/i.test(undone)) ok('returning to the default empties the bridge again');
+  if (/you have made no adjustments/i.test(undone)) ok('returning to the default empties the bridge again');
   else fail('the bridge after a return to default', 'no adjustments', 'it still carries one');
 }
 
@@ -763,9 +879,8 @@ async function checkSavedModelsOnScreen(page: Page, label: string, ticker: strin
     return;
   }
   await figuresButton.click();
-  await page.getByRole('heading', { name: /read the figures before the model does/i }).waitFor({ timeout: 60_000 });
-  await page.locator('[data-head-select="sga"]').first().selectOption('oneOffs');
-  await page.waitForTimeout(1200);
+  await page.getByRole('heading', { name: /^reported figures/i }).waitFor({ timeout: 60_000 });
+  await moveLineTo(page, 'sga', /^One-offs$/);
   await page
     .getByRole('button', { name: /^rebuild with these judgements$/i })
     .click({ timeout: 60_000 });

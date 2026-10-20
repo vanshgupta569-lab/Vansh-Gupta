@@ -176,7 +176,7 @@ body {
 
 .back {
   display: inline-flex; align-items: center; gap: 8px;
-  font-family: ${TYPE.mono};
+  font-family: ${TYPE.figure};
   font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--dim); text-decoration: none; margin-bottom: 48px;
 }
@@ -185,7 +185,7 @@ body {
 
 .eyebrow {
   display: flex; align-items: center; gap: 12px;
-  font-family: ${TYPE.mono};
+  font-family: ${TYPE.figure};
   font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--red-text); margin: 0 0 24px;
 }
@@ -217,14 +217,14 @@ article p { font-size: 16px; line-height: 1.7; margin: 0 0 24px; }
 table { border-collapse: collapse; width: 100%; font-size: 15px; }
 th, td { text-align: left; padding: 10px 16px 10px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th {
-  font-family: ${TYPE.mono};
+  font-family: ${TYPE.figure};
   font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--dim); font-weight: 500;
 }
 td { color: var(--read); }
 
 .label {
-  font-family: ${TYPE.mono};
+  font-family: ${TYPE.figure};
   font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--dim); margin: 0 0 16px;
 }
@@ -266,7 +266,7 @@ const head = (opts: { title: string; description: string; url: string }) => {
     <meta name="theme-color" content="${PAPER.ground}" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="${css}" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="Marginalia" />

@@ -27,7 +27,7 @@ import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
 import { BuildPipeline } from './motionPrimitives';
 import { Search, ArrowRight, FileSpreadsheet } from 'lucide-react';
-import { DARK } from '../design/tokens';
+import { DARK, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
 
 // Colours come from the one palette. They used to be six local constants at
@@ -35,7 +35,7 @@ import { Mark } from '../design/Mark';
 const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, line: LINE } = DARK;
 
 const DISPLAY: React.CSSProperties = {
-  fontFamily: "'Inter', sans-serif",
+  fontFamily: TYPE.display,
   fontWeight: 800,
   letterSpacing: '-0.045em',
   lineHeight: 0.98,
@@ -43,10 +43,15 @@ const DISPLAY: React.CSSProperties = {
 
 const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({ children, centred }) => (
   <p
-    className={`font-mono text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3 ${
+    /* NO RED LABEL TEXT. The red stays on the rule beside the words rather
+       than in them: one oxblood hairline is the accent, and the label itself
+       is read. A label set in the accent colour on every section is the same
+       mistake spaced capitals were — a device used everywhere, which stops
+       being emphasis and becomes the voice of the page. */
+    className={`font-figure text-[13px] mb-6 flex items-center gap-3 ${
       centred ? 'justify-center' : ''
     }`}
-    style={{ color: RED_TEXT }}
+    style={{ color: MUTED }}
   >
     <span className="h-px w-8 shrink-0" style={{ background: RED }} />
     {children}
@@ -211,14 +216,14 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                 if (e.key === 'Escape') setSearchQuery('');
               }}
               placeholder="Apple, Reliance, Nvidia, Tata Motors…"
-              className="w-full font-mono text-[15px] pl-14 pr-4 sm:pr-40 py-5 outline-none border transition-colors focus:border-[#8B1E1E] placeholder:text-[#52525B]"
+              className="w-full font-figure text-[15px] pl-14 pr-4 sm:pr-40 py-5 outline-none border transition-colors focus:border-[#8B1E1E] placeholder:text-[#52525B]"
               style={{ background: '#111114', borderColor: LINE, color: INK }}
               autoFocus
             />
             <button
               onClick={submitSearch}
               disabled={lookupState.loading || !searchQuery.trim()}
-              className="hidden sm:block absolute right-2 font-mono text-[11px] px-5 py-3 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap border"
+              className="hidden sm:block absolute right-2 font-figure text-[11px] px-5 py-3 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap border"
               style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
             >
               {lookupState.loading ? 'Building…' : 'Build model'}
@@ -227,7 +232,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           <button
             onClick={submitSearch}
             disabled={lookupState.loading || !searchQuery.trim()}
-            className="sm:hidden w-full mt-3 font-mono text-[12px] px-5 py-3.5 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 border"
+            className="sm:hidden w-full mt-3 font-figure text-[12px] px-5 py-3.5 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 border"
             style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
           >
             {lookupState.loading ? 'Building…' : 'Build model'}
@@ -247,7 +252,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                   style={{ borderTop: i === 0 ? 'none' : `1px solid ${LINE}` }}
                 >
                   <span className="flex items-center gap-4 min-w-0">
-                    <span className="font-mono text-[14px] shrink-0" style={{ color: INK, fontWeight: 600 }}>
+                    <span className="font-figure text-[14px] shrink-0" style={{ color: INK, fontWeight: 600 }}>
                       {sug.ticker}
                     </span>
                     <span className="text-[15px] truncate" style={{ color: MUTED }}>
@@ -255,7 +260,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                     </span>
                   </span>
                   <span
-                    className="font-mono text-[11px] uppercase tracking-[0.16em] shrink-0 flex items-center gap-3"
+                    className="font-figure text-[11px] uppercase tracking-[0.16em] shrink-0 flex items-center gap-3"
                     style={{ color: MUTED }}
                   >
                     {sug.exchange}
@@ -269,7 +274,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             </div>
           )}
 
-          <p className="font-mono text-[12px] mt-5 leading-[1.6] text-center mx-auto max-w-[84ch]" style={{ color: MUTED }}>
+          <p className="font-figure text-[12px] mt-5 leading-[1.6] text-center mx-auto max-w-[84ch]" style={{ color: MUTED }}>
             US filings come from SEC EDGAR, everywhere else from exchange
             disclosures. Banks, insurers and lenders are shown without a
             discounted cash flow, because it does not apply to them.
@@ -292,7 +297,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
 
           {!hint && lookupState.error && (
             <div
-              className="mt-5 border px-5 py-4 font-mono text-[13px] leading-[1.6]"
+              className="mt-5 border px-5 py-4 font-figure text-[13px] leading-[1.6]"
               style={{ borderColor: 'rgba(139,30,30,0.5)', background: 'rgba(139,30,30,0.10)', color: INK }}
             >
               {lookupState.error}
@@ -345,11 +350,11 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                     <div className="flex justify-between items-start gap-4 mb-5">
                       <div className="min-w-0">
                         <div className="flex items-baseline gap-3">
-                          <span className="font-mono text-[26px] tracking-tight" style={{ color: INK, fontWeight: 700 }}>
+                          <span className="font-figure text-[26px] tracking-tight" style={{ color: INK, fontWeight: 700 }}>
                             {comp.ticker}
                           </span>
                           <span
-                            className="font-mono text-[10px] tracking-[0.16em] uppercase"
+                            className="font-figure text-[10px] tracking-[0.16em] uppercase"
                             style={{ color: MUTED }}
                           >
                             {comp.exchange}
@@ -361,12 +366,12 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                       </div>
 
                       <div className="text-right shrink-0">
-                        <div className="font-mono text-[18px] tabular-nums" style={{ color: INK, fontWeight: 600 }}>
+                        <div className="font-figure text-[18px] tabular-nums" style={{ color: INK, fontWeight: 600 }}>
                           {comp.currencySymbol}
                           {comp.price.toFixed(2)}
                         </div>
                         <div
-                          className="font-mono text-[12px] tracking-[0.06em] mt-1"
+                          className="font-figure text-[12px] tracking-[0.06em] mt-1"
                           style={{ color: comp.priceChangePct >= 0 ? '#4E9E7A' : RED_TEXT }}
                         >
                           {comp.priceChangePct >= 0 ? '+' : ''}
@@ -380,7 +385,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                     </p>
 
                     <div
-                      className="font-mono text-[12px] grid grid-cols-2 gap-y-2 gap-x-4 pt-4 border-t"
+                      className="font-figure text-[12px] grid grid-cols-2 gap-y-2 gap-x-4 pt-4 border-t"
                       style={{ borderColor: LINE, color: MUTED }}
                     >
                       <div>
@@ -403,7 +408,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                   {comp.excelModels && comp.excelModels.length > 0 && (
                     <div className="pt-5 mt-5 border-t" style={{ borderColor: LINE }}>
                       <div
-                        className="font-mono text-[11px] uppercase tracking-[0.18em] mb-3"
+                        className="font-figure text-[11px] uppercase tracking-[0.18em] mb-3"
                         style={{ color: MUTED }}
                       >
                         Download the workbooks
@@ -416,7 +421,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-2 font-mono text-[11px] border px-3 py-2 transition-colors hover:border-[#8B1E1E]"
+                            className="inline-flex items-center gap-2 font-figure text-[11px] border px-3 py-2 transition-colors hover:border-[#8B1E1E]"
                             style={{ color: READ, borderColor: LINE, background: '#0B0B0D' }}
                           >
                             <FileSpreadsheet className="w-3.5 h-3.5" style={{ color: RED_TEXT }} />
@@ -428,11 +433,11 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                   )}
 
                   <div className="pt-5 mt-6 border-t" style={{ borderColor: LINE }}>
-                    <div className="font-mono text-[10px] tracking-[0.1em] mb-3" style={{ color: '#6B6759' }}>
+                    <div className="font-figure text-[10px] tracking-[0.1em] mb-3" style={{ color: '#6B6759' }}>
                       ISIN {comp.isin}
                     </div>
                     <span
-                      className="font-mono text-[11px] tracking-[0.16em] uppercase flex items-center gap-2 whitespace-nowrap"
+                      className="font-figure text-[11px] tracking-[0.16em] uppercase flex items-center gap-2 whitespace-nowrap"
                       style={{ color: RED_TEXT }}
                     >
                       <span className="group-hover:text-[#F2F0EA] transition-colors">Open the model</span>
@@ -452,7 +457,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
               className="p-7 lg:p-8 border flex flex-col justify-center"
               style={{ borderColor: LINE, background: '#0E0E11' }}
             >
-              <div className="font-mono text-[11px] uppercase tracking-[0.18em] mb-4" style={{ color: RED_TEXT }}>
+              <div className="font-figure text-[11px] uppercase tracking-[0.18em] mb-4" style={{ color: RED_TEXT }}>
                 Not on the shelf
               </div>
               <p className="text-[16px] leading-[1.6]" style={{ color: READ }}>
@@ -460,7 +465,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                 than the engine-generated version, write to:
               </p>
               <span
-                className="font-mono text-[15px] select-all border-b pb-0.5 mt-6 self-start"
+                className="font-figure text-[15px] select-all border-b pb-0.5 mt-6 self-start"
                 style={{ color: INK, borderColor: RED }}
               >
                 vanshgupta569@gmail.com
@@ -483,7 +488,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
         <div className="mt-20 pt-8 border-t text-center" style={{ borderColor: LINE }}>
           <button
             onClick={onBackToHome}
-            className="font-mono text-[11px] uppercase tracking-[0.18em] transition-colors cursor-pointer"
+            className="font-figure text-[11px] uppercase tracking-[0.18em] transition-colors cursor-pointer"
             style={{ color: MUTED }}
           >
             &larr;&nbsp;&nbsp;Back to the home page

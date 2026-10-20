@@ -133,7 +133,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
     <div className="pt-28 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12 min-h-screen">
       <div className="flex items-center gap-2 mb-3">
         <span className="w-2 h-2 bg-[#8B1E1E]" />
-        <span className="font-mono text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
+        <span className="font-figure text-[11px] text-[#8A8A8F] tracking-[0.2em] uppercase">
           Before the model — {company.ticker}
         </span>
       </div>
@@ -175,7 +175,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
         <button
           type="button"
           onClick={onSkip}
-          className="inline-flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest px-5 py-3 border border-accent text-ink bg-accent/25 hover:bg-accent/45 transition-colors font-semibold"
+          className="inline-flex items-center gap-2 font-figure text-[13px] uppercase tracking-widest px-5 py-3 border border-accent text-ink bg-accent/25 hover:bg-accent/45 transition-colors font-semibold"
         >
           Skip and build the model
           <ArrowRight className="w-4 h-4" />
@@ -190,7 +190,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
         {/* ---------------- the reported facts ---------------- */}
         <aside className="lg:sticky lg:top-24 self-start">
           <div className="border border-[#222228] bg-[#111114] p-5">
-            <div className="font-mono text-[11px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+            <div className="font-figure text-[11px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
               What the filings do say
             </div>
 
@@ -204,7 +204,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
               <div key={fact.label} className="py-3 border-t border-[#222228]">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[13px] text-[#8A8A8F]">{fact.label}</span>
-                  <span className="font-mono text-[15px] text-[#F2F0EA] tabular-nums shrink-0">
+                  <span className="font-figure text-[15px] text-[#F2F0EA] tabular-nums shrink-0">
                     {fact.value}
                   </span>
                 </div>
@@ -239,7 +239,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
               {newsOpen && (
                 <div className="mt-3 space-y-2">
                   {newsLoading && (
-                    <p className="font-mono text-[12px] text-[#8A8A8F]">Fetching…</p>
+                    <p className="font-figure text-[12px] text-[#8A8A8F]">Fetching…</p>
                   )}
                   {!newsLoading && news && news.length === 0 && (
                     <p className="text-[13px] text-[#8A8A8F]">
@@ -256,7 +256,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
                         className="block text-[13px] leading-snug text-[#A1A1AA] hover:text-[#F2F0EA] transition-colors"
                       >
                         {item.headline}
-                        <span className="block font-mono text-[11px] text-[#8A8A8F] mt-0.5">
+                        <span className="block font-figure text-[11px] text-[#8A8A8F] mt-0.5">
                           {item.source}
                         </span>
                       </a>
@@ -294,7 +294,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
                             key={v.key}
                             type="button"
                             onClick={() => set(factor.key, v.key)}
-                            className={`font-mono text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors whitespace-nowrap ${
+                            className={`font-figure text-[11px] uppercase tracking-wider px-3 py-2 border transition-colors whitespace-nowrap ${
                               chosen === v.key
                                 ? 'border-[#8B1E1E] bg-[#8B1E1E]/20 text-[#F2F0EA]'
                                 : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] hover:border-[#8A8A8F]'
@@ -313,7 +313,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
 
           {/* ---------------- what this will change ---------------- */}
           <div className="border border-[#222228] bg-[#0B0B0D] p-5 mb-6">
-            <div className="font-mono text-[11px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+            <div className="font-figure text-[11px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
               What this will change in the model
             </div>
 
@@ -332,7 +332,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
                     <span className="text-[14px] text-[#8A8A8F]">
                       {DRIVER_LABELS[driver] || driver}
                     </span>
-                    <span className="font-mono text-[14px] text-[#F2F0EA] tabular-nums">
+                    <span className="font-figure text-[14px] text-[#F2F0EA] tabular-nums">
                       {Number(amount) > 0 ? '+' : ''}
                       {Number(amount).toFixed(2)} {driverStepLabel(driver)}
                     </span>
@@ -352,7 +352,7 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
             <button
               type="button"
               onClick={() => onContinue(verdicts)}
-              className="inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-widest px-5 py-3 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 transition-colors font-semibold"
+              className="inline-flex items-center gap-2 font-figure text-[12px] uppercase tracking-widest px-5 py-3 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/25 hover:bg-[#8B1E1E]/45 transition-colors font-semibold"
             >
               Build the model{answered > 0 ? ` with ${answered} judgement${answered === 1 ? '' : 's'}` : ''}
               <ArrowRight className="w-4 h-4" />
@@ -360,14 +360,14 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
             <button
               type="button"
               onClick={onSkip}
-              className="font-mono text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+              className="font-figure text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
             >
               Skip instead
             </button>
             <button
               type="button"
               onClick={onBack}
-              className="font-mono text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+              className="font-figure text-[12px] uppercase tracking-widest px-4 py-3 text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
             >
               ← Choose a different company
             </button>

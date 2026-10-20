@@ -163,7 +163,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
 
       {appliedCount > 0 && (
         <div className="border border-[#222228] bg-[#0B0B0D] p-4 mb-8">
-          <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
+          <div className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
             Carried over from your answers
           </div>
           <p className="text-[14px] leading-relaxed text-[#8A8A8F]">
@@ -179,7 +179,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
         <div className="border border-[#8B1E1E] bg-[#8B1E1E]/10 p-4 mb-8">
           <p className="text-[14px] leading-relaxed text-[#F2F0EA]">
             You have changed a view since the model was last built. Nothing has
-            moved yet — press <span className="font-mono">apply to the model</span>{' '}
+            moved yet — press <span className="font-figure">apply to the model</span>{' '}
             below to put it through.
           </p>
         </div>
@@ -198,7 +198,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
           <Disclose summary={`About ${companyName}`} trailing="context, not figures">
 
           {(profile.industry || profile.sector || profile.employees || profile.country) && (
-            <div className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-[13px] text-[#8A8A8F] mb-4">
+            <div className="flex flex-wrap gap-x-6 gap-y-2 font-figure text-[13px] text-[#8A8A8F] mb-4">
               {profile.sector && <span>Sector: {profile.sector}</span>}
               {profile.industry && <span>Industry: {profile.industry}</span>}
               {profile.employees ? (
@@ -216,7 +216,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
 
           {profile.officers && profile.officers.length > 0 && (
             <div>
-              <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
+              <div className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-2">
                 Who runs it
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5">
@@ -226,7 +226,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                     className="flex items-baseline justify-between gap-4 border-b border-[#222228]/60 py-1.5"
                   >
                     <span className="text-[14px] text-[#F2F0EA]">{officer.name}</span>
-                    <span className="font-mono text-[13px] text-[#8A8A8F] text-right">
+                    <span className="font-figure text-[13px] text-[#8A8A8F] text-right">
                       {officer.title}
                     </span>
                   </div>
@@ -240,7 +240,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
               href={profile.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block mt-4 font-mono text-[13px] text-[#8B1E1E] hover:text-[#F2F0EA] transition-colors"
+              className="inline-block mt-4 font-figure text-[13px] text-[#8B1E1E] hover:text-[#F2F0EA] transition-colors"
             >
               {profile.website}
             </a>
@@ -274,7 +274,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
               <div className="flex items-baseline justify-between gap-4 mb-1">
                 <div className="text-[14px] text-[#F2F0EA]">{factor.title}</div>
                 {inModel ? (
-                  <span className="font-mono text-[12px] uppercase tracking-widest text-[#8B1E1E] shrink-0">
+                  <span className="font-figure text-[12px] uppercase tracking-widest text-[#8B1E1E] shrink-0">
                     in the model
                   </span>
                 ) : null}
@@ -292,7 +292,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
                     key={option}
                     type="button"
                     onClick={() => setVerdict(factor.key, option)}
-                    className={`font-mono text-[13px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${
+                    className={`font-figure text-[13px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${
                       verdict === option
                         ? 'border-[#8B1E1E] bg-[#8B1E1E]/20 text-[#F2F0EA]'
                         : 'border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA]'
@@ -325,7 +325,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
       ))}
 
       <div className="mt-8 border-t border-[#222228] pt-6">
-        <div className="font-mono text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
+        <div className="font-figure text-[12px] tracking-[0.2em] text-[#8A8A8F] uppercase mb-3">
           What this would change
         </div>
 
@@ -340,7 +340,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
             {changes.map((change) => (
               <div
                 key={String(change.key)}
-                className="flex items-baseline justify-between gap-4 font-mono text-[14px]"
+                className="flex items-baseline justify-between gap-4 font-figure text-[14px]"
               >
                 <span className="text-[#8A8A8F]">
                   {driverLabels[String(change.key)] || String(change.key)}
@@ -363,7 +363,7 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
               onApply(proposed, verdicts);
               onClose();
             }}
-            className="font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#8B1E1E]/35 transition-colors"
+            className="font-figure text-[13px] uppercase tracking-widest px-4 py-2 border border-[#8B1E1E] text-[#F2F0EA] bg-[#8B1E1E]/20 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[#8B1E1E]/35 transition-colors"
           >
             Apply to the model
           </button>
@@ -375,11 +375,11 @@ export const QualitativeAdjustments: React.FC<QualitativeProps> = ({
               // the full screen as well as clearing the views.
               onClose();
             }}
-            className="font-mono text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
+            className="font-figure text-[13px] uppercase tracking-widest px-4 py-2 border border-[#222228] text-[#8A8A8F] hover:text-[#F2F0EA] transition-colors"
           >
             Clear and go back to the model
           </button>
-          <span className="font-mono text-[13px] text-[#8A8A8F]">
+          <span className="font-figure text-[13px] text-[#8A8A8F]">
             currently {currencySymbol}
             {currentValue.toLocaleString(undefined, {
               minimumFractionDigits: 2,
