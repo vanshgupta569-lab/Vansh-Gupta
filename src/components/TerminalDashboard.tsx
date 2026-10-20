@@ -17,6 +17,7 @@ import type { AssetApproachResult, RecoveryRates } from '../data/assetApproach';
 import { buildMarketApproach, trailingFiguresFrom, defaultSelection } from '../data/marketApproach';
 import type { MarketApproachResult } from '../data/marketApproach';
 import { terminalSpread } from '../data/terminalSpread';
+import { inTradingCurrency } from '../data/tradingCurrency';
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 import { reverseDcf } from '../data/reverseDcf';
@@ -1048,6 +1049,27 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     return Number(((displayPrice / bankModel.valuePerShare - 1) * 100).toFixed(1));
   }, [bankModel, displayPrice]);
 
+  // ---- THE SAME FIGURES IN THE CURRENCY THE SHARE TRADES IN -------------
+  //
+  // A company is modelled in the currency its statements are in, and
+  // discounted at that currency's own bond yield, because a cash flow and
+  // its discount rate have to describe one economy (METHODOLOGY.md S3 and
+  // S14). Infosys files in US dollars and trades in Bombay, so the honest
+  // model gives a dollar value per share -- and a reader on the NSE is
+  // looking at rupees.
+  //
+  // So every figure here is shown in BOTH, converted at the one rate the
+  // price was converted at and disclosed below. Nothing in the model moves:
+  // this divides an answer. On the great majority of companies the two
+  // currencies are the same and these are all null, so nothing is added to
+  // the screen.
+  const inTrading = {
+    value: inTradingCurrency(terminalMethods.perpetuity ?? dcfResult.targetPrice, company.currencyBasis),
+    exit: inTradingCurrency(terminalMethods.exit, company.currencyBasis),
+    price: inTradingCurrency(displayPrice, company.currencyBasis),
+    bank: inTradingCurrency(bankModel?.valuePerShare, company.currencyBasis),
+  };
+
   // Premium or discount TO THE MODEL, so the model value is the denominator.
   //
   // This used to divide by the market price, which produced figures that were
@@ -1283,13 +1305,18 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     </Pill>
                   ) : undefined
                 }
-                foot="valued as a bank"
+                foot={
+                  inTrading.bank
+                    ? `valued as a bank · ${inTrading.bank.text} in ${inTrading.bank.currency}`
+                    : 'valued as a bank'
+                }
               />
             </div>
             <div className="bg-panel px-5 py-5 lg:px-6">
               <Figure
                 eyebrow={`${liveQuote ? 'Live price' : 'Last stored price'} · ${company.currency}`}
                 value={`${company.currencySymbol}${displayPrice.toFixed(2)}`}
+                foot={inTrading.price ? `${inTrading.price.text} as quoted` : undefined}
                 pill={
                   <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
                     {displayChangePct >= 0 ? '+' : ''}
@@ -1315,6 +1342,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       prefix={company.currencySymbol}
                     />
                   }
+                  foot={
+                    inTrading.value
+                      ? `${inTrading.value.text} in ${inTrading.value.currency}, the currency the share trades in`
+                      : undefined
+                  }
                   pill={
                     premiumAgainst.perpetuity !== null ? (
                       <Pill tone={premiumAgainst.perpetuity > 0 ? 'negative' : 'positive'}>
@@ -1336,6 +1368,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     value={
                       <TweenNumber value={terminalMethods.exit as number} prefix={company.currencySymbol} />
                     }
+                    foot={inTrading.exit ? `${inTrading.exit.text} in ${inTrading.exit.currency}` : undefined}
                     pill={
                       premiumAgainst.exit !== null ? (
                         <Pill tone={premiumAgainst.exit > 0 ? 'negative' : 'positive'}>
@@ -1354,6 +1387,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <Figure
                 eyebrow={`${liveQuote ? 'Live price' : 'Last stored price'} · ${company.currency}`}
                 value={`${company.currencySymbol}${displayPrice.toFixed(2)}`}
+                foot={inTrading.price ? `${inTrading.price.text} as quoted` : undefined}
                 pill={
                   <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
                     {displayChangePct >= 0 ? '+' : ''}
@@ -1399,15 +1433,58 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </Disclose>
           )}
 
+          {/* WHAT CURRENCY EVERYTHING ON THIS SCREEN IS IN.
+
+              The rate named here used to be `rate`, the composite the quoted
+              figure is multiplied by, printed beside the name of the pair it
+              came from. London quotes pence, so that read "Converted at
+              0.013246 (GBPUSD=X)" where GBPUSD=X is 1.3246 -- a disclosed
+              figure a hundred times away from the thing it was labelled as,
+              on ten of the forty-nine converted companies. It is now the
+              pair's own rate, with the quoted unit said separately. */}
           {company.currencyBasis?.priceConverted && (
-            <Disclose summary="What this price is quoted in">
+            <Disclose
+              summary={
+                inTrading.price
+                  ? 'What this price is quoted in, and what the value is worth in it'
+                  : 'What this price is quoted in'
+              }
+            >
               <p className="max-w-prose">
-                Quoted in {company.currencyBasis.quotedCurrency}; shown in{' '}
-                {company.currencyBasis.reportingCurrency}, the currency the statements are in, so the
-                price and the value beside it can be compared. Converted at{' '}
-                {company.currencyBasis.rate?.toPrecision(6)}
-                {company.currencyBasis.pair ? ` (${company.currencyBasis.pair})` : ''}.
+                Quoted in {company.currencyBasis.quotedCurrency}
+                {company.currencyBasis.minorUnitFactor != null &&
+                company.currencyBasis.minorUnitFactor !== 1
+                  ? `, ${Math.round(1 / company.currencyBasis.minorUnitFactor)} to one ${
+                      company.currencyBasis.tradingCurrency
+                    }`
+                  : ''}
+                ; shown in {company.currencyBasis.reportingCurrency}, the currency the statements are
+                in, so the price and the value beside it can be compared.{' '}
+                {inTrading.price ? (
+                  <>
+                    Converted at {Number(inTrading.price.rate.toPrecision(6))}{' '}
+                    {company.currencyBasis.reportingCurrency} per {inTrading.price.currency}
+                    {company.currencyBasis.pair ? ` (${company.currencyBasis.pair}` : ''}
+                    {company.currencyBasis.pair && company.currencyBasis.rateAsOf
+                      ? `, ${company.currencyBasis.rateAsOf.slice(0, 10)})`
+                      : company.currencyBasis.pair
+                        ? ')'
+                        : ''}
+                    .
+                  </>
+                ) : (
+                  <>No exchange rate is involved: the two are the same currency in different units.</>
+                )}
               </p>
+              {inTrading.price && (
+                <p className="mt-2 max-w-prose text-quiet">
+                  The model is built in {company.currencyBasis.reportingCurrency} throughout, down to the
+                  government bond yield it discounts at, because a cash flow and the rate it is discounted
+                  at have to describe one economy. The {inTrading.price.currency} figure under each value
+                  is that answer divided by the rate above — the last step, applied once to an answer. It
+                  moves with the rate, as the price does, so the premium or discount between them does not.
+                </p>
+              )}
             </Disclose>
           )}
 

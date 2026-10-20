@@ -1182,6 +1182,231 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE
+// ---------------------------------------------------------------------------
+//
+// The site models a company in the currency its statements are in and discounts
+// at that currency's own government bond yield (`METHODOLOGY.md` S3 and S14).
+// Three separate fetches have to agree for that to be true -- the statements'
+// units, the risk-free publisher, and the quote after conversion -- and until
+// this check nothing asserted that they did. The invariant held on every payload
+// by construction of code that anyone could change, which is the definition of
+// an unguarded invariant: a mixed model discounts a dollar cash flow at a rupee
+// rate and says nothing at all.
+//
+// Four things are asserted over every payload on disk:
+//
+//   1. THE THREE CURRENCIES AGREE. `meta.currency` (what every figure on the
+//      screen is labelled), `quote.currency` (the price after conversion) and
+//      `riskFree.currency` (where the discount rate came from) all equal the
+//      reporting currency the filing states. A company where they cannot be
+//      made to agree must be refused, not valued.
+//
+//   2. THE TRADING-CURRENCY FIGURE IS IN THE EXCHANGE'S OWN UNITS. The price
+//      put back into the trading currency is compared with `quote.asQuoted`,
+//      which the fetcher recorded separately before converting anything. The
+//      two come from opposite sides of the conversion, so agreement means the
+//      rate and its direction are both right -- a figure compared with itself
+//      would prove neither (`CLAUDE.md`).
+//
+//   3. THE RATE PRINTED BESIDE A PAIR'S NAME IS THAT PAIR'S RATE. This is the
+//      one that was wrong: the provenance line named GBPUSD=X and printed
+//      0.013246, the composite applied to a quote in pence, where the pair is
+//      1.3246. Ten of the forty-nine converted companies, every .L plus NPN.JO
+//      and TEVA.TA. Reading the sentence rather than the field behind it is
+//      deliberate: the fields were right and the sentence was wrong.
+//
+//   4. THE CHECK ITSELF CAN FAIL. Two copies of a real payload are mixed on
+//      purpose -- one with the price left in rupees against dollar statements,
+//      one discounted at a rupee bond yield with dollar statements -- and
+//      part 1's own test is run over them. If it reports nothing, it guards
+//      nothing.
+{
+  console.log('\n=== one currency: the statements, the discount rate and the price ===');
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { inTradingCurrency } = await import(`file:///${REPO}/src/data/tradingCurrency.ts`);
+
+  /** Everything mixed about one company, as sentences. Empty is correct. */
+  const currencyFaults = (built: any, fetched: any): string[] => {
+    const faults: string[] = [];
+    const meta = built?.modelData?.meta;
+    const basis = meta?.currencyBasis;
+    const reporting = basis?.reportingCurrency ?? null;
+    const refused = Boolean(meta?.listingRefusal || meta?.riskFreeRefusal);
+    // A company with no stated reporting currency is refused by gate 1, and
+    // that refusal is checked elsewhere. There is nothing to compare here.
+    if (!reporting) {
+      if (!refused) faults.push('no reporting currency is stated, and the company is not refused');
+      return faults;
+    }
+    const label = meta?.currency ?? null;
+    if (label && label !== reporting) {
+      faults.push(`every figure is labelled ${label}, the statements are in ${reporting}`);
+    }
+    const stamped = (basis.statementCurrencies ?? []).filter((c: string) => c && c !== reporting);
+    if (stamped.length && !refused) {
+      faults.push(`figures stamped ${stamped.join(', ')} against statements in ${reporting}, and not refused`);
+    }
+    const quoteCurrency = fetched?.quote?.currency ?? null;
+    if (quoteCurrency && quoteCurrency !== reporting && !refused) {
+      faults.push(`the price shown is in ${quoteCurrency}, the statements are in ${reporting}, and not refused`);
+    }
+    // THE RATE THE MODEL DISCOUNTS AT, not the one the payload happens to
+    // carry: a rate that was fetched and then refused reaches no valuation,
+    // and reading the assumption the cost of capital was built from is the
+    // only way to tell the two apart.
+    const rfCurrency = meta?.riskFree?.currency ?? fetched?.riskFree?.currency ?? null;
+    const rfUsed = built?.modelData?.dcf?.costOfCapital?.riskFreeRate;
+    if (typeof rfUsed === 'number' && rfCurrency && rfCurrency !== reporting) {
+      faults.push(`discounted at the ${rfCurrency} bond yield against statements in ${reporting}`);
+    }
+    return faults;
+  };
+
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let read = 0, agreed = 0, crossCurrency = 0, unbuilt = 0;
+  const mixed: string[] = [];
+  const unitFaults: string[] = [];
+  const rateFaults: string[] = [];
+
+  for (const file of files) {
+    let fetched: any;
+    try { fetched = readPayload(file); } catch { continue; }
+    if (fetched?.error || fetched?.fetchError) continue;
+    read++;
+    let built: any;
+    try { built = buildCompanyFrom(fetched); } catch { unbuilt++; continue; }
+    const ticker = file.replace(/\.json$/, '');
+
+    const faults = currencyFaults(built, fetched);
+    if (faults.length) mixed.push(`${ticker}: ${faults.join('; ')}`);
+    else agreed++;
+
+    const basis = built?.modelData?.meta?.currencyBasis;
+    const shown = inTradingCurrency(built?.price, basis);
+    if (!shown) continue;
+    crossCurrency++;
+
+    // 2. against the figure the exchange published, as the fetcher stored it
+    //    before it converted anything.
+    const asQuoted = fetched?.quote?.asQuoted;
+    const factor = basis?.minorUnitFactor;
+    if (typeof asQuoted?.price === 'number' && typeof factor === 'number') {
+      const expected = asQuoted.price * factor;
+      // The payload carries the converted price rounded to the cent, and a cent
+      // of a reporting currency is worth more than a cent of a cheaper trading
+      // one. So the tolerance is that rounding carried back through the rate,
+      // not a judgement about how close a rate ought to be.
+      const tolerance = Math.max(0.02, (0.005 / (basis.tradingCurrencyRate || 1)) * 2);
+      if (Math.abs(shown.amount - expected) > tolerance) {
+        unitFaults.push(
+          `${ticker}: shown as ${shown.amount.toFixed(2)} ${shown.currency}, ` +
+            `the exchange quoted ${asQuoted.price} ${asQuoted.currency} = ${expected.toFixed(2)} ${shown.currency}`
+        );
+      }
+    }
+
+    // 3. the sentence the reader is given, not the field behind it.
+    if (basis?.pair) {
+      const sentence: string = built?.modelData?.provenance?.currency ?? built?.provenance?.currency ?? '';
+      const named = sentence.match(/converted at ([\d.]+) ([A-Z]{3}) per ([A-Z]{3})[^(]*\(([A-Z]{3})([A-Z]{3})=X/);
+      if (!named) {
+        rateFaults.push(
+          `${ticker}: no rate is named against the pair ${basis.pair} -- "${sentence.slice(0, 110)}"`
+        );
+      } else {
+        const printed = Number(named[1]);
+        const per = named[2];
+        const unit = named[3];
+        const pairFrom = named[4];
+        const pairTo = named[5];
+        if (pairFrom !== unit || pairTo !== per) {
+          rateFaults.push(`${ticker}: the line says ${per} per ${unit} and names ${pairFrom}${pairTo}=X`);
+        }
+        const actual = basis.tradingCurrencyRate;
+        if (!(typeof actual === 'number' && Math.abs(printed / actual - 1) < 0.001)) {
+          rateFaults.push(
+            `${ticker}: the line says ${pairFrom}${pairTo}=X is ${printed}, and the rate it converts at is ${actual}`
+          );
+        }
+      }
+    }
+  }
+
+  console.log(
+    `  ${read} payloads read, ${unbuilt} building no model, ` +
+      `${agreed} with the statements, the discount rate and the price in one currency, ` +
+      `${crossCurrency} trading in a currency their statements are not in`
+  );
+  if (mixed.length) {
+    totalProblems += mixed.length;
+    console.log(`  PROBLEM: ${mixed.length} companies mix currencies and are valued anyway:`);
+    mixed.slice(0, 10).forEach((m) => console.log(`           ${m}`));
+  } else {
+    console.log('  no company is modelled in one currency and priced or discounted in another');
+  }
+  if (unitFaults.length) {
+    totalProblems += unitFaults.length;
+    console.log(`  PROBLEM: ${unitFaults.length} trading-currency figures are not in the units the exchange quoted:`);
+    unitFaults.slice(0, 10).forEach((m) => console.log(`           ${m}`));
+  } else if (crossCurrency) {
+    console.log(`  all ${crossCurrency} trading-currency figures land on the price the exchange published, in its own units`);
+  }
+  if (rateFaults.length) {
+    totalProblems += rateFaults.length;
+    console.log(`  PROBLEM: ${rateFaults.length} disclosed rates do not match the pair they are named with:`);
+    rateFaults.slice(0, 10).forEach((m) => console.log(`           ${m}`));
+  } else if (crossCurrency) {
+    console.log('  every disclosed rate is the rate of the pair it names');
+  }
+
+  // 4. THE CHECK CAN FAIL. Both mixtures are built from a real payload, so the
+  //    only thing different about them is the currency.
+  const probeFile = files.includes('INFY.NS.json') ? 'INFY.NS.json' : files[0];
+  const probeBase = readPayload(probeFile);
+  const probes = [
+    {
+      what: 'the price left in the currency it was quoted in',
+      payload: {
+        ...probeBase,
+        priceConversion: null,
+        quote: { ...probeBase.quote, currency: 'INR', price: 1000.2 },
+      },
+    },
+    {
+      what: 'a rupee bond yield against dollar statements',
+      payload: { ...probeBase, riskFree: { ...probeBase.riskFree, currency: 'INR' } },
+    },
+  ];
+  let caught = 0;
+  for (const probe of probes) {
+    let built: any = null;
+    try {
+      built = buildCompanyFrom(probe.payload);
+    } catch {
+      /* a model that cannot be built at all is a catch too */
+    }
+    const faults = built ? currencyFaults(built, probe.payload) : ['the model could not be built at all'];
+    const meta = built?.modelData?.meta;
+    const refusal = meta?.listingRefusal?.reason ?? (meta?.riskFreeRefusal ? `riskFreeRateUnavailable` : null);
+    // THE INVARIANT IS THAT A MIXED COMPANY IS NEVER VALUED, so either this
+    // check reports the mixture or the engine refuses it outright. Both
+    // count; what must not happen is a value coming out the other end.
+    if (faults.length || refusal) {
+      caught++;
+      console.log(`  caught: ${probe.what} -- ${faults[0] ?? `refused as ${refusal}`}`);
+    } else {
+      totalProblems++;
+      console.log(`  PROBLEM: ${probe.what} was valued anyway, and nothing reported it`);
+    }
+  }
+  if (caught === probes.length) {
+    console.log(`  neither deliberate mixture reaches a value: the check is able to fail`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // THE TYPECHECK ACTUALLY CHECKS COMPONENT PROPS (`KI-28`)
 // ---------------------------------------------------------------------------
 //

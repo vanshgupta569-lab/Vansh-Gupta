@@ -120,6 +120,40 @@ An empty list is not a claim that the engine is correct. It is a claim that
 nothing known to be wrong is being left alone, which is the only thing this
 file can honestly say.
 
+## A defect found and fixed on 20 October 2026, with no number
+
+It is here rather than in the list above because it was opened and closed in one
+commit, and the list is for things being left alone. It is here at all because
+the count above would otherwise read as nothing having been found.
+
+**The disclosed exchange rate was named with a pair it was a hundred times away
+from.** The header, the provenance line and the workbook's Sources sheet printed
+`rate` — the composite number the *quoted* figure is multiplied by — beside the
+name of the currency pair it came from. London quotes pence, Johannesburg cents
+and Tel Aviv agorot, so on those listings the sentence read "converted at
+0.013246 (GBPUSD=X)" where GBPUSD=X is 1.3246. Measured on the payload set:
+**nine companies with a named pair** — AstraZeneca, BP, HSBC, Rio Tinto, Shell,
+Unilever and Vodafone in London, Naspers in Johannesburg, Teva in Tel Aviv —
+plus GSK, whose quote is in pence against statements in pounds and which names
+no pair at all.
+
+**It moved no valuation**, and that is why it survived: the arithmetic was
+right. The price was converted correctly, and the figure the reader was given to
+check it against was the wrong one. It was found while building the trading
+currency figure beside each value per share, which has to divide by a rate — and
+dividing by the composite would have put a London value in pence while calling
+it pounds.
+
+`listingComparability` now derives `tradingCurrencyRate` once, the rate per
+major unit, and everything that names a pair or converts a figure uses that; the
+quoted unit is said separately ("100 to one GBP"). **The check that would have
+caught it** reads the sentence rather than the field behind it, because the
+fields were right: `npm run verify` parses the rate and the pair out of the
+provenance line for every converted company and compares them, and
+`npm run verify:dashboard` opens the disclosure in a browser and asserts the
+pair's rate is on the page and the composite is not. Both were proved by putting
+the defect back: nine reported in the suite, one on the screen.
+
 ## What the 28 September run of entries was about
 
 Five were opened on 2026-09-28 and all five closed the same day, all from one job:

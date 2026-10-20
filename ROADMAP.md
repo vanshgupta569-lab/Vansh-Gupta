@@ -528,6 +528,70 @@ and dated, user-overridable.
 **Every page says which stage its country is at.** Full global coverage is a
 multi-stage build and prices are a real cost; the order follows the data.
 
+### 13a. What every company page must carry
+
+**Status: the list is agreed; the items carry their own statuses.** Recorded
+2026-10-20. Section 13 above says what the company page *is* — one address per
+company, a tab per section. This is the contents: the information a page must
+provide before it is finished.
+
+**The bar is Screener.in, matched or exceeded**, because that is the tool an
+Indian user already has and the one they will compare against. Every status
+below was read out of the code rather than remembered, and the sources are named
+so the next session can check them rather than trust them.
+
+**Where this page already exceeds Screener**, and these are not in the list
+because they are not Screener features: an editable model with every judgement
+visible and its default stated, provenance per line, a cost of capital whose
+method and window are shown, the adjusted EBITDA bridge, the model heads, the
+four visible states, and a workbook with live formulas rather than pasted
+values.
+
+| What the page must provide | Status | Where it stands today |
+|---|---|---|
+| **Summary ratios** at the top of the page | **In flight** | Nine are built with their formulas and notes in `src/data/ratios.js` — operating margin, ROCE, net debt/EBITDA, current ratio, cash realisation, debtor days, inventory days, days payable, cash conversion cycle. Screener's panel also carries market cap, price, high/low, P/E, book value, dividend yield, face value; those exist as figures on the site but not as one panel. |
+| — **user-added ratios** | **Now** | Not built. `RATIO_DEFINITIONS` is a fixed list; nothing lets a reader add one. The definition shape already carries a formula string, so a user-defined ratio has somewhere to live. |
+| — **alerts on a ratio** | **Next** | Not built. Needs an account and a scheduled job, neither of which exists; the same scheduler the data layer needs (`docs/DATA_LAYER_PLAN.md` §6.2). |
+| **Price chart** | **Now** | Not built. Only the 52-week high and low are kept, computed from a year of daily closes in `api/company.js` `fetchQuote` and then discarded. The series itself is not stored, so there is nothing to draw. |
+| **Ratio charts over time** — P/E, EV/EBITDA, P/B, market cap to sales | **Now** | Not built, and each needs a price history as well as the statements. |
+| **Sales and margin chart** | **Now** | Not built. The data is there — the engine holds revenue and margins for every reported and forecast year — so this is the cheapest chart on the list. |
+| **About the company** | **Built** | Description, sector, industry, head count and named officers, from the profile fetch in `api/company.js` `fetchProfile`. |
+| **Key points** | **In flight** | The qualitative screen carries factors and a revenue CAGR line (`src/components/qualitativeIntro.tsx`); there is no curated key-points block. |
+| **Pros and cons, factual only** | **In flight** | The qualitative factors are built, and **standing decision 6 binds this item**: explain mechanics, not merit. A fact plus a definition is allowed; "a strong balance sheet" is an opinion on a security and is not. Screener's own pros and cons mix the two, so this is a place to diverge deliberately rather than match. |
+| **Peers** | **In flight** | Peer gathering and a ten-company spread to a workbook are built (`src/data/peerSpreading.ts`, `MAX_PEERS = 10`, `api/comps.js`). There is no peers table on the page itself. |
+| — **sector path** (sector → industry → sub-industry) | **Now** | Not built. The profile returns a sector and an industry, so two of the levels exist and the hierarchy does not. |
+| — **index membership** | **Now** | Not built. No index constituent list is held. |
+| — **editable columns** on the peer table | **Next** | Not built; waits on the peers table existing. |
+| **Quarterly results** | **Now** | Not built. The fetcher reads annual periods only — `extractUSFact` takes annual facts, and `YEARS_WANTED = 5` applies to years. Quarterly XBRL is published for India (`docs/DATA_LAYER_PLAN.md` §2.3) and for the SEC. |
+| — **segment results** | **Later** | Not built. Waits on the data layer: the Indian results XBRL carries revenue, result, assets and liabilities by segment on four axes, but **not the segment names** (`docs/DATA_LAYER_PLAN.md` §3), so a table could be drawn with the right figures and no labels. |
+| — **raw filing link** beside each quarter | **In flight** | One link per company is carried (`sourceUrl`, the SEC filing list or the Yahoo page). A link per filing, and per line, is what the data layer's store is designed to give (`docs/DATA_LAYER_PLAN.md` §6.3). |
+| **Ten or more years of profit and loss, balance sheet and cash flow** | **Now** | **Five years today** (`YEARS_WANTED = 5`). Worth stating plainly: the NSE archive measured on 2026-10-20 resolves only six to seven annual filings per company, so ten years for India needs a second source — the annual reports, or MCA. The SEC's company facts go back further. |
+| — **TTM column** | **Now** | Not built; no TTM anywhere in the code. Needs quarterly data first. |
+| — **consolidated and standalone, switchable** | **Now** | Not built. The payload carries one basis. Both are published as separate filings in India, so the data exists and the choice is not yet offered (`docs/DATA_LAYER_PLAN.md` decision 5). |
+| — **related-party view** | **Later** | Not built. The figures are in the annual report's notes, not in any XBRL this site reads. |
+| **Growth tables — ten, five and three years and TTM, for sales, profit, price CAGR and return on equity** | **Now** | Partly there and not as a table: `cagr()` exists in `deriveModel.js` and a revenue CAGR line is shown in the qualitative intro; return on equity is computed. The compounded table is not built, and price CAGR needs the price history above. |
+| **Working-capital ratios — debtor days, inventory days, days payable, cash conversion cycle, ROCE** | **Built** | All five are in `RATIO_DEFINITIONS`, each with its formula and, for ROCE, a note saying the denominator Screener uses is not disclosed precisely so the two will not always agree. That note is the model for every figure on this list where the two tools differ. |
+| **Company-specific operating figures from the filings** — tonnes, subscribers, stores, same-store sales | **Later** | Not built. These are in the annual report's notes and the management discussion, never in the results XBRL, so this waits on stage 5 of the data layer. |
+| **Shareholding, quarterly and yearly** — promoters, institutions, foreign institutions, public, government | **Now** | Not built. Nothing on the site reads a shareholding pattern. For India it is a separate SEBI filing from the results; for the US it is Yahoo's holders block, already fetched for nothing else. |
+| — **number of shareholders** | **Now** | Not built. Published in the Indian shareholding pattern, so it arrives with the item above. |
+| **Documents — announcements** | **Built** | `api/news.js`, shown on the analysis screen's ticker. |
+| — **annual reports** | **Now** | Not built. The link is the cheap half; reading them is stage 5 of the data layer. |
+| — **credit ratings** | **Next** | Not built. The rating agencies publish rationales per issuer; the terms of each need checking first, the same question as `docs/DATA_LAYER_PLAN.md` §4. |
+| — **concall transcript** | **Next** | Not built. |
+| — **concall summary** | **Next** | Not built, and **standing decisions 6 and 8 both bind it**: a summary may quote and attribute what management said, with the sentence and its place in the transcript, and may not characterise it. An AI summary that cannot be checked against the transcript is not allowed. |
+| — **concall presentation** | **Now** | Not built; filed with the exchange alongside the results. |
+| **Site tools — query-based screens** | **In flight** | A batch run over a ticker list with a CSV download is built (`src/data/batchRun.ts`). A query language over a universe is the screener of section 13's table, statused Next there, and this row should not drift from it. |
+| — **Excel export** | **Built** | `src/data/excelExport.ts` and `downloadWorkbook`, with the 138-row chart of accounts, live formulas and the circularity switch. This already exceeds Screener's export, which is values only. |
+| — **user notes on a company** | **Now** | Not built. `MARGIN_NOTES` is editorial explanation, not a reader's own notes; saved models keep a reader's work in this browser's `localStorage` (`src/data/savedModels.ts`) and are the nearest thing. Section 13's tab list already names "Your notes", so the tab is planned and the store is not. |
+| — **commodity prices** | **Later** | Not built. Most series that matter are licensed; the free ones would need the same terms check as every other source. |
+| — **shareholder search by name**, across companies | **Later** | Not built. Needs the shareholding item above, for every company, in one store. |
+
+**Two things this list deliberately does not promise.** A target price or a
+recommendation, which needs the SEBI Research Analyst licence and is built
+switched off (section 14, and launch principle 2). And any figure the sources do
+not publish: every row above that says "Later" and names the annual report is a
+row that waits on the data layer, not on a design.
+
 ---
 
 ## 14. Research
@@ -841,6 +905,7 @@ trusting a status.
 
 | Commit | What |
 |---|---|
+| `PENDING` | **One currency through every model, and the value shown in the currency the share trades in.** Investigated as a reported defect on Infosys — statements in US dollars against a rupee price — and measured to be none: the statements, the risk-free rate and the converted price are all in dollars, and Infosys’s two listings agree, the New York price at $10.50 unconverted against $10.40 for the Bombay price converted. 48 of 176 payloads trade in a currency their statements are not in; the conversion succeeded on all 48, and nothing had a risk-free or displayed quote currency differing from its statements. So no entry was opened. **The policy is now written down** rather than only implemented (`METHODOLOGY.md` §3), with the two alternatives measured: discounting at the trading currency’s rate moves Infosys −25.8%, Unilever −30.8% and Vodafone −27.6%, and withdraws five companies that have a value today for want of a published bond yield. **A regression check was built**, because nothing asserted the invariant: `npm run verify` sweeps every payload for a model labelled in one currency, priced in a second or discounted at a third, and mixes two copies of a real payload on purpose to prove it can fail. **Each value per share now also carries the trading currency** at the one disclosed rate — Infosys reads ₹1,393 under $14.49 — which found and fixed a defect of our own: the disclosed rate was the composite applied to the quoted figure, printed beside the name of a pair a hundred times away from it, on nine companies. Zero drift across 70 valued companies. |
 | `ddfe798` | **`KNOWN_ISSUES.md` is empty: the last three defects closed.** `KI-28` — `tsc --noEmit` was checking no component props anywhere, because `@types/react` was never installed, so the suite was blind to a whole class of error and exited 0 while checking nothing. Installing the types surfaced seven real errors, one of them a latent bug passing React's MouseEvent where a margin-note key belonged, and one a `DCFResult` interface missing the share price three screens read off it. `KI-25` — the news ticker animated unconditionally, so headlines that fitted their window were dragged off the left edge anyway; it measures itself now and only scrolls when it overflows, with the content duplicated and the translation halved so the loop closes without a gap. `KI-26` — a render-blocking stylesheet fetched on every page load for an icon font nothing drew with. Each left a check that fails without its fix: `verify` compiles a component call that must not compile, and `verify:dashboard` drives both ticker branches and matches every font the page fetches against the families `tokens.ts` names. |
 | `894cc84` | **The figures screen made short, and one type system for the whole site.** The screen is a title, one line, two tabs and a compact table; every explanation moved behind a ⓘ that opens on hover, on keyboard focus and on tap, so no paragraph is left on it. The profit and loss went from twenty-two rows to thirteen — most heads carry one line and the table printed its name twice — and measures about 560px, inside a laptop screen. **The editing bug is fixed**: the row was a React component declared inside the screen's own render, so every keystroke gave React a new component type and it remounted the input; measured, clicking a cell left `document.activeElement` on BODY and typing changed nothing. Drag moved off the row onto a grip, a ⋯ menu gives the keyboard a way to move a line, and the reason is an optional inline field. **Typography: Newsreader and Source Sans 3**, chosen from three pairings rendered on the real screens, applied through `tokens.ts`. Monospace is gone from the site (`font-mono` renamed to `font-figure` across 343 call sites and pointed at the body face with tabular figures); so are uppercase letter-spaced labels and red label text. One four-step scale replaces twenty-five sizes, held by a remapping block so a twenty-sixth cannot be written. `DESIGN.md` rewritten to match. |
 | `511234c` | **The figures screen, redesigned (§19b)**: every filed line under the model head the engine assigns, with the basis for each default, draggable to another head and with a keyboard menu beside it, the figure editable in the same row. Replaces expense classification (`9980f72`), reversed here. The re-aggregation is a transfer of one line's own amount rather than a re-sum by head, which is what the first implementation did and what double counted share-based pay into SG&A and short-term investments into cash; one engine hook built, for one-offs, which reproduces the replaced feature's figures exactly. Zero drift across 176 payloads with nothing moved; reported operating profit ties to the filing within 9.13e-16 under every assignment. Saved model at version 3. `METHODOLOGY.md` §22d. |

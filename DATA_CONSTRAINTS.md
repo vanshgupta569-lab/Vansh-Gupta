@@ -577,16 +577,26 @@ at **0.07%**, because these are companies that barely borrow. All notes.
 
 ### A price converted at one exchange rate
 
-**Source:** Yahoo Finance (the rate). **Affects:** 46 modelled.
+**Source:** Yahoo Finance (the rate). **Affects:** 47 modelled, measured on
+2026-10-20.
 
 Where the statements and the listing differ in currency, the price, the previous
 close and the 52-week range are converted at the one rate fetched with the
-price, because no free source gives the rate on each day of the past year.
+price, because no free source gives the rate on each day of the past year. The
+value per share is shown in the trading currency at that same rate, beside the
+value in the statements' own currency the model computes (`METHODOLOGY.md` §3).
 
 **No effect on the value per share**, which is computed in the statements' own
-currency. The 52-week range is a year of prices at today's rate, so it is
-indicative rather than exact. The header says the price is converted and at what
-rate; the workbook's Sources sheet records it.
+currency. The figure shown beside it in the trading currency moves with the
+rate, as the price does, so the premium or discount between the two is
+unchanged. The 52-week range is a year of prices at today's rate, so it is
+indicative rather than exact. The header says the price is converted and at
+what rate; the workbook's Sources sheet records it.
+
+**One company left this constraint on 2026-10-20**, and its price was never
+converted between currencies at all: GSK's London listing is quoted in pence
+against statements already in pounds, so the only step is the quote's own unit
+and no rate is fetched. The note said one had been.
 
 ### Finance-leased assets with no lease liability
 

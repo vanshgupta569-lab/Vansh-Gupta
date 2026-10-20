@@ -640,6 +640,20 @@ export function listingComparability(fetched) {
   // check exists for, so an old Yahoo payload is refused.
   const reportingCurrency = evidence ? evidence.reportingCurrency : isSec ? 'USD' : null;
   const quotedCurrency = conversion?.quotedCurrency ?? fetched?.quote?.asQuoted?.currency ?? fetched?.quote?.currency ?? null;
+  // THE QUOTE'S UNIT IS NOT ALWAYS THE TRADING CURRENCY. London quotes pence,
+  // Johannesburg cents, Tel Aviv agorot, and `conversion.rate` is the composite
+  // the quoted figure was multiplied by: reporting currency per QUOTED unit. So
+  // on a pence quote `rate` is a hundredth of the pair it is fetched from, and
+  // anything that prints `rate` beside `pair` says 0.013246 where GBPUSD=X is
+  // 1.3246. Measured on the payload set: ten of the forty-nine converted
+  // companies, every .L, plus NPN.JO and TEVA.TA.
+  //
+  // So the pair's own rate is derived here, ONCE, and everything that names the
+  // pair or converts a figure between the two currencies uses it:
+  // reporting currency per MAJOR unit of the trading currency.
+  const minorUnitFactor = isNum(conversion?.minorUnitFactor) && conversion.minorUnitFactor > 0 ? conversion.minorUnitFactor : null;
+  const tradingCurrencyRate =
+    isNum(conversion?.rate) && minorUnitFactor !== null ? conversion.rate / minorUnitFactor : null;
   const basis = {
     reportingCurrency,
     reportingCurrencySource: evidence ? evidence.reportingCurrencySource : isSec ? 'SEC filing (payload recorded no units)' : null,
@@ -650,6 +664,8 @@ export function listingComparability(fetched) {
     rate: conversion?.rate ?? null,
     pair: conversion?.pair ?? null,
     rateAsOf: conversion?.asOf ?? null,
+    minorUnitFactor,
+    tradingCurrencyRate,
     exchange: listing?.exchangeName || listing?.exchange || fetched?.quote?.exchange || null,
     country: listing?.country ?? null,
     shareBasis: null,
@@ -2112,8 +2128,14 @@ export function deriveModel(fetched) {
   provenance.currency = currencyBasis.reportingCurrency
     ? `statements in ${currencyBasis.reportingCurrency} (${currencyBasis.reportingCurrencySource})` +
       (currencyBasis.priceConverted
-        ? `; price quoted in ${currencyBasis.quotedCurrency}, converted at ${Number(currencyBasis.rate.toPrecision(6))} ${currencyBasis.reportingCurrency} per ${currencyBasis.quotedCurrency}` +
-          `${currencyBasis.pair ? ` (${currencyBasis.pair}${currencyBasis.rateAsOf ? `, ${currencyBasis.rateAsOf.slice(0, 10)}` : ''})` : ''}`
+        ? `; price quoted in ${currencyBasis.quotedCurrency}` +
+          (currencyBasis.minorUnitFactor !== null && currencyBasis.minorUnitFactor !== 1
+            ? `, ${Math.round(1 / currencyBasis.minorUnitFactor)} to one ${currencyBasis.tradingCurrency}`
+            : '') +
+          (currencyBasis.tradingCurrency !== currencyBasis.reportingCurrency && isNum(currencyBasis.tradingCurrencyRate)
+            ? `, converted at ${Number(currencyBasis.tradingCurrencyRate.toPrecision(6))} ${currencyBasis.reportingCurrency} per ${currencyBasis.tradingCurrency}` +
+              `${currencyBasis.pair ? ` (${currencyBasis.pair}${currencyBasis.rateAsOf ? `, ${currencyBasis.rateAsOf.slice(0, 10)}` : ''})` : ''}`
+            : `, brought to ${currencyBasis.reportingCurrency} by its own unit`)
         : currencyBasis.quotedCurrency
         ? `; price quoted in ${currencyBasis.quotedCurrency}`
         : '') +

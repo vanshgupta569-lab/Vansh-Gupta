@@ -157,8 +157,17 @@ export interface CompanyData {
   currencyBasis?: {
     reportingCurrency: string | null;
     quotedCurrency: string | null;
+    // The major-unit currency behind the quote: GBP where the quote is in pence.
+    tradingCurrency: string | null;
     priceConverted: boolean;
+    // Reporting currency per QUOTED unit — a hundredth of the pair's own rate
+    // on a minor-unit quote, so never print this one beside `pair`.
     rate: number | null;
+    // How much of the trading currency one quoted unit is: 0.01 for pence.
+    minorUnitFactor?: number | null;
+    // Reporting currency per MAJOR unit of the trading currency: the rate the
+    // pair publishes, and the one to convert a figure with.
+    tradingCurrencyRate?: number | null;
     pair: string | null;
     rateAsOf: string | null;
   } | null;

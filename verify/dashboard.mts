@@ -70,9 +70,8 @@ async function freePort(): Promise<number> {
   });
 }
 
-const { paperPayload, PAPER_TICKER, PAPER_NAME } = await import(
-  `file:///${REPO}/verify/fixtures/paperCompany.mts`
-);
+const { paperPayload, PAPER_TICKER, PAPER_NAME, CONVERTED_TICKER, CONVERTED_RATE, CONVERTED_MINOR_UNIT } =
+  await import(`file:///${REPO}/verify/fixtures/paperCompany.mts`);
 const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
 const { COMPANIES_DATA } = await import(`file:///${REPO}/src/data/companies.ts`);
 // The curated model the dashboard itself renders for Apple. The record in
@@ -84,9 +83,19 @@ const { buildWorkbook } = await import(`file:///${REPO}/src/data/excelExport.ts`
 // measures what the browser actually fetched against.
 const { TYPE } = await import(`file:///${REPO}/src/design/tokens.ts`);
 
-// The refused company is reached under its own ticker, so one intercept can
-// answer for both without the browser knowing which is which.
+// Each variant of the paper company is reached under its own ticker, so one
+// intercept answers for all of them without the browser knowing which is
+// which. THE MAP IS WRITTEN ONCE: it used to be spelled out in all three
+// routes, and a fourth ticker would have had to be added to each of them.
 const REFUSED_TICKER = 'PAPERX';
+const FIXTURES: Record<string, 'valued' | 'refused' | 'converted'> = {
+  [PAPER_TICKER]: 'valued',
+  [REFUSED_TICKER]: 'refused',
+  [CONVERTED_TICKER]: 'converted',
+};
+/** The payload for a ticker this check knows, or null for one it does not. */
+const fixtureFor = (ticker: string) =>
+  FIXTURES[ticker] ? { ...paperPayload(FIXTURES[ticker]), ticker } : null;
 
 let problems = 0;
 const fail = (what: string, expected: string, got: string) => {
@@ -1525,7 +1534,7 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ...paperPayload('valued'), ticker }),
+      body: JSON.stringify(fixtureFor(ticker) ?? { ...paperPayload('valued'), ticker }),
     });
   });
 
@@ -1566,13 +1575,128 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   await context.route('**/api/company*', async (route) => {
     const url = new URL(route.request().url());
     const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
-    if (ticker !== PAPER_TICKER && ticker !== REFUSED_TICKER) {
+    const payload = fixtureFor(ticker);
+    if (!payload) {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: `No fixture for ${ticker}` }) });
       return;
     }
-    const payload = paperPayload(ticker === REFUSED_TICKER ? 'refused' : 'valued');
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...payload, ticker }) });
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) });
   });
+}
+
+
+/**
+ * A VALUE SHOWN IN THE CURRENCY THE SHARE TRADES IN, IN A BROWSER.
+ *
+ * The model is built in the currency the statements are in and discounted at
+ * that currency's own bond yield (`METHODOLOGY.md` S3), so a company that files
+ * in dollars and trades in another currency gets a dollar value per share. The
+ * screen now carries the same figure in the trading currency as well, converted
+ * at the one rate disclosed with the price.
+ *
+ * Three things are read off the rendered page:
+ *
+ *   1. THE FIGURE IS THE VALUE DIVIDED BY THE PAIR'S RATE. The hero's own
+ *      number is read from the screen and divided by the rate this fixture
+ *      states, here, as a literal. Dividing by a constant written in the check
+ *      is the point: the screen cannot agree with itself.
+ *
+ *   2. THE PRICE'S OWN FIGURE IS WHAT THE EXCHANGE QUOTED. Compared against
+ *      `quote.asQuoted`, which the fixture records before any conversion.
+ *
+ *   3. THE DISCLOSED RATE IS THE PAIR'S, NOT THE COMPOSITE. The header used to
+ *      read "converted at 0.013246 (GBPUSD=X)" where GBPUSD=X is 1.3246,
+ *      because it printed the number applied to a quote in pence beside the
+ *      name of the pair that number came from. So this asserts 1.3246 is on
+ *      the page and 0.013246 is not.
+ */
+async function checkTradingCurrencyOnScreen(page: Page, ticker: string) {
+  console.log('\n=== a value shown in the currency the share trades in ===');
+  await search(page, ticker);
+  await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
+  await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
+  await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
+
+  // 1. the hero. Scoped to the figure it belongs to rather than searched for
+  //    across the body, because a body-wide match would also pass with the
+  //    figure blank.
+  const foot = page.getByText(/in GBP, the currency the share trades in/).first();
+  if (!(await foot.count())) {
+    fail(
+      'the value in the currency the share trades in',
+      'a line under the intrinsic value reading "£… in GBP, the currency the share trades in"',
+      'no such line on the analysis screen'
+    );
+  } else {
+    const figure = foot.locator('xpath=..');
+    const text = ((await figure.textContent()) || '').replace(/\s+/g, ' ');
+    const dollars = text.match(/\$([\d,]+\.\d\d)/);
+    const pounds = text.match(/£([\d,]+\.\d\d)/);
+    if (!dollars || !pounds) {
+      fail('the two figures under the intrinsic value', 'a $ figure and a £ figure', `"${text.slice(0, 110)}"`);
+    } else {
+      const inUsd = Number(dollars[1].replace(/,/g, ''));
+      const inGbp = Number(pounds[1].replace(/,/g, ''));
+      const expected = inUsd / CONVERTED_RATE;
+      if (Math.abs(inGbp - expected) <= 0.02) {
+        ok(
+          `the intrinsic value reads $${inUsd.toFixed(2)} and £${inGbp.toFixed(2)} beside it ` +
+            `— the value divided by ${CONVERTED_RATE}, the rate the pair publishes`
+        );
+      } else {
+        fail(
+          'the value in the trading currency',
+          `£${expected.toFixed(2)} ($${inUsd.toFixed(2)} ÷ ${CONVERTED_RATE})`,
+          `£${inGbp.toFixed(2)}`
+        );
+      }
+    }
+  }
+
+  // 2. the price, against the figure the exchange published.
+  const quoted = (paperPayload('converted') as any).quote.asQuoted;
+  const expectedPrice = quoted.price * CONVERTED_MINOR_UNIT;
+  const priceFoot = page.getByText(/as quoted$/).first();
+  if (!(await priceFoot.count())) {
+    fail('the price in the currency it is quoted in', 'a line reading "£… as quoted"', 'no such line');
+  } else {
+    const text = ((await priceFoot.textContent()) || '').trim();
+    const shown = Number((text.match(/£([\d,]+\.\d\d)/) || [, 'x'])[1].replace(/,/g, ''));
+    if (Math.abs(shown - expectedPrice) <= 0.02) {
+      ok(
+        `the price reads "${text}" — the ${quoted.price.toFixed(1)} pence the exchange quoted, ` +
+          'which is what the fixture recorded before anything was converted'
+      );
+    } else {
+      fail('the price in the currency it is quoted in', `£${expectedPrice.toFixed(2)}`, text);
+    }
+  }
+
+  // 3. the rate the reader is told, opened from its own summary so the
+  //    assertion is scoped to the disclosure and not to the whole page.
+  const summary = page.getByText(/What this price is quoted in, and what the value is worth in it/).first();
+  if (!(await summary.count())) {
+    fail('the currency disclosure', 'a row reading "What this price is quoted in…"', 'no such row');
+  } else {
+    await summary.click();
+    await page.waitForTimeout(300);
+    const body = ((await page.textContent('body')) || '').replace(/\s+/g, ' ');
+    const saysPair = body.includes(`${CONVERTED_RATE} USD per GBP`) && body.includes('GBPUSD=X');
+    const saysComposite = body.includes(String(CONVERTED_RATE * CONVERTED_MINOR_UNIT));
+    if (saysPair && !saysComposite) {
+      ok(`the disclosure says ${CONVERTED_RATE} USD per GBP (GBPUSD=X), and does not print the composite rate`);
+    } else {
+      fail(
+        'the disclosed rate',
+        `"${CONVERTED_RATE} USD per GBP (GBPUSD=X)" and not ${CONVERTED_RATE * CONVERTED_MINOR_UNIT}`,
+        `pair rate on the page: ${saysPair}; composite on the page: ${saysComposite}`
+      );
+    }
+    // Said once, where the pence are explained, so a reader is not left to
+    // work out why a £ price is a hundred times the number on their screen.
+    if (body.includes('100 to one GBP')) ok('the disclosure says the quote is in pence, 100 to one GBP');
+    else fail('what the quoted unit is', '"100 to one GBP" in the disclosure', 'not said');
+  }
 }
 
 // ------------------------------------------------------------------------ run
@@ -1602,7 +1726,8 @@ try {
     // derived counterpart on load, and answering that with the paper company
     // would put one company's figures under another's name; the site is built
     // to leave the comparison unavailable when the fetch fails, so it fails.
-    if (ticker !== PAPER_TICKER && ticker !== REFUSED_TICKER) {
+    const payload = fixtureFor(ticker);
+    if (!payload) {
       await route.fulfill({
         status: 404,
         contentType: 'application/json',
@@ -1610,11 +1735,10 @@ try {
       });
       return;
     }
-    const payload = paperPayload(ticker === REFUSED_TICKER ? 'refused' : 'valued');
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ...payload, ticker }),
+      body: JSON.stringify(payload),
     });
   });
   await context.route('**/api/news*', (route) =>
@@ -1670,11 +1794,16 @@ try {
   await checkRefused(page, refused.modelData, refused, refused.currencySymbol || '$');
   await readContrast(page, 'a refused company');
 
-  // 4. A build slow enough to read: the loading screen must carry a note, and
+  // 4. The same company again, quoted in a currency its statements are not
+  //    in: the one case where a value per share is shown twice.
+  await checkTradingCurrencyOnScreen(page, CONVERTED_TICKER);
+  await readContrast(page, 'a company quoted in another currency');
+
+  // 5. A build slow enough to read: the loading screen must carry a note, and
   //    must not hold the same one for the whole wait.
   await checkSlowBuild(context, page);
 
-  // 5. Nothing anywhere on any of those screens is below WCAG AA.
+  // 6. Nothing anywhere on any of those screens is below WCAG AA.
   reportContrast();
 } catch (error: any) {
   problems++;

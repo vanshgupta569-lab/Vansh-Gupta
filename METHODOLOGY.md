@@ -220,6 +220,55 @@ included.
 3. **The price must be in the reporting currency.** Where it is not, it is
    converted at a rate fetched with it. No rate, no value.
 
+**The policy, and why it is this one.** A company is modelled in the currency
+its own statements are in, discounted at that currency's own ten-year
+government bond yield (§14), and only the answer is converted — at the rate
+fetched with the price. That is a choice, and it was made against two others,
+measured on 2026-10-20 across the 48 companies in the payload set whose
+statements and listing differ in currency.
+
+- **Converting the statements into the trading currency** — period-average
+  rates through the profit and loss, period-end rates on the balance sheet —
+  and discounting at the trading currency's rate. Defensible, and not chosen,
+  for three measured reasons. It discounts a cash flow at a rate from the wrong
+  economy: Infosys files in US dollars, so its forecast is a dollar forecast,
+  and pricing it at India's 6.54% instead of America's 4.29% moved the value
+  per share from 14.49 to 10.75 — a fall of 25.8% that comes from the rate and
+  not from the company. Unilever moved 30.8% and Vodafone 27.6% the same way.
+  It withdraws five companies that carry a value today — BHP, Novartis,
+  Shopify, Teva and HSBC's Hong Kong listing — because no publisher this site
+  reaches gives a ten-year yield for the Australian dollar, the franc, the
+  Canadian dollar, the shekel or the Hong Kong dollar (§14). And converting a
+  statement properly needs a year of daily rates, which no free source
+  publishes; that absence is already why the 52-week range is indicative rather
+  than exact (`DATA_CONSTRAINTS.md`).
+- **Refusing the company.** That withdraws all thirteen published values among
+  the 48 and corrects nothing, because the model is already internally
+  consistent: one currency through the statements, the discount rate and the
+  price.
+
+**What the reader sees.** Every figure on a company's screen is in the
+reporting currency, and the header says which that is. Where the share trades
+in a different currency, each value per share also carries the same figure in
+the trading currency, converted at the one rate disclosed with the price:
+Infosys shows ₹1,393 under $14.49, beside a price of $10.40 which is ₹1,000.20
+as quoted. The conversion is the last step and divides an answer, so the
+premium or discount between price and value is the same number in either
+currency. This holds for every country; nothing in it is particular to India.
+
+**A quote in a minor unit is not a second currency.** London quotes pence,
+Johannesburg cents, Tel Aviv agorot. The fetcher applies one composite number
+to the quote — reporting currency per *quoted unit* — so on a pence quote that
+number is a hundredth of the pair it was fetched from.
+`listingComparability` derives `tradingCurrencyRate` from it once: the rate per
+*major* unit, which is what the pair itself publishes. Everything that names
+the pair quotes that one — the header's disclosure, the provenance line and the
+workbook's Sources sheet — and everything that converts a figure between the
+two currencies divides by it (`src/data/tradingCurrency.ts`). Until 2026-10-20
+the header printed the composite beside the pair's name, reading "converted at
+0.013246 (GBPUSD=X)" where GBPUSD=X is 1.3246, on ten of the forty-nine
+converted companies.
+
 ---
 
 ## 4. The reported balance sheet, and its plugs

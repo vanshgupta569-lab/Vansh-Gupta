@@ -434,19 +434,27 @@ export function buildDataConstraints(
   // ---------------------------------------------------------------------------
   // 8. A price converted at the rate on the day it was fetched
   // ---------------------------------------------------------------------------
+  // A QUOTE IN PENCE IS NOT A CONVERSION. `priceConverted` is also true where
+  // the only step was the quote's own minor unit -- London quoting pence
+  // against statements already in pounds -- and no exchange rate was fetched
+  // at all. This note said one had been, for three such companies. It now
+  // fires on a genuine difference of currency.
   const basis = meta.currencyBasis;
-  if (basis?.priceConverted) {
+  if (basis?.priceConverted && basis.tradingCurrency && basis.tradingCurrency !== basis.reportingCurrency) {
     add({
       code: 'priceConvertedAtOneRate',
       label: 'The price is converted at one exchange rate',
       detail:
-        `The statements are in ${basis.reportingCurrency} and this listing trades in ${basis.quotedCurrency}. The ` +
+        `The statements are in ${basis.reportingCurrency} and this listing trades in ${basis.tradingCurrency}. The ` +
         `price, the previous close and the 52-week range are all converted at the one rate fetched with the price, ` +
-        `because no free source gives the rate on each day of the past year.`,
+        `because no free source gives the rate on each day of the past year. The value per share is shown in ` +
+        `${basis.tradingCurrency} at that same rate, beside the value in ${basis.reportingCurrency} the model computes.`,
       source: 'Yahoo Finance (exchange rate)',
       effect:
-        'no effect on the value per share, which is computed in the statements\' own currency. The 52-week range is ' +
-        'a year of prices at today\'s rate, so it is indicative rather than exact',
+        `no effect on the value per share, which is computed in the statements’ own currency. The figure shown ` +
+        `beside it in ${basis.tradingCurrency} moves with the rate, as the price does, so the premium or discount ` +
+        `between the two is unchanged. The 52-week range is a year of prices at today’s rate, so it is ` +
+        'indicative rather than exact',
       bound: 0,
       severity: 'note',
     });

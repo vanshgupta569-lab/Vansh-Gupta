@@ -132,10 +132,26 @@ function statementFor(i: number) {
 }
 
 export const PAPER_TICKER = 'PAPER';
+/** The same filer, quoted in another currency: see `paperPayload`. */
+export const CONVERTED_TICKER = 'PAPERC';
+/** The rate that fixture is converted at, as the pair itself publishes it. */
+export const CONVERTED_RATE = 1.3246;
+/** What one quoted unit is worth in the trading currency: pence to pounds. */
+export const CONVERTED_MINOR_UNIT = 0.01;
 export const PAPER_NAME = 'Fenwick Paper Mills Inc.';
 
-/** The payload /api/company would return, if this company existed. */
-export function paperPayload(variant: 'valued' | 'refused' = 'valued') {
+/**
+ * The payload /api/company would return, if this company existed.
+ *
+ * `'converted'` IS THE SAME COMPANY WITH ITS QUOTE IN ANOTHER CURRENCY, and
+ * differs from `valued` in nothing else: the same statements, the same
+ * risk-free rate, the same price once converted. That is deliberate. It means
+ * the two screens must show the same value per share, so a difference between
+ * them is the conversion and can be nothing else. The quote is in pence --
+ * the case that was wrong, where the rate applied to the quote is a hundredth
+ * of the rate of the pair it comes from.
+ */
+export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valued') {
   const statements = YEARS.map((_, i) => {
     const row: any = statementFor(i);
     // The refusal: a filer that reports no operating income. The engine cannot
@@ -162,27 +178,56 @@ export function paperPayload(variant: 'valued' | 'refused' = 'valued') {
     sicCode: '2621',
     sicDescription: 'Paper Mills',
     statements,
-    priceConversion: {
-      quotedCurrency: 'USD',
-      tradingCurrency: 'USD',
-      minorUnitFactor: 1,
-      reportingCurrency: 'USD',
-      converted: false,
-      rate: 1,
-      pair: null,
-      asOf: null,
-      reason: null,
-    },
+    priceConversion: variant === 'converted'
+      ? {
+          quotedCurrency: 'GBp',
+          tradingCurrency: 'GBP',
+          minorUnitFactor: CONVERTED_MINOR_UNIT,
+          reportingCurrency: 'USD',
+          converted: true,
+          // The composite the QUOTED figure is multiplied by, which is what
+          // the fetcher records: the pair times the minor unit.
+          rate: CONVERTED_RATE * CONVERTED_MINOR_UNIT,
+          pair: 'GBPUSD=X',
+          asOf: '2026-09-22T20:00:00.000Z',
+          reason: null,
+        }
+      : {
+          quotedCurrency: 'USD',
+          tradingCurrency: 'USD',
+          minorUnitFactor: 1,
+          reportingCurrency: 'USD',
+          converted: false,
+          rate: 1,
+          pair: null,
+          asOf: null,
+          reason: null,
+        },
     quote: {
       price: 22.5,
       previousClose: 22.25,
       changePct: 1.12,
       currency: 'USD',
-      exchange: 'NYSE',
+      exchange: variant === 'converted' ? 'LSE' : 'NYSE',
       fiftyTwoWeekHigh: 26,
       fiftyTwoWeekLow: 18,
       rangeObservations: 251,
       asOf: '2026-09-22T20:00:00.000Z',
+      // WHAT THE EXCHANGE PUBLISHED, before anything was converted. The
+      // checks compare the figure the screen puts back into pence against
+      // this one, so the two sides of the comparison come from opposite
+      // sides of the conversion.
+      ...(variant === 'converted'
+        ? {
+            asQuoted: {
+              currency: 'GBp',
+              price: 22.5 / (CONVERTED_RATE * CONVERTED_MINOR_UNIT),
+              previousClose: 22.25 / (CONVERTED_RATE * CONVERTED_MINOR_UNIT),
+              fiftyTwoWeekHigh: 26 / (CONVERTED_RATE * CONVERTED_MINOR_UNIT),
+              fiftyTwoWeekLow: 18 / (CONVERTED_RATE * CONVERTED_MINOR_UNIT),
+            },
+          }
+        : {}),
     },
     // The risk-free rate the model discounts at, as the fetcher returns it: a
     // mean of daily closes over the year ending at this company's own balance
@@ -210,4 +255,4 @@ export function paperPayload(variant: 'valued' | 'refused' = 'valued') {
   };
 }
 
-export default { paperPayload, PAPER_TICKER, PAPER_NAME };
+export default { paperPayload, PAPER_TICKER, PAPER_NAME, CONVERTED_TICKER, CONVERTED_RATE, CONVERTED_MINOR_UNIT };
