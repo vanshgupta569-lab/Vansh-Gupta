@@ -865,7 +865,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               </button>
               <button
                 type="button"
-                onClick={onOpenNotes}
+                /* CALLED WITH NOTHING, not with the click. `onOpenNotes` takes
+                   an optional note key and React hands an onClick handler its
+                   MouseEvent as the first argument, so passing the function
+                   directly stored a synthetic event in `noteKey` where a string
+                   or null belongs. The notes screen guards its lookup, so it
+                   opened the first note either way and nothing showed —
+                   a latent bug the typecheck could not see (`KI-28`). */
+                onClick={() => onOpenNotes()}
                 className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent hover:border-[#8B1E1E] transition-colors"
                 style={{ borderColor: LINE, color: MUTED }}
               >

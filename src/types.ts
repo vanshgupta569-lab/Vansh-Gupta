@@ -67,6 +67,15 @@ export interface DCFResult {
   refusalCode?: string | null;
   // Valuation outputs
   targetPrice: number;
+  /**
+   * The share price the valuation was struck against (`model.js`, `R.marketPrice`).
+   *
+   * The engine has always set it and three screens have always read it, but it
+   * was missing from this interface — which nothing noticed, because React's
+   * types were absent and so no component was checked at all (`KI-28`). Null
+   * where the listing gives no comparable price.
+   */
+  marketPrice?: number | null;
   pvExplicitFCF: number;          // billions
   pvTerminalValue: number;        // billions
   enterpriseValueBillion: number;

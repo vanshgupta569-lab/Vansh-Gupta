@@ -27,7 +27,11 @@ const HERO_SLIDES = [
   },
 ];
 
-const customEase = [0.16, 1, 0.3, 1];
+// A cubic bezier is four numbers IN ORDER, and typing it as a tuple is what
+// says so. As `number[]` it was assignable to nothing motion accepts, which is
+// the kind of thing the typecheck could not report while React's types were
+// missing (`KI-28`).
+const customEase: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onSearchCompany }) => {
   const [activeSlide, setActiveSlide] = useState(0);

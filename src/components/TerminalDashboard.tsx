@@ -30,6 +30,7 @@ import {
   EYEBROW,
   LABEL,
   BODY,
+  useMarquee,
 } from './instrument';
 import { HowCalculated } from './howCalculated';
 import { QualitativeAdjustments } from './qualitative';
@@ -442,6 +443,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   }, [company.ticker]);
 
   const newsToShow = liveNews.length > 0 ? liveNews : company.recentNews;
+  // The ticker measures itself: it only scrolls when the headlines are wider
+  // than the window they sit in (`KI-25`).
+  const marquee = useMarquee();
 
   // Drivers State (initialized per company)
   const [drivers, setDrivers] = useState<ValuationDrivers>(company.defaultDrivers);
@@ -1579,13 +1583,34 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <Activity className="w-3.5 h-3.5 animate-pulse" />
           <span>NEWS DISPATCH:</span>
         </div>
-        <div className="overflow-hidden relative w-full">
+        {/* THE TICKER ONLY TICKS WHEN IT HAS SOMEWHERE TO GO (`KI-25`).
+
+            The strip used to be animated unconditionally from translateX(0) to
+            translateX(-100%). That is a ticker when the headlines are wider
+            than the window and a fault when they are not: the text fits, needs
+            no scrolling, and is dragged off the left edge anyway until nothing
+            is left. Measured at 1440px, the strip was 730px inside a 1117px
+            window — 387px to spare — and still travelled to -730px.
+
+            So the strip is measured against its window and the animation is
+            only applied when the first copy is wider. When it does run, the
+            content is DUPLICATED and the translation is -50%: two identical
+            copies moved by exactly one copy's width loop seamlessly, which
+            also removes the blank gap the -100% version left before restarting.
+            The duplicate is aria-hidden, so a screen reader hears the
+            headlines once. */}
+        <div ref={marquee.window} className="overflow-hidden relative w-full">
           {newsToShow.length === 0 ? (
             <span className="font-sans text-[13px] leading-snug text-[#8A8A8F]">
               {newsLoading ? 'Loading the news…' : 'No recent headlines found for this company.'}
             </span>
           ) : (
-          <div className="animate-marquee flex gap-12 font-figure text-xs text-[#A1A1AA]">
+          <div
+            data-ticker-strip
+            data-scrolling={marquee.scrolling ? 'true' : 'false'}
+            className={marquee.scrolling ? 'mg-marquee' : 'inline-flex'}
+          >
+          <div ref={marquee.content} className="mg-marquee-copy flex gap-12 font-figure text-xs text-[#A1A1AA]">
             {newsToShow.map((news) =>
               news.url ? (
                 <a
@@ -1607,6 +1632,18 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                 </span>
               )
             )}
+          </div>
+          {marquee.scrolling && (
+            <div aria-hidden="true" className="mg-marquee-copy flex gap-12 font-figure text-xs text-[#A1A1AA]">
+              {newsToShow.map((news) => (
+                <span key={`echo-${news.id}`} className="inline-flex items-center gap-2">
+                  <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
+                  <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
+                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                </span>
+              ))}
+            </div>
+          )}
           </div>
           )}
         </div>

@@ -21,7 +21,7 @@
 // names — `text-ink`, `text-muted`, `border-line` — declared in `index.css`
 // from `src/design/tokens.ts`. `npm run verify` fails a component that
 // declares a palette hex of its own, which is how the last one drifted.
-import React, { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -139,6 +139,51 @@ export function useBottomBarInset(gap = 48) {
    the same word out into a row of characters. The `uppercase` class is also
    switched off in `index.css` for the three hundred call sites that still
    write it directly, so the two cannot disagree. */
+/**
+ * A MARQUEE THAT ONLY MOVES WHEN IT HAS SOMEWHERE TO GO (`KI-25`).
+ *
+ * Returns a ref for the window, a ref for the first copy of the content, and
+ * whether that copy is wider than the window it sits in. A caller applies the
+ * animation only when `scrolling` is true, and renders a second copy of the
+ * content so the translation can be -50% and loop without a gap.
+ *
+ * THE MEASUREMENT IS OF THE FIRST COPY, NOT OF THE STRIP, and that is what
+ * keeps it stable: rendering the duplicate widens the strip, so a check
+ * against the strip's own width would turn the animation on, widen it,
+ * measure again, and never settle. The first copy's width does not change
+ * when a sibling appears beside it.
+ *
+ * A ResizeObserver on both, because the headlines arrive from a fetch long
+ * after the first paint and the window changes with the viewport.
+ */
+export function useMarquee() {
+  const windowRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [scrolling, setScrolling] = useState(false);
+
+  useEffect(() => {
+    const measure = () => {
+      const box = windowRef.current;
+      const copy = contentRef.current;
+      if (!box || !copy) return;
+      // A pixel of slack: a strip that fits exactly is not a ticker, and
+      // sub-pixel layout would otherwise flip it on and off.
+      setScrolling(copy.getBoundingClientRect().width > box.clientWidth + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (windowRef.current) observer.observe(windowRef.current);
+    if (contentRef.current) observer.observe(contentRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  });
+
+  return { window: windowRef, content: contentRef, scrolling };
+}
+
 export const EYEBROW = 'font-figure text-[13px] font-medium';
 export const LABEL = 'font-figure text-[13px]';
 /** Secondary sentences in the chrome: hints, summaries, foots, captions. */

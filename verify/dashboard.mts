@@ -80,6 +80,9 @@ const { COMPANIES_DATA } = await import(`file:///${REPO}/src/data/companies.ts`)
 const AAPL_SOURCE: any = (await import(`file:///${REPO}/src/data/AAPL.js`)).default;
 const { buildModel, buildDCF, computeWACC } = await import(`file:///${REPO}/src/engine/model.js`);
 const { buildWorkbook } = await import(`file:///${REPO}/src/data/excelExport.ts`);
+// The families the design system declares, which the font-request check below
+// measures what the browser actually fetched against.
+const { TYPE } = await import(`file:///${REPO}/src/design/tokens.ts`);
 
 // The refused company is reached under its own ticker, so one intercept can
 // answer for both without the browser knowing which is which.
@@ -698,6 +701,181 @@ async function editAFigure(page: Page, label: string) {
     else fail(`${label}: Reset all`, 'No changes', after);
   } else {
     fail(`${label}: the Reset all link`, 'beside the change count', '(not there)');
+  }
+}
+
+/**
+ * THE TICKER ONLY TICKS WHEN IT HAS SOMEWHERE TO GO (`KI-25`).
+ *
+ * The strip was animated unconditionally, so headlines that fitted their
+ * window were dragged off the left edge anyway until nothing was left. Nothing
+ * caught it: the page rendered, the contrast passed, and the only symptom was
+ * a screenshot taken mid-cycle reading "oading..." where it should have read
+ * "[Loading...]".
+ *
+ * BOTH BRANCHES ARE DRIVEN, because a check that only sees one of them is half
+ * a check. A short set of headlines must sit still; a long set must move. The
+ * news route is swapped per branch and the company reopened, which is the only
+ * way to get real headlines of a known width in front of the real component.
+ *
+ * The strip's position is read as a transform rather than as a screenshot, and
+ * sampled twice a second apart, so "it is not moving" is a measurement rather
+ * than a glance.
+ */
+async function checkTickerOnScreen(page: Page, ticker: string) {
+  console.log(`\n=== the news ticker: it moves only when it must ===`);
+
+  const serve = async (headlines: string[]) => {
+    await page.route('**/api/news*', (route: any) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: headlines.map((headline, i) => ({
+            id: `t${i}`,
+            time: '09:30',
+            headline,
+            source: 'Verification',
+            url: null,
+          })),
+        }),
+      })
+    );
+    await search(page, ticker);
+    await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
+    await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
+    await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
+    await page.waitForTimeout(1200);
+  };
+
+  /** The strip, its window, whether it says it is scrolling, and where it sits. */
+  const readStrip = () =>
+    page.evaluate(
+      `(() => {
+         const strip = document.querySelector('[data-ticker-strip]');
+         if (!strip) return null;
+         const copy = strip.querySelector('.mg-marquee-copy');
+         const box = strip.parentElement;
+         return {
+           scrolling: strip.getAttribute('data-scrolling') === 'true',
+           copy: Math.round(copy ? copy.getBoundingClientRect().width : 0),
+           window: Math.round(box ? box.clientWidth : 0),
+           left: Math.round(strip.getBoundingClientRect().left - (box ? box.getBoundingClientRect().left : 0)),
+           copies: strip.querySelectorAll('.mg-marquee-copy').length,
+         };
+       })()`
+    );
+
+  // ---- 1. HEADLINES THAT FIT MUST NOT MOVE ----
+  await serve(['Board meets Thursday.', 'Dividend declared.']);
+  let a: any = await readStrip();
+  if (!a) {
+    fail('the news ticker', 'a strip on the analysis screen', '(not there)');
+    await page.unroute('**/api/news*');
+    return;
+  }
+  if (a.copy > 0 && a.copy <= a.window) {
+    ok(`short headlines fit: the strip is ${a.copy}px in a ${a.window}px window`);
+  } else {
+    fail('a set of headlines that fits', 'narrower than its window', `${a.copy}px in ${a.window}px`);
+  }
+  if (!a.scrolling) ok('a strip that fits is not animated');
+  else fail('a strip that fits', 'no animation', 'it is animated anyway');
+  if (a.copies === 1) ok('and is not duplicated, because there is no loop to hide');
+  else fail('copies of a strip that fits', '1', String(a.copies));
+  await page.waitForTimeout(1600);
+  const settled: any = await readStrip();
+  if (settled && Math.abs(settled.left - a.left) <= 1) {
+    ok(`it is still at ${settled.left}px after 1.6 seconds, so nothing is being dragged out of view`);
+  } else {
+    fail(
+      'the position of a strip that fits',
+      `unchanged at ${a.left}px`,
+      `it moved to ${settled ? settled.left : '?'}px — the text is being scrolled away`
+    );
+  }
+
+  // ---- 2. HEADLINES THAT OVERFLOW MUST MOVE ----
+  await serve(
+    Array.from({ length: 14 }, (_, i) =>
+      `Headline ${i + 1}: a sentence long enough that fourteen of them cannot possibly fit one window.`
+    )
+  );
+  const b: any = await readStrip();
+  if (b && b.copy > b.window) {
+    ok(`long headlines overflow: the strip is ${b.copy}px in a ${b.window}px window`);
+  } else {
+    fail('a set of headlines that overflows', 'wider than its window', `${b ? b.copy : '?'}px in ${b ? b.window : '?'}px`);
+  }
+  if (b && b.scrolling) ok('a strip that overflows is animated');
+  else fail('a strip that overflows', 'animated', 'it sits still');
+  if (b && b.copies === 2) {
+    ok('and is duplicated, so the loop closes without a blank gap');
+  } else {
+    fail('copies of a strip that overflows', '2', String(b ? b.copies : '?'));
+  }
+
+  await page.unroute('**/api/news*');
+}
+
+/**
+ * EVERY FONT THE PAGE FETCHES IS A FONT THE SITE USES (`KI-26`).
+ *
+ * The page was loading a second Google Fonts stylesheet for Material Symbols,
+ * an icon family nothing on the site draws with: every icon is an inline SVG
+ * from lucide-react, and there was no `material-symbols` class, no matching
+ * font-family and no ligature text anywhere in the source. The font FILE was
+ * never fetched — a browser loads a webfont only when a glyph needs one — so
+ * the cost was the stylesheet request itself, render-blocking, to a
+ * third-party origin, on every page load, for a resource with no consumer.
+ *
+ * Nothing could have caught it. The build does not know which families the
+ * markup asks for, and no check looked at what the page fetched.
+ *
+ * THE CHECK IS TIED TO THE TOKENS, not to a list kept here. `DESIGN.md` says
+ * families live in `src/design/tokens.ts` and nowhere else, so a stylesheet
+ * request naming a family that `TYPE` does not mention is either a font nobody
+ * uses or a font used behind the tokens' back. Both are faults, and this
+ * reports either.
+ */
+async function checkFontRequests(page: Page, requests: string[]) {
+  console.log(`\n=== what the page fetches for fonts ===`);
+  const sheets = requests.filter((u) => /fonts\.googleapis\.com\/css/.test(u));
+  if (!sheets.length) {
+    fail('a webfont stylesheet', 'at least one, for the type system', 'none requested');
+    return;
+  }
+  // The families the tokens name, lower-cased and stripped of quotes, so
+  // "Source Sans 3" in the stack matches "Source+Sans+3" in the URL.
+  const declared = new Set<string>();
+  for (const stack of Object.values(TYPE as Record<string, string>)) {
+    for (const part of String(stack).split(',')) {
+      const name = part.trim().replace(/^['"]|['"]$/g, '').toLowerCase();
+      if (name) declared.add(name);
+    }
+  }
+  const asked = new Set<string>();
+  for (const url of sheets) {
+    for (const m of url.matchAll(/family=([^&:]+)/g)) {
+      asked.add(decodeURIComponent(m[1]).replace(/\+/g, ' ').toLowerCase());
+    }
+  }
+  const stray = [...asked].filter((f) => !declared.has(f));
+  if (stray.length) {
+    fail(
+      'a webfont the site actually uses',
+      `only families named in tokens.ts (${[...declared].slice(0, 4).join(', ')}…)`,
+      `${stray.join(', ')} fetched by ${sheets.length} stylesheet request${sheets.length === 1 ? '' : 's'} and used nowhere`
+    );
+  } else {
+    ok(`${asked.size} font famil${asked.size === 1 ? 'y' : 'ies'} fetched (${[...asked].join(', ')}), every one named in tokens.ts`);
+  }
+  // AND ONE REQUEST, not two. Each stylesheet is its own render-blocking round
+  // trip to a third-party origin; the families belong in one.
+  if (sheets.length > 1) {
+    fail('webfont stylesheet requests', 'one', `${sheets.length} — each is its own render-blocking round trip`);
+  } else {
+    ok('one stylesheet request carries the whole type system');
   }
 }
 
@@ -1454,10 +1632,22 @@ try {
     console.log(`  PROBLEM: the page threw — ${String(error).slice(0, 160)}`);
   });
 
+  // EVERY REQUEST THE PAGE MAKES, recorded from the first navigation, so the
+  // font check below reads what the browser actually asked for rather than what
+  // index.html appears to say.
+  const requests: string[] = [];
+  page.on('request', (r: any) => requests.push(r.url()));
+
   // 1. The curated model, which the site renders without fetching anything.
   const apple: any = (COMPANIES_DATA as any).AAPL;
   await readContrast(page, 'the landing page');
   await openCurated(page, 'AAPL');
+  // AFTER THE FIRST REAL NAVIGATION, not before it. `readContrast` evaluates on
+  // whatever is loaded and never navigates, so a font check placed above it
+  // measured an about:blank page and reported no stylesheet at all — which is
+  // a check that fails for the wrong reason, and would have gone on failing
+  // after the fix.
+  await checkFontRequests(page, requests);
   await readContrast(page, 'the questions screen');
   await checkValued(page, 'Apple, the curated model', AAPL_SOURCE, apple.currencySymbol || '$');
   await readContrast(page, 'the analysis screen, curated');
@@ -1471,6 +1661,7 @@ try {
   // Saving and reopening, on the derived company: it came through the figures
   // screen with a line moved to another head, so there is a judgement to carry.
   await checkSavedModelsOnScreen(page, PAPER_NAME, PAPER_TICKER);
+  await checkTickerOnScreen(page, PAPER_TICKER);
 
   // 3. The same company, refused.
   const refusedPayload = { ...paperPayload('refused'), ticker: REFUSED_TICKER };

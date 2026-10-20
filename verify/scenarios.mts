@@ -30,6 +30,7 @@ import { checkVersionsAgree, readPayload } from './payloadSet.mts';
 // fresh checkout with no configuration.
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
+import { spawnSync } from 'node:child_process';
 const OUT = path.join(HERE, 'out');
 const PAYLOADS = path.join(HERE, 'payloads');
 fs.mkdirSync(OUT, { recursive: true });
@@ -1177,6 +1178,84 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
       `against src/index.css -- ${bad ? bad + ' PROBLEMS' : `all clear ${T.CONTRAST_FLOOR}:1, worst ${worst.ratio.toFixed(2)}:1 (${worst.what})`}`
   );
   totalProblems += bad;
+}
+
+
+// ---------------------------------------------------------------------------
+// THE TYPECHECK ACTUALLY CHECKS COMPONENT PROPS (`KI-28`)
+// ---------------------------------------------------------------------------
+//
+// `@types/react` was not installed, so `React.FC<Props>` resolved to nothing
+// that constrains JSX and **TypeScript checked no component's props anywhere in
+// the build**. `skipLibCheck: true` hid the library errors that would have said
+// so, and `npx tsc --noEmit` exited 0 and printed nothing.
+//
+// Measured while it was true: `App.tsx` passed `heads` and `onHeads` to a
+// component still declaring `classification` and `onClassify` as required —
+// two props it does not take, and two required props missing — and the run
+// exited 0. The same run correctly reported an ordinary type error in a `.ts`
+// file three lines earlier, so the checker was running; it simply had nothing
+// to check components against.
+//
+// A CHECK THAT THE TYPES ARE INSTALLED IS NOT ENOUGH. It would pass while a
+// `tsconfig` change, a `skipLibCheck` widening or a types version bump quietly
+// switched prop checking off again. So this COMPILES A FILE THAT MUST NOT
+// COMPILE: a component with two required props, called with neither and with
+// one it does not declare. If `tsc` accepts it, prop checking is off, and the
+// twenty-two errors this file's fix uncovered could accumulate again unseen.
+{
+  console.log('\n=== the typecheck sees component props ===');
+  const probeDir = path.join(OUT, 'proptype');
+  fs.mkdirSync(probeDir, { recursive: true });
+  const probe = path.join(probeDir, 'probe.tsx');
+  fs.writeFileSync(
+    probe,
+    [
+      "import React from 'react';",
+      'interface Props { needed: string; alsoNeeded: number; }',
+      'const Component: React.FC<Props> = ({ needed }) => <div>{needed}</div>;',
+      '// TWO ELEMENTS, because TypeScript reports one error per element and a',
+      '// single wrong-in-two-ways call proves only whichever it reports first.',
+      'export const BadExtra = () => <Component needed="x" alsoNeeded={1} notAProp="y" />;',
+      'export const BadMissing = () => <Component />;',
+      '',
+    ].join('\n')
+  );
+  const tsconfig = path.join(probeDir, 'tsconfig.json');
+  fs.writeFileSync(
+    tsconfig,
+    JSON.stringify(
+      {
+        // The project's own settings, so this measures the compiler the repo
+        // actually runs rather than a stricter one invented here.
+        extends: path.join(REPO, 'tsconfig.json').split(path.sep).join('/'),
+        compilerOptions: { noEmit: true, typeRoots: [path.join(REPO, 'node_modules/@types').split(path.sep).join('/')] },
+        include: ['probe.tsx'],
+      },
+      null,
+      2
+    )
+  );
+  const run = spawnSync(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['tsc', '-p', tsconfig],
+    { cwd: REPO, encoding: 'utf8', shell: process.platform === 'win32' }
+  );
+  const output = `${run.stdout || ''}${run.stderr || ''}`;
+  const sawMissing = /needed|alsoNeeded/.test(output.replace(/notAProp/g, ''));
+  const sawExtra = /notAProp/.test(output);
+  if (run.status !== 0 && sawMissing && sawExtra) {
+    console.log('  a component called with a prop it does not declare, and missing two it requires, is rejected -- prop checking is on');
+  } else {
+    totalProblems++;
+    console.log(
+      `  PROBLEM: tsc accepted a component call that is wrong in two ways (exit ${run.status}, ` +
+        `missing-prop reported: ${sawMissing}, undeclared-prop reported: ${sawExtra}). ` +
+        'Component props are not being checked -- is @types/react installed?'
+    );
+    if (output.trim()) console.log(`           ${output.trim().split('\n')[0].slice(0, 150)}`);
+  }
+  fs.rmSync(probeDir, { recursive: true, force: true });
 }
 
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);

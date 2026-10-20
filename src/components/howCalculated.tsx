@@ -48,8 +48,14 @@ interface HowCalculatedProps {
   marketApproach?: MarketApproachResult | null;
   assetApproach?: AssetApproachResult | null;
   /** Which set of recovery rates the liquidation figure is using. */
-  recoveryKey?: 'forcedSale' | 'orderly';
-  onRecoveryKey?: (key: 'forcedSale' | 'orderly') => void;
+  /**
+   * THREE STATES, NOT TWO. A reader who changes any individual rate is on
+   * neither preset, and `custom` is what the asset panel calls that. This
+   * declared two, so the third arrived as a value the type said was
+   * impossible and the description below silently rendered nothing (`KI-28`).
+   */
+  recoveryKey?: 'forcedSale' | 'orderly' | 'custom';
+  onRecoveryKey?: (key: 'forcedSale' | 'orderly' | 'custom') => void;
 }
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
@@ -599,7 +605,8 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
                   ))}
                 </div>
                 <div className="text-[12px] leading-snug text-[#8A8A8F] mt-2">
-                  {RECOVERY_PRESETS.find((p) => p.key === recoveryKey)?.description}
+                  {RECOVERY_PRESETS.find((p) => p.key === recoveryKey)?.description ??
+                    'Your own recovery rates, on neither preset. Pick one above to go back to a stated basis.'}
                 </div>
               </div>
             )}

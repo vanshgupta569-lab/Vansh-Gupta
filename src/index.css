@@ -217,23 +217,52 @@ textarea,
 }
 
 /* Marquee animation */
-/* The ticker used to start fully off the right edge, so even once the
-   headlines had arrived the box sat empty while they travelled into view.
-   Starting at zero means the first headline is readable immediately. The
-   duration is lengthened to compensate, so the reading speed is unchanged. */
+/* THE TICKER, AND THE TWO THINGS THAT WERE WRONG WITH IT (`KI-25`).
+
+   It used to start fully off the right edge, so even once the headlines had
+   arrived the box sat empty while they travelled into view. Starting at zero
+   fixed that and means the first headline is readable immediately.
+
+   What that fix did not add is the condition that the strip should only move
+   when it has somewhere to go. Translating to -100% unconditionally is a
+   ticker when the headlines are wider than the window and a fault when they
+   are not: measured at 1440px the strip was 730px inside a 1117px window and
+   was still dragged to -730px, taking a screenshot mid-cycle that read
+   "oading..." where it should have read "[Loading...]".
+
+   So the strip is measured (`useMarquee` in instrument.tsx) and this class is
+   only applied when the first copy is wider than its window. The content is
+   then duplicated and the translation is -50%: two identical copies moved by
+   exactly one copy's width loop with no seam, which also removes the blank
+   period the -100% version left before restarting.
+
+   The gap between the copies lives INSIDE each copy, as padding, rather than
+   as a gap on the strip. With a gap on the strip the half-way point is one
+   copy plus half a gap, and the loop drifts by that half-gap every cycle. */
 @keyframes marquee {
   0% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  100% { transform: translateX(-50%); }
 }
 
-.animate-marquee {
-  display: inline-block;
+.mg-marquee {
+  display: inline-flex;
   white-space: nowrap;
   animation: marquee 110s linear infinite;
+  will-change: transform;
 }
 
-.animate-marquee:hover {
+.mg-marquee-copy {
+  padding-right: 3rem;
+}
+
+.mg-marquee:hover {
   animation-play-state: paused;
+}
+
+/* A reader who has asked not to see motion is not shown a moving ticker. The
+   headlines are all still there and the strip simply scrolls with the page. */
+@media (prefers-reduced-motion: reduce) {
+  .mg-marquee { animation: none; }
 }
 /* ---------------------------------------------------------------------------
    BODY PROSE — one rule, applied everywhere
