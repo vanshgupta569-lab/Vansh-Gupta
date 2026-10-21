@@ -1,5 +1,5 @@
 // FILE: src/App.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useScroll } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
@@ -11,6 +11,9 @@ import { FiguresEditor } from './components/figuresEditor';
 import { TerminalDashboard } from './components/TerminalDashboard';
 import { QualitativeIntro } from './components/qualitativeIntro';
 import { MarginNotesScreen } from './components/marginNotes';
+import { CompanyPage } from './components/companyPage';
+import { useNavigation } from './data/router';
+import { parseCompanyPath, companyPath, DEFAULT_TAB } from './data/companyRoute';
 import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
@@ -37,6 +40,36 @@ const ScrollProgressBar: React.FC = () => {
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('HOME');
+
+  // THE COMPANY PAGE IS THE ONE PART OF THIS SITE WITH REAL ADDRESSES
+  // (ROADMAP.md §13). `/company/RELIANCE.NS/overview` is a place a reader can
+  // link to; everything else is still one screen value at `/`, which is a
+  // smaller change than giving every screen a route and is what was asked for.
+  // When the path names a company, that is what renders, whatever `currentScreen`
+  // happens to hold — so Back out of the model flow lands where it should.
+  const nav = useNavigation();
+  const route = useMemo(() => parseCompanyPath(nav.path), [nav.path]);
+  const [hubState, setHubState] = useState<{ loading: boolean; error: string | null }>({
+    loading: false,
+    error: null,
+  });
+  const [hubAttempt, setHubAttempt] = useState(0);
+  // Which ticker a fetch is in flight for, so the effect below cannot start a
+  // second one for the same company while the first is still running.
+  const hubFetching = useRef<string | null>(null);
+  // THE COMPANY THE ADDRESS NAMES RIGHT NOW, read when a fetch comes back.
+  //
+  // This is a ref and not the closure's own variable because React runs every
+  // effect twice in development (StrictMode: mount, clean up, mount again).
+  // The first version of this used a `left` flag set by the cleanup, and the
+  // second mount saw a fetch already in flight and did nothing — so the only
+  // live request belonged to a closure that had been told to discard its
+  // answer, and the page sat on "reading the filings" for ever. A ref is read
+  // at the moment the answer arrives rather than captured when it was asked
+  // for, which is the question that actually matters: is this still the
+  // company on screen?
+  const wantedTicker = useRef<string | null>(null);
+  wantedTicker.current = route?.ticker ?? null;
   const [selectedTicker, setSelectedTicker] = useState<string>('AAPL');
   const [activeSection, setActiveSection] = useState<string>('hero');
   // Which margin note the reader clicked into. Null simply opens the first.
@@ -95,6 +128,69 @@ export default function App() {
   };
 
   const allCompanies = { ...COMPANIES_DATA, ...loadedCompanies };
+
+  /**
+   * READING A COMPANY FROM ITS ADDRESS.
+   *
+   * The payload the figures screen works from is the same one the company page
+   * reads, so arriving at /company/X and then opening the Model tab costs ONE
+   * fetch, not two — and the figures the reader was just shown are the figures
+   * the model is built from, rather than a second copy fetched a minute later.
+   */
+  useEffect(() => {
+    if (!route) return;
+    const held = String(payload?.ticker || '').toUpperCase();
+    if (held === route.ticker) return;
+    if (hubFetching.current === route.ticker) return;
+    const want = route.ticker;
+    hubFetching.current = want;
+    setHubState({ loading: true, error: null });
+    fetchCompanyPayload(want)
+      .then((fetched) => {
+        if (wantedTicker.current !== want) return;
+        setPayload(fetched);
+        setCorrections({});
+        setHeads({});
+        setCorrectionReasons({});
+        setFiguresFromModel(false);
+        setSelectedTicker(want);
+        setHubState({ loading: false, error: null });
+      })
+      .catch((error: any) => {
+        if (wantedTicker.current !== want) return;
+        setHubState({
+          loading: false,
+          error:
+            error?.message ||
+            `No company could be read for ${want}. Check the ticker, including its market suffix.`,
+        });
+      })
+      .finally(() => {
+        if (hubFetching.current === want) hubFetching.current = null;
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.ticker, hubAttempt]);
+
+  /** Open a company page, from anywhere. */
+  const openCompanyPage = (ticker: string, tab: string = DEFAULT_TAB) => {
+    nav.go(companyPath(ticker, tab));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  /**
+   * THE MODEL TAB OPENS THE FLOW THAT ALREADY EXISTS, UNCHANGED: the figures
+   * as filed, then the questions, then the valuation. The address goes back to
+   * `/` with it, because that flow has no address of its own and leaving the
+   * company path in the bar would make Back land on a page the reader is no
+   * longer looking at.
+   */
+  const openModelFromHub = () => {
+    if (!payload) return;
+    setFiguresFromModel(false);
+    setCurrentScreen('FIGURES');
+    nav.go('/');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleLookupTicker = async (rawTicker: string) => {
     const ticker = rawTicker.toUpperCase();
@@ -289,7 +385,7 @@ export default function App() {
     <div className="min-h-screen bg-[#0B0B0D] text-[#F2F0EA] font-sans antialiased flex flex-col selection:bg-[#8B1E1E] selection:text-white">
       {/* Universal Top Navigation Header */}
       <Header
-        currentScreen={currentScreen}
+        currentScreen={route ? 'COMPANY' : currentScreen}
         onNavigateToScreen={handleNavigateToScreen}
         onScrollToSection={scrollToSection}
         activeSection={activeSection}
@@ -303,8 +399,28 @@ export default function App() {
 
       {/* Screen Views */}
       <main className="flex-grow">
+        {/* THE COMPANY PAGE WINS WHEN THE PATH NAMES ONE. Checked before the
+            screen values so that a deep link renders the company rather than
+            the landing page that `currentScreen` still says is open. */}
+        {route && (
+          <CompanyPage
+            ticker={route.ticker}
+            tab={route.tab}
+            payload={
+              String(payload?.ticker || '').toUpperCase() === route.ticker ? payload : null
+            }
+            loading={hubState.loading}
+            error={hubState.error}
+            onTab={(slug) => nav.go(companyPath(route.ticker, slug))}
+            onOpenModel={openModelFromHub}
+            onRetry={() => {
+              setHubState({ loading: false, error: null });
+              setHubAttempt((n) => n + 1);
+            }}
+          />
+        )}
         {/* SCREEN 1: BASIC INTRO & PHILOSOPHY */}
-        {currentScreen === 'HOME' && (
+        {!route && currentScreen === 'HOME' && (
           <LandingPage
             onOpenCompany={() => handleNavigateToScreen('DIRECTORY')}
             onScrollTo={scrollToSection}
@@ -318,7 +434,7 @@ export default function App() {
         {/* THE MARGIN NOTES.
             A reading screen rather than an instrument one, which is why it is
             paper rather than the dark ground the model screens use. */}
-        {currentScreen === 'NOTES' && (
+        {!route && currentScreen === 'NOTES' && (
           <MarginNotesScreen
             initialKey={noteKey}
             onBack={() => handleNavigateToScreen('HOME')}
@@ -326,7 +442,7 @@ export default function App() {
         )}
 
         {/* SCREEN 2: COMPANY SEARCH DIRECTORY */}
-        {currentScreen === 'DIRECTORY' && (
+        {!route && currentScreen === 'DIRECTORY' && (
           <DirectoryScreen
             companies={allCompanies}
             selectedTicker={selectedTicker}
@@ -342,7 +458,7 @@ export default function App() {
             is on screen it becomes an anchor, and a reader who has seen a
             number is far less likely to go back and question the figures it
             came from. */}
-        {currentScreen === 'FIGURES' && payload && (
+        {!route && currentScreen === 'FIGURES' && payload && (
           <FiguresEditor
             ticker={payload.ticker || selectedTicker}
             name={payload.name || selectedTicker}
@@ -368,7 +484,7 @@ export default function App() {
         {/* SCREEN 2b: WHAT THE FILINGS CANNOT SAY — asked before the value
             appears, because a number on screen becomes an anchor and every
             judgement made afterwards bends towards it. */}
-        {currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
+        {!route && currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
           <QualitativeIntro
             company={allCompanies[selectedTicker]}
             onContinue={(verdicts) => goToAnalysis(verdicts)}
@@ -378,7 +494,7 @@ export default function App() {
         )}
 
         {/* SCREEN 3: FINANCIAL ANALYSIS & DYNAMIC DCF TERMINAL */}
-        {currentScreen === 'ANALYSIS' && (
+        {!route && currentScreen === 'ANALYSIS' && (
           <TerminalDashboard
             companies={allCompanies}
             selectedTicker={selectedTicker}
@@ -387,6 +503,7 @@ export default function App() {
             initialVerdicts={initialVerdicts}
             judgements={{ corrections, correctionReasons, heads }}
             onRestoreJudgements={restoreJudgements}
+            onOpenCompanyPage={openCompanyPage}
           />
         )}
       </main>

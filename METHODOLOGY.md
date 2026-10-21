@@ -83,6 +83,26 @@ field per line. Money leaving the company is filed negative there and positive
 here, so capital expenditure, dividends and buybacks have their sign flipped on
 the way in.
 
+**The price, and the daily series behind it.** One chart request to Yahoo,
+which answers the price, the previous session's close, the 52-week high and low
+and — since `payloadVersion.ts` v5 — the series itself, which this used to
+download and throw away. Ten years at a daily interval, plus a second, much
+smaller request at a monthly interval for the full history: measured on
+2026-10-22, asking for `range=max&interval=1d` does **not** return daily data,
+it returns monthly (169 points for Apple's 42 years), so storing it as daily
+would be calling monthly data something it is not.
+
+The series is stored **as the exchange quoted it**, in the quoted unit, with no
+conversion applied. A quote in pence stays in pence. The one rate the price was
+converted at lives in `priceConversion` and the company page converts the
+series with that same rate for display (§3), which is the only way the chart
+and the figure above it can be in one currency. The 52-week range is still
+measured over 52 weeks: it is cut from the ten-year series by date, which had
+to be made explicit, because taking the high and low of everything the longer
+request returns would have turned Apple's 52-week low from $243 into the $29 it
+traded at in 2016.
+
+
 **Which source, and when the first one has nothing.** A ticker with a dotted
 suffix (RELIANCE.NS, BP.L) is a foreign listing and goes straight to the second
 source. Everything else is asked of the SEC first — and the SEC's ticker list

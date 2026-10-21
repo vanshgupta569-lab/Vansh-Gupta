@@ -1,6 +1,12 @@
 // FILE: src/types.ts
 export type TabType = 'HISTORICAL' | 'FORECASTED' | 'DRIVERS' | 'DCF_OUTPUT' | 'QUALITATIVE';
-export type ScreenType = 'HOME' | 'DIRECTORY' | 'FIGURES' | 'QUESTIONS' | 'ANALYSIS' | 'NOTES';
+// The screens. `COMPANY` is the odd one out: it is the only screen with real
+// addresses of its own (`/company/RELIANCE.NS/overview`), so nothing SETS this
+// value — the path decides, and this exists so the header can be told which
+// screen it is sitting above. Without it a deep link left `currentScreen` on
+// 'HOME' and the header offered four links to sections of a page the reader
+// was not on.
+export type ScreenType = 'HOME' | 'DIRECTORY' | 'FIGURES' | 'QUESTIONS' | 'ANALYSIS' | 'NOTES' | 'COMPANY';
 
 // Reported history. null means the filing does not give us that figure for
 // that year — it is NOT zero, and the dashboard renders it as an em dash. The

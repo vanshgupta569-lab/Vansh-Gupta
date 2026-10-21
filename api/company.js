@@ -979,6 +979,13 @@ async function quoteInReportingCurrency(quote, reportingCurrency) {
       fiftyTwoWeekHigh: round2(scale(quote.fiftyTwoWeekHigh)),
       fiftyTwoWeekLow: round2(scale(quote.fiftyTwoWeekLow)),
       currency: reportingCurrency,
+      // THE SERIES IS LEFT AS QUOTED, and no second copy of the rate is put
+      // beside it. Ten years of closes multiplied here would be ten years of
+      // prices at one day’s rate with no way left to tell, and the shape of the
+      // series is the whole point of keeping it. The one rate lives in
+      //  and the screen converts with that, so there is nothing
+      // for a second copy to drift from.
+      history: quote.history,
       asQuoted: {
         currency: quote.currency,
         price: quote.price,
@@ -1358,16 +1365,30 @@ async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
   }
 }
 
+/**
+ * ONE CHART REQUEST, AND THE SERIES IS KEPT.
+ *
+ * This used to ask for a year of daily closes, take the highest and the
+ * lowest, and throw the series away -- so the site held a 52-week range and
+ * could not draw a price chart at all. The series is now kept.
+ *
+ * TEN YEARS DAILY, THEN MONTHLY TO THE START. Measured on 2026-10-22:
+ * `range=max&interval=1d` does NOT return daily data. Yahoo silently
+ * coarsens it -- Apple comes back with 169 points for 42 years, which is
+ * monthly. So the daily series is asked for as `10y`, which does return one
+ * point per trading day (2,513 for Apple), and the "Max" range is a second,
+ * much smaller request at a monthly interval. Two requests, about 300KB and
+ * 20KB, against one source that is already being called for the price.
+ */
 async function fetchQuote(symbol) {
-  // A full year of daily closes rather than five days. Same endpoint, same
-  // cost, no key: the extra range is what gives us the 52-week high and low
-  // for the football field chart, without paying for a quote API.
-  const res = await fetch(
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
-      symbol
-    )}?range=1y&interval=1d`,
-    { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
-  );
+  const chart = (range, interval) =>
+    fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+        symbol
+      )}?range=${range}&interval=${interval}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
+    );
+  const res = await chart('10y', '1d');
   if (!res.ok) return null;
 
   const body = await res.json();
@@ -1383,8 +1404,18 @@ async function fetchQuote(symbol) {
   // the computed figures are preferred because they can be checked against
   // data we are holding rather than taken on trust.
   const quoteBlock = result?.indicators?.quote?.[0] || {};
-  const highs = (quoteBlock.high || []).filter((v) => typeof v === 'number');
-  const lows = (quoteBlock.low || []).filter((v) => typeof v === 'number');
+  const stamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
+
+  // THE RANGE IS STILL FIFTY-TWO WEEKS. The request grew to ten years for the
+  // chart, and taking the high and low of everything returned would have
+  // quietly turned the 52-week range into a ten-year range -- on Apple, a low
+  // of $29 instead of $169. So the window is cut by date, from the series, and
+  // the number of observations in it is reported as it always was.
+  const yearAgo = Date.now() / 1000 - 365 * 86400;
+  const inWindow = (i) => !stamps.length || stamps[i] >= yearAgo;
+  const within = (series) => (series || []).filter((v, i) => typeof v === 'number' && inWindow(i));
+  const highs = within(quoteBlock.high);
+  const lows = within(quoteBlock.low);
 
   const fiftyTwoWeekHigh = highs.length
     ? Math.max(...highs)
@@ -1409,6 +1440,26 @@ async function fetchQuote(symbol) {
       ? meta.previousClose
       : null;
 
+  // The long view, best-effort: a chart that stops ten years back is still a
+  // chart, so a failure here costs the "Max" range and nothing else.
+  let monthly = null;
+  try {
+    const far = await chart('max', '1mo');
+    if (far.ok) monthly = seriesFrom((await far.json())?.chart?.result?.[0]);
+  } catch {
+    monthly = null;
+  }
+  const daily = seriesFrom(result);
+  const history =
+    daily || monthly
+      ? {
+          currency: meta.currency || null,
+          source: 'Yahoo Finance (chart)',
+          daily,
+          monthly,
+        }
+      : null;
+
   return {
     price,
     previousClose: previous,
@@ -1426,7 +1477,37 @@ async function fetchQuote(symbol) {
     asOf: meta.regularMarketTime
       ? new Date(meta.regularMarketTime * 1000).toISOString()
       : null,
+    // THE SERIES, AS THE EXCHANGE QUOTED IT. Never converted here: a payload
+    // should carry what the source said, and the one rate the price is
+    // converted at is recorded separately so the conversion can be undone or
+    // checked. The screen converts it with that same rate.
+    history,
   };
+}
+
+/**
+ * A chart response as two parallel arrays, with every gap dropped.
+ *
+ * Yahoo returns nulls in `close` for days the instrument did not trade, and a
+ * null in a price series is not a price of nothing -- it is a day with no
+ * close. Dropping the day is the only honest handling: interpolating would
+ * invent a price, and plotting zero would draw a crash that did not happen.
+ */
+function seriesFrom(result) {
+  const stamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const dates = [];
+  const values = [];
+  for (let i = 0; i < stamps.length; i++) {
+    const close = closes[i];
+    if (typeof close !== 'number' || !isFinite(close)) continue;
+    if (typeof stamps[i] !== 'number') continue;
+    dates.push(new Date(stamps[i] * 1000).toISOString().slice(0, 10));
+    // Six significant figures: enough for a price in any currency this site
+    // reaches, including a quote in agorot, and it keeps the payload small.
+    values.push(Number(close.toPrecision(6)));
+  }
+  return dates.length ? { from: dates[0], to: dates[dates.length - 1], dates, closes: values } : null;
 }
 
 // ===========================================================================
@@ -1438,7 +1519,7 @@ async function fetchQuote(symbol) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 4;
+const FETCHER_VERSION = 5;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

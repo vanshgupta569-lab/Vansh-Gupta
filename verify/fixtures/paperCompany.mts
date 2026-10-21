@@ -27,6 +27,58 @@ import { PAYLOAD_VERSION } from '../../src/data/payloadVersion';
 
 const YEARS = [2021, 2022, 2023, 2024, 2025];
 
+/**
+ * A PRICE SERIES THAT IS A FORMULA, not a recording.
+ *
+ * The chart and its overlays need a daily history, and a check wants to know
+ * the answer before it looks. So this is generated: one close per weekday for
+ * three years, ending on the fixture’s own price of 22.50 and rising at a
+ * fixed rate before it, with no randomness anywhere. A check can therefore
+ * assert the last point, the first point and the count exactly.
+ */
+const HISTORY_END = '2026-09-22';
+const HISTORY_WEEKDAYS = 783; // three years of five-day weeks
+
+function paperHistory() {
+  const dates: string[] = [];
+  const closes: number[] = [];
+  const day = new Date(`${HISTORY_END}T00:00:00Z`);
+  for (let i = 0; i < HISTORY_WEEKDAYS; ) {
+    const weekday = day.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) {
+      dates.push(day.toISOString().slice(0, 10));
+      // 22.50 on the last day, a tenth of a per cent lower each day before.
+      closes.push(Number((22.5 * Math.pow(0.999, i)).toPrecision(6)));
+      i++;
+    }
+    day.setUTCDate(day.getUTCDate() - 1);
+  }
+  dates.reverse();
+  closes.reverse();
+  // A monthly series for the "Max" range, taken from the same formula so the
+  // two cannot disagree: the last close of each month in the daily series.
+  const monthlyDates: string[] = [];
+  const monthlyCloses: number[] = [];
+  for (let i = 0; i < dates.length; i++) {
+    const next = dates[i + 1];
+    if (!next || next.slice(0, 7) !== dates[i].slice(0, 7)) {
+      monthlyDates.push(dates[i]);
+      monthlyCloses.push(closes[i]);
+    }
+  }
+  return {
+    currency: 'USD',
+    source: 'Yahoo Finance (chart)',
+    daily: { from: dates[0], to: dates[dates.length - 1], dates, closes },
+    monthly: {
+      from: monthlyDates[0],
+      to: monthlyDates[monthlyDates.length - 1],
+      dates: monthlyDates,
+      closes: monthlyCloses,
+    },
+  };
+}
+
 /** Revenue in millions, growing 10% a year off a round 900. */
 const revenueFor = (i: number) => 900 + i * 90;
 
@@ -213,6 +265,9 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
       fiftyTwoWeekLow: 18,
       rangeObservations: 251,
       asOf: '2026-09-22T20:00:00.000Z',
+      // The daily closes the quote fetch keeps from v5 on, so the company
+      // page has a chart to draw and the overlays have prices to divide.
+      history: paperHistory(),
       // WHAT THE EXCHANGE PUBLISHED, before anything was converted. The
       // checks compare the figure the screen puts back into pence against
       // this one, so the two sides of the comparison come from opposite

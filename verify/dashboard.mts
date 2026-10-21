@@ -1699,6 +1699,184 @@ async function checkTradingCurrencyOnScreen(page: Page, ticker: string) {
   }
 }
 
+
+/**
+ * THE COMPANY PAGE: EVERY TAB HAS AN ADDRESS, AND EVERY ADDRESS LOADS.
+ *
+ * The point of the hub is that a reader can send somebody a link. So this walks
+ * `COMPANY_TABS` rather than a list kept here — a tenth tab is checked the day
+ * it is added, without anybody remembering — and for each one it NAVIGATES TO
+ * THE ADDRESS DIRECTLY rather than clicking the tab. Clicking would only prove
+ * the React state changes; typing the address is what a shared link does, and
+ * it is the half that breaks when the host has no rewrite for deep paths.
+ *
+ * What each tab must show:
+ *   every tab     the company's name, and its own tab marked as the current one
+ *   overview      the figures, a drawn chart, and no figure printed as a zero
+ *   model         the way into the figures → questions → valuation flow
+ *   the other six one line saying what is being built, and nothing that looks
+ *                 like data
+ */
+async function checkCompanyTabsOnScreen(page: Page) {
+  console.log('\n=== the company page: every tab has an address, and it loads ===');
+  const { COMPANY_TABS } = await import(`file:///${REPO}/src/data/companyRoute.ts`);
+
+  for (const tab of COMPANY_TABS as any[]) {
+    const url = `${BASE}/company/${PAPER_TICKER}/${tab.slug}`;
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    const heading = page.getByRole('heading', { name: PAPER_NAME, level: 1 }).first();
+    try {
+      await heading.waitFor({ timeout: 60_000 });
+    } catch {
+      fail(`the address /company/${PAPER_TICKER}/${tab.slug}`, `the company page for ${PAPER_NAME}`, 'it never rendered');
+      continue;
+    }
+
+    // THE ADDRESS IS STILL THE ADDRESS. A router that quietly rewrote the path
+    // would break every link somebody had already sent.
+    const landed = new URL(page.url()).pathname;
+    if (landed !== `/company/${PAPER_TICKER}/${tab.slug}`) {
+      fail(`the address for ${tab.label}`, `/company/${PAPER_TICKER}/${tab.slug}`, landed);
+    }
+
+    const current = page.locator('nav[aria-label="Company sections"] [aria-current="page"]');
+    const currentLabel = ((await current.first().textContent().catch(() => '')) || '').trim();
+    if (currentLabel !== tab.label) {
+      fail(`the tab marked current at ${tab.slug}`, tab.label, currentLabel || '(none)');
+    }
+
+    if (!tab.built) {
+      // The sentence from the plan, and the badge that says it is not built.
+      const body = ((await page.textContent('main')) || '').replace(/\s+/g, ' ');
+      const promised = String(tab.coming || '').slice(0, 45).replace(/\s+/g, ' ');
+      if (!body.includes(promised)) {
+        fail(`what the ${tab.label} tab says`, `"${promised}…"`, `"${body.slice(0, 90)}…"`);
+      } else if (!/being built/i.test(body)) {
+        fail(`the ${tab.label} tab`, 'a "being built" badge beside the heading', 'no such badge');
+      } else {
+        ok(`${tab.label} loads at its own address and says only what it will carry`);
+      }
+      continue;
+    }
+
+    if (tab.slug === 'model') {
+      const open = page.getByRole('button', { name: new RegExp(`open the figures for ${PAPER_TICKER}`, 'i') });
+      if (await open.count()) ok('Model loads at its own address and opens the figures flow that already exists');
+      else fail('the Model tab', `a control reading "Open the figures for ${PAPER_TICKER}"`, 'no such control');
+      continue;
+    }
+
+    // ---- the overview --------------------------------------------------
+    const tiles = page.locator('section[aria-label="Summary figures"] >> div.border');
+    const figures = ((await page.locator('section[aria-label="Summary figures"]').textContent()) || '').replace(/\s+/g, ' ');
+    for (const wanted of ['Price', 'Market capitalisation', '52-week high', 'Price / earnings', 'Book value per share', 'ROCE', 'ROE', 'Face value']) {
+      if (!figures.includes(wanted)) fail('the summary figures', `a tile for ${wanted}`, 'it is not on the page');
+    }
+    ok(`Overview loads at its own address, with ${await tiles.count()} summary figures`);
+
+    // A MISSING FIGURE IS A DASH ON THE SCREEN, not a zero. Face value is the
+    // one every company is missing — neither source publishes it — so it is
+    // the one tile whose rendering can be asserted for certain.
+    const faceTile = page.locator('section[aria-label="Summary figures"] div', { hasText: /^Face value/ }).first();
+    const faceText = ((await faceTile.textContent().catch(() => '')) || '').replace(/\s+/g, ' ');
+    if (/—/.test(faceText) && !/\b0(\.0+)?\b/.test(faceText.replace('52-week', ''))) {
+      ok('a figure neither source publishes reads as an em dash, not as zero');
+    } else {
+      fail('a figure neither source publishes', 'an em dash', `"${faceText.slice(0, 60)}"`);
+    }
+
+    // And the reason for it is within reach of the dash, on a keyboard.
+    const hint = faceTile.locator('button[data-hint]').first();
+    if (await hint.count()) {
+      await hint.focus();
+      await page.waitForTimeout(250);
+      const explained = ((await page.textContent('body')) || '').replace(/\s+/g, ' ');
+      if (/does not publish|publishes a face value|par value/i.test(explained)) {
+        ok('and its ⓘ says why, on keyboard focus');
+      } else {
+        fail('the reason beside a missing figure', 'an explanation on focus', 'nothing opened');
+      }
+      await page.keyboard.press('Escape').catch(() => {});
+    } else {
+      fail('the reason beside a missing figure', 'a ⓘ button beside the label', 'no such control');
+    }
+
+    // ---- the chart -------------------------------------------------------
+    const chart = page.locator('section[aria-label="Price history"] svg[role="img"]').first();
+    if (!(await chart.count())) {
+      fail('the price chart', 'an svg on the Overview tab', 'no chart drew');
+      continue;
+    }
+    const geometry = `(() => {
+      const svg = document.querySelector('section[aria-label="Price history"] svg[role="img"]');
+      if (!svg) return null;
+      const paths = [...svg.querySelectorAll('path')].map((p) => (p.getAttribute('d') || '').length);
+      return { paths: paths.length, longest: Math.max(0, ...paths) };
+    })()`;
+    let drawn: any = null;
+    for (let tries = 0; tries < 20; tries++) {
+      drawn = await page.evaluate(geometry);
+      if (drawn && drawn.longest >= 200) break;
+      await page.waitForTimeout(250);
+    }
+    if (!drawn || drawn.longest < 200) {
+      fail('the price line', 'a path with real geometry in it', JSON.stringify(drawn));
+    } else {
+      ok(`the price line is drawn (${drawn.paths} paths, the longest ${drawn.longest} characters of geometry)`);
+    }
+
+    // AN OVERLAY IS A SECOND LINE, and choosing one must change the drawing.
+    const before = await page.evaluate(`document.querySelectorAll('section[aria-label="Price history"] svg[role="img"] path').length`);
+    const overlayButton = page.getByRole('button', { name: 'P / E', exact: true }).first();
+    if (await overlayButton.count()) {
+      await overlayButton.click();
+      await page.waitForTimeout(400);
+      const after = await page.evaluate(`document.querySelectorAll('section[aria-label="Price history"] svg[role="img"] path').length`);
+      const says = ((await page.locator('section[aria-label="Price history"]').textContent()) || '').replace(/\s+/g, ' ');
+      if (after > before && /P \/ E = price/.test(says)) {
+        ok(`choosing an overlay draws another line (${before} paths to ${after}) and states its formula`);
+      } else {
+        fail('choosing the P / E overlay', 'another line, and the formula under the chart', `${before} to ${after} paths`);
+      }
+    } else {
+      fail('the overlay controls', 'a "P / E" button', 'no such control');
+    }
+
+    // A RANGE IS A DIFFERENT NUMBER OF CLOSES, so switching must change it.
+    const readout = () => page.locator('[data-chart-readout]').first().textContent();
+    const month = page.getByRole('button', { name: '1M', exact: true }).first();
+    if (await month.count()) {
+      const wide = ((await readout()) || '').match(/([\d,]+) daily closes/)?.[1];
+      await month.click();
+      await page.waitForTimeout(400);
+      const narrow = ((await readout()) || '').match(/([\d,]+) daily closes/)?.[1];
+      if (wide && narrow && Number(narrow.replace(/,/g, '')) < Number(wide.replace(/,/g, ''))) {
+        ok(`switching to 1M narrows the window (${wide} closes to ${narrow})`);
+      } else {
+        fail('switching the range', 'fewer closes on 1M than on 1Y', `${wide} then ${narrow}`);
+      }
+    }
+  }
+
+  // AN ADDRESS NOBODY TYPED CORRECTLY STILL LANDS ON THE COMPANY. A tab that
+  // was renamed, or a typo, must not produce a page with nothing on it.
+  await page.goto(`${BASE}/company/${PAPER_TICKER}/nonsense`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('heading', { name: PAPER_NAME, level: 1 }).first().waitFor({ timeout: 60_000 });
+  // A SHORT TIMEOUT AND A REPORT, not an exception: when the fallback is
+  // broken there is no current tab at all, and a check that throws there takes
+  // the whole run down instead of naming the one thing that is wrong.
+  const fellBack = (
+    (await page
+      .locator('nav[aria-label="Company sections"] [aria-current="page"]')
+      .first()
+      .textContent({ timeout: 5_000 })
+      .catch(() => '')) || ''
+  ).trim();
+  if (fellBack === 'Overview') ok('an address with a tab that does not exist lands on the Overview, not on a blank page');
+  else fail('an unknown tab', 'the Overview', fellBack || '(nothing current)');
+}
+
 // ------------------------------------------------------------------------ run
 let server: ChildProcess | null = null;
 let browser: Browser | null = null;
@@ -1794,16 +1972,20 @@ try {
   await checkRefused(page, refused.modelData, refused, refused.currencySymbol || '$');
   await readContrast(page, 'a refused company');
 
-  // 4. The same company again, quoted in a currency its statements are not
+  // 4. The company page: the hub, and every tab at its own address.
+  await checkCompanyTabsOnScreen(page);
+  await readContrast(page, 'the company page, overview');
+
+  // 5. The same company again, quoted in a currency its statements are not
   //    in: the one case where a value per share is shown twice.
   await checkTradingCurrencyOnScreen(page, CONVERTED_TICKER);
   await readContrast(page, 'a company quoted in another currency');
 
-  // 5. A build slow enough to read: the loading screen must carry a note, and
+  // 6. A build slow enough to read: the loading screen must carry a note, and
   //    must not hold the same one for the whole wait.
   await checkSlowBuild(context, page);
 
-  // 6. Nothing anywhere on any of those screens is below WCAG AA.
+  // 7. Nothing anywhere on any of those screens is below WCAG AA.
   reportContrast();
 } catch (error: any) {
   problems++;

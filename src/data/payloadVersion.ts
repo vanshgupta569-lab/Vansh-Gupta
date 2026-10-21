@@ -25,13 +25,16 @@
 //   2  fiscal period end dates on every statement row
 //   3  filed investing and financing cash flow totals
 //   4  the risk-free rate, fetched per currency from its own publisher
+//   5  the daily price series the quote was already downloading and throwing
+//      away: ten years daily plus monthly to the start, as the exchange quoted
+//      it, with the rate the price was converted at recorded beside it
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 4;
+export const PAYLOAD_VERSION = 5;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

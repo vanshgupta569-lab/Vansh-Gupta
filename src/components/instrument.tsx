@@ -382,6 +382,13 @@ export interface MetricTileProps {
   note?: string;
   /** Opens beside the tile rather than sending the reader to a section. */
   detail?: React.ReactNode;
+  /**
+   * A ⓘ beside the LABEL, for what has to be said about a tile whose value
+   * is an em dash. A missing figure needs its reason within reach of the dash
+   * or the dash reads as nil, and a disclosure row under every tile in a grid
+   * of twelve would be twelve rows of furniture.
+   */
+  hint?: React.ReactNode;
 }
 
 /**
@@ -394,10 +401,13 @@ export interface MetricTileProps {
  * together; the airy version of this card says "dashboard" rather than
  * "terminal".
  */
-export const MetricTile: React.FC<MetricTileProps> = ({ label, value, note, detail }) => (
+export const MetricTile: React.FC<MetricTileProps> = ({ label, value, note, detail, hint }) => (
   <div className="border border-line bg-panel px-4 py-3.5 transition-colors hover:border-quiet/50 hover:bg-panel/70">
-    <div className={`${EYEBROW} text-quiet mb-1.5 truncate`} title={label}>
-      {label}
+    <div className={`${EYEBROW} text-quiet mb-1.5 flex items-center gap-1`}>
+      <span className="truncate" title={label}>
+        {label}
+      </span>
+      {hint}
     </div>
     <div className="font-figure text-[19px] font-medium tabular-nums text-ink leading-none tracking-[-0.01em]">
       {value}

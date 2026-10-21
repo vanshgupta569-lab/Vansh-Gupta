@@ -22,5 +22,11 @@
         { "key": "X-Robots-Tag", "value": "noindex" }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/company/:path*",
+      "destination": "/"
+    }
   ]
 }

@@ -1407,6 +1407,281 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// THE COMPANY PAGE: NO FIGURE IS EVER A ZERO IT DOES NOT HAVE
+// ---------------------------------------------------------------------------
+//
+// Standing decision 3: missing data is never treated as zero, because zero is a
+// claim the company reported zero. A summary panel is where that rule is
+// easiest to break and hardest to see broken — `price / earnings` on a filer
+// that reports no earnings is `x / 0`, and the arithmetic hands back Infinity,
+// NaN or 0 depending which way it was written, all three of which render as
+// something that looks like a figure.
+//
+// So `companyOverview.ts` carries the rule as a shape rather than a habit: a
+// stat has a number, or it has an em dash AND a sentence saying what is not
+// there. This asserts the two can never come apart, over every payload on disk,
+// and then strips the inputs out of a real company and asserts the panel dashes
+// instead of filling with zeros.
+{
+  console.log('\n=== the company page: a missing figure is a dash with a reason, never a zero ===');
+  const { overviewStats, formatStat } = await import(`file:///${REPO}/src/data/companyOverview.ts`);
+
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let read = 0;
+  let statsSeen = 0;
+  let dashes = 0;
+  const faults: string[] = [];
+
+  const audit = (ticker: string, result: any) => {
+    for (const stat of result.stats) {
+      statsSeen++;
+      const shown = formatStat(stat, result.currencySymbol);
+      const hasValue = stat.value !== null;
+      if (hasValue && stat.missing) {
+        faults.push(`${ticker} ${stat.key}: has a value AND a reason for not having one`);
+      }
+      if (!hasValue) {
+        dashes++;
+        if (!stat.missing || !stat.missing.trim()) {
+          faults.push(`${ticker} ${stat.key}: no figure and no reason given`);
+        }
+        if (shown !== '—') {
+          faults.push(`${ticker} ${stat.key}: no figure, but the screen prints "${shown}"`);
+        }
+      } else {
+        if (!isFinite(stat.value)) {
+          faults.push(`${ticker} ${stat.key}: the value is ${stat.value}, which is not a number`);
+        }
+        if (shown === '—') {
+          faults.push(`${ticker} ${stat.key}: has the value ${stat.value} and prints a dash`);
+        }
+      }
+    }
+  };
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    if (payload?.error || payload?.fetchError) continue;
+    read++;
+    audit(file.replace(/\.json$/, ''), overviewStats(payload));
+  }
+
+  console.log(`  ${read} payloads, ${statsSeen} figures, ${dashes} of them a dash with a reason`);
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} figures break the dash-or-number rule:`);
+    faults.slice(0, 10).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log('  every figure is either a number or an em dash with a sentence saying what is missing');
+  }
+
+  // THE PROBE: a real company with the inputs taken out. Every figure that
+  // depended on them must become a dash -- not a zero, not a blank, not a
+  // ratio of something over nothing.
+  const base: any = readPayload(files.includes('AAPL.json') ? 'AAPL.json' : files[0]);
+  const stripped = {
+    ...base,
+    statements: (base.statements || []).map((row: any) => ({
+      ...row,
+      netIncome: null,
+      equity: null,
+      dividendsPaid: null,
+      commonDividendsPaid: null,
+      operatingIncome: null,
+    })),
+  };
+  const after: any = overviewStats(stripped);
+  const mustDash = ['pe', 'pb', 'bookValue', 'dividendYield', 'roce', 'roe'];
+  const wrong = mustDash.filter((key) => {
+    const stat = after.stats.find((s: any) => s.key === key);
+    return !stat || stat.value !== null || formatStat(stat, after.currencySymbol) !== '—';
+  });
+  if (wrong.length) {
+    totalProblems += wrong.length;
+    console.log(
+      `  PROBLEM: with profit, equity, dividends and operating profit all removed, ` +
+        `${wrong.join(', ')} still show a figure`
+    );
+  } else {
+    console.log(
+      `  with profit, equity, dividends and operating profit removed, all ${mustDash.length} figures ` +
+        'that depend on them become a dash'
+    );
+  }
+  // And the ones that do NOT depend on them must survive, or the check above
+  // would pass just as well on a panel that gave up entirely.
+  const mustHold = ['price', 'marketCap', 'high52', 'low52'];
+  const lost = mustHold.filter((key) => after.stats.find((s: any) => s.key === key)?.value === null);
+  if (lost.length) {
+    totalProblems += lost.length;
+    console.log(`  PROBLEM: ${lost.join(', ')} were lost too, and nothing they need was removed`);
+  } else {
+    console.log(`  and ${mustHold.join(', ')} are unaffected, because nothing they rest on was removed`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE COMPANY PAGE: THE CHART OVERLAYS ARE OUR OWN ARITHMETIC
+// ---------------------------------------------------------------------------
+//
+// Every overlay on the price chart is computed here from this company's own
+// filings — a price divided by the earnings in the filing that was the latest
+// one on that day. Nothing is fetched, which means nothing checks it either
+// unless something does it here.
+//
+// THE EXPECTED FIGURES ARE WORKED OUT IN THIS FILE, BY HAND, from round
+// numbers chosen so that every answer is exact. Reading them back out of the
+// same function that produced them would prove nothing at all (`CLAUDE.md`,
+// "Comparing a figure against itself"):
+//
+//   1,000,000,000 shares, so a line in millions divided by them is per 1,000.
+//   FY2024  profit 1,000m -> EPS 1.00 ; equity 2,000m -> book 2.00
+//           revenue 5,000m ; operating 1,000m + depreciation 500m = EBITDA 1,500m
+//           debt 1,000m - cash 400m = net debt 600m
+//   FY2025  a LOSS of 200m, and equity 2,500m -> book 2.50
+//
+//   price 20 on 2024-12-31 -> P/E 20.000  P/B 10.000
+//                             EV (20 x 1e9 = 20,000m + 600m) / 1,500m = 13.7333
+//                             market cap / sales = 20,000 / 5,000 = 4.000
+//   price 30 on 2026-06-30 -> no P/E at all, because the year was a loss
+//                             P/B = 30 / 2.50 = 12.000
+//                             EV (30,000m + net debt 1,200 - 200 = 1,000m)
+//                                / (operating -100m + depreciation 500m = 400m)
+//                                = 31,000 / 400 = 77.500. THE FIRST VERSION OF
+//                                THIS CHECK SAID 75.500, having taken net debt
+//                                as 200 rather than 1,000 -- the check caught
+//                                its own author, which is the point of working
+//                                the figure out by hand.
+//                             P/B = 30 / 2.50 = 12.000
+//   price 10 on 2024-06-30 -> NO POINT ON ANY LINE: it is before the first
+//                             filing this company has, and carrying a later
+//                             filing back to it would draw a ratio nobody
+//                             could have computed on the day.
+{
+  console.log('\n=== the company page: every chart overlay recomputes from the filings ===');
+  const { priceSeries, overlayFor } = await import(`file:///${REPO}/src/data/priceSeries.ts`);
+
+  const dates = ['2024-06-30', '2024-12-31', '2025-06-30', '2026-06-30'];
+  const closes = [10, 20, 25, 30];
+  const payload = {
+    ticker: 'KNOWN',
+    currency: 'USD',
+    currencySymbol: '$',
+    statements: [
+      {
+        fiscalYear: 2024,
+        periodEnd: '2024-12-31',
+        revenue: 5000,
+        operatingIncome: 1000,
+        depreciation: 500,
+        netIncome: 1000,
+        equity: 2000,
+        totalDebtReported: 1000,
+        cashAndShortTermInvestments: 400,
+        dilutedShares: 1_000_000_000,
+      },
+      {
+        fiscalYear: 2025,
+        periodEnd: '2025-12-31',
+        revenue: 4000,
+        operatingIncome: -100,
+        depreciation: 500,
+        netIncome: -200,
+        equity: 2500,
+        totalDebtReported: 1200,
+        cashAndShortTermInvestments: 200,
+        dilutedShares: 1_000_000_000,
+      },
+    ],
+    priceConversion: { converted: false, rate: 1 },
+    quote: {
+      price: 30,
+      currency: 'USD',
+      history: {
+        currency: 'USD',
+        source: 'a formula in verify/scenarios.mts',
+        daily: { from: dates[0], to: dates[dates.length - 1], dates, closes },
+        monthly: null,
+      },
+    },
+  };
+
+  const series: any = priceSeries(payload, '10Y');
+  const expect: [string, string, (number | null)[]][] = [
+    ['pe', 'P / E', [null, 20, 25, null]],
+    ['pb', 'P / B', [null, 10, 12.5, 12]],
+    ['evEbitda', 'EV / EBITDA', [null, 20600 / 1500, 25600 / 1500, 31000 / 400]],
+    ['mcapSales', 'Market cap / sales', [null, 4, 5, 30000 / 4000]],
+  ];
+
+  let checked = 0;
+  const bad: string[] = [];
+  for (const [key, label, wanted] of expect) {
+    const overlay: any = overlayFor(payload, key as any, series);
+    if (overlay.missing) {
+      bad.push(`${label}: nothing drawn at all -- ${overlay.missing}`);
+      continue;
+    }
+    const points = overlay.lines[0].points;
+    const want = wanted.map((v, i) => (v === null ? null : { date: dates[i], value: v }))
+      .filter((p): p is { date: string; value: number } => p !== null);
+    if (points.length !== want.length) {
+      bad.push(`${label}: ${points.length} points drawn, ${want.length} expected (${want.map((w) => w.date).join(', ')})`);
+      continue;
+    }
+    for (let i = 0; i < want.length; i++) {
+      checked++;
+      if (points[i].date !== want[i].date) {
+        bad.push(`${label}: point ${i + 1} is dated ${points[i].date}, expected ${want[i].date}`);
+      } else if (Math.abs(points[i].value - want[i].value) > 1e-9) {
+        bad.push(`${label} on ${want[i].date}: ${points[i].value} against ${want[i].value} worked out by hand`);
+      }
+      // EVERY POINT NAMES THE FILING IT DIVIDED BY, which is the claim the
+      // screen makes when the reader points at it.
+      const wantYear = Date.parse(`${want[i].date}T00:00:00Z`) >= Date.parse('2025-12-31T00:00:00Z') ? 2025 : 2024;
+      if (points[i].filing?.fiscalYear !== wantYear) {
+        bad.push(
+          `${label} on ${want[i].date}: says it used FY${points[i].filing?.fiscalYear}, and FY${wantYear} was the latest filing on that day`
+        );
+      }
+    }
+  }
+
+  // Sales and margin is the filings themselves, one point per filed year.
+  const sm: any = overlayFor(payload, 'salesMargin', series);
+  if (sm.missing) bad.push(`Sales and margin: ${sm.missing}`);
+  else {
+    const sales = sm.lines.find((l: any) => l.label === 'Sales');
+    const margin = sm.lines.find((l: any) => l.label === 'Operating margin');
+    checked += 2;
+    if (!sales || sales.points.length !== 2 || sales.points[0].value !== 5000 || sales.points[1].value !== 4000) {
+      bad.push(`Sales: ${sales?.points.map((p: any) => p.value).join(', ')} against 5000, 4000`);
+    }
+    // 1,000 / 5,000 = 20.0% and -100 / 4,000 = -2.5%, both exact.
+    if (!margin || Math.abs(margin.points[0].value - 20) > 1e-9 || Math.abs(margin.points[1].value + 2.5) > 1e-9) {
+      bad.push(`Operating margin: ${margin?.points.map((p: any) => p.value).join(', ')} against 20, -2.5`);
+    }
+  }
+
+  if (bad.length) {
+    totalProblems += bad.length;
+    console.log(`  PROBLEM: ${bad.length} overlay figures disagree with the arithmetic:`);
+    bad.slice(0, 10).forEach((m) => console.log(`           ${m}`));
+  } else {
+    console.log(
+      `  ${checked} overlay figures match the value worked out by hand, each naming the filing it used; ` +
+        'a loss year draws no price/earnings point and a day before the first filing draws nothing at all'
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // THE TYPECHECK ACTUALLY CHECKS COMPONENT PROPS (`KI-28`)
 // ---------------------------------------------------------------------------
 //

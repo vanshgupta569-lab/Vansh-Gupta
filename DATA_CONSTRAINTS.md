@@ -235,6 +235,47 @@ theirs line by line, and on a filing with unusual captions that is real work.
 What would remove it: the primary-filings data layer, which reads the filing's
 own tags and the labels attached to them (`ROADMAP.md` section 1).
 
+### A vendor feed the site is not licensed to publish from
+
+**Source:** Yahoo Finance. **Affects:** every price series on the site, and
+every figure for every company outside the United States — 83 of the 176
+payloads take their statements from it, and all 175 that carry a price take
+their price history from it.
+
+**This is a development-only source and MUST BE REPLACED BY A LICENSED SOURCE
+BEFORE PUBLIC LAUNCH.** It is written here, in the file about what the sources
+do not give us, because the thing it does not give us is the right to show it to
+anybody: Yahoo's terms allow personal, non-commercial use and do not permit
+redistribution. The site is private while it is being built (launch principle 2),
+and that is the only reason this is a constraint rather than a defect.
+
+What it covers today:
+
+- **The price, the previous close and the 52-week range** for every company,
+  curated and derived alike.
+- **The daily price history** behind the chart on the company page: ten years
+  of daily closes and a monthly series back to the listing's start
+  (`payloadVersion.ts` v5). This is the largest single thing taken from the
+  vendor and the one with the clearest licensing cost — end-of-day prices with
+  display rights are a product sold by exchanges and vendors, and `ROADMAP.md`
+  §13 already carries "global prices with display rights" as **Paid · last**.
+- **Every statement for every Indian company**, and for every other company
+  outside the SEC's reach. The United States is already on primary filings;
+  India is not, and `docs/DATA_LAYER_PLAN.md` is the plan that moves it.
+
+**It cannot move a value by itself** — the figures are the vendor's extraction
+of the same filings, and where that extraction has been wrong the defect was
+opened against us and fixed (`ROADMAP.md` §1 records the September 2026 run:
+statements in yen labelled dollars, depositary share counts, Brazilian currency
+fields contradicting their own figures, which is why 38 US-listed foreign
+companies are refused outright). What it costs is the right to publish, and a
+dependency on a third party's extraction where the filing itself is public.
+
+**What removes it, in order.** The Indian primary-filings layer for statements
+(`docs/DATA_LAYER_PLAN.md`, stages 1 to 5), and a licensed end-of-day price feed
+bought before launch for the chart. Until both are done, nothing on this site is
+public.
+
 ### Lines the filing does not report at all
 
 **Source:** both. **Affects:** 116 modelled.
@@ -360,6 +401,18 @@ Each was fetched for a full year ending eighteen months in the past on
 index onto the Treasury's own feed at the same time, so every rate in the model
 now comes from the institution that sets it: Apple's rate changed by half a
 basis point in the move.
+
+**And the rupee’s publisher can be down.** On 2026-10-22, refetching the whole
+set for the price history, FRED answered every request with its own
+"Site Maintenance" page, so **six Indian companies lost their risk-free rate in
+one afternoon** — Reliance, TCS, HDFC Bank, HDB, ICICI and Reliance
+Infrastructure — and every one of them was refused a valuation rather than
+discounted at something else, which is the behaviour standing decision 3
+requires. It is also the only single point of failure in the set that can take a
+company’s valuation away without any code changing: the other five currencies
+are fetched from the institution that sets the rate, and the rupee is fetched
+from a third party republishing a sixth. A usable Indian series from NSE or
+CCIL would remove it (`ROADMAP.md` §1).
 
 **Four currencies could not be reached, and those companies stay refused**:
 Samsung (won), Tencent and Alibaba (renminbi), TSMC (Taiwan dollar), Novo
@@ -585,6 +638,20 @@ close and the 52-week range are converted at the one rate fetched with the
 price, because no free source gives the rate on each day of the past year. The
 value per share is shown in the trading currency at that same rate, beside the
 value in the statements' own currency the model computes (`METHODOLOGY.md` §3).
+
+**And now the whole price chart.** From `payloadVersion.ts` v5 the site keeps
+ten years of daily closes, and the company page draws them at that same single
+rate. It scales every point by one constant, so the SHAPE of the line — every
+rise, fall and drawdown — is exactly the shape the exchange published; what is
+at today's rate is the LEVEL, and the axis labels with it. A reader comparing a
+price from 2017 against the axis is reading what that price would be worth at
+today's exchange rate, not what it was worth then. The ratio overlays carry the
+same qualification, because the price in them is this converted one while the
+earnings under it are in the statements’ own currency.
+
+**What removes it:** a source of daily historical rates. None of the free ones
+reached so far publishes a usable history, which is the same gap that stops the
+statements themselves being translated (`METHODOLOGY.md` §3).
 
 **No effect on the value per share**, which is computed in the statements' own
 currency. The figure shown beside it in the trading currency moves with the

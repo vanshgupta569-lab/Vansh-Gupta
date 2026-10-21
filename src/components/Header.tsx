@@ -96,15 +96,27 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 bg-[#111114]/95 backdrop-blur-md hairline-border-b">
-      <div className="max-w-[1440px] mx-auto px-6 lg:px-12 py-4 flex items-center justify-between gap-5 lg:gap-8">
+      {/* THE BAR CANNOT OVERLAP ITSELF.
+
+          The wordmark was fixed at 26px and `shrink-0`; so was the block of
+          controls opposite it. On a 390px screen the two together need more
+          width than there is, and because neither could give, they were drawn
+          one over the other -- the mark ran under "Check the figures".
+
+          Three things fix it and all three are needed: the gutter and the gap
+          shrink on a phone, the mark steps down to 20px below `sm` and is
+          allowed to truncate rather than insisting on its full width, and the
+          controls keep `shrink-0` because they are already icon-only there.
+          Measured at 320px, the narrowest screen worth supporting. */}
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-4 flex items-center justify-between gap-3 sm:gap-5 lg:gap-8">
         {/* Left: the wordmark, and the clocks when there is room for them */}
-        <div className="flex items-center gap-6 min-w-0">
+        <div className="flex items-center gap-6 min-w-0 shrink-0">
           <button
             onClick={() => {
               onNavigateToScreen('HOME');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="text-[26px] lg:text-[30px] text-[#F2F0EA] hover:text-[#ffb3ad] transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
+            className="text-[20px] sm:text-[26px] lg:text-[30px] text-[#F2F0EA] hover:text-[#ffb3ad] transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
           >
             {/* THE MARK, NOT A LABEL.
                 The hero draws the wordmark in particles: lowercase, Playfair,
@@ -158,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Right: where you can go from here */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex min-w-0 items-center gap-2 overflow-hidden sm:gap-3">
           {/* ONE CONTROL, TWO STATES, ALWAYS THERE.
               Quiet when every figure is as filed, oxblood when some are not,
               and in both cases the way back to the figures. Shown even with
@@ -213,11 +225,15 @@ export const Header: React.FC<HeaderProps> = ({
                   .filter(Boolean)
                   .join(' · ') || 'Check the figures'}
               </span>
-              <span className="md:hidden">
-                {corrected || reclassified
-                  ? (corrected?.count ?? 0) + (reclassified?.count ?? 0)
-                  : 'Figures'}
-              </span>
+              {/* On a phone this is the count, or nothing at all: the icon
+                  already says what the control is, and the words are what
+                  pushed the wordmark off the bar. */}
+              {(corrected || reclassified) && (
+                <span className="md:hidden">
+                  {(corrected?.count ?? 0) + (reclassified?.count ?? 0)}
+                </span>
+              )}
+              <span className="hidden sm:inline md:hidden">Figures</span>
             </button>
           )}
 
@@ -242,10 +258,13 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Dropped on a phone: the search control two along goes to the same
+              screen, and two ways to one place is what a 320px bar cannot
+              afford. */}
           {currentScreen === 'ANALYSIS' && (
             <button
               onClick={() => onNavigateToScreen('DIRECTORY')}
-              className="bg-transparent border hairline-border text-[#F2F0EA] font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
+              className="hidden sm:flex bg-transparent border hairline-border text-[#F2F0EA] font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors items-center gap-2 cursor-pointer whitespace-nowrap"
             >
               <Building2 className="w-3.5 h-3.5 text-[#8A8A8F]" />
               <span className="hidden sm:inline">All companies</span>

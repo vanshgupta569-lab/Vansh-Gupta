@@ -101,6 +101,12 @@ interface TerminalDashboardProps {
    * screen cannot rebuild a record, so it hands the restored judgements up to
    * whoever owns the payload and the company list.
    */
+  /**
+   * THE WAY TO THE COMPANY PAGE (ROADMAP.md §13). This screen is one tab of
+   * that page rather than the whole of a company, and until the name here
+   * led somewhere, the hub was reachable only by typing its address.
+   */
+  onOpenCompanyPage?: (ticker: string, tab?: string) => void;
   onRestoreJudgements?: (
     ticker: string,
     judgements: { corrections: Corrections; correctionReasons: CorrectionReasons; heads: HeadAssignment }
@@ -114,6 +120,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   onOpenDirectory,
   initialVerdicts,
   judgements,
+  onOpenCompanyPage,
   onRestoreJudgements,
 }) => {
   const company = companies[selectedTicker] || companies['AAPL'];
@@ -1250,9 +1257,22 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
               <span className="font-figure text-[13px] font-bold tracking-[0.16em] text-accent-text">
                 {company.ticker}
               </span>
-              <h1 className="truncate font-display text-[19px] font-medium tracking-tight text-ink sm:text-[22px]">
-                {company.name}
-              </h1>
+              {onOpenCompanyPage ? (
+                <h1 className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenCompanyPage(company.ticker)}
+                    title={`Everything on ${company.name}: overview, financials, filings, ownership`}
+                    className="block max-w-full truncate font-display text-[19px] font-medium tracking-tight text-ink transition-colors hover:text-accent-text cursor-pointer sm:text-[22px]"
+                  >
+                    {company.name}
+                  </button>
+                </h1>
+              ) : (
+                <h1 className="truncate font-display text-[19px] font-medium tracking-tight text-ink sm:text-[22px]">
+                  {company.name}
+                </h1>
+              )}
             </div>
             <RefStrip
               items={[
