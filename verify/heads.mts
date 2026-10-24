@@ -594,13 +594,33 @@ export async function checkHeads(ticker = 'RELIANCE.NS'): Promise<HeadsReport> {
   // the one-offs hook reproduces them, the replacement is a rename of a
   // mechanism that already worked; if it does not, something was lost and this
   // says which.
+  //
+  // AT THE PRICE THEY WERE STRUCK AT, which is the whole reason this block
+  // needs a constant beside the three figures.
+  //
+  // The cost of capital weights equity at market capitalisation, so the share
+  // price is a valuation input (`CLAUDE.md`: "anything that reproduces a
+  // valuation has to carry the price it was struck against"). These three were
+  // published against a payload fetched on 2026-10-09, and reading the price
+  // out of whatever payload happens to be on disk compared them with a
+  // valuation struck at a different one. On 2026-10-24, after a refetch moved
+  // Reliance from 1,170.30 to 1,190.00, all three drifted — 706.52 to 705.62,
+  // 1,683.09 to 1,681.35, 1,044.32 to 1,043.13 — and the check reported a
+  // regression in the one-offs head that had not happened.
+  //
+  // 1,170.30 is not remembered, it is solved: it is the only price that
+  // reproduces 706.52 on the defaults, and at that same price the other two
+  // land within half a paisa. Pinning it also means these three figures now
+  // test the ONE-OFFS MECHANISM and nothing else, which is what they are for.
   const reproduced: HeadsReport['reproduced'] = [];
+  const STRUCK_AT = 1170.3;
   const want: [string, any, number][] = [
     ['RELIANCE.NS on the defaults', {}, 706.52],
     ['RELIANCE.NS, other operating costs set aside', { otherOperatingCosts: { head: 'oneOffs' } }, 1683.09],
     ['RELIANCE.NS, SG&A set aside', { sga: { head: 'oneOffs' } }, 1044.32],
   ];
-  const rel: any = readPayload('RELIANCE.NS.json');
+  const relToday: any = readPayload('RELIANCE.NS.json');
+  const rel: any = { ...relToday, quote: { ...relToday.quote, price: STRUCK_AT } };
   for (const [label, assignment, expected] of want) {
     const v = valueUnder(rel, {}, assignment);
     const actual = isNum(v.perpetuity) ? (v.perpetuity as number) : NaN;
@@ -608,7 +628,7 @@ export async function checkHeads(ticker = 'RELIANCE.NS'): Promise<HeadsReport> {
     if (!isNum(actual) || Math.abs(actual - expected) > 0.01) {
       problems.push(
         `${label}: the old feature published ${expected} and the heads give ${isNum(actual) ? actual.toFixed(2) : 'a refusal'} ` +
-          '— the one-offs head must reproduce what "excluded as non-recurring" did'
+          `— the one-offs head must reproduce what "excluded as non-recurring" did, at the ${STRUCK_AT} it was struck at`
       );
     }
   }
