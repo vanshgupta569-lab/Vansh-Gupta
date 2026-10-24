@@ -841,7 +841,7 @@ Both are recorded here rather than built, because each touches engine code that
 this job was already replacing a live feature in, and because a control that
 moves a line and changes no number is worse than no control.
 
-### 19c. The loading screen — NEXT
+### 19c. The loading screen — the card is BUILT, the live progress is NEXT
 
 **The decision:** replace the generic quotes with **live progress using the
 company's real numbers**, plus **one myth-versus-fact card drawn from that
@@ -861,6 +861,25 @@ remark about EBITDA.
   definition; it does not call a number good or bad.
 - The existing check that a slow build does not leave one note on screen for the
   whole wait (`verify:dashboard`) applies to whatever replaces the notes.
+
+**Built on 2026-10-24: the card.** Sixty myth-versus-fact cards, written and
+checked away from this repository and kept in `src/data/myth_fact_cards.csv`
+as the copy of record, with `src/data/mythFactCards.ts` generated from it and
+compared against it cell by cell on every run so no card can be reworded here.
+Each card carries a condition, and `src/data/mythFactMatch.ts` carries the
+predicate behind it over the company's filed statements. A card is shown only
+where its audience includes the company and its condition is TRUE — not
+unknown, not false — so a reader is never shown a claim about their company
+that the filing does not support. Measured over 175 companies: 166 earn a card
+of their own and 9 fall back to one written for any company, all 9 of them
+banks. The myth is shown first, the fact a beat later, and the mechanism sits
+behind a ⓘ rather than as a third paragraph on a screen somebody is waiting
+to leave.
+
+**Still Next: the live progress on real numbers.** Which filing is being read,
+which year has arrived, the revenue and profit figures as they land. The card
+half shipped on its own because it was what was asked for; this half is
+untouched and is a job of its own.
 
 ### 19d. The first design principle — recorded, not scheduled
 
@@ -909,6 +928,7 @@ trusting a status.
 
 | Commit | What |
 |---|---|
+| `PENDING` | **The loading screen carries one myth-versus-fact card from the company’s own figures (§19c).** Sixty cards converted from `src/data/myth_fact_cards.csv` into typed data with every column kept, and compared with the CSV cell by cell on every run — 420 cells — so a card cannot be reworded in the code. Each card’s "Show when" condition is a predicate over the filed statements, and **a condition has three answers, not two**: true, false, and cannot-be-established, which is never read as false. Over 175 companies: 1,891 conditions true, 4,969 false, 3,640 that the source cannot settle; 166 companies earn a card of their own, 9 fall back, all 9 banks. Eleven cards can never be shown because neither source returns the line they rest on — six of them the bank cards — recorded in `DATA_CONSTRAINTS.md`. The myth is shown first, the fact a beat later, the mechanism behind a ⓘ. The 53 did-you-know notes are no longer rendered; the file is kept and says so. **Four breaks proved the checks**: a reworded card, two different ways of reading an absent line as nil, and the mechanism printed in the open. The one-line-at-a-time probe that caught the second of those also found three real faults in this code before it shipped. |
 | `61f8e73` | **The company page, stage 1: the hub and the Overview tab (§13).** One address per company and per tab — `/company/RELIANCE.NS/overview` — with all nine tabs from `docs/VISION.md` in one list that the page, the router and the browser check all read. Overview and Model are built; the other seven carry one line naming what they will hold and nothing that could be mistaken for data. **The Overview**: twelve summary figures, each with its formula, the filing it came from and its source behind a ⓘ, and every ratio taken from the one filing that reports both of its halves. **The price chart**: the daily series the quote fetch had been downloading and discarding since the beginning is now kept (`payloadVersion.ts` v5, ten years daily plus monthly to the start, as quoted), with seven ranges and five overlays — P/E, P/B, EV/EBITDA, market cap to sales, and sales with operating margin — every one of them computed from this company’s own filings, each point naming the filing it divided by, and no point at all before the earliest filing held. **The header no longer draws over itself at phone width**: measured at 320px, the wordmark now ends 153px clear of the controls where the two used to overlap. **Three checks, each proved by breaking it**: no figure prints as a zero it does not have (264 dashes across 175 payloads; breaking it reported all 264), every overlay matches a figure worked out by hand (13 of them; three separate breaks reported 3, 4 and 3), and every tab address loads in a browser (breaking the unknown-tab fallback and the unbuilt-tab line each reported it). The hand-worked figures caught their own author first: the EV/EBITDA expectation was written with the wrong net debt. |
 | `125faa9` | **One currency through every model, and the value shown in the currency the share trades in.** Investigated as a reported defect on Infosys — statements in US dollars against a rupee price — and measured to be none: the statements, the risk-free rate and the converted price are all in dollars, and Infosys’s two listings agree, the New York price at $10.50 unconverted against $10.40 for the Bombay price converted. 48 of 176 payloads trade in a currency their statements are not in; the conversion succeeded on all 48, and nothing had a risk-free or displayed quote currency differing from its statements. So no entry was opened. **The policy is now written down** rather than only implemented (`METHODOLOGY.md` §3), with the two alternatives measured: discounting at the trading currency’s rate moves Infosys −25.8%, Unilever −30.8% and Vodafone −27.6%, and withdraws five companies that have a value today for want of a published bond yield. **A regression check was built**, because nothing asserted the invariant: `npm run verify` sweeps every payload for a model labelled in one currency, priced in a second or discounted at a third, and mixes two copies of a real payload on purpose to prove it can fail. **Each value per share now also carries the trading currency** at the one disclosed rate — Infosys reads ₹1,393 under $14.49 — which found and fixed a defect of our own: the disclosed rate was the composite applied to the quoted figure, printed beside the name of a pair a hundred times away from it, on nine companies. Zero drift across 70 valued companies. |
 | `ddfe798` | **`KNOWN_ISSUES.md` is empty: the last three defects closed.** `KI-28` — `tsc --noEmit` was checking no component props anywhere, because `@types/react` was never installed, so the suite was blind to a whole class of error and exited 0 while checking nothing. Installing the types surfaced seven real errors, one of them a latent bug passing React's MouseEvent where a margin-note key belonged, and one a `DCFResult` interface missing the share price three screens read off it. `KI-25` — the news ticker animated unconditionally, so headlines that fitted their window were dragged off the left edge anyway; it measures itself now and only scrolls when it overflows, with the content duplicated and the translation halved so the loop closes without a gap. `KI-26` — a render-blocking stylesheet fetched on every page load for an icon font nothing drew with. Each left a check that fails without its fix: `verify` compiles a component call that must not compile, and `verify:dashboard` drives both ticker branches and matches every font the page fetches against the families `tokens.ts` names. |

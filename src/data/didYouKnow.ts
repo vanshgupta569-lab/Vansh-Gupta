@@ -1,5 +1,18 @@
 // FILE: src/data/didYouKnow.ts
 //
+// NO LONGER SHOWN ANYWHERE. From 2026-10-24 the loading screen carries one
+// myth-versus-fact card drawn from the company's own filed figures instead
+// (`src/data/mythFactCards.ts`), which is the decision recorded in
+// `ROADMAP.md` §19c: these fifty-three are generic by construction — the same
+// fifty-three for every company — and a reader waiting for Reliance to build
+// should be reading something about Reliance.
+//
+// The file is KEPT rather than deleted because the notes were written and
+// checked and are worth something elsewhere; nothing imports it, and the
+// check that used to measure its shuffle has been replaced by the checks on
+// the cards that took its place. Delete it, or find it a home, as its own
+// decision rather than as a side effect of this one.
+//
 // Short notes shown while a model is being built.
 //
 // WHAT BELONGS HERE

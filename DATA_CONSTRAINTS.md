@@ -276,6 +276,52 @@ dependency on a third party's extraction where the filing itself is public.
 bought before launch for the chart. Until both are done, nothing on this site is
 public.
 
+### The lines eleven of the sixty myth-versus-fact cards rest on
+
+**Source:** both. **Affects:** 11 of the 60 cards on the loading screen, which
+can never be shown; measured over 175 companies on 2026-10-24.
+
+The cards shown while a company builds are chosen by testing each one's "Show
+when" condition against that company's filed figures. Eleven conditions rest on
+lines neither the SEC's XBRL nor the vendor feed returns, so they can never be
+established and the cards are never shown:
+
+| Cards | The line that is missing |
+|---|---|
+| 21 | cash interest paid, as distinct from the interest expense charged |
+| 38 | cash paid for acquisitions |
+| 50 | deferred revenue |
+| 51 | impairment charges |
+| 54 | cash taxes paid, as distinct from the tax expense charged |
+| 55, 58 | customer deposits |
+| 56, 60 | interest income and non-interest income, separated |
+| 57, 58 | gross loans |
+| 59 | provisions for credit losses |
+
+**Six of the eleven are the bank cards**, which is the sharper half of this: a
+bank's own schema — deposits, loans, interest income, provisions — is not in
+either source at all, so every card written about banking is unreachable and a
+bank is shown one of the cards written for any company instead. Measured: of 36
+banks in the payload set, 27 still earn a card from a condition that reads only
+the lines both sources do return, and 9 fall back.
+
+**It cannot move a value.** No card is an input to anything; the loading screen
+reads the filings and shows one of sixty fixed statements about how accounts
+behave. What it costs is relevance — a bank waits in front of a card about
+companies in general rather than about banks.
+
+**It is not treated as a near miss.** A condition that cannot be established is
+not false and is never read as nil: `npm run verify` removes one filed line at
+a time from four real companies and fails if any answer turns into a different
+answer rather than into "cannot be established". That check was written because
+the obvious spelling — `(leases ?? 0) > (debt ?? 0) / 5` — reads an absent line
+as a reported zero, and it caught three of those in the first version of this
+code.
+
+What would remove it: the primary-filings data layer, which reads the filing's
+own tags rather than a normalised schema, and for India reads the bank
+schedules themselves (`docs/DATA_LAYER_PLAN.md` §2.3).
+
 ### Lines the filing does not report at all
 
 **Source:** both. **Affects:** 116 modelled.

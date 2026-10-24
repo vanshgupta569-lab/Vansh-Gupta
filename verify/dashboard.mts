@@ -1557,21 +1557,100 @@ function reportContrast() {
 // ---- the loading screen, on a build slow enough to read --------------------
 //
 // The overlay is the one screen a reader sees on every single build and the one
+/**
+ * THE CARD BECOMES THIS COMPANY'S CARD WHEN ITS FIGURES ARRIVE.
+ *
+ * The slow-build check above watches a fetch that never answers, so the card it
+ * sees is one of the three written for any company — correct, and not the half
+ * that matters. This drives an ordinary search, where the figures land early
+ * and the screen is then held for the build stages, and asserts the card on
+ * screen is one THIS COMPANY EARNED: its condition true on the paper company's
+ * own filed statements, computed here from the fixture rather than read off the
+ * page, so the two sides come from opposite directions.
+ */
+async function checkCardFromFigures(page: Page) {
+  console.log('\n=== the card the company\u2019s own figures earn ===');
+  const { MYTH_FACT_CARDS } = await import(`file:///${REPO}/src/data/mythFactCards.ts`);
+  const { CONDITIONS, Figures } = await import(`file:///${REPO}/src/data/mythFactMatch.ts`);
+  const cards: any[] = MYTH_FACT_CARDS as any[];
+
+  const figures = new (Figures as any)((paperPayload as any)('valued').statements);
+  const earned = cards.filter((c) => {
+    if (c.showWhen.trim().toLowerCase() === 'any company') return false;
+    if (c.appliesTo === 'Banks only') return false;
+    try {
+      return (CONDITIONS as any)[c.id](figures) === true;
+    } catch {
+      return false;
+    }
+  });
+  if (!earned.length) {
+    fail('the paper company earning a card', 'at least one condition true on its filings', 'none');
+    return;
+  }
+
+  const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
+  const started = search(page, PAPER_TICKER);
+  await overlay.waitFor({ state: 'visible', timeout: 30_000 });
+
+  // Sampled across the hold, because the card starts as one written for any
+  // company and becomes this one's the moment the filings land.
+  const seen = new Set<number>();
+  for (let i = 0; i < 14; i++) {
+    const id = await overlay
+      .locator('[data-myth-card]')
+      .first()
+      .getAttribute('data-myth-card')
+      .catch(() => null);
+    if (id) seen.add(Number(id));
+    if (!(await overlay.isVisible().catch(() => false))) break;
+    await page.waitForTimeout(400);
+  }
+  await started.catch(() => {});
+
+  const matched = [...seen].filter((id) => earned.some((c) => c.id === id));
+  if (!matched.length) {
+    fail(
+      'the card on the loading screen once the figures land',
+      `one of the ${earned.length} the paper company earns (${earned.map((c) => c.id).join(', ')})`,
+      seen.size ? `only ${[...seen].join(', ')}, which it did not earn` : 'no card at all'
+    );
+  } else {
+    const card = earned.find((c) => c.id === matched[0]);
+    ok(
+      `the card became one of the ${earned.length} this company earned \u2014 #${card.id}, because ` +
+        `"${String(card.showWhen).slice(0, 62)}"`
+    );
+  }
+}
+
 // screen nothing rendered checked, because in a fast harness it is gone before
 // anything can look at it. So the fetch is held open on purpose and the overlay
 // is read while it waits.
 //
-// Two things are asserted. A note is shown at all — one of the fifty-three in
-// the data file, with its belief, its correction and its mechanism, not a
-// truncated fragment. And it CHANGES: a reader who waits twenty seconds must not
-// spend twenty seconds on one sentence, which is the failure this exists to
-// prevent rather than a nicety.
+// Four things are asserted, and the last is the one this check exists for.
+//
+//   THE MYTH IS SHOWN FIRST, on its own. A fact printed under the belief at the
+//   same instant is a caption on it; a reader has to have had the chance to
+//   agree with the myth for the correction to land.
+//
+//   THE FACT FOLLOWS, in the card's own words, not a fragment.
+//
+//   THE WHY IS BEHIND THE ⓘ and nowhere else. The mechanism is three lines of
+//   prose, and three lines of prose on a screen somebody is waiting to leave is
+//   three lines nobody reads. It opens on keyboard focus, which is also the
+//   half that is easy to lose.
+//
+//   THE SCREEN DOES NOT HOLD ONE THING FOR THE WHOLE WAIT. A reader who waits
+//   seventeen seconds must not spend seventeen seconds on one sentence. That
+//   was asserted against the notes this card replaced, and `ROADMAP.md` §19c
+//   says it applies to whatever replaces them.
 async function checkSlowBuild(context: BrowserContext, page: Page) {
   console.log('\n=== the loading screen, on a slow build ===');
-  const { DID_YOU_KNOW } = await import(`file:///${REPO}/src/data/didYouKnow.ts`);
-  const facts: string[] = (DID_YOU_KNOW as any[]).map((n) => n.fact);
+  const { MYTH_FACT_CARDS } = await import(`file:///${REPO}/src/data/mythFactCards.ts`);
+  const cards: any[] = MYTH_FACT_CARDS as any[];
 
-  // Held for longer than two turns of the note so a second one is certain,
+  // Held for longer than the myth's own beat so the second half is certain,
   // then released; the route is put back afterwards so nothing later inherits
   // a slow fetch.
   const HOLD_MS = 17_000;
@@ -1588,9 +1667,13 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   });
 
   const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
-  const shown = async (): Promise<string | null> => {
+  const read = async () => {
     const text = (await overlay.textContent().catch(() => null)) || '';
-    return facts.find((f) => text.includes(f)) ?? null;
+    return {
+      text,
+      myth: cards.find((c) => text.includes(c.myth)) ?? null,
+      fact: cards.find((c) => text.includes(c.fact)) ?? null,
+    };
   };
 
   // Deliberately NOT awaited: the click starts a fetch that will not answer for
@@ -1598,25 +1681,70 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
 
-  const seen: string[] = [];
-  for (let waited = 0; waited < HOLD_MS - 1000; waited += 1000) {
-    const fact = await shown();
-    if (fact && seen[seen.length - 1] !== fact) seen.push(fact);
-    await page.waitForTimeout(1000);
+  // ---- 1. THE MYTH BEFORE THE FACT ----
+  const first = await read();
+  if (!first.myth) {
+    fail('a card on the loading screen', 'the myth from one of the sixty cards', `"${first.text.slice(0, 80)}"`);
+  } else if (first.fact) {
+    fail(
+      'the myth shown on its own first',
+      'the belief, with its correction a beat later',
+      'both at once, which makes the fact a caption on the myth'
+    );
+  } else {
+    ok(`the myth is shown first and alone: "${first.myth.myth.slice(0, 56)}…"`);
+  }
+
+  // ---- 2. AND THEN THE FACT, AND THE CARD CHANGES AT LEAST ONCE ----
+  const states: string[] = [];
+  let sawFact: any = null;
+  for (let waited = 0; waited < HOLD_MS - 2000; waited += 900) {
+    const now = await read();
+    const state = `${now.myth?.id ?? '-'}/${now.fact?.id ?? '-'}`;
+    if (states[states.length - 1] !== state) states.push(state);
+    if (now.fact && !sawFact) sawFact = now.fact;
+    await page.waitForTimeout(900);
   }
   await started.catch(() => {});
 
-  if (!seen.length) {
-    fail('a note on the loading screen', 'one of the entries in didYouKnow.ts', 'none of them');
-  } else if (seen.length < 2) {
+  if (!sawFact) {
+    fail('the fact following the myth', "the card's own correction", 'the myth held the screen alone');
+  } else {
+    ok(`the fact follows it: "${sawFact.fact.slice(0, 56)}…"`);
+  }
+  if (states.length < 2) {
     fail(
-      'the note changing during a slow build',
-      `at least 2 notes across ${Math.round(HOLD_MS / 1000)} seconds`,
-      `1: "${seen[0].slice(0, 60)}…" held the whole wait`
+      'the loading screen changing during a slow build',
+      `at least two states across ${Math.round(HOLD_MS / 1000)} seconds`,
+      `one: ${states[0] ?? '(nothing)'} held the whole wait`
     );
   } else {
-    ok(`${seen.length} notes over ${Math.round(HOLD_MS / 1000)} seconds, the first "${seen[0].slice(0, 54)}…"`);
-    ok('a slow build does not leave one note on screen for the whole wait');
+    ok(`${states.length} states over ${Math.round(HOLD_MS / 1000)} seconds (${states.join(' then ')}), so nothing holds the screen for the whole wait`);
+  }
+
+  // ---- 3. THE WHY IS BEHIND THE ⓘ, AND REACHABLE BY KEYBOARD ----
+  const body = (await page.textContent('body')) || '';
+  const openWhy = cards.find((c) => body.includes(c.why));
+  if (openWhy) {
+    fail(
+      'the mechanism behind the ⓘ',
+      'the why reached by hover, focus or tap',
+      `card ${openWhy.id}'s why is printed on the screen`
+    );
+  } else {
+    ok('no card prints its mechanism in the open');
+  }
+  const hint = overlay.locator('button[data-hint]').first();
+  if (!(await hint.count())) {
+    fail('the ⓘ on the card', 'a button beside the fact', 'no such control');
+  } else {
+    await hint.focus();
+    await page.waitForTimeout(300);
+    const opened = (await page.textContent('body')) || '';
+    const why = cards.find((c) => opened.includes(c.why));
+    if (why) ok(`the ⓘ opens the mechanism on keyboard focus: "${why.why.slice(0, 54)}…"`);
+    else fail('the ⓘ on the card', "the card's why, on keyboard focus", 'nothing opened');
+    await page.keyboard.press('Escape').catch(() => {});
   }
 
   // Put the instant fixture back for anything that runs after this.
@@ -2027,7 +2155,10 @@ try {
   await checkTradingCurrencyOnScreen(page, CONVERTED_TICKER);
   await readContrast(page, 'a company quoted in another currency');
 
-  // 6. A build slow enough to read: the loading screen must carry a note, and
+  // 6. The loading screen: the card this company’s own figures earn, then a
+  //    build slow enough to read it in two beats.
+  await checkCardFromFigures(page);
+
   //    must not hold the same one for the whole wait.
   await checkSlowBuild(context, page);
 

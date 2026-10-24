@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, animate, AnimatePresence, useInView } from 'motion/react';
-import { noteOrder } from '../data/didYouKnow';
-import type { DidYouKnow } from '../data/didYouKnow';
+import { pickMythFactCard, type MythFactChoice } from '../data/mythFactMatch';
+import { Hint, HINT_STYLES } from './figuresHint';
 import { EYEBROW, LABEL, BODY, UI } from './instrument';
 
 /**
@@ -159,6 +159,16 @@ const STAGES = [
   'Discounting cash flows',
 ];
 
+// HOW LONG THE MYTH HOLDS THE SCREEN ON ITS OWN.
+//
+// The card is read in two beats: the belief, then what is actually the
+// case. Printing both at once makes the fact a caption on the myth; a
+// reader who has seen the myth alone for a moment has had the chance to
+// agree with it, which is the only thing that makes the correction land.
+// Long enough to read nine words, short enough that the second beat is
+// still inside a quick build.
+const MYTH_ALONE_MS = 2200;
+
 // HOW LONG ONE NOTE HOLDS THE SCREEN.
 //
 // Long enough to read a belief, a correction and the mechanism behind it
@@ -168,13 +178,33 @@ const STAGES = [
 // that drags shows a new one roughly every stage-and-a-half after that.
 const NOTE_MS = 6500;
 
-export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
+/**
+ * THE SCREEN A READER WAITS ON, AND THE ONE CARD IT CARRIES.
+ *
+ * `payload` is this company's filed statements, and it is null until the
+ * fetch comes back — which is most of the wait. So the card arrives in two
+ * parts, and both are honest at the moment they are shown:
+ *
+ *   BEFORE THE FIGURES LAND, a card whose own condition is that there is a
+ *   company. Three of the sixty say exactly that, so showing one is not a
+ *   claim about this company that we cannot yet support.
+ *
+ *   WHEN THEY LAND, the card this company's own figures earn — chosen by
+ *   `pickMythFactCard`, which tests every condition against the filing and
+ *   treats a line it cannot read as unknown rather than as nil.
+ *
+ * That is also what keeps the screen from holding one thing for a whole
+ * slow build, which `verify:dashboard` has asserted since the notes: the
+ * myth gives way to the fact, and the general card gives way to this
+ * company's.
+ */
+export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ active, payload }) => {
   const reduced = useReducedMotion();
   const [stage, setStage] = useState(0);
-  // A fresh order per build, drawn when the overlay opens rather than when the
-  // module loads, so the notes are not the same every time in one session.
-  const [notes, setNotes] = useState<DidYouKnow[]>([]);
-  const [noteIndex, setNoteIndex] = useState(0);
+  // Drawn when the overlay opens rather than when the module loads, so two
+  // builds in one session are not the same card.
+  const [seed, setSeed] = useState(0);
+  const [showFact, setShowFact] = useState(false);
 
   useEffect(() => {
     if (!active) {
@@ -195,26 +225,41 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
 
   useEffect(() => {
     if (!active) {
-      setNoteIndex(0);
+      setSeed(0);
+      setShowFact(false);
       return;
     }
-    setNotes(noteOrder());
-    setNoteIndex(0);
-    // Reduced motion suppresses movement, not information: the note still
-    // changes, it simply does not fade while it does. A reader who waits
-    // twenty seconds gets three notes either way.
-    const timer = setInterval(
-      () => setNoteIndex((i) => i + 1),
-      NOTE_MS
-    );
-    return () => clearInterval(timer);
-  }, [active]);
+    setSeed(Date.now());
+    setShowFact(false);
+    // Reduced motion suppresses movement, not information: the fact still
+    // arrives, it simply does not fade in while it does.
+    const timer = setTimeout(() => setShowFact(true), reduced ? 0 : MYTH_ALONE_MS);
+    return () => clearTimeout(timer);
+  }, [active, reduced]);
+
+  // THE FIGURES ARRIVING RESTART THE READING, because the card has changed:
+  // the general one gives way to this company's, and a fact already on
+  // screen under a myth that is no longer there would be a non sequitur.
+  const hasFigures = Boolean(payload?.statements?.length);
+  useEffect(() => {
+    if (!active || !hasFigures) return;
+    setShowFact(false);
+    const timer = setTimeout(() => setShowFact(true), reduced ? 0 : MYTH_ALONE_MS);
+    return () => clearTimeout(timer);
+  }, [active, hasFigures, reduced]);
+
+  const choice: MythFactChoice | null = React.useMemo(() => {
+    if (!active || !seed) return null;
+    try {
+      return pickMythFactCard(payload?.statements?.length ? payload : { statements: [] }, seed);
+    } catch {
+      return null;
+    }
+  }, [active, seed, hasFigures, payload]);
 
   if (!active) return null;
 
-  // Wraps rather than stopping, so a build slow enough to exhaust the order
-  // starts again rather than holding the last note for the rest of the wait.
-  const note = notes.length ? notes[noteIndex % notes.length] : null;
+  const card = choice?.card ?? null;
 
   // Rendered as a centred overlay rather than inline. Inline, it sits below the
   // suggestion list and lands off-screen exactly when the user has just picked
@@ -237,6 +282,7 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
            losing the bottom of it. */
         className="w-full max-w-xl max-h-[90vh] overflow-y-auto border border-line bg-panel p-7 shadow-2xl sm:p-9"
       >
+        <style>{HINT_STYLES}</style>
         {/* ---- THE PROGRESS, REDUCED TO ONE LINE --------------------------
             Five labelled rows with ticks and a pulsing underline took the
             middle of the card, and they are the dull part: a reader cannot act
@@ -274,33 +320,58 @@ export const BuildPipeline: React.FC<{ active: boolean }> = ({ active }) => {
           <div className={`${UI} mt-2.5 text-quiet`}>{STAGES[stage]}</div>
         </div>
 
-        {/* ---- THE NOTE, WHICH IS WHY THIS SCREEN IS WORTH LOOKING AT ------
-            It was below the checklist, in 12px grey, under an eyebrow reading
-            "While you wait" — which is an apology for the wait rather than a
-            reason to read. A reader who has just asked for a valuation is
-            exactly the reader for whom one correction about how accounts behave
-            is worth having, so it is the content of the card now and the
-            progress is the furniture.
+        {/* ---- THE CARD, WHICH IS WHY THIS SCREEN IS WORTH LOOKING AT ------
+            A reader who has just asked for a valuation is exactly the reader
+            for whom one correction about how accounts behave is worth having,
+            so it is the content of the card and the progress is the furniture.
 
-            `aria-live` is off deliberately: the card announces its progress, and
-            a note changing every six seconds would talk over it. */}
-        {note && (
-          <div aria-live="off">
+            THE WHY IS BEHIND THE ⓘ, not printed under the fact. Three
+            paragraphs on a screen somebody is waiting to leave is three
+            paragraphs nobody reads; the mechanism is there for the reader who
+            wants it, on hover, on keyboard focus and on a tap.
+
+            `aria-live` is off deliberately: the card announces its progress,
+            and a card changing underneath would talk over it. */}
+        {card && (
+          <div aria-live="off" data-myth-card={card.id}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
-                key={note.key}
+                key={card.id}
                 initial={reduced ? false : { opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduced ? undefined : { opacity: 0, y: -6 }}
                 transition={{ duration: reduced ? 0 : 0.35, ease: 'easeOut' }}
               >
-                <p className={`${BODY} text-muted italic`}>{note.belief}</p>
-                {/* The fact is the headline of this screen, so it is set like
-                    one: the display face, at a size that carries the card. */}
-                <p className="mt-3 font-display text-[clamp(1.25rem,2.4vw,1.75rem)] font-medium leading-[1.2] tracking-tight text-ink">
-                  {note.fact}
+                <p className={`${BODY} text-muted italic`} data-myth>
+                  {card.myth}
                 </p>
-                <p className={`${BODY} mt-3.5 text-read`}>{note.why}</p>
+                {/* The fact is the headline of this screen, so it is set like
+                    one: the display face, at a size that carries the card.
+                    Its row is held open before it arrives so the card does not
+                    jump when it does. */}
+                <div className="mt-3 min-h-[2.4em]">
+                  <AnimatePresence initial={false}>
+                    {showFact && (
+                      <motion.p
+                        data-fact
+                        initial={reduced ? false : { opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: reduced ? 0 : 0.35, ease: 'easeOut' }}
+                        className="font-display text-[clamp(1.25rem,2.4vw,1.75rem)] font-medium leading-[1.2] tracking-tight text-ink"
+                      >
+                        {card.fact}
+                        <Hint label="Why that is so">
+                          <p>{card.why}</p>
+                          <p className="mt-2 text-quiet">
+                            {choice?.matched
+                              ? `Shown because this company's filed figures meet: ${card.showWhen}.`
+                              : 'Shown for any company: this one\u2019s figures earned no card of their own.'}
+                          </p>
+                        </Hint>
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
               </motion.div>
             </AnimatePresence>
           </div>

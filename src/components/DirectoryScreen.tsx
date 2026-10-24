@@ -65,7 +65,7 @@ interface DirectoryScreenProps {
   onSelectCompany: (ticker: string) => void;
   onBackToHome: () => void;
   onLookupTicker: (ticker: string) => void;
-  lookupState: { loading: boolean; error: string | null };
+  lookupState: { loading: boolean; error: string | null; payload?: any };
 }
 
 export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
@@ -281,7 +281,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           </p>
 
           {/* While a model is being built, name the stages instead of spinning */}
-          <BuildPipeline active={lookupState.loading} />
+          <BuildPipeline active={lookupState.loading} payload={lookupState.payload} />
 
           {/* Grey, not oxblood. This is a missed step, not a failure, and a
               red box would tell the user the site is broken when it is not. */}

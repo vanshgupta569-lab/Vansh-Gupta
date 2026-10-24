@@ -943,58 +943,322 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 
-// ---- the loading-screen notes hold together --------------------------------
+// ---------------------------------------------------------------------------
+// THE MYTH-VERSUS-FACT CARDS: NOT ONE WORD OF THEM IS THIS CODE'S
+// ---------------------------------------------------------------------------
 //
-// A content file, so most of what matters about it cannot be checked by a
-// machine — whether a note states mechanics rather than merit is a reading, not
-// a test. Three things can be: that no entry is missing a field a reader would
-// be shown, that no key is duplicated (React would then reuse one note's DOM for
-// another), and that the ordering rule the `group` field exists for actually
-// holds. The last is the one worth having: it is a greedy rule over a shuffle,
-// so it is exercised over many shuffles rather than reasoned about.
+// The sixty cards were written and checked for accuracy away from this
+// repository, and `src/data/myth_fact_cards.csv` is the copy of record.
+// `src/data/mythFactCards.ts` is generated from it so the site can import
+// typed data rather than parse a CSV in a browser.
+//
+// A GENERATED FILE THAT NOBODY CHECKS IS A FILE SOMEBODY EDITS. So this reads
+// the CSV again, cell by cell, and compares it with what the site actually
+// imports: a card reworded in the TypeScript, a condition quietly adjusted to
+// match what the code does, a row dropped, a new row added by hand — any of
+// them fails here. The comparison is exact, including the punctuation and the
+// minus signs in the conditions, because "do not reword them" is the
+// instruction the cards arrived with.
 {
-  console.log('\n=== the loading-screen notes ===');
-  const { DID_YOU_KNOW, noteOrder } = await import(`file:///${REPO}/src/data/didYouKnow.ts`);
-  let bad = 0;
-  const GROUPS = ['income', 'balance', 'cash', 'valuation', 'reading'];
+  console.log('\n=== the myth-versus-fact cards are the CSV, to the character ===');
+  const { MYTH_FACT_CARDS } = await import(`file:///${REPO}/src/data/mythFactCards.ts`);
 
-  const seen = new Set<string>();
-  for (const n of DID_YOU_KNOW as any[]) {
-    for (const field of ['key', 'group', 'belief', 'fact', 'why']) {
-      if (typeof n[field] !== 'string' || !n[field].trim()) {
-        bad++;
-        console.log(`  PROBLEM: ${n.key ?? '(no key)'} has no ${field}`);
+  /** RFC4180 enough for this file: quoted fields, doubled quotes, commas in them. */
+  const parseCsv = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = '';
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; } else quoted = false;
+        } else field += c;
+        continue;
+      }
+      if (c === '"') { quoted = true; continue; }
+      if (c === ',') { row.push(field); field = ''; continue; }
+      if (c === '\r') continue;
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue; }
+      field += c;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter((r) => r.length > 1 || (r[0] || '').trim() !== '');
+  };
+
+  const csvPath = path.join(REPO, 'src', 'data', 'myth_fact_cards.csv');
+  const rows = parseCsv(fs.readFileSync(csvPath, 'utf8'));
+  const head = rows[0].map((h) => h.trim());
+  const at = (r: string[], name: string) => r[head.indexOf(name)];
+  const columns: [string, string][] = [
+    ['ID', 'id'],
+    ['Myth', 'myth'],
+    ['Fact', 'fact'],
+    ['Why', 'why'],
+    ['Show when', 'showWhen'],
+    ['Topic', 'topic'],
+    ['Applies to', 'appliesTo'],
+  ];
+
+  const faults: string[] = [];
+  for (const [column] of columns) {
+    if (!head.includes(column)) faults.push(`the CSV has no "${column}" column any more`);
+  }
+  const cards: any[] = MYTH_FACT_CARDS as any[];
+  if (rows.length - 1 !== cards.length) {
+    faults.push(`the CSV has ${rows.length - 1} cards and the site imports ${cards.length}`);
+  }
+  let cells = 0;
+  for (let i = 1; i < rows.length && !faults.length; i++) {
+    const want = rows[i];
+    const got = cards[i - 1];
+    for (const [column, key] of columns) {
+      cells++;
+      const a = key === 'id' ? String(got?.id) : String(got?.[key]);
+      const b = String(at(want, column));
+      if (a !== b) {
+        faults.push(`card ${at(want, 'ID')} ${key}: the CSV says ${JSON.stringify(b.slice(0, 70))} and the site imports ${JSON.stringify(a.slice(0, 70))}`);
       }
     }
-    if (!GROUPS.includes(n.group)) { bad++; console.log(`  PROBLEM: ${n.key} is in an unknown group "${n.group}"`); }
-    if (seen.has(n.key)) { bad++; console.log(`  PROBLEM: the key "${n.key}" appears twice`); }
-    seen.add(n.key);
   }
 
-  // Every note must be shown once per pass, and no group three times running
-  // until the remainder leaves no choice. The tail of a fifty-three-note order
-  // can; the first twenty, which is over two minutes of waiting, must not.
-  const SHUFFLES = 400;
-  const HEAD = 20;
-  let runs = 0;
-  let incomplete = 0;
-  for (let s = 0; s < SHUFFLES; s++) {
-    const order: any[] = noteOrder();
-    if (order.length !== DID_YOU_KNOW.length || new Set(order.map((n) => n.key)).size !== order.length) incomplete++;
-    for (let i = 2; i < Math.min(HEAD, order.length); i++) {
-      if (order[i].group === order[i - 1].group && order[i].group === order[i - 2].group) runs++;
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} differences between the CSV and what the site imports:`);
+    faults.slice(0, 6).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(`  ${cards.length} cards, ${cells} cells, identical to the CSV in every one`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// A CARD IS NEVER SHOWN TO A COMPANY IT DOES NOT FIT
+// ---------------------------------------------------------------------------
+//
+// Each card carries a "Show when" condition and an audience. A card may be
+// shown only when the audience includes this company AND the condition is TRUE
+// on its filed figures. The third answer is what this check is really about:
+//
+//     A CONDITION THAT CANNOT BE ESTABLISHED IS NOT FALSE, AND IT IS NOT TRUE.
+//
+// A company that does not report lease liabilities has not reported lease
+// liabilities of nil (standing decision 3), so a card about leases must not
+// fire on it. Written the obvious way — `(a ?? 0) > (b ?? 0) * 0.2` — every
+// such card fires on every company that is missing the line, which is the
+// failure this check exists to prevent and the easiest one to write by
+// accident.
+//
+// Measured over the payload set, and then on the same companies with the
+// figures taken away.
+{
+  console.log('\n=== a myth-versus-fact card is never shown to a company it does not fit ===');
+  const { MYTH_FACT_CARDS } = await import(`file:///${REPO}/src/data/mythFactCards.ts`);
+  const { pickMythFactCard, CONDITIONS, Figures, cannotBeEstablished } = await import(
+    `file:///${REPO}/src/data/mythFactMatch.ts`
+  );
+  const { isFinancialCompany } = await import(`file:///${REPO}/src/data/residualIncome.js`);
+
+  const cards: any[] = MYTH_FACT_CARDS as any[];
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  const faults: string[] = [];
+  let read = 0;
+  let matched = 0;
+  let fellBack = 0;
+  const verdicts = { yes: 0, no: 0, unknown: 0 };
+  const fired = new Map<number, number>();
+
+  for (const file of files) {
+    let payload: any;
+    try { payload = readPayload(file); } catch { continue; }
+    if (payload?.error || payload?.fetchError || !payload?.statements?.length) continue;
+    read++;
+    const ticker = file.replace(/\.json$/, '');
+    const bank = (isFinancialCompany as any)(payload);
+
+    for (const card of cards) {
+      let v: any = null;
+      try { v = (CONDITIONS as any)[card.id](new (Figures as any)(payload.statements)); } catch { v = null; }
+      if (v === true) { verdicts.yes++; fired.set(card.id, (fired.get(card.id) ?? 0) + 1); }
+      else if (v === false) verdicts.no++;
+      else verdicts.unknown++;
+      if (v !== true && v !== false && v !== null) {
+        faults.push(`${ticker} card ${card.id}: the condition answered ${JSON.stringify(v)}, which is not true, false or unknown`);
+      }
+    }
+
+    const choice: any = pickMythFactCard(payload, 20261024);
+    if (!choice) {
+      faults.push(`${ticker}: no card at all, not even one for any company`);
+      continue;
+    }
+    // THE AUDIENCE. A bank must never be shown a card written about non-banks.
+    const fits =
+      choice.card.appliesTo === 'All companies' ||
+      choice.card.appliesTo === (bank ? 'Banks only' : 'Non-banks only');
+    if (!fits) {
+      faults.push(`${ticker} is ${bank ? 'a bank' : 'not a bank'} and was shown a "${choice.card.appliesTo}" card (${choice.card.id})`);
+    }
+    // THE CONDITION. Whatever was shown must hold, or be a card for any company.
+    let held: any = null;
+    try { held = (CONDITIONS as any)[choice.card.id](new (Figures as any)(payload.statements)); } catch { held = null; }
+    if (held !== true) {
+      faults.push(`${ticker} was shown card ${choice.card.id}, whose condition is ${held === null ? 'not established' : 'false'}`);
+    }
+    if (choice.matched) matched++;
+    else {
+      fellBack++;
+      if (choice.card.showWhen.trim().toLowerCase() !== 'any company') {
+        faults.push(`${ticker} fell back to card ${choice.card.id}, which is not an "Any company" card`);
+      }
     }
   }
-  if (incomplete) { bad += incomplete; console.log(`  PROBLEM: ${incomplete} of ${SHUFFLES} orders drop or repeat a note`); }
-  if (runs) { bad += runs; console.log(`  PROBLEM: ${runs} runs of three from one group inside the first ${HEAD} notes`); }
 
-  const byGroup = GROUPS.map((g) => `${g} ${(DID_YOU_KNOW as any[]).filter((n) => n.group === g).length}`).join(', ');
+  const never = cards.filter((c) => !fired.has(c.id));
+  const unreachable = never.filter((c) => cannotBeEstablished(c.id));
   console.log(
-    `  ${DID_YOU_KNOW.length} notes (${byGroup}); ${SHUFFLES} shuffles checked -- ` +
-      `${bad ? bad + ' PROBLEMS' : 'each shown once, never three from one group in the first ' + HEAD}`
+    `  ${read} companies x ${cards.length} cards: ${verdicts.yes} conditions true, ${verdicts.no} false, ` +
+      `${verdicts.unknown} that cannot be established from what the source gives us`
   );
-  totalProblems += bad;
+  console.log(
+    `  ${matched} companies earned a card of their own; ${fellBack} fell back to a card written for any company`
+  );
+  console.log(
+    `  ${never.length} cards never fire, ${unreachable.length} of them because the source does not return the line: ` +
+      unreachable.map((c) => c.id).join(', ')
+  );
+
+  // THE PROBE. The same companies with every filed figure taken out.
+  //
+  // TWO THINGS GO WRONG WHEN AN ABSENT LINE IS READ AS NIL, and only one of
+  // them shows a card. `(leases ?? 0) > (debt ?? 0) / 5` never fires on a
+  // company with no figures — nought is not greater than nought — so looking
+  // only for cards that fire would pass it. What it actually does is turn 99
+  // conditions that cannot be established into a confident "no". Both are the
+  // same mistake and both are caught here: with nothing filed, every
+  // condition but the three written for any company must answer UNKNOWN.
+  let wrongOnEmpty = 0;
+  let judgedWithNothing = 0;
+  for (const file of files.slice(0, 40)) {
+    let payload: any;
+    try { payload = readPayload(file); } catch { continue; }
+    if (!payload?.statements?.length) continue;
+    const blank = {
+      ...payload,
+      statements: payload.statements.map((row: any) => ({ fiscalYear: row.fiscalYear, periodEnd: row.periodEnd })),
+    };
+    for (const card of cards) {
+      let v: any = null;
+      try { v = (CONDITIONS as any)[card.id](new (Figures as any)(blank.statements)); } catch { v = null; }
+      if (card.showWhen.trim().toLowerCase() === 'any company') continue;
+      if (v === true) {
+        wrongOnEmpty++;
+        if (wrongOnEmpty <= 4) {
+          faults.push(
+            `card ${card.id} fires on a company with no figures at all: "${card.showWhen.slice(0, 58)}" — an absent line is being read as nil`
+          );
+        }
+      } else if (v === false) {
+        judgedWithNothing++;
+        if (judgedWithNothing <= 4) {
+          faults.push(
+            `card ${card.id} answers "no" for a company with no figures at all: "${card.showWhen.slice(0, 58)}" — it cannot be established, which is not the same as false`
+          );
+        }
+      }
+    }
+  }
+  if (!wrongOnEmpty && !judgedWithNothing) {
+    console.log(
+      '  with every filed figure removed from 40 companies, every condition but the three written for any ' +
+        'company answers that it cannot be established -- none fires, and none claims a confident no'
+    );
+  }
+
+  // TAKING A FIGURE AWAY CAN ONLY MAKE AN ANSWER LESS CERTAIN.
+  //
+  // Blanking every figure at once does not catch the commonest way this goes
+  // wrong, because two absent lines compared with each other often still
+  // answer. The failure needs a company that reports MOST things: Apple files
+  // no dividends line in a year it earned a profit, and a condition written
+  // `(dividends ?? 0) === 0 && profit > 0` then reads "pays no dividend" off a
+  // line that is not there — eighteen cards shown to companies that never
+  // earned them, every one of them plausible on the screen.
+  //
+  // So one field is removed at a time from a real company, and the rule is a
+  // direction rather than a value: the verdict may stay as it was, or become
+  // unknown, and NOTHING ELSE. A definite answer that changes to a different
+  // definite answer because a line went missing is a line being read as nil.
+  // A QUANTITY, NOT A TAG. Several quantities are filed under whichever of
+  // two or three lines the company uses, and the code falls back along that
+  // chain on purpose — total debt is the filed total if there is one and the
+  // long and short pieces otherwise. Dropping ONE of those tags therefore
+  // changes the answer legitimately, because the quantity is still reported.
+  // What must never happen is the answer surviving when the whole quantity
+  // goes, so each chain is removed together.
+  const FIELDS: string[][] = [
+    ['revenue'], ['cogs'], ['rnd'], ['sga'], ['operatingIncome'], ['pretaxIncome'], ['taxExpense'],
+    ['netIncome'], ['interestExpense'], ['receivables'], ['inventory'], ['currentAssets'], ['ppeNet'],
+    ['totalAssets'], ['payables'], ['currentLiabilities'], ['leaseObligations'], ['totalLiabilities'],
+    ['equity'], ['goodwill'], ['intangibles'], ['depreciation'], ['capex'], ['operatingCashFlow'],
+    ['buybacks'], ['stockComp'], ['dilutedShares'], ['longTermInvestments'],
+    ['cash', 'shortTermInvestments', 'cashAndShortTermInvestments'],
+    ['longTermDebt', 'currentDebt', 'currentDebtAndLease', 'longTermDebtAndLease', 'totalDebtReported'],
+    ['dividendsPaid', 'commonDividendsPaid'],
+  ];
+  const judge = (statements: any[], id: number) => {
+    try {
+      return (CONDITIONS as any)[id](new (Figures as any)(statements));
+    } catch {
+      return null;
+    }
+  };
+  let flipped = 0;
+  let probed = 0;
+  for (const file of ['AAPL.json', 'RELIANCE.NS.json', 'BP.L.json', 'MSFT.json'].filter((f) => files.includes(f))) {
+    let payload: any;
+    try { payload = readPayload(file); } catch { continue; }
+    if (!payload?.statements?.length) continue;
+    for (const group of FIELDS) {
+      const field = group.join(' / ');
+      const without = payload.statements.map((row: any) => {
+        const copy = { ...row };
+        for (const one of group) delete copy[one];
+        return copy;
+      });
+      for (const card of cards) {
+        if (card.showWhen.trim().toLowerCase() === 'any company') continue;
+        probed++;
+        const before = judge(payload.statements, card.id);
+        const after = judge(without, card.id);
+        if (after !== before && after !== null) {
+          flipped++;
+          if (flipped <= 4) {
+            faults.push(
+              `card ${card.id} on ${file.replace(/.json$/, '')}: dropping ${field} turned ${String(before)} into ` +
+                `${String(after)} rather than into "cannot be established" — the absent line is being read as a figure`
+            );
+          }
+        }
+      }
+    }
+  }
+  if (!flipped) {
+    console.log(
+      `  ${probed.toLocaleString('en-US')} answers re-tested with one filed line removed at a time: every one ` +
+        'either held or became unknown, none turned into a different answer'
+    );
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} cards shown to a company they do not fit:`);
+    faults.slice(0, 8).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log('  every card shown is one whose audience includes the company and whose condition holds on its filings');
+  }
 }
+
 
 // ---- the explainers are whole, and reachable -------------------------------
 //

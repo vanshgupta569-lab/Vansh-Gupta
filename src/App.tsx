@@ -78,7 +78,16 @@ export default function App() {
   // Companies fetched and modelled on demand this session. They sit alongside
   // the curated ones and are discarded on refresh — nothing is stored.
   const [loadedCompanies, setLoadedCompanies] = useState<Record<string, CompanyData>>({});
-  const [lookupState, setLookupState] = useState<{ loading: boolean; error: string | null }>({
+  // `payload` on this state is the FIGURES ARRIVING WHILE THE READER WAITS.
+  // The loading screen shows one myth-versus-fact card drawn from the
+  // company's own filings, so it needs them as soon as they land rather than
+  // when the screen after it opens — which on a fast fetch is nearly five
+  // seconds later, because the build stages are held on screen deliberately.
+  const [lookupState, setLookupState] = useState<{
+    loading: boolean;
+    error: string | null;
+    payload?: any;
+  }>({
     loading: false,
     error: null,
   });
@@ -223,6 +232,10 @@ export default function App() {
       // Fetch the filings and stop. Nothing is modelled until the reader has
       // had the chance to look at what it would be modelled from.
       const fetched = await fetchCompanyPayload(ticker);
+      // Handed to the loading screen BEFORE the hold below, so the card it is
+      // showing becomes this company's card while the reader is still
+      // watching rather than a moment after they have left.
+      setLookupState({ loading: true, error: null, payload: fetched });
       await settle();
       setPayload(fetched);
       // A new company gets the engine's own defaults back. A judgement made
