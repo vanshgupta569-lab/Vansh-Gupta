@@ -359,8 +359,60 @@ async function checkBottomBarClearance(page: Page, label: string) {
     `it runs ${r.over}px past the top of the bar — "${r.worst}"`);
 }
 
-async function openFetched(page: Page, ticker: string) {
+/**
+ * Search box to finished model, the way a reader goes.
+ *
+ * ONE DEFINITION, because three checks walked this route and each spelled it
+ * out again — so when a search stopped landing in the figures editor and
+ * started landing on the company page, all three broke separately.
+ */
+async function openModelled(page: Page, ticker: string) {
   await search(page, ticker);
+  if (!(await openModelTab(page, ticker))) return;
+  await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
+  await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
+  await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
+}
+
+/** From wherever a search lands, into the figures editor. */
+async function openModelTab(page: Page, ticker: string): Promise<boolean> {
+  // WAIT FOR THE COMPANY PAGE, NOT FOR AN <h1>. The search screen has one of
+  // its own, so waiting on the heading resolved while the loading screen was
+  // still up — the site holds that for 4.8 seconds on purpose — and the path
+  // read back as "/" for a navigation that had not happened yet.
+  // REPORTED, NOT THROWN. When a search stops landing on the company page
+  // this is the thing that is wrong, and a check that dies on the wait prints
+  // a Playwright timeout instead of naming it.
+  const arrived = await page
+    .locator('nav[aria-label="Company sections"]')
+    .first()
+    .waitFor({ timeout: 90_000 })
+    .then(() => true)
+    .catch(() => false);
+  const landed = new URL(page.url()).pathname;
+  if (!arrived || landed !== `/company/${ticker}/overview`) {
+    fail(
+      `where a search for ${ticker} lands`,
+      `/company/${ticker}/overview, with the company page on screen`,
+      arrived ? landed : `${landed} — no company page rendered`
+    );
+    return false;
+  }
+  ok(`a search for ${ticker} lands on its company page, at its own address`);
+  await page.getByRole('button', { name: /^model$/i }).first().click({ timeout: 30_000 });
+  await page
+    .getByRole('button', { name: new RegExp(`open the figures for ${ticker}`, 'i') })
+    .click({ timeout: 60_000 });
+  return true;
+}
+
+async function openFetched(page: Page, ticker: string) {
+  // A SEARCH LANDS ON THE COMPANY PAGE, not inside the figures editor, so
+  // this goes the way a reader does: the Overview, then the Model tab, then
+  // the figures. The assertions below are unchanged — only the route to them
+  // is, which is the point of driving the site rather than calling into it.
+  await search(page, ticker);
+  if (!(await openModelTab(page, ticker))) return;
   // The figures screen shows the filings before anything is modelled, and the
   // site holds it for a few seconds on purpose, so this waits rather than races.
   await page.getByRole('button', { name: /^build the model$/i }).waitFor({ timeout: 90_000 });
@@ -750,10 +802,7 @@ async function checkTickerOnScreen(page: Page, ticker: string) {
         }),
       })
     );
-    await search(page, ticker);
-    await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
-    await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
-    await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
+    await openModelled(page, ticker);
     await page.waitForTimeout(1200);
   };
 
@@ -1612,10 +1661,7 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
  */
 async function checkTradingCurrencyOnScreen(page: Page, ticker: string) {
   console.log('\n=== a value shown in the currency the share trades in ===');
-  await search(page, ticker);
-  await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
-  await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
-  await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
+  await openModelled(page, ticker);
 
   // 1. the hero. Scoped to the figure it belongs to rather than searched for
   //    across the body, because a body-wide match would also pass with the

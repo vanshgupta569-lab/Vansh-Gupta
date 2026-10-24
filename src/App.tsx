@@ -233,7 +233,20 @@ export default function App() {
       setFiguresFromModel(false);
       setSelectedTicker(ticker);
       setLookupState({ loading: false, error: null });
-      setCurrentScreen('FIGURES');
+      // A SEARCH LANDS ON THE COMPANY, NOT INSIDE ONE OF ITS SCREENS.
+      //
+      // Typing a ticker used to drop the reader straight into the figures
+      // editor, which is one tab of a company and not the company: no price,
+      // no chart, no profile, no address to send anybody, and no way to see
+      // what the company IS before being asked to check its numbers. It now
+      // goes to /company/<ticker>/overview, and the Model tab there opens the
+      // same figures screen unchanged.
+      //
+      // The payload fetched above travels with it, so the hub finds the
+      // company already in hand and does not fetch a second time — and the
+      // figures the Model tab opens are the ones this fetch returned rather
+      // than a second copy fetched a minute later.
+      nav.go(companyPath(ticker));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       await settle();
