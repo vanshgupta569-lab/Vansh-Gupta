@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-20T00:00:00.000Z",
+  "generatedAt": "2026-10-24T00:00:00.000Z",
   "title": "Design System: Marginalia",
   "extensions": {
     "colorMeta": {
@@ -421,6 +421,24 @@
       "description": "The container form: square, hairline-bordered, panel ground, divided internally by hairlines. Figure columns separate with a 1px gap over a hairline background rather than with more borders.",
       "html": "<section class=\"ds-panel\" aria-label=\"Valuation\"><div class=\"ds-panel-head\"><span class=\"ds-panel-ticker\">AAPL</span><span class=\"ds-panel-name\">Apple Inc.</span></div><div class=\"ds-panel-grid\"><div class=\"ds-panel-cell\"><div class=\"ds-cell-eyebrow\">Intrinsic value</div><div class=\"ds-cell-value\">$184.26</div></div><div class=\"ds-panel-cell\"><div class=\"ds-cell-eyebrow\">Live price · USD</div><div class=\"ds-cell-value\">$209.41</div></div></div></section>",
       "css": ".ds-panel { border: 1px solid var(--m-line, #262521); background: var(--m-panel, #111114); border-radius: 0; } .ds-panel-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; border-bottom: 1px solid var(--m-line, #262521); padding: 16px 20px; } .ds-panel-ticker { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 700; letter-spacing: normal; color: var(--m-accent-text, #D05E58); } .ds-panel-name { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.035em; color: var(--m-ink, #F2F0EA); } .ds-panel-grid { display: grid; gap: 1px; background: var(--m-line, #262521); grid-template-columns: 1.25fr 1fr; } .ds-panel-cell { background: var(--m-panel, #111114); padding: 24px 20px; } .ds-cell-eyebrow { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-size: 13px; font-weight: 500; letter-spacing: normal; color: var(--m-quiet, #85816F); margin-bottom: 6px; } .ds-cell-value { font-family: var(--font-figure); font-variant-numeric: tabular-nums lining-nums; font-variant-numeric: tabular-nums; font-size: clamp(1.625rem, 3vw, 2.375rem); font-weight: 500; line-height: 1; letter-spacing: -0.02em; color: var(--m-ink, #F2F0EA); }"
+    },
+    {
+      "name": "Section Tab Bar",
+      "kind": "navigation",
+      "refersTo": "nav-tabs",
+      "description": "One tab per section of a company, each at its own address. The panel ground inside the same hairline box as the identity block above it; hairlines drawn BY the tabs, never by a line-coloured ground showing through a gap, which puts a slab of line colour past the last tab. The current tab takes the page ground and a two-pixel oxblood underline as an inset shadow, so it reads as cut out of the bar. Scrolls horizontally on a phone rather than wrapping or collapsing to a menu.",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"Company sections\"><button type=\"button\" class=\"ds-tab ds-tab-current\" aria-current=\"page\">Overview</button><button type=\"button\" class=\"ds-tab\">Financials</button><button type=\"button\" class=\"ds-tab\">Filings</button><button type=\"button\" class=\"ds-tab\">Model</button></nav>",
+      "css": ".ds-tabs { display: flex; overflow-x: auto; background: var(--m-panel, #111114); border-left: 1px solid var(--m-line, #262521); border-right: 1px solid var(--m-line, #262521); border-bottom: 1px solid var(--m-line, #262521); } .ds-tab { flex: none; font-family: var(--font-figure); font-size: 13px; font-weight: 500; color: var(--m-muted, #A8A29A); background: transparent; border: 0; border-right: 1px solid var(--m-line, #262521); padding: 12px 16px; white-space: nowrap; cursor: pointer; transition: color 0.2s, background 0.2s; } .ds-tab:hover { color: var(--m-ink, #F2F0EA); background: rgba(11,11,13,0.4); } .ds-tab-current { color: var(--m-ink, #F2F0EA); background: var(--m-page, #0B0B0D); box-shadow: inset 0 -2px 0 var(--m-accent, #8B1E1E); }",
+      "notes": "A tab that is not built renders a heading, a neutral \"being built\" pill and one sentence naming what it will carry. Never a greyed table or placeholder rows."
+    },
+    {
+      "name": "Two-Axis Price Chart",
+      "kind": "chart",
+      "refersTo": "chart-price",
+      "description": "Plain SVG, no charting library, because a library decides for itself what to do with a gap and this chart must never join a line across a ratio that does not exist. The price is a 1.5px ink line on a fill fading from 10% ink; it owns the LEFT axis. An overlay is amber and owns the RIGHT axis, always — never one shared scale, which flattens one quantity into the baseline. A second overlay line is dashed in read oxblood on its own scale, with the caption saying which axis belongs to which. Where the series has no point the path breaks rather than bridging.",
+      "html": "<section class=\"ds-chart\" aria-label=\"Price history\"><svg role=\"img\" viewBox=\"0 0 520 160\" aria-label=\"Price over 1Y, with P / E\"><path class=\"ds-chart-fill\" d=\"M40 120 L160 92 L280 100 L400 64 L480 48 L480 140 L40 140 Z\"/><path class=\"ds-chart-price\" d=\"M40 120 L160 92 L280 100 L400 64 L480 48\"/><path class=\"ds-chart-overlay\" d=\"M40 108 L160 84 L280 96\"/><path class=\"ds-chart-overlay\" d=\"M400 60 L480 52\"/><text class=\"ds-chart-axis\" x=\"32\" y=\"124\" text-anchor=\"end\">$200</text><text class=\"ds-chart-axis ds-chart-axis-right\" x=\"488\" y=\"52\" text-anchor=\"start\">30.0x</text></svg><p class=\"ds-chart-readout\">262 daily closes. Point at the chart to read a day.</p></section>",
+      "css": ".ds-chart { background: var(--m-panel, #111114); border: 1px solid var(--m-line, #262521); padding: 20px; } .ds-chart-fill { fill: rgba(242,240,234,0.10); } .ds-chart-price { fill: none; stroke: var(--m-ink, #F2F0EA); stroke-width: 1.5; stroke-linejoin: round; } .ds-chart-overlay { fill: none; stroke: var(--m-amber, #C79A2E); stroke-width: 1.25; stroke-linejoin: round; } .ds-chart-overlay-second { stroke: var(--m-accent-text, #D05E58); stroke-dasharray: 4 3; } .ds-chart-axis { font-family: var(--font-figure); font-size: 11px; fill: var(--m-quiet, #85816F); } .ds-chart-axis-right { fill: var(--m-amber, #C79A2E); } .ds-chart-readout { font-family: var(--font-sans); font-size: 13px; color: var(--m-quiet, #85816F); margin: 8px 0 0; min-height: 22px; }",
+      "notes": "The readout sits in a fixed place under the chart, never following the pointer: a tooltip that moves makes the eye chase it, and its figures are meant to be compared with the ones above. The break in the overlay path above is deliberate — it is what a gap looks like."
     }
   ],
   "narrative": {
@@ -540,6 +558,26 @@
         "name": "The Four Steps Rule",
         "body": "Title, section, body, small, and nothing between them. The site asked for twenty-five sizes between 9px and 62px before this; the remapping block in index.css snaps any stray arbitrary size onto one of the four, so a twenty-sixth cannot be introduced by writing one.",
         "section": "typography"
+      },
+      {
+        "name": "The Empty End Rule",
+        "body": "Hairlines between tabs are drawn by the tabs themselves, never by letting a line-coloured ground show through a gap. Drawn the second way, the space past the last tab is a slab of line colour across the page, which reads as a broken element rather than a divider.",
+        "section": "components"
+      },
+      {
+        "name": "The Two-Axis Rule",
+        "body": "On a chart, the price owns the left axis and an overlay owns the right, in amber, always. Never one shared scale: a price-to-earnings of 46 and a price of $344 share an axis only by flattening one of them into the baseline, and a flat line is a claim about a quantity that did not move. Two overlay lines each get their own scale, the second dashed, with the caption saying which axis is which.",
+        "section": "components"
+      },
+      {
+        "name": "The Gap Is A Gap Rule",
+        "body": "Where a series has no point — a loss year with no price-to-earnings, a day before the earliest filing held — the path breaks and starts again rather than bridging, and the readout says why in words. Interpolating invents a figure and a flat join invents a period that did not move.",
+        "section": "components"
+      },
+      {
+        "name": "The Unbuilt Section Rule",
+        "body": "A section that is not built shows a heading, a neutral \"being built\" pill and one sentence naming what it will carry. Never a greyed-out table, placeholder rows or an empty state dressed as real data: a mocked-up section is the most convincing false claim a site can make.",
+        "section": "components"
       }
     ],
     "dos": [

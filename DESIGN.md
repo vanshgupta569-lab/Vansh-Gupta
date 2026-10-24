@@ -582,6 +582,32 @@ the bar passes throughout the defect — that is luck, not clearance.
   blur and a hairline bottom border, carrying the ticker in read oxblood, the
   company name in muted, and price and implied value as small mono figures.
 
+**Section tabs, inside a screen.** A company has one address per section
+(`/company/RELIANCE.NS/overview`), and the tabs that move between them are a
+row directly under the identity block, not a second bar at the top of the
+page: the fixed header already owns that edge, and two bars of chrome above
+the first figure is the clutter the first principle forbids.
+
+The row is the panel ground inside the same hairline box as the block above
+it, with a hairline between tabs; the current tab takes the page ground and a
+two-pixel oxblood underline drawn as an inset shadow, so the tab reads as cut
+out of the bar rather than painted on it. Labels are the small step in muted,
+ink on hover, and the row scrolls horizontally on a phone rather than wrapping
+to two lines or collapsing into a menu — nine sections wrapped is a paragraph
+of chrome, and a menu hides the fact that the sections exist.
+
+**THE RULE OF THE EMPTY END.** The hairlines between tabs are drawn by the
+tabs, never by letting a line-coloured ground show through a gap. Drawn the
+second way, the space to the right of the last tab is a slab of line colour
+across the page — which is what it was at first, and it reads as a broken
+element rather than as a divider.
+
+**A tab that is not built shows one line and nothing else.** A heading, a
+neutral "being built" pill, and the sentence naming what it will carry. No
+greyed-out table, no placeholder rows, no empty state dressed as a company
+with no data: a mocked-up section is the most convincing false claim a site
+can make, and standing decision 7 forbids it.
+
 ### Signature Components
 
 **Figure.** An eyebrow in quiet above, the number large and alone, an optional
@@ -622,6 +648,36 @@ disagreement means is what opens.
 beside a muted tabular value, 20px apart. Identity is reference, not headline: a
 reader who typed the ticker knows which company this is, so it is set at label
 size and the space the company name used to take went to the figure.
+
+**PriceChart.** Plain SVG, no charting library. A library decides for itself
+what to do with a gap in the data, and the one thing this chart must never do
+is join a line across a ratio that does not exist; every decision about an
+absence is made in the data layer, where the suite can measure it, and the
+component only draws what it is given.
+
+The price is a 1.5px ink line over a fill that fades from 10% ink to nothing.
+Range and overlay chips are the chip component. Axis labels are 11px quiet,
+tabular; the crosshair is a quiet 3/3 dash with a 3px ink dot. The readout
+sits in a fixed place under the chart rather than following the pointer: a
+tooltip that moves makes the eye chase it, and the figures it carries are
+meant to be compared with the ones above.
+
+**THE TWO-AXIS RULE.** The price owns the left axis and an overlay owns the
+right, always, and an overlay is drawn in amber so it cannot be mistaken for
+the price. They are never put on one scale: a price-to-earnings of 46 and a
+price of $344 share an axis only by flattening one of them into the baseline,
+and a flat line is a claim about a quantity that did not move.
+
+Where an overlay carries two lines — sales and the margin on it — **each gets
+its own scale**, the second is drawn dashed in read oxblood, the right axis
+labels the first, and the caption says which axis belongs to which. The
+alternative, normalising both onto one axis, draws two shapes that are true
+only relative to themselves and leaves the reader no way to know it.
+
+**A gap is a gap.** Where the series has no point — a loss year with no
+price-to-earnings, a day before the earliest filing — the path breaks and
+starts again rather than bridging. The readout says so in words too, because
+a reader pointing at that stretch is owed a reason and not a blank.
 
 ## Do's and Don'ts
 
