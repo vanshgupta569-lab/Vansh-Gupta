@@ -1946,6 +1946,232 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// THE RUPEE RATE: THE OECD FIRST, FRED BEHIND IT, AND A REFUSAL IF BOTH GO
+// ---------------------------------------------------------------------------
+//
+// Five currencies are fetched from the institution that sets the rate. The
+// rupee is not: no daily Indian series is both openly licensed and reachable
+// from where this runs, so it comes from the OECD’s Main Economic Indicators
+// long-term interest rate, which is monthly.
+//
+// IT USED TO COME FROM FRED’S REPUBLICATION OF THAT SERIES, AND THAT WAS A
+// SINGLE POINT OF FAILURE WITH A MEASURED OUTAGE BEHIND IT. On 2026-10-22 FRED
+// answered every request with its own "Site Maintenance" page and six Indian
+// companies lost their valuation in an afternoon — correctly refused rather
+// than discounted at something else, but refused over a third party being down.
+//
+// So the OECD is asked first and FRED is kept behind it. What this check holds:
+//
+//   THE OECD ANSWERING MEANS FRED IS NOT ASKED AT ALL.
+//   THE OECD FAILING MEANS FRED ANSWERS WITH THE SAME RATE, TO THE LAST DIGIT.
+//   AN OECD ANSWER TOO SHORT TO AVERAGE HANDS ON RATHER THAN BEING AVERAGED.
+//   BOTH FAILING MEANS NO RATE, AND A REASON NAMING BOTH PUBLISHERS.
+//
+// The second is the one that matters and the easiest to get wrong: two sources
+// averaged even slightly differently would move every Indian valuation on the
+// day the first one went down, which is the failure the fallback exists to
+// prevent. The two are dated differently at source — the OECD says "2025-04"
+// and FRED says "2025-04-01" — so the rupee rate is one line of normalisation
+// away from a window that quietly holds eleven months instead of twelve.
+//
+// OFFLINE, ON PURPOSE. `fetch` is replaced for the length of the block, so the
+// suite does not depend on either publisher being up to check what happens when
+// one of them is down. The twelve months below were read from both sources on
+// 2026-10-24, where 175 of the 178 months they both carry are identical to the
+// last digit and the other three agree to within 7e-7 of a percentage point.
+{
+  console.log('\n=== the rupee rate: the OECD first, FRED behind it ===');
+  const { fetchRiskFreeRate } = await import(`file:///${REPO}/api/company.js`);
+
+  // The year to a 31 March balance sheet date, which is most Indian companies.
+  const MONTHS: [string, number][] = [
+    ['2025-04', 6.455],
+    ['2025-05', 6.272],
+    ['2025-06', 6.3075],
+    ['2025-07', 6.35],
+    ['2025-08', 6.522],
+    ['2025-09', 6.585],
+    ['2025-10', 6.482],
+    ['2025-11', 6.5375],
+    ['2025-12', 6.6325],
+    ['2026-01', 6.732],
+    ['2026-02', 6.77],
+    ['2026-03', 6.84],
+  ];
+  const MEAN = MONTHS.reduce((t, [, v]) => t + v, 0) / MONTHS.length / 100;
+
+  // Each publisher’s own format, including how each dates a month.
+  const oecdCsv = (rows: [string, number][]) =>
+    'DATAFLOW,REF_AREA,FREQ,MEASURE,UNIT_MEASURE,ACTIVITY,ADJUSTMENT,TRANSFORMATION,TIME_HORIZ,' +
+    'METHODOLOGY,TIME_PERIOD,OBS_VALUE,OBS_STATUS,UNIT_MULT,DECIMALS,BASE_PER\n' +
+    rows
+      .map(
+        ([month, value]) =>
+          `OECD.SDD.STES:DSD_STES@DF_FINMARK(4.0),IND,M,IRLT,PA,_Z,_Z,_Z,_Z,N,${month},${value},A,0,2,`
+      )
+      .join('\n');
+  const fredCsv = (rows: [string, number][]) =>
+    'observation_date,INDIRLTLT01STM\n' +
+    rows.map(([month, value]) => `${month}-01,${value.toFixed(14)}`).join('\n');
+
+  const asked = { oecd: 0, fred: 0 };
+  const realFetch = globalThis.fetch;
+  const stub =
+    (oecd: [string, number][] | null, fred: [string, number][] | null) =>
+    async (input: any) => {
+      const url = String(typeof input === 'string' ? input : input?.url ?? input);
+      const answer = (body: string) =>
+        ({ ok: true, status: 200, text: async () => body }) as any;
+      const down = (status: number) => ({ ok: false, status, text: async () => '' }) as any;
+      if (url.includes('sdmx.oecd.org')) {
+        asked.oecd++;
+        return oecd ? answer(oecdCsv(oecd)) : down(503);
+      }
+      if (url.includes('fredgraph.csv')) {
+        asked.fred++;
+        return fred ? answer(fredCsv(fred)) : down(503);
+      }
+      throw new Error(`the rupee check did not expect a request to ${url.slice(0, 60)}`);
+    };
+
+  const faults: string[] = [];
+  const near = (a: any, b: any) => typeof a === 'number' && Math.abs(a - b) < 1e-12;
+  let fromOecd: any = null;
+  let fromFred: any = null;
+  let fromShort: any = null;
+  let fromNeither: any = null;
+  try {
+    globalThis.fetch = stub(MONTHS, MONTHS) as any;
+    fromOecd = await fetchRiskFreeRate('INR', '2026-03-31');
+    const askedFredAnyway = asked.fred;
+
+    asked.oecd = 0;
+    asked.fred = 0;
+    globalThis.fetch = stub(null, MONTHS) as any;
+    fromFred = await fetchRiskFreeRate('INR', '2026-03-31');
+
+    globalThis.fetch = stub(MONTHS.slice(0, 3), MONTHS) as any;
+    fromShort = await fetchRiskFreeRate('INR', '2026-03-31');
+
+    globalThis.fetch = stub(null, null) as any;
+    fromNeither = await fetchRiskFreeRate('INR', '2026-03-31');
+
+    // ---- 1. the OECD answers, and nothing else is asked ----
+    if (!near(fromOecd?.rate, MEAN)) {
+      faults.push(`the OECD answer gave ${fromOecd?.rate} rather than the mean of the twelve months, ${MEAN}`);
+    }
+    if (fromOecd?.publisher !== 'OECD') {
+      faults.push(`the OECD answer is published by ${JSON.stringify(fromOecd?.publisher)}, not "OECD"`);
+    }
+    if (fromOecd?.observations !== MONTHS.length) {
+      faults.push(`the OECD answer averaged ${fromOecd?.observations} readings, not ${MONTHS.length}`);
+    }
+    if (askedFredAnyway) {
+      faults.push(`FRED was asked ${askedFredAnyway} time(s) although the OECD had answered`);
+    }
+
+    // ---- 2. the OECD blocked: the same rate, and it says whose it is ----
+    if (!near(fromFred?.rate, fromOecd?.rate)) {
+      faults.push(
+        `with the OECD blocked the rate came back as ${fromFred?.rate} rather than the ${fromOecd?.rate} ` +
+          'the OECD gave: the fallback is not the same series, or not averaged the same way'
+      );
+    }
+    if (!/FRED/.test(String(fromFred?.publisher))) {
+      faults.push(`the fallback answer is published by ${JSON.stringify(fromFred?.publisher)}, which does not name FRED`);
+    }
+    if (!/OECD/.test(String(fromFred?.publisher))) {
+      faults.push(
+        `the fallback answer does not say why it was used: ${JSON.stringify(fromFred?.publisher)}`
+      );
+    }
+    if (fromFred?.observations !== MONTHS.length) {
+      faults.push(`the fallback averaged ${fromFred?.observations} readings, not ${MONTHS.length}`);
+    }
+    // AND THE SAME WINDOW, SAID THE SAME WAY. The OECD dates a monthly
+    // observation "2025-04" and FRED dates it "2025-04-01", so without one line
+    // of normalisation the two are only interchangeable by luck: the window is
+    // a string comparison, and a window boundary that falls on the first of a
+    // month keeps the month in one series and drops it from the other. It also
+    // reaches the reader \u2014 the sentence under a rupee valuation names the
+    // window it averaged.
+    if (
+      fromOecd?.windowFrom !== fromFred?.windowFrom ||
+      fromOecd?.windowTo !== fromFred?.windowTo
+    ) {
+      faults.push(
+        `the two sources describe the same year differently: the OECD says ${fromOecd?.windowFrom} to ` +
+          `${fromOecd?.windowTo} and FRED says ${fromFred?.windowFrom} to ${fromFred?.windowTo}`
+      );
+    }
+
+    // ---- 3. an OECD answer too short to average hands on ----
+    if (!near(fromShort?.rate, fromOecd?.rate) || !/FRED/.test(String(fromShort?.publisher))) {
+      faults.push(
+        'three months from the OECD were averaged, or did not hand on to the fallback: ' +
+          `${fromShort?.observations} readings from ${JSON.stringify(fromShort?.publisher)}`
+      );
+    }
+
+    // ---- 4. both down: no rate, and a reason naming both ----
+    if (fromNeither?.rate !== null && fromNeither?.rate !== undefined) {
+      faults.push(`with both publishers down a rate of ${fromNeither?.rate} came back rather than nothing`);
+    }
+    const why = String(fromNeither?.reason || '');
+    if (!/OECD/.test(why) || !/FRED/.test(why)) {
+      faults.push(`the refusal does not name both publishers that were asked: ${JSON.stringify(why.slice(0, 90))}`);
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // ---- 5. and it is the rate the payload set was built on ----
+  //
+  // The twelve months above are the real ones for a 31 March 2026 year end, so
+  // the mean of them is the rate the six Indian payloads on disk carry. If the
+  // set is ever refetched against a different window this says so rather than
+  // failing, because a moved window is not a fault.
+  let tied = '';
+  try {
+    const rel: any = readPayload('RELIANCE.NS.json');
+    const saved = rel?.riskFree;
+    if (saved?.windowFrom === '2025-04-01' && saved?.windowTo === '2026-03-01') {
+      if (!near(saved.rate, MEAN)) {
+        faults.push(
+          `the payload set carries ${saved.rate} for the rupee over the same window, not the ${MEAN} these ` +
+            'twelve months average to'
+        );
+      } else {
+        tied = `, and the same twelve months the payload set was built on (${(MEAN * 100).toFixed(4)}%)`;
+      }
+    } else {
+      tied = `, measured against a window the payload set no longer uses (it holds ${saved?.windowFrom} to ${saved?.windowTo})`;
+    }
+  } catch {
+    tied = '';
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the rupee rate chain:`);
+    faults.forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  the OECD answers at ${(fromOecd.rate * 100).toFixed(4)}% over ${fromOecd.observations} monthly ` +
+        `readings and FRED is not asked${tied}`
+    );
+    console.log(
+      `  with the OECD blocked, ${fromFred.publisher.split(' — ')[0]} answers with the same rate to the ` +
+        'last digit, and the answer says why it was used'
+    );
+    console.log(
+      '  three months from the OECD are not averaged into a year: the window floor hands on to the fallback'
+    );
+    console.log(`  with both down there is no rate at all: "${String(fromNeither.reason).slice(0, 96)}"`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // THE TYPECHECK ACTUALLY CHECKS COMPONENT PROPS (`KI-28`)
 // ---------------------------------------------------------------------------
 //

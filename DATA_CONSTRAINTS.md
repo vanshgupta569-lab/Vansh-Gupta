@@ -440,7 +440,7 @@ first left the matter; that was a fact about one vendor, not about the data.
 | JPY | Ministry of Finance, Japan | JGB daily interest rates, 10Y | daily, from 1974 | Japanese government standard terms, free reuse with attribution |
 | GBP | Bank of England | IADB series IUDMNZC, 10-year nominal par yield | daily, any window | Bank statistics, reusable with acknowledgement |
 | SEK | Sveriges Riksbank | SWEA SEGVB10YC, 10-year benchmark | daily, any window | open data |
-| INR | OECD Main Economic Indicators, via FRED | `INDIRLTLT01STM`, 10-year, **monthly** | monthly, from Dec 2011 | OECD statistics, reusable with attribution |
+| INR | **OECD**, with FRED as a fallback | MEI long-term interest rates `IRLT`, 10-year, **monthly** | monthly, from Dec 2011 | OECD content published from 1 July 2024 is CC BY 4.0; FRED redistributes the same series |
 
 Each was fetched for a full year ending eighteen months in the past on
 2026-09-27 and returned 245 to 255 observations. The US moved off the vendor's
@@ -448,17 +448,38 @@ index onto the Treasury's own feed at the same time, so every rate in the model
 now comes from the institution that sets it: Apple's rate changed by half a
 basis point in the move.
 
-**And the rupee’s publisher can be down.** On 2026-10-22, refetching the whole
-set for the price history, FRED answered every request with its own
-"Site Maintenance" page, so **six Indian companies lost their risk-free rate in
-one afternoon** — Reliance, TCS, HDFC Bank, HDB, ICICI and Reliance
-Infrastructure — and every one of them was refused a valuation rather than
-discounted at something else, which is the behaviour standing decision 3
-requires. It is also the only single point of failure in the set that can take a
-company’s valuation away without any code changing: the other five currencies
-are fetched from the institution that sets the rate, and the rupee is fetched
-from a third party republishing a sixth. A usable Indian series from NSE or
-CCIL would remove it (`ROADMAP.md` §1).
+**The rupee’s publisher went down, and that single point of failure is now
+closed.** On 2026-10-22, refetching the whole set for the price history, FRED
+answered every request with its own "Site Maintenance" page, so **six Indian
+companies lost their risk-free rate in one afternoon** — Reliance, TCS, HDFC
+Bank, HDB, ICICI and Reliance Infrastructure — and every one of them was
+refused a valuation rather than discounted at something else, which is the
+behaviour standing decision 3 requires. It was also the only single point of
+failure in the set that could take a company’s valuation away without any code
+changing: every other currency is fetched from the institution that sets the
+rate, and the rupee was fetched from a third party republishing a sixth.
+
+**Since 2026-10-25 the OECD is asked first, through its own SDMX API, and FRED
+is kept behind it.** The OECD compiles the series; FRED republishes it. Measured
+over the whole overlap on 2026-10-24:
+
+| | months | first | last | identical to the last digit |
+|---|---|---|---|---|
+| OECD `IRLT` (India, monthly) | 178 | 2011-12 | 2026-09 | **175 of 178** |
+| FRED `INDIRLTLT01STM` | 178 | 2011-12 | 2026-09 | the other 3 agree to 7e-7 of a percentage point |
+
+The three that differ differ because the OECD API rounds to six decimals where
+FRED prints fourteen. **The six Indian payloads were refetched against the OECD
+directly and the rate did not move at all**: 6.540458% over the same twelve
+months, to the last digit, for all six.
+
+**What is still true:** both are the same monthly series, so this removes a
+dependency on one host rather than the monthly-data constraint below. And the
+OECD’s own API is not perfectly reliable either — one request in about a
+dozen during this work came back `500` and answered normally on the next
+attempt, which is exactly what the fallback is for and why it was kept rather
+than replaced. A usable **daily** Indian series from FBIL, NSE or CCIL is what
+would remove the real constraint (`ROADMAP.md` §1).
 
 **Four currencies could not be reached, and those companies stay refused**:
 Samsung (won), Tencent and Alibaba (renminbi), TSMC (Taiwan dollar), Novo
@@ -470,14 +491,15 @@ Every daily publisher of the Indian ten-year was checked on 2026-10-10:
 
 | Source | Daily history? | Terms | Reachable from a US server? |
 |---|---|---|---|
-| FBIL (the benchmark itself) | yes | licensed commercially | n/a — no licence |
+| FBIL (the benchmark itself) | yes | **licensed commercially: a paid licence is needed to display it on a website** — **Paid · last** | n/a — no licence |
 | RBI NSDP page | no — a handful of **weekly** figures, no history | public | yes |
 | RBI DBIE (`data.rbi.org.in`) | yes, behind an undocumented gateway | public | **yes** — see below |
 | CCIL | yes | Terms of Use forbid *"systematic or automated data collection, including scraping, data mining, data extraction and data harvesting"* | no — timed out from both India and a US datacentre |
 | NSE | a total-return **index**, not a yield | redistribution restricted | no — 200 from India, timed out from a US datacentre |
 | World Bank | **no such indicator exists** — every "yield" series it publishes is agricultural | open | yes |
 | IMF | monthly at best; IFS was restructured in 2025 | open | yes |
-| OECD via FRED | **monthly** | reusable with attribution | **yes** |
+| OECD, direct (`sdmx.oecd.org`) | **monthly** | CC BY 4.0 since 1 July 2024, with attribution | **yes** — this is what is read |
+| OECD via FRED | **monthly** | the same series, redistributed | **yes** — kept as the fallback |
 
 **One earlier conclusion in this file was wrong and is corrected here.** It said
 the Bank's historical database "resolves but does not complete a connection from
@@ -521,6 +543,39 @@ currencies; and for the rupee, an open *daily* Indian series — either an FBIL
 licence, or the DBIE gateway's service path documented well enough to depend
 on. Until then the rupee is valued on a monthly series that is named as monthly
 everywhere it is shown.
+
+### The yield publishers that need permission or money before launch
+
+**Source:** the publishers themselves. **Affects:** 1 currency valued today
+(INR), 3 currencies that are candidates for later (CHF, SGD, CNY).
+**Bound:** none on any value today — **noted, so that a licence is bought or
+asked for before a public site needs it, not after.**
+
+Six of the seven publishers this site reads are open: the US Treasury (public
+domain), the ECB, the Bank of England, Japan’s Ministry of Finance, the
+Riksbank and the OECD (CC BY 4.0 since 1 July 2024, with attribution). Four
+others are not, and each is recorded here before it is needed rather than
+discovered at launch.
+
+| Publisher | Currency | What it gives | What it needs | Status |
+|---|---|---|---|---|
+| **FBIL** | INR | the official Indian benchmark, daily | **a paid licence to display it on a website** | **Paid · last** |
+| **SNB** (Swiss National Bank) | CHF | daily Confederation bond yields | **permission before public use** | Later |
+| **MAS** (Monetary Authority of Singapore) | SGD | daily SGS benchmark yields | **permission before public use** | Later |
+| **ChinaBond** | CNY | the daily CGB yield curve | **permission before public use** | Later |
+
+None of the three is read today, and the companies that would need them are
+refused rather than approximated: 1 payload reports in Swiss francs, 1 in
+Singapore dollars and 7 in renminbi. Building against any of them is a request
+for permission first, and the request is a launch-time task, not a development
+one — the same rule the paid items follow in `docs/VISION.md`.
+
+The OECD’s own terms page is worth one note: `www.oecd.org` answers an
+automated request with `403`, so the licence was read in a browser and from the
+OECD’s July 2024 announcement rather than fetched. The data API
+(`sdmx.oecd.org`) has no such block, answers a plain HTTPS request, and sets
+`Cache-Control: public, max-age=7200`; one request per company build, against a
+payload that is then cached on disk, is well inside what that invites.
 
 ### How much plant a change in revenue is worth
 

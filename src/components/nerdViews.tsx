@@ -726,6 +726,13 @@ export const DCFView: React.FC<ViewProps> = ({
     />
   );
   const w = D.waccDetail || {};
+  // The fetched rate as the data layer recorded it: the publisher, the
+  // frequency, the window and how many readings are in it. The number the
+  // sliders move is in `w`; this is where it came from.
+  const rf =
+    source?.meta?.riskFree?.rate != null && source.meta.riskFree.publisher
+      ? source.meta.riskFree
+      : null;
   const money = (v: any, dp = 0) => (num(v) ? `${currencySymbol}${fmt(v, dp)}` : '—');
 
   return (
@@ -793,6 +800,16 @@ export const DCFView: React.FC<ViewProps> = ({
               label: 'Risk-free rate',
               value: fmtPct(w.riskFreeRate, 2),
               adjuster: A('riskFreeRatePct', { step: 0.05 }),
+              // NAMED ON THE SCREEN, not only in the payload. A risk-free rate
+              // belongs to a currency and comes from the body that publishes
+              // that currency’s government yield; which body is part of the
+              // figure. It also says plainly when the first choice could not
+              // be reached and something standing behind it answered.
+              note: rf
+                ? `Source: ${rf.publisher}. The mean of ${rf.observations} ${rf.frequency || 'daily'} ` +
+                  `reading${rf.observations === 1 ? '' : 's'} of the ${rf.name} over the year to ` +
+                  `${rf.windowTo}, this company’s own balance sheet date.`
+                : undefined,
             },
             {
               label: 'Market risk premium',

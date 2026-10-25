@@ -293,7 +293,12 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
       rate: 0.0425,
       currency: 'USD',
       symbol: '^TNX',
-      name: '10-year US Treasury',
+      name: '10-year US Treasury par yield',
+      // WHO PUBLISHED IT AND HOW OFTEN. Both are on the screen under the
+      // risk-free rate, so a fixture without them would leave the one thing
+      // "Source: OECD" is about unchecked.
+      publisher: 'US Treasury',
+      frequency: 'daily',
       tenorYears: 10,
       observations: 250,
       windowFrom: '2024-12-31',

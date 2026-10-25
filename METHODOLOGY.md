@@ -1453,24 +1453,66 @@ WACC           = weight of equity × cost of equity
 2026-09-26; five currencies since 2026-09-27, six since 2026-10-10). It is the
 **mean yield of the 10-year government bond of the currency the statements are
 in, over the year ending at the company's own balance sheet date**, taken from
-the institution that publishes it: the US Treasury, the European Central Bank,
-Japan's Ministry of Finance, the Bank of England and the Riksbank. Each of those
-five is daily and returns 245 to 255 observations for a year's window.
+the institution that publishes it.
+
+**Which series, for each currency, and who publishes it.** Not every "ten-year
+government yield" is the same quantity: a par yield, a zero-coupon spot rate
+and the yield on whichever bond is currently the benchmark are three different
+constructions, and they differ by basis points rather than by nothing. What is
+read is named here rather than left to the phrase.
+
+| Currency | Series | What kind of yield | Published | Publisher |
+|---|---|---|---|---|
+| USD | Daily Treasury Par Yield Curve, `BC_10YEAR` | **par**, constant maturity | daily | US Treasury |
+| EUR | Euro area AAA government bond curve, `SR_10Y` (`YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y`) | **spot** (zero-coupon), from the fitted Svensson curve | daily | European Central Bank |
+| JPY | JGB interest rates, 10Y column | **benchmark** — the yield on the current 10-year issue, published as "Interest Rate (JGB)" | daily | Ministry of Finance, Japan |
+| GBP | IADB `IUDMNZC` | **par**, nominal, from the fitted government curve | daily | Bank of England |
+| SEK | SWEA `SEGVB10YC` | **benchmark** government bond | daily | Sveriges Riksbank |
+| INR | MEI long-term interest rates, `IRLT`, India | **benchmark** — secondary-market yields on government bonds of about ten years’ residual maturity, averaged over the month | **monthly** | **OECD**, with FRED’s republication (`INDIRLTLT01STM`) as a fallback |
+
+The five daily sources return 245 to 255 observations for a year’s window.
 
 **The rupee is monthly, and the engine knows it is.** No daily Indian series is
 both openly licensed and reachable from where this site runs, so INR comes from
-the OECD's Main Economic Indicators series republished by FRED
-(`INDIRLTLT01STM`), which publishes once a month. Because of that, **how many
-observations a window must hold is a property of the source, not a constant**:
-30 for a daily publisher, 20 for a weekly one, 9 for a monthly one. The old flat
-floor of 30 would have refused every rupee company for ever while reporting it
-as a fetch failure. A 31 March balance-sheet date — which is most Indian
-companies — gives all twelve months; fewer than nine and the rate is refused
-rather than averaged from a stub.
+the OECD's Main Economic Indicators long-term interest rate, which publishes
+once a month. Because of that, **how many observations a window must hold is a
+property of the source, not a constant**: 30 for a daily publisher, 20 for a
+weekly one, 9 for a monthly one. The old flat floor of 30 would have refused
+every rupee company for ever while reporting it as a fetch failure. A 31 March
+balance-sheet date — which is most Indian companies — gives all twelve
+months; fewer than nine and the rate is refused rather than averaged from a
+stub.
+
+**The rupee is the one currency with two publishers, and the reason is a
+measured outage.** It used to be fetched from FRED’s republication of the OECD
+series, and on 2026-10-22 FRED answered every request with its own "Site
+Maintenance" page: six Indian companies lost their valuation in an afternoon.
+Refusing was the right behaviour and the dependency was not — it was the only
+rate in the set that came from a third party republishing a sixth.
+
+Since 2026-10-25 the **OECD is asked first, through its own API**, and FRED is
+kept behind it. They are the same series: over the whole overlap, 178 months
+from 2011-12 to 2026-09, **175 months are identical to the last digit** and the
+other three agree to within 7e-7 of a percentage point, which is the OECD API
+rounding to six decimals where FRED prints more. The two date a month
+differently — `2025-04` against `2025-04-01` — so the OECD’s are
+normalised to the first of the month, and `npm run verify` checks that both
+describe the same window the same way as well as giving the same rate.
+
+**The answer says which one spoke.** A rate fetched from the OECD is published
+by "OECD"; one that fell back says so and why, in the same sentence the reader
+sees: *"FRED, republishing the OECD series — used because OECD could not be
+read (OECD 503)"*. If both are down there is no rate, the refusal names both,
+and the company is refused rather than discounted at something else.
+
+**The publisher is on the screen and in the workbook**, not only in the
+payload: the discount-rate section names it under the risk-free rate, and the
+provenance sentence that travels into the Assumptions sheet carries it too.
 
 The frequency travels with the rate to the page, so the sentence under a rupee
-valuation says "the mean of the monthly ... 12 monthly averages" and names the
-lag, rather than claiming daily closes that were never read.
+valuation says "the mean of the monthly ... published by the OECD ... 12
+monthly averages" and names the lag, rather than claiming daily closes that
+were never read.
 `DATA_CONSTRAINTS.md` carries the measured cost: on the two currencies where
 both a daily and an OECD monthly series exist, monthly sampling alone moved the
 one-year mean by 0.3bp (USD) and 0.1bp (GBP).
@@ -1509,7 +1551,8 @@ between two of the three terms and undefined for the third, and `DCF 9` is still
 not demonstrable — for a different and smaller reason than before.
 
 **A currency without a yield is still refused, not approximated.** Six
-publishers are reached; four currencies are not. A company reporting in won,
+currencies are reached, from seven publishers; four currencies are not. A
+company reporting in won,
 renminbi, Taiwan dollars or kroner has no risk-free rate and is refused with
 `riskFreeRateUnavailable` rather than discounted at another country's rate —
 Samsung, Tencent, Alibaba, TSMC, Novo Nordisk. `DATA_CONSTRAINTS.md` sets out

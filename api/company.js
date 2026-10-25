@@ -1081,17 +1081,40 @@ async function fetchProfile(symbol) {
 //        The Bank permits reuse of its statistical data with acknowledgement.
 //   SEK  Sveriges Riksbank SWEA API, SEGVB10YC, daily 10-year government
 //        benchmark. Published as open data.
+//   INR  The OECD’s own SDMX API, Main Economic Indicators long-term
+//        interest rates (IRLT), monthly. CC BY 4.0 since 1 July 2024.
+//        FRED republishes the identical series and is kept as a fallback.
 //
 // Checked and fetched on 2026-09-27; each returned a complete year for a window
 // ending eighteen months in the past, which is what this model asks of it.
 //
 // WHAT IS STILL MISSING, and why each company stays refused: no reachable
-// publisher was found for the Indian rupee, the Korean won, the new Taiwan
-// dollar, the renminbi or the Danish krone. India is the sharpest case and is
-// set out in DATA_CONSTRAINTS.md: the published Indian benchmark is FBIL's, a
-// licensed commercial benchmark, and the Reserve Bank republishes only its
-// latest observations on a page that carries no history, while the Bank's own
-// historical database does not answer from outside India.
+// publisher was found for the Korean won, the new Taiwan dollar, the renminbi
+// or the Danish krone. The rupee is answered, monthly, by the OECD; what that
+// costs and what would remove it are in DATA_CONSTRAINTS.md, along with the
+// three candidate publishers that need permission before a public site may
+// use them (SNB for the franc, MAS for the Singapore dollar, ChinaBond for the
+// renminbi) and FBIL's licence for the Indian benchmark itself.
+
+// A SOURCE MAY HAVE A FALLBACK, AND THE ANSWER SAYS WHICH ONE SPOKE.
+//
+// Only the rupee has one, and the reason is a measured outage rather than a
+// precaution: on 2026-10-22 FRED answered every request with its own "Site
+// Maintenance" page and six Indian companies lost their valuation in an
+// afternoon. FRED was the only publisher this file read for the rupee, and it
+// was a third party republishing a sixth.
+//
+// So the OECD, which is the body that actually compiles the series, is asked
+// first through its own SDMX API, and FRED is kept behind it. Measured over
+// the whole overlap on 2026-10-24: both carry 178 months from 2011-12 to
+// 2026-09, 175 of them identical to the last digit and the other three equal
+// to within 7e-7 of a percentage point, which is the OECD API rounding to six
+// decimals where FRED prints more. They are the same series, so whichever
+// answers gives the same rate.
+//
+// `publisher` on the answer names the one that did, and says so when it was
+// not the first choice, because a reader told "Source: OECD" is owed the truth
+// of where the number came from this time.
 //
 // THE TEN-YEAR, not the thirty. The rate is added to a market risk premium, and
 // an equity risk premium is quoted against the ten-year benchmark by
@@ -1119,7 +1142,7 @@ const asRate = (v) => {
 // it is carried through to the page so a reader is never told a monthly series
 // is a daily one. Daily is the default because every source here was daily
 // until INR.
-const RISK_FREE_SOURCES = {
+export const RISK_FREE_SOURCES = {
   USD: {
     name: '10-year US Treasury par yield',
     publisher: 'US Treasury',
@@ -1263,45 +1286,94 @@ const RISK_FREE_SOURCES = {
 
   // THE INDIAN TEN-YEAR, AND WHY IT IS THE ONLY MONTHLY ONE HERE.
   //
-  // The benchmark itself is FBIL's, and FBIL licenses it. RBI republishes a
-  // handful of weekly observations with no history. CCIL operates the market
-  // and its Terms of Use forbid automated collection outright. NSE answers
-  // from India and times out from a US datacentre, and publishes a
-  // total-return index rather than a yield. The World Bank has no government
-  // bond yield indicator at all -- every "yield" series it carries is
-  // agricultural. That leaves the OECD's Main Economic Indicators series,
-  // republished by FRED, which is monthly.
+  // The benchmark itself is FBIL's, and FBIL licenses it: a paid licence is
+  // needed to show it on a website, so it is a launch-time purchase and not a
+  // development one. RBI republishes a handful of weekly observations with no
+  // history. CCIL operates the market and its Terms of Use forbid automated
+  // collection outright. NSE answers from India, times out from a US
+  // datacentre, and publishes a total-return index rather than a yield. The
+  // World Bank has no government bond yield indicator at all -- every "yield"
+  // series it carries is agricultural.
+  //
+  // That leaves the OECD's Main Economic Indicators long-term interest rate,
+  // which is monthly. It is fetched from the OECD itself rather than from a
+  // republication: the series is compiled by the OECD, OECD content published
+  // from 1 July 2024 is under CC BY 4.0, and their SDMX API answers a plain
+  // HTTPS request with the whole history and a two-hour cache header.
   //
   // Monthly is a real cost and it is stated rather than hidden: see
   // DATA_CONSTRAINTS.md, which carries the measured size of it.
   INR: {
     name: '10-year Indian government bond yield',
-    publisher: 'OECD Main Economic Indicators, via FRED',
-    terms: 'OECD statistics, reusable with attribution; redistributed by FRED',
-    url: 'https://fred.stlouisfed.org/series/INDIRLTLT01STM',
+    publisher: 'OECD',
+    terms: 'OECD statistics, CC BY 4.0 since 1 July 2024, reusable with attribution',
+    url: 'https://www.oecd.org/en/data/indicators/long-term-interest-rates.html',
     frequency: 'monthly',
     async read(from, to) {
+      // SDMX, nine key positions: reference area, frequency, measure, unit,
+      // activity, adjustment, transformation, time horizon, methodology. Only
+      // the first three are pinned; the rest are not applicable to this series
+      // and are left open rather than guessed at.
+      const month = (d) => ymd(d).slice(0, 7);
       const res = await fetch(
-        'https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDIRLTLT01STM' +
-          `&cosd=${ymd(from)}&coed=${ymd(to)}`,
-        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'text/csv' } }
+        'https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_FINMARK,4.0/IND.M.IRLT......' +
+          `?startPeriod=${month(from)}&endPeriod=${month(to)}&format=csvfile`,
+        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'application/vnd.sdmx.data+csv' } }
       );
-      if (!res.ok) throw new Error(`FRED ${res.status}`);
+      if (!res.ok) throw new Error(`OECD ${res.status}`);
       const lines = (await res.text()).trim().split('\n');
-      if (!/observation_date/i.test(lines[0] || '')) throw new Error('FRED: not the CSV, probably a block page');
+      const head = (lines[0] || '').split(',').map((h) => h.trim());
+      const dateAt = head.indexOf('TIME_PERIOD');
+      const valueAt = head.indexOf('OBS_VALUE');
+      if (dateAt < 0 || valueAt < 0) throw new Error('OECD: no TIME_PERIOD/OBS_VALUE column');
       const out = [];
       for (const line of lines.slice(1)) {
-        const [rawDate, rawValue] = line.split(',');
-        const percent = asRate(rawValue);
-        const date = String(rawDate).trim().slice(0, 10);
-        if (percent !== null && /^\d{4}-\d{2}-\d{2}$/.test(date)) out.push({ date, percent });
+        const cells = line.split(',');
+        if (cells.length <= Math.max(dateAt, valueAt)) continue;
+        const percent = asRate(cells[valueAt]);
+        const period = String(cells[dateAt]).trim();
+        // A MONTHLY OBSERVATION IS DATED AT THE FIRST OF ITS MONTH, which is
+        // the convention the fallback's republication uses. Dating them the
+        // same way is what makes the two interchangeable: the same window
+        // picks the same twelve months whichever source answered.
+        if (percent !== null && /^\d{4}-\d{2}$/.test(period)) out.push({ date: `${period}-01`, percent });
       }
+      if (!out.length) throw new Error('OECD: no observations in the window');
       return out;
     },
+    fallbacks: [
+      {
+        name: '10-year Indian government bond yield',
+        publisher: 'FRED, republishing the OECD series',
+        terms: 'OECD statistics, reusable with attribution; redistributed by FRED',
+        url: 'https://fred.stlouisfed.org/series/INDIRLTLT01STM',
+        frequency: 'monthly',
+        async read(from, to) {
+          const res = await fetch(
+            'https://fred.stlouisfed.org/graph/fredgraph.csv?id=INDIRLTLT01STM' +
+              `&cosd=${ymd(from)}&coed=${ymd(to)}`,
+            { headers: { 'User-Agent': SEC_CONTACT, Accept: 'text/csv' } }
+          );
+          if (!res.ok) throw new Error(`FRED ${res.status}`);
+          const lines = (await res.text()).trim().split('\n');
+          if (!/observation_date/i.test(lines[0] || '')) {
+            throw new Error('FRED: not the CSV, probably a block page');
+          }
+          const out = [];
+          for (const line of lines.slice(1)) {
+            const [rawDate, rawValue] = line.split(',');
+            const percent = asRate(rawValue);
+            const date = String(rawDate).trim().slice(0, 10);
+            if (percent !== null && /^\d{4}-\d{2}-\d{2}$/.test(date)) out.push({ date, percent });
+          }
+          return out;
+        },
+      },
+    ],
   },
 };
 
-async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
+export async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
   const spec = RISK_FREE_SOURCES[reportingCurrency];
   if (!spec) {
     return {
@@ -1316,53 +1388,83 @@ async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
   const end = valuationDate ? new Date(`${valuationDate}T00:00:00Z`) : new Date();
   const start = new Date(end.getTime() - RISK_FREE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-  try {
-    const all = await spec.read(start, end);
-    const from = ymd(start);
-    const to = ymd(end);
-    const window = all.filter((row) => row.date >= from && row.date <= to);
-    // HOW MANY OBSERVATIONS IS ENOUGH DEPENDS ON HOW OFTEN THE SOURCE PUBLISHES.
-    // 30 was the right floor while every source was daily -- roughly six weeks
-    // of trading, enough that one quiet fortnight cannot carry the mean. Asking
-    // a monthly series for 30 observations in a year asks for something that
-    // cannot exist, and would have refused every INR company for the rest of
-    // time while looking like a fetch failure. The floor is now stated per
-    // frequency, against what a full year of that frequency actually holds.
-    const frequency = spec.frequency || 'daily';
-    const floor = { daily: 30, weekly: 20, monthly: 9 }[frequency];
-    if (floor === undefined) throw new Error(`unknown publication frequency "${frequency}"`);
-    if (window.length < floor) {
-      throw new Error(
-        `only ${window.length} ${frequency} observations in the window, below the ${floor} this source needs`
-      );
+  // The source, then anything standing behind it. A source that throws, or
+  // that cannot fill the window, hands on to the next; the failures are kept
+  // so that whichever answers can say what it stood in for, and so that a
+  // refusal names every publisher that was asked rather than only the last.
+  const attempts = [spec, ...(Array.isArray(spec.fallbacks) ? spec.fallbacks : [])];
+  const failures = [];
+  for (const source of attempts) {
+    try {
+      return await readRiskFreeWindow(source, start, end, reportingCurrency, failures);
+    } catch (error) {
+      failures.push(`${source.publisher} could not be read (${String(error.message).slice(0, 60)})`);
     }
-    window.sort((a, b) => (a.date < b.date ? -1 : 1));
-    const mean = window.reduce((t, row) => t + row.percent, 0) / window.length;
-    return {
-      rate: mean / 100,
-      currency: reportingCurrency,
-      name: spec.name,
-      publisher: spec.publisher,
-      terms: spec.terms,
-      sourceUrl: spec.url,
-      tenorYears: 10,
-      frequency,
-      observations: window.length,
-      windowFrom: window[0].date,
-      windowTo: window[window.length - 1].date,
-      latest: window[window.length - 1].percent / 100,
-      reason: null,
-    };
-  } catch (error) {
-    // NEVER A SILENT CONSTANT. A rate that could not be fetched is absent, and
-    // the engine says so rather than discounting at a number nobody chose.
-    return {
-      rate: null,
-      currency: reportingCurrency,
-      publisher: spec.publisher,
-      reason: `The ${spec.name} could not be fetched from the ${spec.publisher} (${String(error.message).slice(0, 60)}).`,
-    };
   }
+
+  // NEVER A SILENT CONSTANT. A rate that could not be fetched is absent, and
+  // the engine says so rather than discounting at a number nobody chose.
+  return {
+    rate: null,
+    currency: reportingCurrency,
+    publisher: spec.publisher,
+    reason: `The ${spec.name} could not be fetched: ${failures.join('; ')}.`,
+  };
+}
+
+/**
+ * One source, read and averaged, or an exception saying why not.
+ *
+ * Split out of the function above so that every source in a chain is held to
+ * exactly the same window, floor and arithmetic. A fallback that was averaged
+ * a little differently from the source it stands in for would move the
+ * valuation on the day the first one went down, which is the failure the
+ * fallback exists to prevent.
+ */
+async function readRiskFreeWindow(spec, start, end, reportingCurrency, failures = []) {
+  const all = await spec.read(start, end);
+  const from = ymd(start);
+  const to = ymd(end);
+  const window = all.filter((row) => row.date >= from && row.date <= to);
+  // HOW MANY OBSERVATIONS IS ENOUGH DEPENDS ON HOW OFTEN THE SOURCE PUBLISHES.
+  // 30 was the right floor while every source was daily -- roughly six weeks
+  // of trading, enough that one quiet fortnight cannot carry the mean. Asking
+  // a monthly series for 30 observations in a year asks for something that
+  // cannot exist, and would have refused every INR company for the rest of
+  // time while looking like a fetch failure. The floor is now stated per
+  // frequency, against what a full year of that frequency actually holds.
+  const frequency = spec.frequency || 'daily';
+  const floor = { daily: 30, weekly: 20, monthly: 9 }[frequency];
+  if (floor === undefined) throw new Error(`unknown publication frequency "${frequency}"`);
+  if (window.length < floor) {
+    throw new Error(
+      `only ${window.length} ${frequency} observations in the window, below the ${floor} this source needs`
+    );
+  }
+  window.sort((a, b) => (a.date < b.date ? -1 : 1));
+  const mean = window.reduce((t, row) => t + row.percent, 0) / window.length;
+  return {
+    rate: mean / 100,
+    currency: reportingCurrency,
+    name: spec.name,
+    // WHO ACTUALLY ANSWERED, and what it stood in for. One field rather than
+    // a new one, deliberately: the payload shape is versioned, and a new key
+    // would mark all 176 saved payloads stale and force a refetch of the
+    // whole set to record a sentence that belongs beside the publisher
+    // anyway.
+    publisher: failures.length
+      ? `${spec.publisher} — used because ${failures.join('; ')}`
+      : spec.publisher,
+    terms: spec.terms,
+    sourceUrl: spec.url,
+    tenorYears: 10,
+    frequency,
+    observations: window.length,
+    windowFrom: window[0].date,
+    windowTo: window[window.length - 1].date,
+    latest: window[window.length - 1].percent / 100,
+    reason: null,
+  };
 }
 
 /**

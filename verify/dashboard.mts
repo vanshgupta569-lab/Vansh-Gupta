@@ -1344,6 +1344,33 @@ async function checkValued(page: Page, label: string, source: any, symbol: strin
 
   // ---- the cost of capital
   compare('cost of capital — risk-free rate', pct(W.riskFreeRate, 2), await beside(page, 'Risk-free rate'));
+
+  // AND THE SCREEN SAYS WHO PUBLISHED IT. A risk-free rate belongs to a
+  // currency and comes from the body that publishes that currency’s
+  // government yield; which body is part of the figure, and it matters most
+  // where a source has something standing behind it — the rupee is fetched
+  // from the OECD with FRED as a fallback, and "Source: OECD" and "Source:
+  // FRED, because the OECD could not be reached" are different sentences.
+  {
+    // From the payload this company was built from, which is where the screen
+    // reads it too. What is asserted is that the string reached the page, not
+    // that the figure is right — the figures either side of it are checked
+    // against the engine. A record carrying no publisher claims none on screen,
+    // and the curated Apple file is one: it predates the field.
+    const rf = source?.meta?.riskFree;
+    const said = ((await page.textContent('body')) || '').replace(/\s+/g, ' ');
+    if (!rf?.publisher) {
+      ok('no publisher is recorded for this rate, and the screen claims none');
+    } else if (said.includes(`Source: ${rf.publisher}`)) {
+      ok(`the discount rate names its publisher on the screen: "Source: ${rf.publisher}"`);
+    } else {
+      fail(
+        'the publisher of the risk-free rate',
+        `"Source: ${rf.publisher}" under the rate`,
+        'the screen does not say where the rate came from'
+      );
+    }
+  }
   compare('cost of capital — market risk premium', pct(W.marketRiskPremium, 2), await beside(page, 'Market risk premium'));
   compare('cost of capital — cost of equity', pct(W.costOfEquity, 2), await beside(page, 'Cost of equity'));
   compare('cost of capital — weight of equity', pct(W.weightEquity, 1), await beside(page, 'Weight of equity, at market value'));

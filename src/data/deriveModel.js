@@ -1067,8 +1067,16 @@ export function deriveModel(fetched) {
   const rfReading = { daily: 'daily close', weekly: 'weekly reading', monthly: 'monthly average' }[
     rfFrequency
   ] || `${rfFrequency} reading`;
+  // WHO PUBLISHED IT, in the sentence itself. The publisher was carried in the
+  // payload and shown nowhere, which was survivable while every rate came from
+  // the institution that sets it and the name of the series said so. It stopped
+  // being survivable when a source acquired a fallback: "Source: OECD" and
+  // "Source: FRED, republishing the OECD series, because the OECD could not be
+  // reached" are different sentences, and the reader is owed whichever one is
+  // true of the number in front of them.
+  const rfPublisher = riskFree?.publisher ? ` published by ${riskFree.publisher}` : '';
   provenance.riskFreeRate = isNum(riskFree?.rate)
-    ? `${(riskFree.rate * 100).toFixed(2)}% — the mean of the ${rfFrequency} ${riskFree.name}, ` +
+    ? `${(riskFree.rate * 100).toFixed(2)}% — the mean of the ${rfFrequency} ${riskFree.name}${rfPublisher}, ` +
       `${riskFree.observations} ${rfReading}${riskFree.observations === 1 ? '' : 's'} over the year ending ` +
       `${riskFree.windowTo}, which is this company's own balance sheet date. An average rather than a single ` +
       `reading, so the value does not move with one day's bond market; the ten-year rather than the thirty, ` +
