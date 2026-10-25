@@ -939,3 +939,381 @@ defect and belongs in `KNOWN_ISSUES.md` with a measured number — not in this
 plan. I did not investigate further and changed nothing, because this was a
 planning job and it would change a valuation. Say the word and it is its own
 session.
+
+---
+
+## 12. The Company Brain: where each item is published, by country
+
+**Status: investigation. Nothing here is built.** Measured against the live
+sources on 2026-10-25, in the same way as the rest of this document: what could
+be read at the source was read, and what could not is marked as such rather than
+filled in from memory.
+
+`ROADMAP.md` §13a lists what a company page must carry. Most of it is not a
+figure: what the business is made of, who runs it, who it sells to, what it
+owns, what it has promised. That is the **Company Brain**, and this section
+records, for eight jurisdictions, **where each item is actually published and in
+what form** — because the form decides who reads it.
+
+**Two forms, and the difference is the whole design.**
+
+- **Structured** — XBRL, or a form whose fields the regulator prescribes. Parsed,
+  checked against identities, stored as data. No model involved, and the figure
+  can be reproduced from the document by anyone.
+- **Text** — prose in a PDF or an HTML filing. Read by extraction, and under
+  standing decision 8 (*"AI only where its output can be checked against a
+  source"*) **only with the sentence quoted and its page number recorded beside
+  the extracted value**, so every claim can be checked against the document it
+  came from. Where the document is silent the answer is **"not disclosed"** —
+  never zero, never inferred, never carried over from last year.
+
+The practical consequence, stated once rather than per row: **an item that is
+text in a country is a per-document extraction job with a provenance record, and
+an item that is structured is a parser.** The cost difference between the two is
+roughly the cost difference between the whole of this plan's stage 1 and stage 4.
+
+### 12.1 How to read these tables
+
+Every row carries a verification mark, and the marks mean exactly this:
+
+| Mark | Meaning |
+|---|---|
+| **✓** | **Read at the source on 2026-10-25**, by fetching the regulator's or exchange's own document. The source is named in the row or in the notes under the table. |
+| **~** | **Recorded from a secondary source** — a law firm's note, a regulator's summary page, trade press, or a filer's own filing citing the rule. Plausible and consistent, not read at the rule itself. |
+| **?** | **Unconfirmed.** Either the source refused an automated request, or nothing authoritative was found. These are listed again in §12.12 so none of them can be mistaken for a measurement. |
+
+**What refused an automated request today**, recorded because a refusal is a
+finding and because this plan's §4.4 forbids working around one:
+
+| Source | Result |
+|---|---|
+| `www.bseindia.com` | **403** on the home page and on the terms page. BSE remains unverified, exactly as §1 and §4 of this document already say. |
+| `www.mca.gov.in` | **403** (Akamai "Access Denied"). The Companies Act rules could not be read at the source. |
+| `www.indiacode.nic.in` | **403**. Same consequence. |
+| `www.jpx.co.jp` | **403** to one fetcher; the JPX pages below were read through a search index that quoted them, not fetched. |
+| `law.krx.co.kr` | **no connection**. KRX's disclosure regulation could not be read at the source. |
+| `www.oecd.org` | **403** (the data API `sdmx.oecd.org` answers normally — see `DATA_CONSTRAINTS.md`). |
+
+Nothing was retried with a different user agent, a proxy, or a browser
+automation. One attempt each, and the answer is recorded.
+
+### 12.2 The eleven items, defined
+
+So that a ✓ in one country means the same thing as a ✓ in another.
+
+| Item | What counts as the item |
+|---|---|
+| **Segments** | Revenue, result and assets by reportable segment, as the accounting standard defines them |
+| **Geography** | Revenue and non-current assets by country or region |
+| **Major customers** | Customers above the standard's threshold (10% of revenue), named or not |
+| **Suppliers** | Who the company buys from, or a concentration measure of it |
+| **Plants / capacity** | Where the company produces, and how much it can produce |
+| **Directors** | Who the board and key management are, and every change |
+| **Related parties** | Transactions with the group, the promoters and the people who run it |
+| **Guidance** | Management's own forecast of its results |
+| **Group structure** | Subsidiaries, associates and joint ventures, with holdings |
+| **Auditor changes** | Appointment, resignation or dismissal, and the reason |
+| **Pledges** | Promoter or director shares pledged or otherwise encumbered |
+
+---
+
+### 12.3 India
+
+Read at the source today: the **SEBI (LODR) Regulations, 2015 as last amended
+15 October 2026**, the consolidated PDF published at `sebi.gov.in` (2.4MB,
+11,973 lines of extracted text), and the **BRSR format**, Annexure I to the
+circular of 10 May 2021, also at `sebi.gov.in`.
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | Ind AS 108 note in the annual report; segment columns in the quarterly results filed under Reg 33 | text in the report; **XBRL** in the results, if the results taxonomy carries the segment block — **not measured** | ? |
+| Geography | Ind AS 108 secondary-segment note | text | ~ |
+| Major customers | Ind AS 108 major-customer disclosure (>10% of revenue), customarily unnamed | text | ~ |
+| Suppliers | Not disclosed as a list. **BRSR Principle 8, item 4** gives *percentages* of input material "sourced from suppliers", split "Directly sourced from MSMEs/small producers" and "Sourced directly from within the district"; trade-payable ageing and MSME dues are in the notes | **XBRL** (BRSR, see below) for the percentages; text otherwise | ✓ |
+| Plants / capacity | **BRSR Section A, item 16**: *"Number of locations where plants and/or operations/offices of the entity are situated"*, split national / international, as **counts of plants and offices** — not a list of sites, and no capacity figure. Installed capacity has not been a Schedule III requirement since 2011 | **XBRL** (BRSR) for the counts | ✓ |
+| Markets | **BRSR Section A, item 17**: number of states served, number of countries served, exports as a percentage of turnover, and "a brief on types of customers" | **XBRL** (BRSR) | ✓ |
+| Directors | **LODR Schedule III Part A Para A, item 7**: *"Change in directors, key managerial personnel … Auditor and Compliance Officer"*, disclosed to the exchanges under Reg 30; the corporate governance report under Reg 27(2) carries the standing board | text for the event; **prescribed form** for the governance report | ✓ |
+| Related parties | **Reg 23(9)**: *"The listed entity shall submit to the stock exchanges disclosures of related party transactions in the format as specified by the Board … and publish the same on its website"*, every six months **on the date of publication** of the standalone and consolidated results (from 1 April 2023; it was within 30 days before) | **prescribed format**; filed in XBRL mode per exchange circulars — **the circulars could not be read at BSE (403)** | ✓ rule / ? XBRL |
+| Guidance | **No mandatory forecast.** Where management gives one it is in the earnings call, and **Schedule III Para A item 15(b)(iii)** requires the transcript on the website *"along with simultaneous submission to recognized stock exchanges within five working days of the conclusion of such calls"*; audio within 24 hours or before the next trading day, video within 48 hours. **Item 15(a)(ii)** requires the investor presentation itself to be disclosed to the exchanges *before* the event | text | ✓ |
+| Group structure | **Form AOC-1** (Companies Act s.129(3) with Rule 5 of the Companies (Accounts) Rules 2014) — salient features of every subsidiary, associate and joint venture, attached to the annual accounts; and **BRSR Section A item 21(a)**, *"Names of holding / subsidiary / associate companies / joint ventures"* with the percentage of shares held | AOC-1: text in the annual report (MCA holds it as a filing, behind a fee); BRSR item 21: **XBRL** | ✓ BRSR / ~ AOC-1 |
+| Auditor changes | **Schedule III Para A item 7** (the change) and **item 7A**: on an auditor's resignation, *"detailed reasons for resignation of auditor, as given by the said auditor"* must be disclosed within 24 hours of receiving them. Item 7B does the same for an independent director | text | ✓ |
+| Pledges | The quarterly **shareholding pattern** under **Reg 31(1)** — "within twenty one days from the end of each quarter", in the format SEBI specifies — carries the encumbered column; SAST Reg 31 requires the promoter's own encumbrance disclosure | **prescribed format**, filed in XBRL; the *format* was not read at the source | ✓ rule / ~ column |
+
+**BRSR, and what it actually gives.** Reg 34(2)(f) requires it of the **top 1,000
+listed entities by market capitalisation from FY2022-23**, in the format SEBI
+specifies, with BRSR Core assessment or assurance and — "with effect from and in
+the manner as may be specified" — value-chain disclosures. It is filed in **XBRL**
+with the exchanges alongside a PDF: that is reported consistently by the exchange
+circulars of July 2022 and by filers, **but the circulars sit on BSE and NSE,
+both of which refuse an automated request**, so the XBRL mode is marked ~ rather
+than ✓.
+
+**The honest size of the BRSR win.** It is real but narrower than it sounds. BRSR
+gives *counts* of plants and offices, *counts* of states and countries served,
+and *percentages* of sourcing. It does not name a plant, state a capacity, or
+name a supplier. The one place it names anything is item 21, the group structure.
+A Company Brain built on BRSR alone would know that a company has 14 plants and
+sells into 23 countries, and nothing about where they are.
+
+---
+
+### 12.4 United States
+
+Read at the source today: **SEC Form 8-K** (`sec.gov/files/form8-k.pdf`),
+**17 CFR 229.403** and **229.601(b)(21)** (Cornell LII, the eCFR having redirected
+an automated request to an unblock page), and **Apple's FY2025 Form 10-K** as
+filed on EDGAR on 2025-10-31 (accession `0000320193-25-000079`).
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | ASC 280 note in the 10-K | **XBRL, detail-tagged.** Measured on Apple's 10-K: the business-segments axis is used **15 times** in the inline document | ✓ |
+| Geography | Same note | **XBRL, detail-tagged** — the geographical axis, **15 uses** in the same filing | ✓ |
+| Major customers | Concentration-of-risk disclosure | **XBRL, detail-tagged** — major-customer and concentration-risk axes, **17 uses** | ✓ |
+| Suppliers | Not required. Risk factors and the MD&A describe dependence in prose | text | ~ |
+| Plants / capacity | **Item 2, Properties** of the 10-K | text | ~ |
+| Directors | **8-K Item 5.02**, *"Departure of Directors or Certain Officers; Election of Directors; Appointment of Certain Officers; Compensatory Arrangements of Certain Officers"*; the standing board is in the proxy statement | text; the 8-K **cover page** is tagged, the body is not | ✓ |
+| Related parties | Item 404 of Regulation S-K in the proxy; ASC 850 note in the 10-K | proxy: text. Note: **XBRL** | ~ |
+| Guidance | **Not required at all.** Where it exists it is in the earnings release furnished under **8-K Item 2.02**, which requires the registrant to *"include the text of that announcement or release as an exhibit"* — in practice Exhibit 99.1, and *furnished* rather than filed, so it is not subject to Section 18 liability | text | ✓ |
+| Group structure | **Exhibit 21** under Item 601(b)(21): *"List all subsidiaries of the registrant, the state or other jurisdiction of incorporation or organization of each"*, with the names under which each does business; subsidiaries that would not together be a significant subsidiary may be omitted | **text, and untagged.** Measured: Apple's Exhibit 21.1 is 11,921 bytes, a 21-row table of name and jurisdiction, with **zero inline XBRL tags**, against **1,131** tagged facts in the 10-K itself | ✓ |
+| Auditor changes | **8-K Item 4.01**, *"Changes in Registrant's Certifying Accountant"*, carrying the Item 304(a) disclosure including any disagreements | text | ✓ |
+| Pledges | **Item 403(b)**: of the shares shown in the beneficial-ownership table, the registrant must *"indicate, by footnote or otherwise, the amount of shares … that are pledged as security"*. It is in the **proxy**, not the 10-K, and it is a footnote to a table | text | ✓ |
+
+**The US is the only one of the eight where the three hardest commercial items —
+segments, geography and customer concentration — arrive as data rather than as
+prose.** That is not because the US discloses more; it is because US detail
+tagging reaches into the notes, and the EU's and the UK's does not (§12.5, §12.6).
+Everything a reader would call *qualitative* — properties, suppliers, directors,
+pledges, the earnings release — is prose, and half of it is in the proxy rather
+than the 10-K, which is a second document with a second cadence.
+
+---
+
+### 12.5 United Kingdom
+
+Nothing in this table was read at the FCA Handbook itself; the structured-reporting
+rules were taken from an FRC document and from law-firm notes, and the item rows
+from the accounting standards they rest on. **This is the weakest of the eight
+tables.**
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | IFRS 8 note in the annual report, filed to the **National Storage Mechanism** | **iXBRL block tag only** — the note is tagged as a block of text, not figure by figure | ~ |
+| Geography | Same note | iXBRL block tag only | ~ |
+| Major customers | Same note | iXBRL block tag only | ~ |
+| Suppliers | Not required; payment-practices reporting is a separate government service | text | ? |
+| Plants / capacity | Strategic report, in prose | text | ~ |
+| Directors | Directors' report and the RNS announcement through the NSM; PDMR dealings under MAR Article 19 | text; PDMR notifications use a **prescribed form** | ~ |
+| Related parties | IAS 24 note | iXBRL block tag only | ~ |
+| Guidance | Trading statements and outlook paragraphs, announced through an RIS | text | ~ |
+| Group structure | **Companies Act 2006 s.409** — subsidiary undertakings, with name, registered office and holding, in the notes | text (iXBRL block at best) | ~ |
+| Auditor changes | RNS announcement; the s.519 statement of circumstances on ceasing to hold office | text | ~ |
+| Pledges | No direct equivalent of the Indian or US disclosure; DTR 5 major-holdings notifications (TR-1) are a prescribed form | prescribed form | ? |
+
+**On the structured-reporting rule itself:** `DTR 4.1.14`, which used to carry the
+requirement by reference to the EU ESEF Regulation, has been **deleted**; the
+requirements were moved into DTR 4.1.15–4.1.23 and a new Annex with effect from
+28 July 2023, applying to financial years beginning on or after 1 January 2022,
+and the approved taxonomies moved into FCA Technical Note TN/507.1. Marked **~**:
+this came from two law-firm notes and an FRC paper, not from the Handbook.
+
+---
+
+### 12.6 EU / Germany
+
+Read at the source today: **HGB §315**, at `gesetze-im-internet.de`.
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | IFRS 8 note in the consolidated annual financial report | **ESEF iXBRL block tag only.** Detailed tagging is required of the primary statements (from 2020); the notes are **block-tagged** from financial years beginning on or after 1 January 2022 | ~ |
+| Geography | Same note | block tag only | ~ |
+| Major customers | Same note | block tag only | ~ |
+| Suppliers | Not required; the Lieferkettensorgfaltspflichtengesetz report is a separate filing about due diligence, not a supplier list | text | ? |
+| Plants / capacity | Group management report, in prose | text | ~ |
+| Directors | Vorstand and Aufsichtsrat in the annual report; Directors' Dealings under MAR Article 19 | text; dealings use a prescribed form | ~ |
+| Related parties | IAS 24 note; §111a AktG for approval of related-party transactions | block tag only | ~ |
+| Guidance | **Mandatory.** HGB §315(1) requires the group management report to assess and explain expected development: *"Ferner ist im Konzernlagebericht die voraussichtliche Entwicklung mit ihren wesentlichen Chancen und Risiken zu beurteilen und zu erläutern; zugrunde liegende Annahmen sind anzugeben."* The word *Prognosebericht* does not appear in the statute — the duty does, including the duty to state the assumptions it rests on | **text**, in the management report | ✓ |
+| Group structure | Anteilsbesitzliste under §313 HGB, published with the accounts in the Bundesanzeiger | text | ~ |
+| Auditor changes | Appointment by the AGM under §318 HGB; a change is an AGM item rather than an event filing | text | ~ |
+| Pledges | Not generally disclosed | — | ? |
+
+**Germany is the one jurisdiction of the eight where management's own forecast is
+compulsory**, which makes it the natural place to test guidance extraction: there
+is a forecast in every group management report, in a named section, with its
+assumptions stated beside it. It is also prose, so it is an extraction job and
+not a parser — which is the point of testing it there.
+
+---
+
+### 12.7 Japan
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | セグメント情報 in the 有価証券報告書 (EDINET) and in the 決算短信 | **XBRL** in EDINET; the depth of tagging in the segment note is **not measured** | ~ |
+| Geography | Same note | XBRL, depth not measured | ~ |
+| Major customers | 主要な顧客ごとの情報 in the segment note | XBRL, depth not measured | ~ |
+| Suppliers | Not required as a list; 仕入先 appear in prose where material | text | ? |
+| Plants / capacity | **設備の状況** in the 有価証券報告書 — a named list of plants with their equipment, and capacity where the company states it. The richest plant disclosure of the eight | text | ~ |
+| Directors | 役員の状況 in the 有価証券報告書; a change files an 臨時報告書 | text | ~ |
+| Related parties | 関連当事者情報 note | XBRL, depth not measured | ~ |
+| Guidance | **The tanshin forecast, and it is XBRL.** JPX states that TDnet provides XBRL for 決算短信, for 業績予想の修正 (revisions to the forecast) and for 配当予想の修正, alongside the summary PDF, the full PDF and the corporate governance report. The forecast is in the summary section, which is the part that is tagged | **XBRL** | ~ |
+| Group structure | 関係会社の状況 in the 有価証券報告書 | XBRL/text, not measured | ~ |
+| Auditor changes | 臨時報告書 on a change of accounting auditor | text | ~ |
+| Pledges | 大量保有報告書 (the 5% rule) records 担保契約等重要な契約 | prescribed form | ~ |
+
+**TDnet's free window is 31 days, and it was measured rather than taken on
+trust.** JPX's own page says the viewing service covers *31 days including the
+day of disclosure*; the public site at `release.tdnet.info` was fetched on
+2026-10-25 and its date selector offered **exactly 31 dates, 2026-09-25 to
+2026-10-25 inclusive**. Anything older is gone from the free service. The paid
+routes are a server-type feed and a TDnet API under a JPX contract — JPX states
+that information taken from the TDnet API **may be redistributed to third
+parties**, and that the server-type service charges per volume for
+redistribution. Marked ~: the JPX pages were read through a search index because
+`jpx.co.jp` returned 403 to a direct fetch.
+
+**So Japan is the one country where waiting costs data permanently.** Every other
+source in this section keeps its archive. This is the single strongest argument
+in `docs/ARCHIVE_PLAN.md`.
+
+---
+
+### 12.8 Korea
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | 사업보고서, and the financial statement notes | **XBRL.** OpenDART's own menu offers "XBRL재무제표 원문 내려받기" and "주석 일괄다운로드" — XBRL statements and a bulk download of the notes | ✓ availability / ? depth |
+| Geography | Same | as above | ? |
+| Major customers | 사업의 내용 in the 사업보고서 | text | ~ |
+| Suppliers | 원재료 및 생산설비 section, in prose | text | ~ |
+| Plants / capacity | 생산설비 및 가동률 — production facilities **and utilisation rates**. With Japan, the most specific capacity disclosure of the eight | text | ~ |
+| Directors | 임원 현황 in the 사업보고서 | text | ~ |
+| Related parties | 특수관계자 거래 note, and 대규모내부거래 disclosures for large groups | XBRL for the note | ~ |
+| Guidance | **Fair disclosure (공정공시).** Where a company gives a forecast of sales or operating profit selectively, the exchange's disclosure regulation requires it to be filed first; failing to do so has led KRX to designate companies as unfaithful-disclosure corporations. **The regulation's article number is unconfirmed** — `law.krx.co.kr` did not answer, and the one primary corroboration found (a listed company's own disclosure control policy) would not extract from its PDF | text / prescribed form | ? |
+| Group structure | 계열회사 현황 in the 사업보고서; the KFTC's large-business-group disclosures | text | ~ |
+| Auditor changes | 감사인 변경 disclosure | prescribed form | ~ |
+| Pledges | 주식등의 대량보유상황보고서 (5% rule) and 임원·주요주주 소유상황보고서 | prescribed form | ~ |
+
+**OpenDART's terms were read at the source** (`opendart.fss.or.kr/intro/terms.do`)
+and are recorded in `docs/ARCHIVE_PLAN.md`: free in principle, a registered key,
+a published usage quota, and the Public Data Act behind it. **The quota's number
+could not be read** — the FAQ page returns a shell that fills in from script.
+
+---
+
+### 12.9 Canada
+
+Nothing in this table was read at a regulator's rule today. **SEDAR+'s terms were**,
+and they are the finding that matters for Canada — see §12.11 and the archive plan.
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | IFRS 8 note in the financial statements on SEDAR+ | **text/PDF.** Canada has **no XBRL mandate**: the CSA ran a *voluntary* XBRL filing programme in which filings are supplementary and the PDF remains the official statement | ~ |
+| Geography | Same note | text | ~ |
+| Major customers | Same note | text | ~ |
+| Suppliers | Not required | text | ? |
+| Plants / capacity | Annual Information Form (Form 51-102F2); NI 43-101 technical reports for miners | text | ~ |
+| Directors | Management information circular (Form 51-102F5); material change reports | text | ~ |
+| Related parties | IAS 24 note; MI 61-101 for related-party transactions | text | ~ |
+| Guidance | Forward-looking information in the MD&A, with the update and comparison duties of NI 51-102 | text | ~ |
+| Group structure | Intercorporate relationships in the AIF | text | ~ |
+| Auditor changes | The change-of-auditor reporting package under NI 51-102 | text | ~ |
+| Pledges | Insider reports on SEDI; the circular's ownership disclosure | prescribed form | ? |
+
+---
+
+### 12.10 Australia
+
+Read at the source today: **ASIC Information Sheet 284**, on the consolidated
+entity disclosure statement.
+
+| Item | Where it is published | Form | Mark |
+|---|---|---|---|
+| Segments | AASB 8 note in the annual report, lodged with ASX | **text/PDF.** No XBRL mandate for listed financial reports | ~ |
+| Geography | Same note | text | ~ |
+| Major customers | Same note | text | ~ |
+| Suppliers | Not required | text | ? |
+| Plants / capacity | Operations review in the annual report; JORC reports for miners | text | ~ |
+| Directors | Appendix 3X / 3Y / 3Z director's interest notices under the Listing Rules; the annual report for the standing board | prescribed form | ~ |
+| Related parties | AASB 124 note; Chapter 10 of the Listing Rules for approvals | text | ~ |
+| Guidance | Continuous disclosure under Listing Rule 3.1, and the Appendix 4D / 4E results announcements | text | ~ |
+| Group structure | **The consolidated entity disclosure statement.** ASIC: it applies to *"Australian public companies (listed and unlisted)"*, and where consolidated statements are prepared it must *"disclose details of each entity within the company's consolidated group"* — name; whether a body corporate, partnership or trust; any trustee, partner or joint-venture role; place of incorporation; the percentage of share capital held; and Australian residency, with each foreign jurisdiction of residence listed. It applies to **each financial year commencing on or after 1 July 2023**, so first to 30 June 2024; the tax-residency amendments apply from years commencing on or after 1 July 2024. ASIC adds that accounting materiality does **not** apply — dormant and shelf entities must still be listed — and the directors must declare it *"true and correct"*, a higher standard than *true and fair* | **text**, in the annual report; a prescribed content list rather than a prescribed file format | ✓ |
+| Auditor changes | ASIC consent/resignation forms; an ASX announcement | prescribed form | ~ |
+| Pledges | Substantial holder notices (Forms 603/604); director interest notices | prescribed form | ~ |
+
+**Australia's group-structure disclosure is the best of the eight** — a complete
+list of group entities with holdings, incorporation and tax residency, with
+materiality switched off and a "true and correct" declaration over it. It is also
+plain prose in a PDF, so it is an extraction job rather than a parser.
+
+---
+
+### 12.11 Across the eight
+
+**Which items arrive as data anywhere.**
+
+| Item | Structured in | Text everywhere else |
+|---|---|---|
+| Segments / geography / customers | **US** (detail-tagged), **Japan** and **Korea** (XBRL, depth unmeasured), **EU/UK** (block tag only — a tag around the whole note, which is not the same as data) | India, Canada, Australia |
+| Guidance | **Japan** (tanshin forecast in XBRL) | everywhere else — and in **Germany** it is at least compulsory and in a named section |
+| Group structure | **India** (BRSR item 21) | US (Exhibit 21, measured untagged), Australia (CEDS), UK (s.409), everywhere else |
+| Related parties | **India** (Reg 23(9) prescribed format) | everywhere else |
+| Pledges | **India** (shareholding pattern), and the 5% notification forms in Japan and Korea | US (a proxy footnote), everywhere else |
+| Plants / capacity | **nowhere** | and the best *text* is Japan's 設備の状況 and Korea's 생산설비 및 가동률 |
+| Suppliers | **nowhere**, and in most places it is not disclosed at all. India gives percentages in the BRSR; nobody names a supplier | — |
+| Directors / auditor changes | event filings are prescribed forms in several places but the content is prose everywhere | — |
+
+**Three conclusions for the build.**
+
+1. **"AI-extracted with page references" is the normal case, not the exception.**
+   Seven of the eleven items are prose in six of the eight countries. The
+   extraction contract — value, the sentence it came from, the page, the document
+   hash, and *"not disclosed"* where the document is silent — is therefore
+   infrastructure, and belongs in the store design of §6.3 rather than in a later
+   stage. A Company Brain field without a quotable sentence behind it does not
+   ship.
+2. **Block tagging is not data.** The EU and UK tag a note as one lump of text.
+   An adapter that treats an ESEF filing as structured because it is iXBRL will
+   find the primary statements tagged figure by figure and the segment note tagged
+   as a single string — which is the same extraction problem as a PDF, with an
+   extra step.
+3. **The countries sort into three groups**, and it is the opposite of the order
+   one would guess from market size: **US** (notes are data, qualitative items are
+   prose in a second document), **Japan and Korea** (deep reports, rich plant and
+   capacity disclosure, XBRL of unmeasured depth, and in Japan a 31-day window on
+   the free feed), and **UK, EU, Canada, Australia, India** (a PDF annual report
+   and a handful of prescribed forms around it).
+
+### 12.12 The leads in the brief, checked one by one
+
+| Lead | Verdict | Evidence |
+|---|---|---|
+| India: BRSR is XBRL | **~ reported, not verified** | Exchange circulars of July 2022 and filer practice say XBRL plus PDF; the circulars are on BSE and NSE, which refuse automated requests |
+| India: BRSR carries plant locations, markets, value chain | **✓ with a correction** | Section A item 16 gives **counts** of plants and offices, not locations; item 17 gives counts of states and countries plus exports as a percentage of turnover; "value chain" in BRSR is assessment percentages and awareness programmes (Principle 8 item 4, Principle 3), **not a supplier list** |
+| India: AOC-1 carries subsidiaries, associates, JVs | **~** | Section 129(3) with Rule 5 of the Companies (Accounts) Rules 2014; confirmed from secondary reproductions of the rule and the form, because `mca.gov.in` and `indiacode.nic.in` both returned 403 |
+| India: investor presentations filed under Reg 30 | **✓ with the precise hook** | Reg 30 read with **Schedule III Part A Para A item 15(a)(ii)**: presentations for analyst or institutional investor meets and for post-earnings or quarterly calls, disclosed to the exchanges *prior to the beginning of such events*. Item 15(a)(i) requires the meet schedule two working days ahead |
+| India: concall transcripts | **✓, with the deadline** | **Item 15(b)**: audio before the next trading day or within 24 hours, whichever is earlier; video within 48 hours; **transcripts within five working days**, on the website and to the exchanges simultaneously. Reg 46(2)(oa) mirrors it for the company's own website |
+| India: Reg 23(9) related-party filings | **✓, and the cadence has changed** | Reg 23(9) now requires submission in SEBI's format **on the date of publication** of the half-yearly results, not within 30 days of it (from 1 April 2023) |
+| US: 8-K Item 2.02, earnings release as Ex 99.1 | **✓** | Form 8-K: *"include the text of that announcement or release as an exhibit"*; Item 2.02 material is **furnished, not filed**, and so outside Section 18 liability unless the registrant says otherwise |
+| US: 8-K Item 4.01 auditor change | **✓** | *"Changes in Registrant's Certifying Accountant"*, carrying Item 304(a) of Regulation S-K including disagreements |
+| US: 8-K Item 5.02 director change | **✓** | *"Departure of Directors or Certain Officers; Election of Directors; Appointment of Certain Officers; Compensatory Arrangements of Certain Officers"* |
+| US: Exhibit 21 subsidiaries, untagged | **✓, measured** | Item 601(b)(21) requires the list with jurisdictions. Apple's FY2025 Exhibit 21.1: 11,921 bytes, 21 table rows, **0 inline XBRL tags**, against 1,131 tagged facts in the 10-K itself |
+| US: Item 403(b) pledge footnotes | **✓ with a correction** | The duty is in **paragraph (b) itself** — *"indicate, by footnote or otherwise, the amount of shares … that are pledged as security"* — not in a numbered Instruction; none of the seven Instructions to Item 403 mentions pledging. It appears in the **proxy**, not the 10-K |
+| Japan: tanshin forecasts in XBRL | **~** | JPX states TDnet provides XBRL for 決算短信, 業績予想の修正 and 配当予想の修正; read through a search index because `jpx.co.jp` returned 403 |
+| Japan: TDnet keeps only ~31 days free | **✓, measured** | JPX says 31 days including the disclosure day; the public site's date selector offered exactly 31 dates on 2026-10-25, 2026-09-25 to 2026-10-25 |
+| Germany: forecast mandatory in the group management report | **✓** | HGB §315(1): *"Ferner ist im Konzernlagebericht die voraussichtliche Entwicklung mit ihren wesentlichen Chancen und Risiken zu beurteilen und zu erläutern; zugrunde liegende Annahmen sind anzugeben."* The statute does not use the word *Prognosebericht* |
+| Korea: fair-disclosure forecasts on DART | **? substance yes, rule unconfirmed** | The obligation and its enforcement are described consistently by Korean financial press, including KRX designating a company as an unfaithful-disclosure corporation for not filing a 영업실적 전망 fair disclosure. The regulation's article could not be read: `law.krx.co.kr` did not answer |
+| Australia: consolidated entity disclosure statement | **✓, with the dates pinned** | ASIC INFO 284: all Australian public companies, listed and unlisted; contents as quoted in §12.10; **financial years commencing on or after 1 July 2023** for the statement, and on or after 1 July 2024 for the tax-residency amendments. Accounting materiality does not apply, and the directors declare it *true and correct* |
+
+### 12.13 What this section asks of you
+
+**Nothing yet, and that is deliberate** — this is a map, not a build. Two things
+are worth knowing before the first Company Brain stage is scoped:
+
+1. **The ? rows are work, not gaps in the write-up.** Five sources refused an
+   automated request today and three claims could not be read at the rule. Each
+   one is a browser visit by a person, not a code change.
+2. **The extraction contract is the real decision.** Seven of eleven items are
+   prose almost everywhere, so the Company Brain stands or falls on whether every
+   extracted value carries its sentence, its page and its document hash. If that
+   is accepted now it is a column in the store design; if it is added later it is
+   a migration.
