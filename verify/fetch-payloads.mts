@@ -8,6 +8,11 @@
 //   npm run verify:payloads -- AAPL MSFT just those
 //   npm run verify:payloads -- --force   refetch ones already on disk
 //
+// EVERY FETCH IS KEPT (stage 0 of `docs/ARCHIVE_PLAN.md`). `--force` used to
+// write over the payload and the version it replaced was gone; it now writes a
+// new capture under payloads/versions/ first, and only then moves the pointer.
+// `npm run verify` fails if any capture is ever changed afterwards.
+//
 // It calls the site's own API handler, so what lands on disk is exactly what
 // the site would receive. Expect a few failures: sources rate-limit, and some
 // tickers have no statements any more. Those are reported and skipped, and the
@@ -16,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { surveyPayloads, payloadSetLine } from './payloadSet.mts';
+import { capture, audit, sizeLine } from './payloadVersions.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
@@ -61,7 +67,14 @@ const worker = async () => {
     }
     const body = res.body || { error: `no body (${res.code})` };
     body.ticker = body.ticker || t;
-    fs.writeFileSync(file, JSON.stringify(body));
+    const bytes = JSON.stringify(body);
+    // KEPT FIRST, POINTED AT SECOND. A crash between the two leaves a capture
+    // nothing points at, which is recoverable; the other order leaves a pointer
+    // to bytes nobody kept, which is the loss this stage exists to stop. The
+    // pointer itself is overwritten on purpose: it is a pointer, and the
+    // history it used to be the only copy of now lives beside it.
+    capture(t, bytes);
+    fs.writeFileSync(file, bytes);
     if (body.error) {
       failed++;
       console.log(`${t.padEnd(14)} ERROR  ${String(body.error).slice(0, 70)}`);
@@ -87,6 +100,7 @@ console.log(
 // them, and that is exactly the mix that produces numbers which look valid.
 const survey = surveyPayloads();
 console.log(payloadSetLine(survey));
+console.log(sizeLine(audit()));
 if (survey.stale.length) {
   console.log(
     `  ${survey.stale.length} of them predate this fetcher. Nothing will measure over the set until they are ` +

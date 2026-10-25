@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "verify": "tsx verify/scenarios.mts",
     "verify:payloads": "tsx verify/fetch-payloads.mts",
+    "verify:versions": "tsx verify/payloadVersions.mts",
     "verify:sweep": "tsx verify/sweep.mts",
     "verify:compare": "tsx verify/compare.mts",
     "verify:workbook": "tsx verify/workbook-vs-site.mts",

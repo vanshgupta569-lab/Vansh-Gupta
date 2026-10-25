@@ -1946,6 +1946,48 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// NOTHING THAT WAS CAPTURED HAS BEEN CHANGED OR LOST
+// ---------------------------------------------------------------------------
+//
+// Stage 0 of `docs/ARCHIVE_PLAN.md`. Until 2026-10-25 a refetch wrote over the
+// payload file and the version it replaced was gone — a loss running
+// continuously, with no third party to ask for permission to stop it. Six
+// payloads were replaced on 2026-10-25 alone, and with them the prices that
+// every earlier measurement in this repository was struck against.
+//
+// Every fetch now writes a capture under `verify/payloads/versions/` whose NAME
+// IS THE HASH OF ITS OWN CONTENTS, and this is the check that makes that worth
+// something: a capture that has been edited no longer hashes to its name, and
+// says so here. It also holds the log and the files to each other in both
+// directions, so neither a deleted file nor a deleted log line can hide, and
+// asserts that the payload the whole suite reads really is the newest capture
+// of it rather than something that was never kept.
+//
+// THE STORE IS NOT IN THE REPOSITORY, and that is deliberate rather than
+// incidental: `verify/.gitignore` keeps payloads out because the Yahoo-sourced
+// figures are vendor data this site is not licensed to redistribute, and a
+// history of them is still them. Keeping the history is ours to do; publishing
+// it is not.
+{
+  console.log('\n=== every payload capture is still the capture it was ===');
+  const { audit, sizeLine } = await import(`file:///${REPO}/verify/payloadVersions.mts`);
+  const report = audit();
+  if (report.problems.length) {
+    totalProblems += report.problems.length;
+    console.log(`  PROBLEM: ${report.problems.length} faults in the capture store:`);
+    report.problems.slice(0, 8).forEach((p) => console.log(`           ${p}`));
+  } else if (!report.versions) {
+    console.log('  no captures on disk, and no payloads to capture');
+  } else {
+    console.log(`  ${sizeLine(report)}`);
+    console.log(
+      '  every capture hashes to its own name, every one is in the log and on disk, and every payload ' +
+        'the set reads is its newest capture'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // THE RUPEE RATE: THE OECD FIRST, FRED BEHIND IT, AND A REFUSAL IF BOTH GO
 // ---------------------------------------------------------------------------
 //

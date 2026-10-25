@@ -1,5 +1,8 @@
 # Fetched company data: Yahoo-sourced figures are vendor data the site is not
-# licensed to redistribute (see README, "Payloads").
+# licensed to redistribute (see README, "Payloads"). This covers
+# payloads/versions/ as well, which is where every capture of every payload is
+# kept from 2026-10-25 (ARCHIVE_PLAN.md stage 0): keeping the history is ours
+# to do, publishing the vendor’s figures is not.
 payloads/
 # Sweep snapshots and built workbooks: local working files.
 snapshots/

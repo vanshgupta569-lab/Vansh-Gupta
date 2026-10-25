@@ -1,8 +1,9 @@
 # A point-in-time archive — the plan
 
-**Status: plan only. Nothing here is built, and nothing should be built until
-you say so.** The brief that produced this document said: write the plan, stop
-for approval. Measured against the live sources on 2026-10-25.
+**Status: approved on 2026-10-25. Stage 0 is BUILT; everything after it waits.**
+The plan was written first and stopped for approval, as the brief asked; the
+decisions are recorded in §9 and the measurements that answered them are in
+§3.1 and §7. Measured against the live sources on 2026-10-25.
 
 ---
 
@@ -48,11 +49,81 @@ the same rule applied one layer earlier.
    that rots: a company revises its own forecast and the website copy is replaced,
    and the only durable record is the original announcement captured on the day.
 
+**And guidance is stored as a statement, not as a document.** A captured PDF
+answers "what did they say"; a company page has to answer "what did they
+promise, for when, and has it changed". So each guidance statement extracted
+from a captured document is one row:
+
+| Field | What it holds | Example |
+|---|---|---|
+| `metric` | the measure being forecast, in the engine’s own vocabulary | `revenue_growth` |
+| `target` | the number or range, with its unit and whether it is a floor, a ceiling or a midpoint | `12–14%` |
+| `period` | what the target is for, as dates rather than words | FY2027, 2026-04-01 to 2027-03-31 |
+| `scope` | consolidated or standalone, group or segment, constant currency or reported | consolidated, constant currency |
+| `quote` | **the exact sentence**, unedited, as it appears | "We expect revenue growth of 12–14% in constant currency for FY2027." |
+| `source` | the captured document: its hash, its page or timestamp, its URL | `sha256:…`, p. 4 |
+| `captured_at` | when we took the copy the quote came from | 2026-10-25T08:35:13Z |
+
+The `quote` is not decoration and not an audit afterthought: it is the field
+that makes the other six checkable, and standing decision 8 allows extraction
+**only** on that condition. A statement whose quote does not contain its target
+is a failed extraction and is refused rather than stored. A guidance figure
+with no quote is not a guidance figure.
+
+**Superseded, never edited.** A revised forecast is a new row with its own
+capture; the old row keeps its quote and gains a `superseded_by`. That is the
+same rule as the figures store in `docs/DATA_LAYER_PLAN.md` §6.3, and it is
+what lets a page show that a company cut its own guidance twice in a year
+without either version being lost.
+
 **What this is not.** It is not a mirror of an exchange, not a redistribution
 service, and not a general crawl. It is a captured copy of the documents of the
 companies this site models, held so that the site's own numbers can be traced
 and so that "as first reported" is answerable. That distinction is load-bearing
 in §2, because several of these terms turn on it.
+
+### 1.1 The key: the LEI beside the ticker
+
+**A ticker is not an identity.** It is a name one exchange gives one line of
+one company, and this repository has already been bitten by that: the India
+plan keys its store on ISIN rather than symbol because *"Eternal’s history
+proves symbols are renamed, and the ISIN survived it"* (§6.3 there). An archive
+spanning eight countries has the problem twice over — the same company arrives
+as `RELIANCE.NS`, as an ISIN, as a CIK, as an EDINET code and as a DART
+corp_code, and nothing in that list joins to anything else.
+
+**So every captured document is keyed on the LEI as well.** The Legal Entity
+Identifier is a 20-character code for the legal person that filed, issued by
+the Global LEI Foundation, and GLEIF publishes it through a free API with no
+key. Checked on 2026-10-25:
+
+| Probe | Result |
+|---|---|
+| `filter[isin]=US0378331005` | **exactly one record** — `HWUPKR0MPOU8FGXBT394`, Apple Inc. |
+| `filter[entity.legalName]=Reliance Industries Limited` | `5493003UOETFYRONLG31`, RELIANCE INDUSTRIES LIMITED, IN |
+| what each record carries | legal name, legal address and country, registration status (`ISSUED`, `LAPSED`), next renewal date |
+| authentication | none; no key, no registration |
+| published rate limit | **none found in the response headers** — so the same politeness budget as everything else in §4 |
+
+**Resolve by ISIN, never by name.** The same probe by name is fuzzy and
+dangerous: `entity.legalName=Apple Inc.` returned Apple Inc., **Apple Ford,
+Inc.** and **APPLE MANAGEMENT INC.** The ISIN filter returned one record and
+the right one. Since the figures store is already keyed on ISIN, the LEI is one
+join away and never a guess.
+
+**What it buys.** A group structure that joins across countries — a subsidiary
+disclosed in an Exhibit 21, an AOC-1 and a consolidated entity disclosure
+statement is one legal person with one LEI, or it is three names that happen to
+look alike. **And registration status is itself a fact worth keeping**: a
+LAPSED LEI on a counterparty is a real signal, and the renewal date comes free
+with the lookup.
+
+**What it does not buy, said plainly.** Not every issuer has one, coverage
+varies by country, and the LEI identifies the *legal entity*, not the listed
+line: a company with two share classes has one LEI and two tickers. So the LEI
+is an additional key, not a replacement for the ticker or the ISIN, and a
+company without one is recorded as having none rather than being matched by
+name.
 
 ---
 
@@ -288,7 +359,9 @@ periodically, and makes every clone of this repository carry every PDF ever
 captured. Object storage is a tenth of the trouble and an order of magnitude
 cheaper.
 
-**Candidate: Cloudflare R2.** Published pricing (checked 2026-10-25): **$0.015
+**Chosen: Cloudflare R2** (decision 2, 2026-10-25) — **and not set up yet.**
+The account is yours to create; nothing here provisions anything, and stage 0
+needs no account at all. Published pricing (checked 2026-10-25): **$0.015
 per GB-month**, Class A (writes and lists) **$4.50 per million**, Class B
 (reads) **$0.36 per million**, **free egress**, and a free tier of 10 GB-month,
 1M Class A and 10M Class B operations. Free egress is the one that matters,
@@ -301,6 +374,43 @@ so it wants a runner with a long timeout rather than a fast one. A scheduled
 GitHub Actions workflow fits (and the free allowance covers a nightly job of
 this size); a Vercel cron can trigger it, since the repository already deploys
 there, but Vercel's function timeouts make it a poor host for the crawl itself.
+
+### 3.1 Where stage 0’s captures live, and why not in the repository
+
+The decision was to put them in the repository **if a year of them came to
+under 100 MB**, and otherwise to keep them in an ignored folder and say so.
+Measured on 2026-10-25, on the set as it stands:
+
+| | |
+|---|---|
+| the set today | **176 payloads, 10.34 MB**, mean 60 KB, largest 69 KB |
+| what a full refetch adds | **10.3 MB** — one new capture per company, every time |
+| a year at one full refetch a month | **124 MB** |
+| a year at one a week | **538 MB** |
+| compressed, for reference | 2.90 MB per full refetch (28%) |
+
+**A refetch always writes a new capture for every company**, so there is no
+deduplication to hope for: `fetchedAt` and the live `quote.price` are inside
+the payload, so no two fetches of the same company are ever byte-identical.
+The monthly figure is the conservative one — the payload version was bumped
+twice in the four weeks to 2026-10-22, and each bump forces a full refetch —
+so **124 MB a year is a floor, not an estimate**, and it is over the line.
+
+**And there is a second reason, which decides it regardless of size.**
+`verify/.gitignore` has kept payloads out of this repository from the start,
+and the comment says why: *"Yahoo-sourced figures are vendor data the site is
+not licensed to redistribute"*. `verify/README.md` says the same at more
+length. **A history of vendor data is still vendor data**, and committing
+versions of it would publish the thing that constraint exists to keep
+unpublished — which is exactly the "quietly relaxing a rule" that `CLAUDE.md`
+forbids as a side effect of another job.
+
+**So the captures live in `verify/payloads/versions/`, which the existing
+ignore rule already covers**, and the ignore file now says that it covers them
+and why. Keeping the history is ours to do; publishing it is not. If the set
+ever moves to sources that are ours to redistribute — the SEC-only subset
+already is — this is worth revisiting, and it is a licensing question rather
+than a storage one.
 
 ---
 
@@ -382,12 +492,15 @@ read, or when. `ROADMAP.md` §13 lists point-in-time as a Next item; §6.3 of th
 data layer plan says a store that overwrites "cannot be made point-in-time later
 — the history is gone".
 
-**4. Our own payloads are overwriting themselves right now.** This is the
-cheapest loss to stop and the easiest to overlook. The 176 payloads in
-`verify/payloads/` each carry a `fetchedAt`, and a refetch **replaces the file**.
-Six of them were refetched yesterday; the previous versions are gone, including
-the risk-free rate block as it stood and the prices every earlier measurement was
-struck against. Nothing third-party needs to agree to anything for that to stop.
+**4. Our own payloads were overwriting themselves. ~~Right now~~ — closed on
+2026-10-25 by stage 0 (§7).** This was the cheapest loss to stop and the easiest
+to overlook: the 176 payloads in `verify/payloads/` each carry a `fetchedAt`, and
+a refetch **replaced the file**. Six were refetched on 2026-10-25 before the
+store existed, and those previous versions are gone for good — including the
+risk-free rate block as it stood and the prices earlier measurements were struck
+against. Everything from the store onwards is kept. **Nothing third-party had to
+agree to anything for that to stop**, which is the whole argument for doing the
+stages in this order.
 
 **5. Guidance, which rots fastest.** A company that revises or withdraws a
 forecast replaces the copy on its own website. The original survives in the
@@ -400,18 +513,51 @@ that will not.**
 
 ---
 
-## 7. The staged build, if you approve it
+## 7. The staged build
 
 Each stage is one job with its own checks, in the pattern the data layer plan
-uses. Stages 1 and later touch third parties; **stage 0 does not**.
+uses. Stages 1 and later touch third parties; **stage 0 does not**, which is
+why it is the one that is built.
 
-**Stage 0 — stop overwriting what we already fetch.** Payload captures become
-append-only: a new fetch writes a new file keyed by its hash and capture time,
-and the current pointer moves. No third party is involved and nothing new is
-downloaded.
-*Checks:* a refetch leaves the previous version readable; the capture index names
-every version with its time; the suite's payload reader still sees exactly one
-current payload per company; and breaking the pointer makes it fail.
+**Stage 0 — stop overwriting what we already fetch. BUILT on 2026-10-25.**
+A fetch now writes the capture first and moves the pointer second:
+
+```
+verify/payloads/<TICKER>.json                          the pointer, which is
+                                                        what everything reads
+verify/payloads/versions/<TICKER>/<when>__<sha>.json    the capture, written
+                                                        once, then read-only
+verify/payloads/versions/index.jsonl                    one appended line per
+                                                        capture
+```
+
+The capture’s **name is the hash of its own contents**, which is what makes an
+edit detectable rather than merely discouraged, and the file is chmod 444 after
+writing, so a careless script gets an error from the operating system before
+the check ever runs. The log carries what §1 requires of every capture: the
+hash, our capture time, the source’s own `fetchedAt`, the shape version, the
+source, the price it was struck at, and the size.
+
+The 176 payloads that predate the store were **adopted** as their first capture,
+dated by their own `fetchedAt` rather than by a time invented for them.
+
+*The check, in `npm run verify`:* every capture still hashes to its own name;
+the log and the files agree in **both** directions, so neither a deleted file
+nor a deleted line can hide; every payload has at least one capture; and the
+pointer the whole suite reads is byte-for-byte the newest capture.
+
+*Proved by breaking, three ways at once* — one capture edited, one deleted,
+and one pointer rewritten in place the way a refetch used to. The check
+reported **6 faults** naming each: *"has been changed since it was captured: it
+is named for 2392cdd5c2ad and now hashes to 7b1bdf6ea38b"*, *"is in the capture
+log and not on disk"*, *"is not its newest capture … so the set is reading
+something that was never kept"*. The read-only flag refused the first write on
+its own (`EPERM`) before the break was forced through.
+
+*And proved forward, on a real refetch:* MSFT was refetched after the store was
+built. Its capture of 2026-10-21 (price **531.68**) is still there beside the
+new one of 2026-10-25 (**524.51**), and the pointer equals the newer. Under the
+behaviour of the day before, 531.68 would have been gone.
 
 **Stage 1 — the SEC archive.** Daily index, documents for the watchlist, hashes,
 the index table, and the store.
@@ -465,14 +611,27 @@ built here until there is a written answer or a licence.
 
 ---
 
-## 9. What I need from you
+## 9. The decisions, and what is still open
 
-1. **Approve or not**, and if yes, whether stage 0 can start immediately — it
-   needs no third party, costs nothing, and stops a loss that is happening now.
-2. **Storage:** R2 as proposed, or something else. This needs an account that
-   does not exist yet.
-3. **Permission letters:** whether to write to JPX (TDnet), NSE, ASX and the CSA.
-   Each is a conversation rather than a code change, and all four take longer
-   than anything in §7.
-4. **BSE:** one browser visit to read their terms would settle the last unknown
-   in §2, and it has to be a person, not this repository.
+**Taken on 2026-10-25:**
+
+1. **Approved, and stage 0 started immediately.** Built the same day; §7 has
+   what it does, what it measured and how it was proved to fail.
+2. **Cloudflare R2 for the later stages — not set up yet.** The account will be
+   created by Nihar, who will say when. Nothing in this repository provisions,
+   configures or writes to any remote store, and stage 0 needs none.
+3. **The permission letters are on hold until the end** — NSE, ASX and the CSA
+   are not to be written to for now. **JPX (TDnet) is a separate decision Nihar
+   will take on its own**, because it is the only one with a clock on it: the
+   free service holds 31 days, so every week of delay is a week that can never
+   be captured, whatever the answer turns out to be.
+4. **BSE: Nihar will read the terms page in a browser and send the text.** It is
+   the last unverified row in §2.10, and it cannot be read from here — the site
+   returned 403 to an automated request on two paths on 2026-10-25.
+
+**Still open, and nothing is blocked on them today:**
+
+- Whether the captured documents may be *shown* to a reader, source by source.
+  Only the FCA’s terms expressly license onward distribution (§8).
+- When stage 1 starts, which needs nothing from anyone: the SEC permits it and
+  the store is built.

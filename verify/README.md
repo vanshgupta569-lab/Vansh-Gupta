@@ -71,8 +71,8 @@ every formula in it with HyperFormula, and then checks, **in each scenario**:
   the amounts they should;
 - no formula reaches into the units column.
 
-It also checks two things that are not about a workbook at all, because there
-was nowhere better to put them and both are cheap:
+It also checks things that are not about a workbook at all, because there was
+nowhere better to put them and each is cheap:
 
 - **a driver moves the value the way it reads.** Twelve of the sliders are set
   back to their own defaults, which must reproduce the untouched model to the
@@ -102,6 +102,18 @@ was nowhere better to put them and both are cheap:
   the index — and the pages are checked to carry no script at all, which is the
   whole point of them. Run before `npm run build`, it says so and checks the
   sources only.
+
+- **every payload capture is still the capture it was.** Stage 0 of
+  `docs/ARCHIVE_PLAN.md`: a fetch keeps the payload under
+  `verify/payloads/versions/<TICKER>/` in a file **named for the hash of its own
+  contents**, and this reads every one of them back. A capture that has been
+  edited no longer hashes to its name; a capture deleted from disk is still in
+  the log, and one added without a log line is on disk and not in it, so both
+  directions fail; every payload must have at least one capture; and the payload
+  the whole suite reads must be byte-for-byte the newest capture of it, which is
+  what makes "the set reads the latest" true rather than intended. Proved by
+  editing a capture, deleting another and rewriting a pointer in place: six
+  faults, each naming what happened.
 
 ### The scenarios
 
@@ -245,14 +257,26 @@ licenses fundamentals from data vendors. Those figures are not the site's to
 redistribute — the same constraint that blocks precedent transaction data
 (`ROADMAP.md`, section 2). The SEC-sourced ones would be fine on their own,
 but a mixed directory with one rule is easier to keep honest than a mixed
-directory with two. At 1.8 MB for 176 companies size is not the reason.
+directory with two. At 10.3 MB for 176 companies size is not the reason — and
+it is not the reason for the version store either, which would come to about
+124 MB a year at one full refetch a month (`docs/ARCHIVE_PLAN.md` §3.1).
+
+**Every version of every payload is kept, in `verify/payloads/versions/`**,
+which the same ignore rule covers for the same reason. A fetch writes the
+capture first and moves `verify/payloads/<TICKER>.json` second; the capture is
+named for the hash of its contents and made read-only, and `npm run verify`
+fails if any of them is ever changed. `npm run verify:versions` prints what the
+store holds; `npx tsx verify/payloadVersions.mts --adopt` takes in any payload
+that has no capture yet.
 
 The consequence, stated plainly: a measurement quoted in a commit message can
 be reproduced by fetching the same tickers, but not to the figure, because the
-sources restate and the prices move. Where an exact reproduction matters,
-freeze a copy of `verify/payloads/` outside the repository and say in the
-commit message which set was used. Every measurement in `KNOWN_ISSUES.md`
-names the date its payloads were fetched for this reason.
+sources restate and the prices move. **The version store makes the freeze
+automatic**: name the capture in the commit message instead — every one has a
+hash and a time, and the bytes behind it cannot change afterwards without the
+suite saying so. Measurements in `KNOWN_ISSUES.md` name the date their payloads
+were fetched for the same reason, which is now a date that can be resolved to a
+file.
 
 Expect a few tickers to fail on any fetch: sources rate-limit, and some have
 no statements any more (4 of 176 on the September 2026 set). They are reported
