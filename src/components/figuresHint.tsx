@@ -169,6 +169,15 @@ export const Hint: React.FC<HintProps> = ({ children, label, tone = 'normal' }) 
             color: READ,
             zIndex: 60,
             padding: '10px 12px',
+            // THE PANEL IS PROSE, AND PROSE IS SANS AT ONE WEIGHT, whatever it
+            // hangs off. Every hint until now sat on a table row that was
+            // already set that way, so the family and the weight were left to
+            // inherit — until the loading screen put a ⓘ at the end of a
+            // sentence set in the display face, and three lines of Newsreader
+            // medium came out of it. A tooltip is not a title.
+            fontFamily: 'var(--font-sans)',
+            fontWeight: 400,
+            fontStyle: 'normal',
             fontSize: 13,
             lineHeight: 1.5,
           }}

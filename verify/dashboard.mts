@@ -1562,11 +1562,18 @@ function reportContrast() {
  *
  * The slow-build check above watches a fetch that never answers, so the card it
  * sees is one of the three written for any company — correct, and not the half
- * that matters. This drives an ordinary search, where the figures land early
- * and the screen is then held for the build stages, and asserts the card on
- * screen is one THIS COMPANY EARNED: its condition true on the paper company's
- * own filed statements, computed here from the fixture rather than read off the
- * page, so the two sides come from opposite directions.
+ * that matters. This one asserts the card on screen is one THIS COMPANY EARNED:
+ * its condition true on the paper company's own filed statements, computed here
+ * from the fixture rather than read off the page, so the two sides come from
+ * opposite directions.
+ *
+ * AND IT IS DRIVEN AGAINST A COLD FETCH, THREE SECONDS SLOW, because that is
+ * the shape the screen is hardest on and the shape the first version of it got
+ * wrong. An instant fixture hands the figures over before the card has even
+ * appeared, so the card is this company's from first sight and nothing about
+ * the handover is exercised at all. Three seconds is inside the minimum hold
+ * (4.8s in `App.tsx`), so the overlay is still on screen when the figures land
+ * and the correction has to arrive before it closes.
  */
 async function checkCardFromFigures(page: Page) {
   console.log('\n=== the card the company\u2019s own figures earn ===');
@@ -1589,6 +1596,20 @@ async function checkCardFromFigures(page: Page) {
     return;
   }
 
+  // A page route, which takes precedence over the fixture route on the context,
+  // and is lifted again at the end of the check.
+  const COLD_MS = 3_000;
+  await page.route('**/api/company*', async (route) => {
+    await new Promise((r) => setTimeout(r, COLD_MS));
+    const url = new URL(route.request().url());
+    const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(fixtureFor(ticker) ?? { ...paperPayload('valued'), ticker }),
+    });
+  });
+
   const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
@@ -1596,6 +1617,8 @@ async function checkCardFromFigures(page: Page) {
   // Sampled across the hold, because the card starts as one written for any
   // company and becomes this one's the moment the filings land.
   const seen = new Set<number>();
+  const factsSeen = new Set<number>();
+  let introduced = '';
   for (let i = 0; i < 14; i++) {
     const id = await overlay
       .locator('[data-myth-card]')
@@ -1603,6 +1626,22 @@ async function checkCardFromFigures(page: Page) {
       .getAttribute('data-myth-card')
       .catch(() => null);
     if (id) seen.add(Number(id));
+    const text = (await overlay.textContent().catch(() => null)) || '';
+    for (const card of cards) if (text.includes(card.fact)) factsSeen.add(card.id);
+    // THE SENTENCE THAT INTRODUCES AN EARNED CARD, read while it is on screen
+    // and with the mechanism OPEN, which is the only state it exists in: the
+    // \u24D8 renders its text only when open, and the slow-build check cannot
+    // reach this sentence at all because a fetch that never answers can only
+    // ever show a card written for any company. Opened here, in the second and
+    // a half between the correction arriving and the overlay closing.
+    if (!introduced && [...factsSeen].some((id) => earned.some((c) => c.id === id))) {
+      const hint = overlay.locator('button[data-hint]').first();
+      if (await hint.count()) {
+        await hint.focus().catch(() => {});
+        await page.waitForTimeout(150);
+        introduced = (await overlay.textContent().catch(() => null)) || '';
+      }
+    }
     if (!(await overlay.isVisible().catch(() => false))) break;
     await page.waitForTimeout(400);
   }
@@ -1622,6 +1661,60 @@ async function checkCardFromFigures(page: Page) {
         `"${String(card.showWhen).slice(0, 62)}"`
     );
   }
+
+  // AND ITS CORRECTION REACHED THE SCREEN BEFORE THE SCREEN CLOSED.
+  //
+  // This is the half the id on its own does not prove, and it was broken when
+  // it shipped. The overlay lives until the fetch is done and the minimum hold
+  // is served, and the first version of the card restarted both beats every
+  // time the figures arrived — with the result that the earned card's fact
+  // was scheduled 2.2 seconds after figures that arrive at the very moment the
+  // screen is allowed to close. The reader got a belief and no correction,
+  // which is worse than showing them nothing: the myth is the half that is
+  // wrong.
+  //
+  // Checked against this ordinary search rather than the held fetch, because
+  // an ordinary search is the one that closes on time.
+  const earnedFact = [...factsSeen].filter((id) => earned.some((c) => c.id === id));
+  if (!earnedFact.length) {
+    fail(
+      'the correction on the card the figures earned',
+      'the fact, in the card\u2019s own words, before the overlay closed',
+      factsSeen.size
+        ? `only the fact of card ${[...factsSeen].join(", ")}, which it did not earn`
+        : 'the myth, and then the screen went'
+    );
+  } else {
+    ok(`and its correction was on screen before the overlay closed (card ${earnedFact[0]})`);
+  }
+
+  // A CARD IS NOT A VERDICT, and the sentence introducing an EARNED one is
+  // where saying so is hardest: the condition that picked it really is about
+  // these filings, the reader is owed that, and it still has to be put as what
+  // it is \u2014 a common misunderstanding about accounts rather than a finding
+  // about whoever is on screen. The sixty cards contain the phrase nowhere, and
+  // the CSV check holds them to the character, so a match here came from this
+  // screen.
+  if (!introduced) {
+    fail(
+      'the sentence that introduces the card',
+      'the mechanism opened while the earned card was on screen',
+      'the overlay closed before it could be read'
+    );
+  } else {
+    const verdict = introduced.match(/this compan(y|ies)[^.]{0,60}/i);
+    if (verdict) {
+      fail(
+        'a card introduced as education rather than as a verdict',
+        'no \u201cthis company\u201d in the sentence that says why this card',
+        `"${verdict[0]}"`
+      );
+    } else {
+      ok('the earned card is introduced as education, with no \u201cthis company\u201d anywhere in it');
+    }
+  }
+
+  await page.unroute('**/api/company*');
 }
 
 // screen nothing rendered checked, because in a fast harness it is gone before
@@ -1645,6 +1738,17 @@ async function checkCardFromFigures(page: Page) {
 //   seventeen seconds must not spend seventeen seconds on one sentence. That
 //   was asserted against the notes this card replaced, and `ROADMAP.md` §19c
 //   says it applies to whatever replaces them.
+//
+//   NOTHING AT ALL FOR THE FIRST SECOND. A cached answer comes back in a few
+//   hundred milliseconds, and a card that appears and goes inside that is a
+//   flicker rather than a sentence. So the overlay is read the instant it is
+//   visible, when there must be no card, and the card's own arrival is timed.
+//
+//   IT IS LABELLED A COMMON MYTH, AND SAYS NOTHING ABOUT THE COMPANY. Sixty
+//   cards about how accounts behave are education; the same sixty introduced as
+//   something about the company on screen are a verdict on a security, which
+//   standing decision 6 does not allow. The label is asserted, and so is the
+//   absence of the phrase.
 async function checkSlowBuild(context: BrowserContext, page: Page) {
   console.log('\n=== the loading screen, on a slow build ===');
   const { MYTH_FACT_CARDS } = await import(`file:///${REPO}/src/data/mythFactCards.ts`);
@@ -1680,6 +1784,52 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   // seventeen seconds, and the overlay is read while it is outstanding.
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
+
+  // ---- 0. NOT A FLICKER: NO CARD IN THE FIRST SECOND ----
+  //
+  // TWO ASSERTIONS, AND THE FIRST IS THE ONE THAT HOLDS.
+  //
+  // No card when the overlay is first read: that read lands wherever it lands
+  // and the hold-off has to have outlasted it.
+  //
+  // Then the arrival is timed, from first sight rather than from the click,
+  // which this check cannot see: the search is deliberately not awaited so the
+  // overlay can be read while the fetch is outstanding. First sight trails the
+  // overlay opening by about a third of a second in this harness (the measured
+  // arrival is 671ms against a 1,000ms hold-off), so the floor is set below the
+  // hold-off by more than that margin. Between them the two catch a hold-off
+  // shortened to anything a reader could not read.
+  const openedAt = Date.now();
+  const atOnce = await overlay.locator('[data-myth-card]').count();
+  if (atOnce) {
+    fail(
+      'the card held back while a quick build could still finish',
+      'the progress rule alone for the first second',
+      `a card ${Date.now() - openedAt}ms after the overlay opened`
+    );
+  }
+  let appearedAfter: number | null = null;
+  for (let waited = 0; waited < 5000; waited += 100) {
+    if (await overlay.locator('[data-myth-card]').count()) {
+      appearedAfter = Date.now() - openedAt;
+      break;
+    }
+    await page.waitForTimeout(100);
+  }
+  if (appearedAfter === null) {
+    fail('the card on the loading screen', 'a card within five seconds', 'none ever appeared');
+  } else if (appearedAfter < 500) {
+    fail(
+      'the card held back while a quick build could still finish',
+      'no card inside the first second',
+      `the card appeared ${appearedAfter}ms in`
+    );
+  } else {
+    ok(
+      `no card when the overlay was first read, and the card ${appearedAfter}ms later: a build that ` +
+        'finishes inside a second shows the progress rule and closes rather than flashing a myth'
+    );
+  }
 
   // ---- 1. THE MYTH BEFORE THE FACT ----
   const first = await read();
@@ -1722,6 +1872,17 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     ok(`${states.length} states over ${Math.round(HOLD_MS / 1000)} seconds (${states.join(' then ')}), so nothing holds the screen for the whole wait`);
   }
 
+  // ---- 2b. LABELLED A COMMON MYTH, AND NOT ABOUT THE COMPANY ----
+  const panel = (await overlay.textContent().catch(() => null)) || '';
+  if (!/common myth/i.test(panel)) {
+    fail(
+      'the card labelled as a common myth',
+      'the words \u201cCommon myth\u201d beside the belief',
+      `"${panel.replace(/\s+/g, " ").slice(0, 90)}"`
+    );
+  } else {
+    ok('the card is labelled a common myth, so the belief is not read as a finding');
+  }
   // ---- 3. THE WHY IS BEHIND THE ⓘ, AND REACHABLE BY KEYBOARD ----
   const body = (await page.textContent('body')) || '';
   const openWhy = cards.find((c) => body.includes(c.why));
@@ -1744,6 +1905,31 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     const why = cards.find((c) => opened.includes(c.why));
     if (why) ok(`the ⓘ opens the mechanism on keyboard focus: "${why.why.slice(0, 54)}…"`);
     else fail('the ⓘ on the card', "the card's why, on keyboard focus", 'nothing opened');
+
+    // ---- AND NOTHING ANYWHERE SAYS THE CARD IS ABOUT THIS COMPANY ----
+    //
+    // Read with the mechanism OPEN as well as closed, because the sentence that
+    // introduces a card lives inside it and the Hint renders its text only
+    // while it is open. Scanning the closed panel alone passed a card
+    // introduced as \u201cShown because this company's filed figures meet\u201d,
+    // which is the exact wording this is here to keep off the screen.
+    //
+    // The sixty cards are general by construction (none of them contains the
+    // phrase) and the CSV check holds them to the character, so anything
+    // matching came from this screen rather than from a card.
+    const verdict = `${panel} ${opened}`.match(/this compan(y|ies)[^.]{0,60}/i);
+    if (verdict) {
+      fail(
+        'a card that says nothing about the company it is shown beside',
+        'no \u201cthis company\u201d on the loading screen, open or closed',
+        `"${verdict[0]}"`
+      );
+    } else {
+      ok(
+        'nothing on the screen, with the mechanism open or closed, makes the card a statement ' +
+          'about the company being built'
+      );
+    }
     await page.keyboard.press('Escape').catch(() => {});
   }
 

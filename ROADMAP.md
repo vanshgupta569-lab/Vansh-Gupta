@@ -876,6 +876,26 @@ banks. The myth is shown first, the fact a beat later, and the mechanism sits
 behind a ⓘ rather than as a third paragraph on a screen somebody is waiting
 to leave.
 
+**Finished on 2026-10-25: the three points the brief carried.** The card is
+labelled **"Common myth"**, and nothing on the screen — with the mechanism open
+or closed — says *this company*: the sentence that introduces an earned card
+gives the condition that picked it and puts it as education rather than as a
+finding. **A build that finishes in under a second shows no card at all**; the
+card waits a second, and a quick build closes with the progress rule as its
+only content. Checked at 1600px and 390px against the first design principle:
+no sideways scroll, nothing clipped, the panel 342×392 inside a 390-wide
+phone.
+
+**And a defect in what shipped on 2026-10-24, found while doing it and fixed in
+the same commit.** The two beats restarted whenever the figures arrived, so on
+any build slower than about two and a half seconds the correction was scheduled
+for after the overlay had closed: the reader was shown a belief and never the
+fact. The beats are now scheduled once and the card is replaced only while its
+myth is still alone. `verify:dashboard` now drives the card check against a
+three-second cold fetch and asserts the earned card’s own correction reached
+the screen before it closed; run against the version that shipped, it reports
+the defect.
+
 **Still Next: the live progress on real numbers.** Which filing is being read,
 which year has arrived, the revenue and profit figures as they land. The card
 half shipped on its own because it was what was asked for; this half is

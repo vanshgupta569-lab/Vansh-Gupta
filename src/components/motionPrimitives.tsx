@@ -169,6 +169,18 @@ const STAGES = [
 // still inside a quick build.
 const MYTH_ALONE_MS = 2200;
 
+// A BUILD THAT IS OVER IN UNDER A SECOND SHOWS NO CARD AT ALL.
+//
+// Answers are cached at the edge, so a company somebody else looked at this
+// morning can come back in a few hundred milliseconds. A myth that appears
+// and is gone before it can be read is worse than no card: what the reader
+// registers is a flicker, not a sentence, and the one thing this screen was
+// built to carry is the thing they lose. So the card waits a second before it
+// appears, and a build that finishes inside that second closes with the
+// progress rule as its only content — which is honest, because there was
+// nothing to wait through.
+const CARD_AFTER_MS = 1000;
+
 // HOW LONG ONE NOTE HOLDS THE SCREEN.
 //
 // Long enough to read a belief, a correction and the mechanism behind it
@@ -187,16 +199,23 @@ const NOTE_MS = 6500;
  *
  *   BEFORE THE FIGURES LAND, a card whose own condition is that there is a
  *   company. Three of the sixty say exactly that, so showing one is not a
- *   claim about this company that we cannot yet support.
+ *   claim we cannot yet support.
  *
  *   WHEN THEY LAND, the card this company's own figures earn — chosen by
  *   `pickMythFactCard`, which tests every condition against the filing and
  *   treats a line it cannot read as unknown rather than as nil.
  *
- * That is also what keeps the screen from holding one thing for a whole
- * slow build, which `verify:dashboard` has asserted since the notes: the
- * myth gives way to the fact, and the general card gives way to this
- * company's.
+ * ONE CARD PER BUILD, AND IT IS REPLACED ONLY WHILE ITS MYTH IS STILL
+ * ALONE. The first version of this screen restarted both beats whenever the
+ * figures arrived, which reads well and was wrong: the overlay closes as soon
+ * as the fetch is done and the hold is served, so on any build slower than
+ * about two and a half seconds the correction was scheduled for after the
+ * screen had gone. The reader was shown a belief and never the fact.
+ *
+ * So the beat is scheduled once, from the moment the card appears, and the
+ * swap is allowed only before the fact is on screen. A myth that gets a
+ * shorter moment alone is a small cost; a fact that never arrives is the
+ * whole point of the screen, lost.
  */
 export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ active, payload }) => {
   const reduced = useReducedMotion();
@@ -205,6 +224,7 @@ export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ ac
   // builds in one session are not the same card.
   const [seed, setSeed] = useState(0);
   const [showFact, setShowFact] = useState(false);
+  const [cardReady, setCardReady] = useState(false);
 
   useEffect(() => {
     if (!active) {
@@ -227,39 +247,56 @@ export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ ac
     if (!active) {
       setSeed(0);
       setShowFact(false);
+      setCardReady(false);
       return;
     }
     setSeed(Date.now());
     setShowFact(false);
+    setCardReady(false);
+    // BOTH BEATS ARE SCHEDULED HERE, ONCE, from the moment the overlay opens.
     // Reduced motion suppresses movement, not information: the fact still
-    // arrives, it simply does not fade in while it does.
-    const timer = setTimeout(() => setShowFact(true), reduced ? 0 : MYTH_ALONE_MS);
-    return () => clearTimeout(timer);
+    // arrives, it simply does not fade in while it does. The hold-off is not
+    // an animation, so it is not waived — a card nobody can read is no
+    // kinder to a reader who has asked for less movement.
+    const appear = setTimeout(() => setCardReady(true), CARD_AFTER_MS);
+    const beat = setTimeout(
+      () => setShowFact(true),
+      CARD_AFTER_MS + (reduced ? 0 : MYTH_ALONE_MS)
+    );
+    return () => {
+      clearTimeout(appear);
+      clearTimeout(beat);
+    };
   }, [active, reduced]);
 
-  // THE FIGURES ARRIVING RESTART THE READING, because the card has changed:
-  // the general one gives way to this company's, and a fact already on
-  // screen under a myth that is no longer there would be a non sequitur.
+  // WHICH CARD, AND WHEN IT MAY STILL CHANGE.
+  //
+  // Picked from the figures the moment there are any, which on a cached
+  // answer is before the card has appeared at all — so the first sight of
+  // it is already the card the filings earned, with no swap to watch.
+  //
+  // After the fact is on screen the card is frozen: the correction the reader
+  // is in the middle of reading is not pulled out from under them, and a
+  // general card held to the end of a slow build is true of any company,
+  // which is exactly what its own condition says.
   const hasFigures = Boolean(payload?.statements?.length);
+  const [choice, setChoice] = useState<MythFactChoice | null>(null);
   useEffect(() => {
-    if (!active || !hasFigures) return;
-    setShowFact(false);
-    const timer = setTimeout(() => setShowFact(true), reduced ? 0 : MYTH_ALONE_MS);
-    return () => clearTimeout(timer);
-  }, [active, hasFigures, reduced]);
-
-  const choice: MythFactChoice | null = React.useMemo(() => {
-    if (!active || !seed) return null;
-    try {
-      return pickMythFactCard(payload?.statements?.length ? payload : { statements: [] }, seed);
-    } catch {
-      return null;
+    if (!active || !seed) {
+      setChoice(null);
+      return;
     }
-  }, [active, seed, hasFigures, payload]);
+    if (showFact) return;
+    try {
+      setChoice(pickMythFactCard(hasFigures ? payload : { statements: [] }, seed));
+    } catch {
+      setChoice(null);
+    }
+  }, [active, seed, showFact, hasFigures, payload]);
 
   if (!active) return null;
 
-  const card = choice?.card ?? null;
+  const card = cardReady ? choice?.card ?? null : null;
 
   // Rendered as a centred overlay rather than inline. Inline, it sits below the
   // suggestion list and lands off-screen exactly when the user has just picked
@@ -269,7 +306,7 @@ export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ ac
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0B0D]/85 backdrop-blur-sm px-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-page/85 backdrop-blur-sm px-6"
       role="status"
       aria-live="polite"
     >
@@ -342,6 +379,14 @@ export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ ac
                 exit={reduced ? undefined : { opacity: 0, y: -6 }}
                 transition={{ duration: reduced ? 0 : 0.35, ease: 'easeOut' }}
               >
+                {/* "Common myth", never "this company". Sixty cards about how
+                    accounts behave, shown to a reader who has just asked for a
+                    valuation; the label says what they are reading, and says it
+                    before the belief rather than after it. A card is general
+                    education, and a screen that appeared to pass judgement on a
+                    company in the second before showing any of its figures
+                    would be the opposite of standing decision 6. */}
+                <div className={`${EYEBROW} text-quiet mb-1.5`}>Common myth</div>
                 <p className={`${BODY} text-muted italic`} data-myth>
                   {card.myth}
                 </p>
@@ -362,10 +407,14 @@ export const BuildPipeline: React.FC<{ active: boolean; payload?: any }> = ({ ac
                         {card.fact}
                         <Hint label="Why that is so">
                           <p>{card.why}</p>
+                          {/* NOT "this company". The condition is what picked the
+                              card, and the reader is owed it, but a card is a
+                              common misunderstanding about accounts rather than a
+                              finding about whoever is being looked at. */}
                           <p className="mt-2 text-quiet">
                             {choice?.matched
-                              ? `Shown because this company's filed figures meet: ${card.showWhen}.`
-                              : 'Shown for any company: this one\u2019s figures earned no card of their own.'}
+                              ? `General education, not a verdict on anyone. This card is shown where the filings being read meet — ${card.showWhen}.`
+                              : 'General education, not a verdict on anyone. This card is written for any company, so no condition was tested.'}
                           </p>
                         </Hint>
                       </motion.p>

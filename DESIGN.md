@@ -679,6 +679,45 @@ price-to-earnings, a day before the earliest filing — the path breaks and
 starts again rather than bridging. The readout says so in words too, because
 a reader pointing at that stretch is owed a reason and not a blank.
 
+**BuildPipeline.** The overlay a reader waits on, and the only screen seen on
+every single build: a capped progress rule with the stage named beneath it in
+the quietest type on the card, and one myth-versus-fact card. The card is the
+content and the progress is the furniture.
+
+**The Common Myth Rule.** The card carries the label **"Common myth"** — the
+eyebrow, sentence case, 13px, quiet — and nothing on the screen, with the ⓘ
+open or closed, says *this company*. The sixty cards are about how accounts
+behave, not about whoever is being built; the same sentence introduced as a
+finding about the company on screen is a verdict on a security, which standing
+decision 6 does not allow. The sentence behind the ⓘ still gives the condition
+that picked the card, because the reader is owed it, and still puts it as
+education: *"General education, not a verdict on anyone. This card is shown
+where the filings being read meet — …"*
+
+**The No Flicker Rule.** Nothing is shown for the first second. Answers are
+cached at the edge, so a company somebody looked at this morning can come back
+in a few hundred milliseconds, and a card that appears and goes inside that is
+a flicker rather than a sentence. A build that finishes inside the second
+closes with the progress rule as its only content, which is honest: there was
+nothing to wait through. The rule generalises — **a screen does not show
+something it is about to take away.**
+
+**The Two Beats Rule, and the card that does not move under the reader.** The
+belief first, alone; the correction a beat later (2.2s). A fact printed under
+the belief at the same instant is a caption on it, and a reader has to have had
+the chance to agree with the myth for the correction to land. **The beats are
+scheduled once**, and the card may be replaced only while its myth is still
+alone. Restarting them when better data arrives reads well and loses the fact:
+the overlay closes as soon as the work is done, so a correction rescheduled
+late is a correction the reader never sees. A belief shown without its
+correction is worse than showing nothing, because the belief is the half that
+is wrong.
+
+**A tooltip is not a title.** The ⓘ panel is prose: sans, weight 400, upright,
+13px, whatever it hangs off. It used to inherit, which was invisible while
+every ⓘ sat on a sans table row and produced three lines of Newsreader medium
+the first time one was put at the end of a display-face sentence.
+
 ## Do's and Don'ts
 
 ### Do:
