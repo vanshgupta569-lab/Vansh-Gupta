@@ -103,6 +103,21 @@ nowhere better to put them and each is cheap:
   whole point of them. Run before `npm run build`, it says so and checks the
   sources only.
 
+- **the financials tab’s four rules.** `docs/FINANCIALS_SPEC.md` is mostly a
+  list of ways a financial table lies, and these are the four that can be
+  checked without a browser, over every payload on disk. **The TTM method is
+  read off the periods the company filed**, not its country — driven with
+  constructed period sets so the three branches today’s annual-only data never
+  reaches are still exercised. **A gap is an em dash and never a zero**, checked
+  against the payload field rather than against the view, so the two come from
+  opposite directions. **No bank carries an operating margin, an EBITDA, a gross
+  profit or a cost of sales** (rule 13). **No balance sheet line is ever
+  summed** (rule 6) — and specifically, the trailing-twelve-month column is
+  never the total of the balances behind it. Measured: 35,071 cells over 175
+  companies, 4,828 of them with nothing behind them, 178 filed nils kept
+  distinct, 36 banks, 2,697 balance sheet rows. Proved by breaking all four at
+  once: 7,483 faults.
+
 - **every payload capture is still the capture it was.** Stage 0 of
   `docs/ARCHIVE_PLAN.md`: a fetch keeps the payload under
   `verify/payloads/versions/<TICKER>/` in a file **named for the hash of its own

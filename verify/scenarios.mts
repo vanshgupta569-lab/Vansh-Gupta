@@ -1946,6 +1946,249 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// THE FINANCIALS TAB: FOUR RULES OF ITS OWN (docs/FINANCIALS_SPEC.md)
+// ---------------------------------------------------------------------------
+//
+// The tab shows the three statements as filed, and the spec it was built from
+// is mostly a list of ways a financial table lies. These are the four that can
+// be checked without a browser, measured over every payload on disk.
+//
+//   THE TTM METHOD COMES FROM THE PERIODS THE COMPANY FILED (rule 5), not
+//   from its country. Today every payload holds annual periods only, so the
+//   live data exercises one branch of four; the other three are driven here
+//   with constructed period sets, because the rule is the thing being built
+//   and shipping three unexercised branches is how they rot.
+//
+//   A GAP IS NEVER A ZERO (rule 3, and standing decision 3). The failure this
+//   catches is one line of code — `row[field] ?? 0` — and it is invisible on
+//   screen: a company that does not disclose its inventory shows a confident
+//   nil, and every total built on it is wrong by exactly the amount nobody
+//   knows.
+//
+//   NO BANK GETS AN OPERATING MARGIN (rule 13). A margin struck against
+//   interest and fee income is a number with no meaning that still looks like
+//   one, so the bank template has no such row rather than having one that is
+//   filtered out later — a filter is something that can be forgotten.
+//
+//   A BALANCE SHEET IS NEVER SUMMED (rule 6). Cash at four quarter-ends added
+//   together is four times the cash, and it is the most natural mistake in the
+//   whole spec because every row beside it IS summed.
+{
+  console.log('\n=== the financials tab: the four rules that can be checked without a browser ===');
+  const {
+    financialsFor,
+    ttmMethod,
+    templateFor,
+    formatValue,
+    FORBIDDEN_FOR_BANKS,
+  } = await import(`file:///${REPO}/src/data/financials.ts`);
+
+  const faults: string[] = [];
+
+  // ---- 1. THE TTM METHOD, ON PERIODS A COMPANY COULD ACTUALLY FILE ----
+  const ttmCases: [string, { end: string; months: number }[], string, string][] = [
+    [
+      'a filer whose latest period is the full year',
+      [{ end: '2026-03-31', months: 12 }, { end: '2025-03-31', months: 12 }],
+      'annual',
+      'TTM (FY basis)',
+    ],
+    [
+      'a quarterly filer, three quarters past the year end',
+      [
+        { end: '2025-12-31', months: 3 },
+        { end: '2025-09-30', months: 3 },
+        { end: '2025-06-30', months: 3 },
+        { end: '2025-03-31', months: 3 },
+        { end: '2024-12-31', months: 12 },
+      ],
+      'four-quarters',
+      'TTM (4 quarters)',
+    ],
+    [
+      'a half-yearly filer at its half way point',
+      [
+        { end: '2025-09-30', months: 6 },
+        { end: '2024-09-30', months: 6 },
+        { end: '2025-03-31', months: 12 },
+      ],
+      'half-year-bridge',
+      'TTM (H1 basis)',
+    ],
+    ['a company with nothing filed', [], 'none', 'TTM'],
+    [
+      'two quarters and nothing else, which do not make a year',
+      [{ end: '2025-12-31', months: 3 }, { end: '2025-09-30', months: 3 }],
+      'none',
+      'TTM',
+    ],
+  ];
+  for (const [name, filed, method, label] of ttmCases) {
+    const got: any = (ttmMethod as any)(filed);
+    if (got.method !== method || got.label !== label) {
+      faults.push(
+        `${name}: the method should be ${method} labelled "${label}", and it is ${got.method} ` +
+          `labelled "${got.label}"`
+      );
+    }
+  }
+  // AND IT USES THE PERIODS IT SAYS IT DOES. A method that names four quarters
+  // and combines three would pass every test above.
+  const quarterly: any = (ttmMethod as any)(ttmCases[1][1]);
+  if (quarterly.uses.length !== 4 || quarterly.uses[0] !== '2025-12-31') {
+    faults.push(`the four-quarter method combines ${JSON.stringify(quarterly.uses)}, not the latest four`);
+  }
+  const bridge: any = (ttmMethod as any)(ttmCases[2][1]);
+  if (bridge.uses.length !== 3) {
+    faults.push(`the half-year bridge combines ${bridge.uses.length} periods, not the year and two halves`);
+  }
+
+  // ---- 2, 3, 4: over every payload on disk ----
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let companies = 0;
+  let banks = 0;
+  let cells = 0;
+  let gaps = 0;
+  let filedZeros = 0;
+  let balanceRows = 0;
+  const STATEMENTS = ['income', 'balance', 'cash'] as const;
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    if (payload?.error || payload?.fetchError || !payload?.statements?.length) continue;
+    companies++;
+    const ticker = file.replace(/\.json$/, '');
+    const bank = (templateFor as any)(payload) === 'bank';
+    if (bank) banks++;
+    const symbol = String(payload.currencySymbol || payload.currency || '');
+
+    for (const statement of STATEMENTS) {
+      const view: any = (financialsFor as any)(payload, { statement, frequency: 'annual' });
+      const annualPeriods = view.periods.filter((p: any) => p.kind !== 'ttm');
+
+      // ---- 3. NO BANK GETS A MARGIN OR AN EBITDA ----
+      if (bank) {
+        for (const row of view.rows) {
+          if ((FORBIDDEN_FOR_BANKS as string[]).includes(row.key)) {
+            faults.push(`${ticker} is a bank and its ${statement} carries a "${row.label}" row`);
+          }
+        }
+      }
+
+      for (const row of view.rows) {
+        row.cells.forEach((cell: any, i: number) => {
+          cells++;
+          const shown = (formatValue as any)(cell, row.kind, symbol);
+
+          // ---- 2. A GAP IS AN EM DASH, NEVER A ZERO ----
+          if (cell.value === null) {
+            gaps++;
+            if (shown !== '\u2014') {
+              faults.push(`${ticker} ${statement} ${row.key} period ${i}: no value, and the screen shows "${shown}"`);
+            }
+            if (cell.state !== 'notReported' && cell.state !== 'notApplicable') {
+              faults.push(`${ticker} ${statement} ${row.key} period ${i}: no value, and the state is ${cell.state}`);
+            }
+            if (!cell.reason) {
+              faults.push(`${ticker} ${statement} ${row.key} period ${i}: nothing to show and no reason why`);
+            }
+          } else if (cell.value === 0) {
+            // A FILED NIL IS A CLAIM, and is distinguishable from an absence.
+            filedZeros++;
+            if (cell.state === 'notReported') {
+              faults.push(`${ticker} ${statement} ${row.key} period ${i}: a nil is being reported as not reported`);
+            }
+          }
+
+          // THE FIELD BEHIND THE CELL, read from the payload rather than from
+          // the view, so the two come from opposite directions: a row whose
+          // source field is absent must never arrive on screen as a number.
+          const sourceRow = annualPeriods[i]
+            ? payload.statements.find((s: any) => s.periodEnd === annualPeriods[i].endDate)
+            : null;
+          if (sourceRow && !row.formula && row.key in sourceRow) {
+            const raw = sourceRow[row.key];
+            const absent = !(typeof raw === 'number' && isFinite(raw));
+            if (absent && cell.value !== null) {
+              faults.push(
+                `${ticker} ${statement} ${row.key} ${annualPeriods[i].key}: the filing has no figure and the ` +
+                  `table shows ${cell.value}`
+              );
+            }
+          }
+        });
+      }
+
+      // ---- 4. A BALANCE IS A MOMENT, NOT A TOTAL OF MOMENTS ----
+      if (statement === 'balance') {
+        const ttmAt = view.periods.findIndex((p: any) => p.kind === 'ttm');
+        if (ttmAt >= 0) {
+          for (const row of view.rows) {
+            if (!row.pointInTime) continue;
+            balanceRows++;
+            const latest = row.cells[ttmAt - 1];
+            const ttm = row.cells[ttmAt];
+            if (ttm.value !== latest.value) {
+              faults.push(
+                `${ticker} ${row.key}: the TTM column holds ${ttm.value} and the latest balance is ` +
+                  `${latest.value} — a balance sheet line has been aggregated`
+              );
+            }
+            // And specifically not the sum, which is the shape the mistake takes.
+            const summable = row.cells
+              .slice(0, ttmAt)
+              .map((c: any) => c.value)
+              .filter((v: any) => typeof v === 'number');
+            const sum = summable.reduce((t: number, v: number) => t + v, 0);
+            // ONLY WHEN THE SUM IS A DIFFERENT NUMBER. A line reported as nil in
+            // the earlier years sums to its own latest value, and accusing that of
+            // being an aggregate was this check's own first false positive: six
+            // companies, every one of them correct.
+            if (
+              summable.length > 1 &&
+              ttm.value !== null &&
+              latest.value !== null &&
+              Math.abs(sum - latest.value) > 1e-9 &&
+              Math.abs(ttm.value - sum) < 1e-9
+            ) {
+              faults.push(`${ticker} ${row.key}: the TTM column is the SUM of ${summable.length} balances`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the financials tab:`);
+    faults.slice(0, 8).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  the TTM method is read off the filed periods in all five cases: a year, four quarters, the ` +
+        'half-year bridge, nothing filed, and two quarters that do not make a year'
+    );
+    console.log(
+      `  ${cells.toLocaleString('en-GB')} cells over ${companies} companies and three statements: ` +
+        `${gaps.toLocaleString('en-GB')} with nothing behind them, every one an em dash with a reason, and ` +
+        `${filedZeros} filed nils kept distinct from them`
+    );
+    console.log(
+      `  none of the ${banks} banks carries ${(FORBIDDEN_FOR_BANKS as string[]).join(', ')}`
+    );
+    console.log(
+      `  ${balanceRows.toLocaleString('en-GB')} balance sheet rows: every trailing-twelve-month column is the ` +
+        'latest balance, and not one is a sum of balances'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // NOTHING THAT WAS CAPTURED HAS BEEN CHANGED OR LOST
 // ---------------------------------------------------------------------------
 //

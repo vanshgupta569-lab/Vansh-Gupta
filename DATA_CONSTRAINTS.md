@@ -577,6 +577,41 @@ OECD’s July 2024 announcement rather than fetched. The data API
 `Cache-Control: public, max-age=7200`; one request per company build, against a
 payload that is then cached on disk, is well inside what that invites.
 
+### No quarterly periods, and five bank lines neither feed carries
+
+**Source:** both — the SEC path and the vendor feed alike. **Affects:** the
+Financials tab on every one of the 175 companies. **Bound:** **no effect on any
+valuation** — the engine has always modelled from annual figures — but the
+tab shows one column a year where it is built to show four, and a TTM that is
+the financial year rather than a rolling one.
+
+**The data layer fetches annual periods only.** `YEARS_WANTED = 5` in
+`api/company.js` applies to years, and `extractUSFact` takes annual facts. So
+the Financials tab’s Quarterly and Half-year controls have nothing behind
+them, and say so when chosen rather than drawing an empty grid that would read
+as a company that files nothing.
+
+**What it costs, precisely.** Rule 5 of `docs/FINANCIALS_SPEC.md` picks the TTM
+method from the periods a company actually filed. With annual periods only, one
+branch is reachable: **the latest filed period is the year, so the trailing
+twelve months are that year.** That is correct rather than approximate — it is
+the rule’s own third case — but it means TTM adds nothing a reader could not
+already see, which is the whole point of a TTM column. Quarterly XBRL is
+published both by the SEC and in India (`docs/DATA_LAYER_PLAN.md` §2.3), so this
+is a fetcher change rather than a missing source.
+
+**And five lines a bank statement needs are in neither feed:** interest earned
+separated from other income, operating profit before provisions, provisions and
+contingencies, deposits, and advances. Deposits are the largest liability a bank
+has. The bank template lists all five and marks them not reported, because a
+reader who knows what a bank’s accounts contain should be able to see what is
+missing from ours.
+
+**What would remove it:** quarterly periods in the payload, which is a change to
+`api/company.js` and a payload version bump; and for the bank lines, a source
+that files to a banking schema — RBI Form A for India (`DATA_CONSTRAINTS.md`
+already refuses banks in the India plan for the same reason).
+
 ### How much plant a change in revenue is worth
 
 **Source:** neither. **Affects:** 3 of the 57 companies whose forecast buys

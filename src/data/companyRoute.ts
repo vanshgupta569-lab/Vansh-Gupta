@@ -37,12 +37,13 @@ export const COMPANY_TABS: CompanyTab[] = [
     built: true,
   },
   {
+    // STAGE A (docs/FINANCIALS_SPEC.md): the three statements as filed, every
+    // number opening the evidence behind it. What is not built yet is said on
+    // the screen itself rather than here: there are no quarterly periods in the
+    // data layer, so the Quarterly and Half-year controls say so when chosen.
     slug: 'financials',
     label: 'Financials',
-    built: false,
-    coming:
-      'Ten or more years of the actual statements, annual and quarterly, with every number ' +
-      'clickable to the filing it came from, and reported, corrected and modelled side by side.',
+    built: true,
   },
   {
     slug: 'filings',

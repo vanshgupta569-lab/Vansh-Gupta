@@ -2154,6 +2154,178 @@ async function checkCompanyTabsOnScreen(page: Page) {
       continue;
     }
 
+    if (tab.slug === 'financials') {
+      // ---- THE STATEMENTS, AND THE EVIDENCE UNDER EVERY NUMBER ----
+      //
+      // The spec this tab was built from says its differentiator in one line:
+      // of the five sites studied, none links a number to the filing behind
+      // it. So the thing asserted here is not that a table rendered — it is
+      // that EVERY NUMBER OPENS THE EVIDENCE, by tap and by keyboard, and that
+      // the evidence says what period, what unit, what state and what source.
+      const table = page.locator('[data-financials]').first();
+      if (!(await table.count())) {
+        fail('the Financials tab', 'the statement table', 'no table on the page');
+        continue;
+      }
+
+      // The three statements, and the TTM column pinned beside the latest year.
+      const header = ((await table.locator('thead').textContent()) || '').replace(/\s+/g, ' ');
+      if (!/TTM/.test(header)) {
+        fail('the TTM column', 'a TTM column beside the latest year', `"${header.slice(0, 70)}"`);
+      } else if (!/TTM \(FY basis\)/.test(header)) {
+        fail(
+          'the TTM column saying which basis it is on',
+          'the basis in the header, as rule 5 requires',
+          `"${header.slice(0, 90)}"`
+        );
+      } else {
+        ok('Financials loads at its own address, with a TTM column that names its basis');
+      }
+
+      // ---- EVERY NUMBER OPENS AN EVIDENCE SHEET ----
+      const cells = table.locator('[data-cell]');
+      const total = await cells.count();
+      let opened = 0;
+      let shortOfEvidence = 0;
+      const wanted = ['Line', 'Period', 'Duration', 'Basis', 'Unit', 'State'];
+      // Sampled across the grid rather than all of it: the first, the last, a
+      // TTM cell and a derived one, which are the four shapes a cell comes in.
+      const sample = [0, 1, Math.floor(total / 2), total - 2, total - 1].filter(
+        (i, n, a) => i >= 0 && i < total && a.indexOf(i) === n
+      );
+      for (const i of sample) {
+        const cell = cells.nth(i);
+        const name = (await cell.getAttribute('data-cell')) || `cell ${i}`;
+        await cell.evaluate((el: any) => el.click());
+        const sheet = page.locator('[data-evidence-sheet]');
+        if (!(await sheet.isVisible().catch(() => false))) {
+          fail('the evidence behind a number', `a sheet for ${name}`, 'nothing opened');
+          continue;
+        }
+        const said = ((await sheet.textContent()) || '').replace(/\s+/g, ' ');
+        const missing = wanted.filter((w) => !said.includes(w));
+        if (missing.length) {
+          shortOfEvidence++;
+          fail(
+            `the evidence for ${name}`,
+            `every field the spec asks for (${wanted.join(', ')})`,
+            `no ${missing.join(', ')}`
+          );
+        } else {
+          opened++;
+        }
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(150);
+      }
+      if (opened === sample.length) {
+        ok(`${opened} numbers sampled across ${total} in the table, and every one opened its evidence`);
+      }
+
+      // AND THE EVIDENCE IS HONEST ABOUT A VENDOR FEED. The paper company is
+      // an SEC filer in the fixture, so the sentence asserted is that one; the
+      // vendor sentence is checked in `npm run verify`, over the 92 payloads
+      // that actually have it.
+      await cells.first().evaluate((el: any) => el.click());
+      const evidence = ((await page.locator('[data-evidence-sheet]').textContent()) || '').replace(/\s+/g, ' ');
+      if (/SEC EDGAR/.test(evidence) && /XBRL/.test(evidence)) {
+        ok('the evidence names the source and the concept it was read from');
+      } else {
+        fail('the evidence sheet', 'the source named', `"${evidence.slice(0, 80)}"`);
+      }
+      await page.keyboard.press('Escape');
+
+      // ---- A GAP IS AN EM DASH ON THE SCREEN TOO ----
+      //
+      // On the BALANCE SHEET with its detail rows open, because that is where
+      // this fixture actually has absences — goodwill, intangibles and minority
+      // interest, none of which the paper company reports. Asserting it on a
+      // statement with no gaps in it would pass for ever while proving nothing,
+      // which this suite has been caught by before.
+      await page
+        .getByRole('button', { name: 'Balance sheet', exact: true })
+        .evaluate((el: any) => el.click());
+      await page.waitForTimeout(250);
+      await page
+        .getByRole('button', { name: /more lines/i })
+        .evaluate((el: any) => el.click());
+      await page.waitForTimeout(250);
+      const dashes = await table.locator('[data-state="notReported"]').count();
+      if (!dashes) {
+        fail(
+          'the check that a gap is an em dash',
+          'at least one line this company does not report, to assert it on',
+          'every cell on the balance sheet has a figure, so nothing was tested'
+        );
+      }
+      let zeroed = 0;
+      for (const text of await table.locator('[data-state="notReported"]').allTextContents()) {
+        if (text.trim() !== '\u2014') zeroed++;
+      }
+      if (zeroed) {
+        fail('a line the filing does not report', 'an em dash', `${zeroed} of them show something else`);
+      } else {
+        ok(`${dashes} cells with nothing behind them, every one an em dash on the screen`);
+      }
+
+      // ---- A FREQUENCY WITH NO PERIODS SAYS SO, rather than drawing a grid --
+      await page
+        .getByRole('button', { name: 'Quarterly', exact: true })
+        .evaluate((el: any) => el.click());
+      await page.waitForTimeout(250);
+      const quarterly = ((await page.textContent('main')) || '').replace(/\s+/g, ' ');
+      if (/No quarterly periods are held/i.test(quarterly) && !(await page.locator('[data-financials]').count())) {
+        ok('a frequency with no periods behind it says so, and draws no empty table');
+      } else {
+        fail(
+          'the Quarterly view with no quarterly periods held',
+          'a sentence saying so and no table',
+          `"${quarterly.slice(0, 90)}"`
+        );
+      }
+      await page
+        .getByRole('button', { name: 'Annual', exact: true })
+        .evaluate((el: any) => el.click());
+      await page.waitForTimeout(250);
+
+      // ---- AND IT HOLDS AT 390px, where the table is the hard case --------
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(400);
+      const phone: any = await page.evaluate(`(() => {
+        const sc = document.scrollingElement;
+        const table = document.querySelector('[data-financials]');
+        const wrap = table && table.parentElement;
+        const label = document.querySelector('[data-financials] tbody th');
+        return {
+          pageSideways: sc.scrollWidth > sc.clientWidth + 1,
+          tableScrolls: wrap ? wrap.scrollWidth > wrap.clientWidth + 1 : false,
+          labelPct: label ? (label.getBoundingClientRect().width / innerWidth) * 100 : null,
+        };
+      })()`);
+      if (phone.pageSideways) {
+        fail('the statements on a phone', 'the page never scrolling sideways', 'the whole page scrolls');
+      } else if (!phone.tableScrolls) {
+        fail(
+          'the statements on a phone',
+          'the table scrolling sideways inside itself',
+          'it does not scroll at all, so the later periods are unreachable'
+        );
+      } else if (!(phone.labelPct <= 30.5)) {
+        fail(
+          'the label column on a phone',
+          'no more than 30% of the width',
+          `${phone.labelPct.toFixed(1)}%`
+        );
+      } else {
+        ok(
+          `at 390px the label column is ${phone.labelPct.toFixed(0)}% of the width, the table scrolls ` +
+            'sideways inside itself, and the page does not'
+        );
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.waitForTimeout(300);
+      continue;
+    }
+
     // ---- the overview --------------------------------------------------
     const tiles = page.locator('section[aria-label="Summary figures"] >> div.border');
     const figures = ((await page.locator('section[aria-label="Summary figures"]').textContent()) || '').replace(/\s+/g, ' ');
@@ -2362,6 +2534,24 @@ try {
   // 4. The company page: the hub, and every tab at its own address.
   await checkCompanyTabsOnScreen(page);
   await readContrast(page, 'the company page, overview');
+
+  // AND THE STATEMENTS, which is a screen of its own: a table of its own with
+  // its own chips, states and evidence sheet, none of which the overview has.
+  // Sweeping only the overview would leave the densest screen on the site
+  // unmeasured.
+  await page.goto(`${BASE}/company/${PAPER_TICKER}/financials`, { waitUntil: `domcontentloaded` });
+  await page.locator(`[data-financials]`).first().waitFor({ timeout: 30_000 });
+  // Waited for rather than clicked at: the table renders a frame before its
+  // footer does, and one run of this check timed out on the race.
+  const more = page.getByRole(`button`, { name: /more lines/i });
+  await more.waitFor({ state: `visible`, timeout: 30_000 });
+  await more.evaluate((el: any) => el.click());
+  await page.waitForTimeout(300);
+  await readContrast(page, 'the company page, the statements');
+  await page.locator(`[data-cell]`).first().evaluate((el: any) => el.click());
+  await page.waitForTimeout(300);
+  await readContrast(page, 'the evidence behind a figure');
+  await page.keyboard.press(`Escape`);
 
   // 5. The same company again, quoted in a currency its statements are not
   //    in: the one case where a value per share is shown twice.

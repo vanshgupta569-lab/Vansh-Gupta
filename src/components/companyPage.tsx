@@ -24,6 +24,7 @@ import { ArrowRight, ExternalLink } from 'lucide-react';
 import { COMPANY_TABS, type CompanyTab } from '../data/companyRoute';
 import { overviewStats, formatStat, filingLabel } from '../data/companyOverview';
 import { PriceChart } from './priceChart';
+import { FinancialsTab } from './financialsTab';
 import { Hint, HINT_STYLES } from './figuresHint';
 import { EYEBROW, UI, BODY, MetricTile, RefStrip, Pill, Disclose } from './instrument';
 
@@ -260,6 +261,11 @@ export const CompanyPage: React.FC<Props> = ({
                 </p>
               </section>
             </div>
+          )}
+
+          {/* ---- the statements, as filed, with the evidence behind them -- */}
+          {!loading && !error && payload && active.slug === 'financials' && (
+            <FinancialsTab payload={payload} ticker={ticker} />
           )}
 
           {/* ---- the model tab opens the flow that already exists -------- */}
