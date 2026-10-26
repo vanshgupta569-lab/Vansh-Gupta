@@ -203,6 +203,113 @@ export const PAPER_NAME = 'Fenwick Paper Mills Inc.';
  * the case that was wrong, where the rate applied to the quote is a hundredth
  * of the rate of the pair it comes from.
  */
+/**
+ * THE QUARTERS THIS COMPANY FILED, in the shape the fetcher now returns.
+ *
+ * Five of them, which is the shape that matters: the last quarter of FY2025
+ * and the first three of FY2026, so the latest four run PAST the year end and
+ * the trailing twelve months is a real rolling figure rather than the
+ * financial year wearing a different label.
+ *
+ * They add up on purpose. FY2025 revenue is 1,260 and its four quarters are
+ * 300 + 310 + 320 + 330; a check that four quarters tie to the year would be
+ * worthless against a fixture where they do not.
+ *
+ * AND ONE FIGURE IS DERIVED, with both of the filings it is the difference
+ * of — because the thing most worth checking on screen is the one a reader
+ * cannot see is derived unless we say so.
+ */
+const QUARTER_FILINGS = {
+  q4: {
+    accn: '0000111111-26-000004',
+    form: '10-K',
+    filed: '2026-02-10',
+    url: 'https://www.sec.gov/Archives/edgar/data/111111/000011111126000004/',
+  },
+  nine: {
+    accn: '0000111111-25-000003',
+    form: '10-Q',
+    filed: '2025-11-05',
+    url: 'https://www.sec.gov/Archives/edgar/data/111111/000011111125000003/',
+  },
+  q1: {
+    accn: '0000111111-26-000005',
+    form: '10-Q',
+    filed: '2026-05-06',
+    url: 'https://www.sec.gov/Archives/edgar/data/111111/000011111126000005/',
+  },
+  q2: {
+    accn: '0000111111-26-000006',
+    form: '10-Q',
+    filed: '2026-08-05',
+    url: 'https://www.sec.gov/Archives/edgar/data/111111/000011111126000006/',
+  },
+  q3: {
+    accn: '0000111111-26-000007',
+    form: '10-Q',
+    filed: '2026-11-04',
+    url: 'https://www.sec.gov/Archives/edgar/data/111111/000011111126000007/',
+  },
+};
+
+const quarter = (
+  periodStart: string,
+  periodEnd: string,
+  fiscalYear: number,
+  fiscalPeriod: string,
+  revenue: number,
+  filing: any,
+  extra: any = {}
+) => ({
+  periodStart,
+  periodEnd,
+  fiscalYear,
+  fiscalPeriod,
+  months: 3,
+  values: {
+    revenue,
+    cogs: Math.round(revenue * 0.6),
+    operatingIncome: Math.round(revenue * 0.15),
+    pretaxIncome: Math.round(revenue * 0.14),
+    netIncome: Math.round(revenue * 0.105),
+    totalAssets: 2000 + revenue,
+    cash: 100 + Math.round(revenue / 10),
+    equity: 900 + revenue,
+    operatingCashFlow: Math.round(revenue * 0.2),
+    capex: Math.round(revenue * 0.07),
+  },
+  filing,
+  ...extra,
+});
+
+const PAPER_QUARTERS = [
+  // The last quarter of FY2025, which no 10-Q reports: it is the year less
+  // the nine months, and so carries both of those filings.
+  quarter('2025-10-01', '2025-12-31', 2025, 'Q4', 330, QUARTER_FILINGS.q4, {
+    states: {
+      revenue: 'derived',
+      cogs: 'derived',
+      operatingIncome: 'derived',
+      pretaxIncome: 'derived',
+      netIncome: 'derived',
+      operatingCashFlow: 'derived',
+      capex: 'derived',
+    },
+    derivedFrom: {
+      revenue: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+      cogs: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+      operatingIncome: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+      pretaxIncome: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+      netIncome: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+      operatingCashFlow: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+      capex: [QUARTER_FILINGS.q4, QUARTER_FILINGS.nine],
+    },
+  }),
+  quarter('2026-01-01', '2026-03-31', 2026, 'Q1', 340, QUARTER_FILINGS.q1),
+  quarter('2026-04-01', '2026-06-30', 2026, 'Q2', 350, QUARTER_FILINGS.q2),
+  quarter('2026-07-01', '2026-09-30', 2026, 'Q3', 360, QUARTER_FILINGS.q3),
+];
+
 export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valued') {
   const statements = YEARS.map((_, i) => {
     const row: any = statementFor(i);
@@ -230,6 +337,7 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
     sicCode: '2621',
     sicDescription: 'Paper Mills',
     statements,
+    quarters: PAPER_QUARTERS.map((q) => ({ ...q, values: { ...q.values } })),
     priceConversion: variant === 'converted'
       ? {
           quotedCurrency: 'GBp',

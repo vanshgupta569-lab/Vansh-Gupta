@@ -28,13 +28,17 @@
 //   5  the daily price series the quote was already downloading and throwing
 //      away: ten years daily plus monthly to the start, as the exchange quoted
 //      it, with the rate the price was converted at recorded beside it
+//   6  `quarters`: the quarterly and half-year periods each company filed,
+//      with the state of every figure (reported or derived) and, for an SEC
+//      filer, the filing each one came from — both filings where a quarter
+//      is the difference between two cumulative figures
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 5;
+export const PAYLOAD_VERSION = 6;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

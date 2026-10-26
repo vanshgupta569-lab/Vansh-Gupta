@@ -2131,14 +2131,26 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
           for (const row of view.rows) {
             if (!row.pointInTime) continue;
             balanceRows++;
-            const latest = row.cells[ttmAt - 1];
+            // THE LATEST BALANCE OF THIS LINE, wherever it sits. With quarters
+            // in the payload the newest balance is often a quarter end, and a
+            // line the quarter does not report keeps the one from the year end
+            // — so the expectation is the newest period that reports it, not
+            // the column immediately to the left.
             const ttm = row.cells[ttmAt];
-            if (ttm.value !== latest.value) {
+            const everyPeriod = [
+              ...(payload.quarters || []).map((q: any) => ({ end: q.periodEnd, v: q.values?.[row.key] })),
+              ...payload.statements.map((s: any) => ({ end: s.periodEnd, v: s[row.key] })),
+            ]
+              .filter((p: any) => typeof p.v === 'number')
+              .sort((a: any, b: any) => (a.end < b.end ? -1 : 1));
+            const latestOfLine = everyPeriod.length ? everyPeriod[everyPeriod.length - 1] : null;
+            if (latestOfLine && ttm.value !== latestOfLine.v) {
               faults.push(
-                `${ticker} ${row.key}: the TTM column holds ${ttm.value} and the latest balance is ` +
-                  `${latest.value} — a balance sheet line has been aggregated`
+                `${ticker} ${row.key}: the TTM column holds ${ttm.value} and the latest balance, at ` +
+                  `${latestOfLine.end}, is ${latestOfLine.v} — a balance sheet line has been aggregated`
               );
             }
+            const latest = latestOfLine ? { value: latestOfLine.v } : { value: null };
             // And specifically not the sum, which is the shape the mistake takes.
             const summable = row.cells
               .slice(0, ttmAt)
@@ -2184,6 +2196,254 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     console.log(
       `  ${balanceRows.toLocaleString('en-GB')} balance sheet rows: every trailing-twelve-month column is the ` +
         'latest balance, and not one is a sum of balances'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE QUARTERS: THREE THINGS THAT WOULD LOOK RIGHT AND BE WRONG
+// ---------------------------------------------------------------------------
+//
+// A quarterly table is the easiest place on this site to publish a confident
+// lie, because every failure below produces a number of about the right size
+// in about the right place.
+//
+//   A CUMULATIVE FIGURE SHOWN AS A QUARTER. Measured on Apple’s own facts:
+//   the operating cash flow it files on its Q3 10-Q spans 272 days, not 90 —
+//   it is nine months, cumulative from the start of the year. Printed under a
+//   "Q3" heading it is three times the truth and looks entirely normal. The
+//   check is arithmetic rather than trust: FOUR QUARTERS MUST ADD UP TO THE
+//   YEAR, and a cumulative figure among them overshoots it enormously.
+//
+//   A DERIVED QUARTER WITH ONE FILING, OR NONE. A quarter the company never
+//   filed on its own is the difference between two documents. One link is half
+//   the provenance and no link is none of it, and neither is visible on screen.
+//
+//   A TTM THAT IGNORES THE QUARTERS IT HAS. The whole value of the column is
+//   that it runs to the latest quarter rather than to the last year end; a TTM
+//   that quietly stays on the financial year is a stale number wearing a fresh
+//   label.
+{
+  console.log('\n=== the quarters: cumulative, derived, and what the TTM is made of ===');
+  const { financialsFor, ttmMethod } = await import(`file:///${REPO}/src/data/financials.ts`);
+
+  const faults: string[] = [];
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let withQuarters = 0;
+  let quarterRows = 0;
+  let derivedFigures = 0;
+  let sumsChecked = 0;
+  let vendorSums = 0;
+  const vendorOff: string[] = [];
+  let ttmFromQuarters = 0;
+  let spansChecked = 0;
+  let reconciledAway = 0;
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    if (payload?.error || payload?.fetchError || !payload?.statements?.length) continue;
+    const ticker = file.replace(/\.json$/, '');
+    const quarters: any[] = Array.isArray(payload.quarters) ? payload.quarters : [];
+    if (!quarters.length) continue;
+    withQuarters++;
+    quarterRows += quarters.length;
+    if (typeof payload.quartersDropped === 'number') reconciledAway += payload.quartersDropped;
+
+    for (const q of quarters) {
+      // ---- 1a. A QUARTER’S OWN DATES SAY IT IS A QUARTER ----
+      if (q.periodStart && q.periodEnd) {
+        const days = Math.round(
+          (new Date(q.periodEnd).getTime() - new Date(q.periodStart).getTime()) / 86400000
+        );
+        spansChecked++;
+        // Wide enough for a 52/53-week filer’s sixteen-week fourth quarter,
+        // and nowhere near wide enough for a half year (181 days) or a nine
+        // months (272), which is the thing being guarded against.
+        const low = q.months === 6 ? 160 : 76;
+        const high = q.months === 6 ? 200 : 120;
+        if (days < low || days > high) {
+          faults.push(
+            `${ticker} ${q.fiscalPeriod || q.months + 'M'} to ${q.periodEnd} spans ${days} days, which is ` +
+              `not a ${q.months}-month period — a cumulative figure is being carried as one`
+          );
+        }
+      }
+
+      // ---- 2. A DERIVED FIGURE CARRIES BOTH OF ITS FILINGS ----
+      for (const [field, state] of Object.entries(q.states || {})) {
+        if (state !== 'derived') continue;
+        derivedFigures++;
+        const from = q.derivedFrom?.[field];
+        if (!Array.isArray(from) || from.length < 2) {
+          faults.push(
+            `${ticker} ${q.periodEnd} ${field} is derived and links ${from?.length ?? 0} filings, not two`
+          );
+        } else if (from.some((f: any) => !f?.accn || !f?.url)) {
+          faults.push(`${ticker} ${q.periodEnd} ${field}: a linked filing has no accession or no address`);
+        } else if (from[0].accn === from[1].accn) {
+          faults.push(
+            `${ticker} ${q.periodEnd} ${field}: both ends of the subtraction point at the same filing ` +
+              `(${from[0].accn})`
+          );
+        }
+      }
+    }
+
+    // ---- 1b. FOUR QUARTERS ADD UP TO THE YEAR ----
+    //
+    // The arithmetic the whole thing rests on, and the one a cumulative figure
+    // cannot survive. Checked per fiscal year, on the flow lines where all four
+    // quarters and the year itself are held.
+    const FLOWS = ['revenue', 'netIncome', 'operatingCashFlow', 'operatingIncome'];
+    const threes = quarters.filter((q) => q.months === 3);
+    for (const year of payload.statements) {
+      const inYear = threes.filter((q) => q.fiscalYear === year.fiscalYear);
+      if (inYear.length !== 4) continue;
+      for (const field of FLOWS) {
+        const parts = inYear.map((q) => q.values?.[field]).filter((v: any) => typeof v === 'number');
+        const whole = year[field];
+        if (parts.length !== 4 || typeof whole !== 'number' || whole === 0) continue;
+        const sum = parts.reduce((t: number, v: number) => t + v, 0);
+        // A tenth of a per cent, which is wider than the rounding to millions
+        // and far narrower than any cumulative figure could hide in.
+        const off = Math.abs(sum - whole) > Math.abs(whole) * 0.001 + 1;
+        // WHOSE ARITHMETIC IS BEING CHECKED MATTERS. On the SEC path the
+        // quarters are ours: filed ones taken as filed, missing ones derived
+        // here, so a sum that misses the year is OUR error and fails the run.
+        // On the vendor path we take what the feed gives and derive nothing;
+        // a mismatch there is the vendor disagreeing with itself, which is
+        // worth measuring and recording but is not a defect of this code.
+        if (/sec/i.test(String(payload.source || ''))) {
+          sumsChecked++;
+          if (off) {
+            faults.push(
+              `${ticker} FY${year.fiscalYear} ${field}: the four quarters add to ${sum.toFixed(0)} and the ` +
+                `year is ${whole.toFixed(0)}`
+            );
+          }
+        } else {
+          vendorSums++;
+          if (off && vendorOff.length < 5) {
+            vendorOff.push(
+              `${ticker} FY${year.fiscalYear} ${field}: quarters ${sum.toFixed(0)} vs year ${whole.toFixed(0)}`
+            );
+          } else if (off) {
+            vendorOff.push('');
+          }
+        }
+      }
+    }
+
+    // ---- 3. THE TTM USES THE LATEST FOUR REAL QUARTERS WHEN THEY EXIST ----
+    // THE LATEST FOUR QUARTERS BY DATE, not the latest four that happen to
+    // carry revenue. The difference matters: where the reconciliation refused
+    // a field for one year, the quarters are still quarters and the TTM is
+    // still built from the latest four of them — it simply has nothing to
+    // show for that line. Filtering by the field first made this check's
+    // expectation disagree with the code's for three companies, every one of
+    // which was behaving correctly.
+    const incomeQuarters = threes.sort((a: any, b: any) => (a.periodEnd < b.periodEnd ? -1 : 1));
+    const latestYearEnd = payload.statements[payload.statements.length - 1]?.periodEnd;
+    const after = incomeQuarters.filter((q: any) => q.periodEnd > String(latestYearEnd));
+    if (incomeQuarters.length >= 4 && after.length) {
+      ttmFromQuarters++;
+      const view: any = (financialsFor as any)(payload, { statement: 'income', frequency: 'annual' });
+      const ttm = view.periods.find((p: any) => p.kind === 'ttm');
+      const row = view.rows.find((r: any) => r.key === 'revenue');
+      const four = incomeQuarters.slice(-4);
+      const want = four.reduce((t: number, q: any) => t + q.values.revenue, 0);
+      if (view.ttm.method !== 'four-quarters') {
+        faults.push(
+          `${ticker} holds ${incomeQuarters.length} quarters, ${after.length} of them after the year end, ` +
+            `and its TTM method is "${view.ttm.method}"`
+        );
+      } else if (!ttm || ttm.endDate !== four[3].periodEnd) {
+        faults.push(
+          `${ticker}: the TTM column ends ${ttm?.endDate} and the latest quarter ends ${four[3].periodEnd}`
+        );
+      } else if (four.every((q: any) => typeof q.values?.revenue === 'number')) {
+        // Only where all four carry the line. A quarter whose revenue the data
+        // layer refused leaves the TTM with nothing to add, and the column says
+        // so — which is the right answer, not a fault.
+        const got = row?.cells[view.periods.indexOf(ttm)]?.value;
+        if (typeof got !== 'number' || Math.abs(got - want) > Math.abs(want) * 0.001 + 1) {
+          faults.push(
+            `${ticker}: the TTM revenue is ${got} and the four quarters to ${four[3].periodEnd} add to ` +
+              `${want.toFixed(0)}`
+          );
+        }
+      }
+    }
+  }
+
+  // AND THE BALANCE SHEET IS STILL NEVER SUMMED, now that there are quarters
+  // to sum it over. Four quarter-end cash balances added together is four
+  // times the cash.
+  for (const file of files.slice(0, 60)) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    if (!payload?.statements?.length || !payload?.quarters?.length) continue;
+    const ticker = file.replace(/\.json$/, '');
+    const view: any = (financialsFor as any)(payload, { statement: 'balance', frequency: 'annual' });
+    const ttmAt = view.periods.findIndex((p: any) => p.kind === 'ttm');
+    if (ttmAt < 0) continue;
+    const totals = view.rows.find((r: any) => r.key === 'totalAssets');
+    if (!totals) continue;
+    const ttm = totals.cells[ttmAt]?.value;
+    const latestBalance = [...payload.quarters, ...payload.statements]
+      .filter((p: any) => typeof (p.values?.totalAssets ?? p.totalAssets) === 'number')
+      .sort((a: any, b: any) => (a.periodEnd < b.periodEnd ? -1 : 1))
+      .pop();
+    const want = latestBalance?.values?.totalAssets ?? latestBalance?.totalAssets;
+    if (typeof ttm === 'number' && typeof want === 'number' && Math.abs(ttm - want) > 1e-6) {
+      faults.push(
+        `${ticker}: the TTM total assets is ${ttm.toFixed(0)} and the latest balance, at ` +
+          `${latestBalance.periodEnd}, is ${want.toFixed(0)}`
+      );
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the quarterly figures:`);
+    faults.slice(0, 8).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  ${withQuarters} companies carry quarters, ${quarterRows} periods between them; ${spansChecked} ` +
+        'carry their own start and end dates and every one spans what it claims to'
+    );
+    console.log(
+      `  ${sumsChecked} four-quarter sums on the SEC path checked against the year they belong to, and ` +
+        'every one agrees to within a tenth of a per cent'
+    );
+    if (vendorSums) {
+      const bad = vendorOff.filter(Boolean).length + vendorOff.filter((v) => !v).length;
+      console.log(
+        `  ${vendorSums} on the vendor path, where the quarters are taken as given and nothing is ` +
+          `derived: ${bad} do not tie to the vendor’s own annual figure` +
+          (vendorOff.filter(Boolean).length ? ` (e.g. ${vendorOff.filter(Boolean)[0]})` : '')
+      );
+    }
+    console.log(
+      `  ${derivedFigures.toLocaleString('en-GB')} figures were worked out from two filings rather than ` +
+        'filed, and every one links both of them'
+    );
+    console.log(
+      `  ${ttmFromQuarters} companies have real quarters past their year end, and every one of their TTM ` +
+        'columns is the latest four of them, ending on the latest quarter'
+    );
+    console.log(
+      `  ${reconciledAway} field-years were refused by the data layer for not adding up to the year ` +
+        'beside them, and show as not reported rather than as figures nobody can reconcile'
     );
   }
 }

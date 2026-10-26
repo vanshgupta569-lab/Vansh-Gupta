@@ -103,6 +103,21 @@ nowhere better to put them and each is cheap:
   whole point of them. Run before `npm run build`, it says so and checks the
   sources only.
 
+- **the quarters: cumulative, derived, and what the TTM is made of.** Three
+  failures that would all look right on screen. **A cumulative figure shown as
+  a quarter**: a 10-Q reports cash flow from the start of the year, so Apple’s
+  "Q3" point spans 272 days, and printed as a quarter it is nine months of
+  cash read as three. Checked as arithmetic rather than trust — four quarters
+  must add to the year beside them — and separately against each period’s own
+  start and end dates. **A derived quarter with one filing**: a quarter worked
+  out as this year-to-date less the last is a claim about two documents, and
+  both must be linked. **A TTM that ignores the quarters it has**: where four
+  real quarters run past the year end the column must be those four, ending on
+  the latest, not the financial year wearing a fresh label. The SEC path is
+  held to the sum; the vendor path is measured and reported rather than failed,
+  because nothing there is derived by us and a mismatch is the feed
+  disagreeing with itself.
+
 - **the financials tab’s four rules.** `docs/FINANCIALS_SPEC.md` is mostly a
   list of ways a financial table lies, and these are the four that can be
   checked without a browser, over every payload on disk. **The TTM method is

@@ -577,28 +577,59 @@ OECD’s July 2024 announcement rather than fetched. The data API
 `Cache-Control: public, max-age=7200`; one request per company build, against a
 payload that is then cached on disk, is well inside what that invites.
 
-### No quarterly periods, and five bank lines neither feed carries
+### What the quarterly figures cover, and where they stop
 
-**Source:** both — the SEC path and the vendor feed alike. **Affects:** the
-Financials tab on every one of the 175 companies. **Bound:** **no effect on any
-valuation** — the engine has always modelled from annual figures — but the
-tab shows one column a year where it is built to show four, and a TTM that is
-the financial year rather than a rolling one.
+**Source:** both, and they are not alike. **Affects:** the Financials tab.
+**Bound:** **no effect on any valuation** — the engine models from annual
+figures and does not read the quarterly periods at all — but the tab is only
+as deep as the feed behind it, and the two feeds are a world apart.
 
-**The data layer fetches annual periods only.** `YEARS_WANTED = 5` in
-`api/company.js` applies to years, and `extractUSFact` takes annual facts. So
-the Financials tab’s Quarterly and Half-year controls have nothing behind
-them, and say so when chosen rather than drawing an empty grid that would read
-as a company that files nothing.
+**Measured on 2026-10-26, over the whole payload set.**
 
-**What it costs, precisely.** Rule 5 of `docs/FINANCIALS_SPEC.md` picks the TTM
-method from the periods a company actually filed. With annual periods only, one
-branch is reachable: **the latest filed period is the year, so the trailing
-twelve months are that year.** That is correct rather than approximate — it is
-the rule’s own third case — but it means TTM adds nothing a reader could not
-already see, which is the whole point of a TTM column. Quarterly XBRL is
-published both by the SEC and in India (`docs/DATA_LAYER_PLAN.md` §2.3), so this
-is a fetcher change rather than a missing source.
+| | SEC path | Vendor feed |
+|---|---|---|
+| companies | 84 | 93 |
+| carrying any quarters | **84** | **92** |
+| quarters held | 1084 | 493 |
+| the most for one company | **13** | **7** |
+| half-years held | 291 | 0 |
+| figures worked out rather than filed | 7,108 | 0 |
+
+**The SEC path is deep and the vendor feed is shallow**, and the difference is
+not a setting. The SEC publishes every quarter a company ever filed, so the
+thirteen the tab shows are a ceiling we chose rather than one the source
+imposed. The vendor publishes about five quarters of income and fewer of
+anything else: measured on 2026-10-25, Reliance returned five quarters of
+revenue and **two** of balance sheet, both of them year ends, and HDFC Bank
+two of revenue against four of balance sheet.
+
+**And that is rule 5’s India case arriving for real.** An Indian company files
+its income quarterly and its balance sheet and cash flow only at the half year
+and the year end, so on those companies the Financials tab has a quarterly
+income statement and no quarterly balance sheet — and says which of the two it
+is rather than reporting "no quarters" for a company that plainly files them.
+
+**What is still missing, and it is the vendor’s to fix, not ours:** a quarterly
+cash flow for most non-US companies, and more than about five quarters of
+history. The primary-filings layer in `docs/DATA_LAYER_PLAN.md` is what closes
+it; India publishes quarterly XBRL and the plan measures it.
+
+**A cumulative figure is never shown as a quarter, and that is the whole
+difficulty.** A 10-Q reports the income statement for the quarter but the cash
+flow **cumulatively from the start of the year**: measured on Apple’s own
+facts, its Q3 operating cash flow point spans 272 days, not 90. Printed under a
+"Q3" heading it would be nine months of cash read as three, and it would look
+entirely ordinary. So a point is taken as a quarter only when its own start and
+end dates say it is one — 80 to 100 days — and otherwise the quarter is
+worked out as **this year to date less the last**, which is the same
+subtraction that gives Q4 = FY − 9M. Every figure worked out that way is
+labelled derived and carries **both** of the filings it is the difference of.
+
+**What it cost in storage**, which is the honest price of all this: the payload
+set went from 10.34 MB to 13.95 MB, **35% larger**. An SEC
+payload went from 62.0 KB to 102.1 KB on average and a vendor one from
+58.5 KB to 61.4 KB — the vendor feed holds so little that it barely
+moved. A full refetch went from about 22 minutes to 25 minutes.
 
 **And five lines a bank statement needs are in neither feed:** interest earned
 separated from other income, operating profit before provisions, provisions and

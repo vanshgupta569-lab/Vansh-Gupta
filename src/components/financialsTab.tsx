@@ -162,7 +162,9 @@ export const FinancialsTab: React.FC<{ payload: any; ticker: string }> = ({ payl
           <div className="flex flex-wrap items-center gap-1.5">
             {([5, 10, 'all'] as const).map((w) => (
               <Chip key={String(w)} on={w === window_} onClick={() => setWindow(w)}>
-                {w === 'all' ? `All (${view.periods.filter((p) => p.kind === 'annual').length})` : `${w}Y`}
+                {w === 'all'
+                  ? `All (${view.periods.filter((p) => p.kind !== 'ttm').length})`
+                  : `${w}Y`}
               </Chip>
             ))}
             <Chip
@@ -379,6 +381,36 @@ const EvidenceSheet: React.FC<{ evidence: Evidence; onClose: () => void }> = ({ 
         ))}
       </dl>
 
+      {/* THE DOCUMENTS, AND BOTH OF THEM WHERE A QUARTER IS A SUBTRACTION.
+          A quarter the company never filed on its own is this year-to-date
+          less the last one, which is a claim about two filings; showing one
+          would be half the provenance, and a reader who wants to check the
+          subtraction needs to be able to open both. */}
+      {evidence.filings.length > 0 && (
+        <div className="mt-4 border-t border-line pt-3">
+          <div className={`${EYEBROW} text-quiet mb-1.5`}>
+            {evidence.filings.length > 1 ? 'The two filings it is the difference of' : 'The filing'}
+          </div>
+          <ul className="space-y-1.5">
+            {evidence.filings.map((f) => (
+              <li key={f.accn}>
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-filing={f.accn}
+                  className={`${UI} text-accent-text hover:text-ink transition-colors inline-flex items-center gap-1.5`}
+                >
+                  {f.form || 'filing'} · {f.filed || 'date not recorded'}
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+                <span className={`${UI} font-figure text-quiet ml-2`}>{f.accn}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="mt-4 border-t border-line pt-3">
         <div className={`${EYEBROW} text-quiet mb-1.5`}>Where it came from</div>
         <p className={`${UI} ${evidence.traceable ? 'text-read' : 'text-accent-text'}`}>{evidence.source}</p>
@@ -389,7 +421,7 @@ const EvidenceSheet: React.FC<{ evidence: Evidence; onClose: () => void }> = ({ 
             company used is not recorded in the data we hold.
           </p>
         )}
-        {evidence.url && (
+        {evidence.url && !evidence.filings.length && (
           <a
             href={evidence.url}
             target="_blank"

@@ -492,6 +492,358 @@ function extractPeriodEnds(facts, tagList) {
   return merged;
 }
 
+// ---------------------------------------------------------------------------
+// QUARTERS, AND THE ONE RULE THAT MAKES THEM HONEST
+// ---------------------------------------------------------------------------
+//
+// `docs/FINANCIALS_SPEC.md` rule 4: a discrete quarter is Q2 = H1 − Q1,
+// Q3 = 9M − H1, Q4 = FY − 9M, and a cash flow quarter is YTD − prior YTD.
+// Every one of those is the same subtraction — **this period’s cumulative
+// figure less the previous period’s** — so there is one rule here rather than
+// four, and Q4 = FY − 9M is not a special case but the last turn of it.
+//
+// THE FAILURE THIS GUARDS AGAINST, measured on Apple’s own facts on
+// 2026-10-25: of its operating cash flow points filed on a 10-Q, the Q2 one
+// spans 181 days and the Q3 one 272 — they are the half year and the nine
+// months, cumulative from the start of the fiscal year, not quarters. A reader
+// shown 81,754 as "Q3 cash flow" would be reading nine months of cash as three.
+// So a point is only ever taken as a quarter when its own span says it is one:
+// 80 to 100 days, measured from its start and end dates, never from its `fp`
+// label or from the form it was filed on.
+//
+// AND A DERIVED QUARTER CARRIES BOTH FILINGS. It is the difference between two
+// documents, so one link would be half the provenance; `derivedFrom` holds the
+// pair, newest first, and `npm run verify` fails if a derived figure ever
+// carries fewer than two.
+
+// Screener shows thirteen: three years of seasonality plus the quarter a reader
+// is actually looking at.
+const QUARTERS_WANTED = 13;
+
+// The lines the Financials tab shows, which is what the quarters are for. Not
+// all 46: a quarterly payload of every field would roughly double what is
+// stored to carry lines no screen reads.
+const QUARTER_FIELDS = [
+  'revenue', 'cogs', 'rnd', 'sga', 'operatingIncome', 'pretaxIncome', 'taxExpense', 'netIncome',
+  'interestExpense', 'cash', 'shortTermInvestments', 'receivables', 'inventory', 'currentAssets',
+  'ppeNet', 'goodwill', 'intangibles', 'totalAssets', 'payables', 'currentLiabilities', 'longTermDebt',
+  'totalLiabilities', 'equity', 'minorityInterest', 'operatingCashFlow', 'capex', 'investingCashFlow',
+  'financingCashFlow', 'depreciation', 'stockComp', 'dividendsPaid', 'buybacks', 'dilutedShares',
+];
+
+// THE ONES THAT ADD UP OVER A YEAR, which is not most of them.
+//
+// Only a flow can be reconciled against the year: four quarter-end cash
+// balances added together are four times the cash, and a weighted average
+// share count averages rather than sums. Reconciling those too deleted every
+// balance sheet figure from every quarter of every completed year — 5,168
+// field-years of them, measured before this list existed, and the quarterly
+// balance sheet was empty for anything but the year in progress.
+const QUARTER_FLOW_FIELDS = new Set([
+  'revenue', 'cogs', 'rnd', 'sga', 'operatingIncome', 'pretaxIncome', 'taxExpense', 'netIncome',
+  'interestExpense', 'operatingCashFlow', 'capex', 'investingCashFlow', 'financingCashFlow',
+  'depreciation', 'stockComp', 'dividendsPaid', 'buybacks',
+]);
+
+const daySpan = (start, end) => Math.round((new Date(end) - new Date(start)) / 86400000);
+const near = (a, b, slack) => Math.abs(a - b) <= slack;
+
+/** Where a filing can be read, from its accession number. */
+const filingRef = (cik, point) =>
+  point && point.accn
+    ? {
+        accn: point.accn,
+        form: point.form || null,
+        filed: point.filed || null,
+        url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${String(point.accn).replace(/-/g, '')}/`,
+      }
+    : null;
+
+/**
+ * Every point of one tag list, split into the two shapes XBRL facts come in.
+ *
+ * A FLOW spans a period and is keyed by both its dates, because the same end
+ * date carries a quarter, a half year and a full year, and telling them apart
+ * is the whole job. A STOCK is a moment and is keyed by its date alone.
+ *
+ * Within one key the most recently FILED point wins, so a restatement
+ * supersedes what it restated; across tags the earlier tag in the list wins,
+ * which is the same order of preference the annual path uses.
+ */
+function collectPoints(facts, tagList) {
+  const flows = new Map();
+  const stocks = new Map();
+  for (const tag of tagList) {
+    const entry = facts['us-gaap']?.[tag];
+    if (!entry) continue;
+    const unitKey = Object.keys(entry.units || {})[0];
+    if (!unitKey) continue;
+    for (const point of entry.units[unitKey] || []) {
+      if (!point?.end) continue;
+      const map = point.start ? flows : stocks;
+      const key = point.start ? `${point.start}|${point.end}` : point.end;
+      const held = map.get(key);
+      // A later filing of the same period supersedes an earlier one; a later
+      // TAG never displaces an earlier one, so a key already held by a
+      // preferred tag is left alone.
+      if (held && held.tag !== tag) continue;
+      if (!held || String(point.filed || '') >= String(held.filed || '')) {
+        map.set(key, { ...point, tag });
+      }
+    }
+  }
+  return { flows, stocks };
+}
+
+/**
+ * The reporting calendar: which periods this company actually filed.
+ *
+ * Read off the revenue points rather than taken from `fp` and `fy`, which
+ * describe the FILING rather than the figure — the same trap the annual path's
+ * comment warns about. A fiscal year is a span of about 365 days; the periods
+ * inside it are the cumulative spans that start on the same day it does.
+ */
+function reportingCalendar(flows) {
+  const years = [];
+  for (const point of flows.values()) {
+    const days = daySpan(point.start, point.end);
+    if (days >= 300 && days <= 400) years.push({ start: point.start, end: point.end, days });
+  }
+  years.sort((a, b) => (a.end < b.end ? -1 : 1));
+
+  const periods = [];
+  const addYear = (start, end, fiscalYear) => {
+    // Every cumulative period of this year: the ones that begin where it begins.
+    const cumulative = [...flows.values()]
+      .filter((p) => near(daySpan(p.start, start), 0, 5) && (!end || p.end <= end))
+      .sort((a, b) => (a.end < b.end ? -1 : 1));
+    const ends = [...new Set(cumulative.map((p) => p.end))];
+    if (end && !ends.includes(end)) ends.push(end);
+    ends.sort();
+    ends.forEach((at, i) => {
+      periods.push({
+        fiscalYearEnd: end,
+        fiscalYearStart: start,
+        fiscalYear,
+        end: at,
+        index: i + 1,
+        of: ends.length,
+        previousEnd: i > 0 ? ends[i - 1] : null,
+        cumulativeDays: daySpan(start, at),
+      });
+    });
+  };
+
+  for (const year of years) addYear(year.start, year.end, Number(year.end.slice(0, 4)));
+
+  // THE YEAR THAT HAS NOT ENDED YET, which is the one a reader is waiting for.
+  //
+  // Measured on Apple on 2026-10-25: the SEC held three quarters of its FY2026
+  // and this function dropped all three, because it only built periods inside
+  // a COMPLETED fiscal year and FY2026 has no year-long span yet. The cost is
+  // not three columns — it is the whole point of a trailing twelve months,
+  // which exists to run past the last year end rather than stop at it.
+  //
+  // The unfinished year is found the same way as a finished one: by the
+  // cumulative spans that begin the day after the last year ended.
+  const last = years[years.length - 1];
+  if (last) {
+    const nextStart = [...flows.values()]
+      .map((p) => p.start)
+      .filter((start) => start > last.end && daySpan(last.end, start) <= 10)
+      .sort()[0];
+    if (nextStart) {
+      // Its year end is a year away and has not happened, so the label comes
+      // from where the year is going rather than from where it stopped.
+      const projected = new Date(new Date(nextStart).getTime() + 350 * 86400000)
+        .toISOString()
+        .slice(0, 10);
+      addYear(nextStart, null, Number(projected.slice(0, 4)));
+    }
+  }
+
+  return periods;
+}
+
+/**
+ * One field's figure for one period: reported where the company filed that
+ * exact period, derived where it has to be worked out, and absent otherwise.
+ *
+ * Never a cumulative figure wearing a quarter’s label.
+ */
+function quarterValue(field, period, points, cik, wantMonths) {
+  const { flows, stocks } = points;
+
+  // A BALANCE IS A MOMENT. It is whatever was filed at that date, and it is
+  // never derived, never summed and never carried from another date.
+  if (stocks.size && !flows.size) {
+    const at = stocks.get(period.end);
+    if (!at) return null;
+    return { value: at.val, state: 'reported', filing: filingRef(cik, at) };
+  }
+
+  const wantDays = wantMonths * 30.4;
+  const slack = wantMonths === 3 ? 12 : 20;
+
+  // 1. FILED AS THIS PERIOD, with its own start and end saying so.
+  for (const point of flows.values()) {
+    if (point.end !== period.end) continue;
+    if (!near(daySpan(point.start, point.end), wantDays, slack)) continue;
+    return { value: point.val, state: 'reported', filing: filingRef(cik, point) };
+  }
+
+  // 2. THE DIFFERENCE OF TWO CUMULATIVE FIGURES, which is rule 4 in one line:
+  //    Q2 = H1 − Q1, Q3 = 9M − H1, Q4 = FY − 9M, and a cash flow quarter is
+  //    this year-to-date less the last one.
+  if (wantMonths === 3 && period.previousEnd) {
+    const now = flows.get(`${period.fiscalYearStart}|${period.end}`);
+    const before = flows.get(`${period.fiscalYearStart}|${period.previousEnd}`);
+    // BOTH ENDS OF THE SUBTRACTION MUST BE THE SAME LINE. A company that files
+    // `NetIncomeLoss` for nine months and `ProfitLoss` for the year is filing
+    // two different measures, and the difference between them is not a
+    // quarter — it is the gap between two definitions. Measured on Arista on
+    // 2026-10-26: mixing them put its Q4 net income at −2,556 against a year
+    // of 2,852. Where the tags differ this declines rather than subtracting.
+    if (now && before && now.tag !== before.tag) return null;
+    if (now && before) {
+      return {
+        value: now.val - before.val,
+        state: 'derived',
+        derivedFrom: [filingRef(cik, now), filingRef(cik, before)],
+        from: [now.end, before.end],
+      };
+    }
+  }
+
+  // 3. NOTHING THAT CAN BE SAID HONESTLY.
+  return null;
+}
+
+/**
+ * The quarters and half-years this company filed, newest last.
+ *
+ * Both are kept because both are filed: a US filer’s Q2 10-Q reports the six
+ * months cumulatively as well as the quarter, and India files its balance sheet
+ * and cash flow only at the half year and the year end (rule 5). A period that
+ * no field can fill is dropped rather than carried as a row of dashes.
+ */
+// What the reconciliation above threw away, for the fetcher to report. A
+// module-level list because it is a diagnostic, not part of any answer.
+const quarterlyDropped = [];
+
+function extractQuarterlySEC(facts, cik, countFields, annualRows) {
+  const anchor = collectPoints(facts, US_TAGS.revenue);
+  const calendar = reportingCalendar(anchor.flows);
+  if (!calendar.length) return [];
+
+  const byField = {};
+  for (const field of QUARTER_FIELDS) {
+    if (US_TAGS[field]) byField[field] = collectPoints(facts, US_TAGS[field]);
+  }
+
+  const rows = [];
+  for (const period of calendar) {
+    for (const months of [3, 6]) {
+      // A half year is only a period in its own right at the half way point.
+      if (months === 6 && !near(period.cumulativeDays, 183, 25)) continue;
+      // AND A QUARTER IS THREE MONTHS LONGER THAN THE REPORTING DATE BEFORE
+      // IT. Not simply "a reporting date inside the year": a company that
+      // files nothing between its year ends has one reporting date a year, and
+      // measuring from the start of the year made its FULL YEAR the first
+      // quarter — BlackRock's "Q1" came out 364 days long. The increment is
+      // what makes a quarter a quarter, so the increment is what is checked.
+      let incrementDays = null;
+      if (months === 3) {
+        incrementDays = period.previousEnd
+          ? daySpan(period.previousEnd, period.end)
+          : period.cumulativeDays;
+        // 76 TO 120 DAYS, which is wide on purpose. A 52/53-week filer divides
+        // its year 12, 12, 12 and 16 weeks, so Costco’s fourth quarter runs
+        // 112 days and is a quarter in every sense that matters. A window
+        // tight enough to exclude it silently gave that company three quarters
+        // a year and no fourth. What this still cannot be mistaken for is a
+        // cumulative figure: a half year is 181 days and nine months 272, both
+        // far outside. Rule 9 asks for an unusual length to be LABELLED rather
+        // than hidden, so the length travels with the row.
+        if (incrementDays < 76 || incrementDays > 120) continue;
+      }
+
+      const values = {};
+      const states = {};
+      const derivedFrom = {};
+      let filing = null;
+      for (const field of QUARTER_FIELDS) {
+        const points = byField[field];
+        if (!points) continue;
+        const got = quarterValue(field, period, points, cik, months);
+        if (!got || typeof got.value !== 'number' || !isFinite(got.value)) continue;
+        values[field] = countFields.has(field) ? got.value : got.value / 1e6;
+        if (got.state !== 'reported') states[field] = got.state;
+        if (got.derivedFrom) derivedFrom[field] = got.derivedFrom.filter(Boolean);
+        if (!filing && got.filing) filing = got.filing;
+      }
+      if (!Object.keys(values).length) continue;
+
+      rows.push({
+        periodEnd: period.end,
+        periodStart:
+          months === 3 && period.previousEnd
+            ? new Date(new Date(period.previousEnd).getTime() + 86400000).toISOString().slice(0, 10)
+            : period.fiscalYearStart,
+        fiscalYear: period.fiscalYear,
+        fiscalPeriod: months === 6 ? 'H1' : `Q${period.index}`,
+        months,
+        ...(incrementDays ? { days: incrementDays } : {}),
+        values,
+        ...(Object.keys(states).length ? { states } : {}),
+        ...(Object.keys(derivedFrom).length ? { derivedFrom } : {}),
+        ...(filing ? { filing } : {}),
+      });
+    }
+  }
+
+  // THE QUARTERS MUST ADD UP TO THE YEAR BESIDE THEM, OR THEY ARE NOT SHOWN.
+  //
+  // Both tables are on one screen, and a reader adding four quarters and
+  // getting a different number from the year above them is right to stop
+  // trusting the page. Where the two disagree we do not know which is wrong,
+  // so the honest answer is the one standing decision 3 gives: refuse rather
+  // than approximate. The field is dropped for that year and shows as not
+  // reported, and the year keeps its own figure.
+  //
+  // The disagreements are real and they are the filings’ own: a company can
+  // tag nine months under one concept and the year under another, restate one
+  // and not the other, or change concept mid-history.
+  const dropped = [];
+  for (const year of annualRows || []) {
+    const four = rows.filter((r) => r.months === 3 && r.fiscalYear === year.fiscalYear);
+    if (four.length !== 4) continue;
+    for (const field of QUARTER_FIELDS) {
+      if (!QUARTER_FLOW_FIELDS.has(field)) continue;
+      const parts = four.map((r) => r.values[field]);
+      if (parts.some((v) => typeof v !== 'number')) continue;
+      const whole = year[field];
+      if (typeof whole !== 'number' || whole === 0) continue;
+      const sum = parts.reduce((t, v) => t + v, 0);
+      if (Math.abs(sum - whole) > Math.abs(whole) * 0.001 + 1) {
+        for (const r of four) {
+          delete r.values[field];
+          if (r.states) delete r.states[field];
+          if (r.derivedFrom) delete r.derivedFrom[field];
+        }
+        dropped.push(`${year.fiscalYear}:${field}`);
+      }
+    }
+  }
+  if (dropped.length) quarterlyDropped.push(...dropped);
+
+  rows.sort((a, b) => (a.periodEnd < b.periodEnd ? -1 : a.periodEnd > b.periodEnd ? 1 : a.months - b.months));
+  // The latest thirteen quarters, and any half-years that fall inside them.
+  const quarters = rows.filter((r) => r.months === 3).slice(-QUARTERS_WANTED);
+  const from = quarters.length ? quarters[0].periodEnd : '0000-00-00';
+  return rows.filter((r) => r.periodEnd >= from);
+}
+
 async function fetchFromSEC(ticker) {
   const match = await lookupCIK(ticker);
   if (!match) return null;
@@ -585,6 +937,11 @@ async function fetchFromSEC(ticker) {
     return row;
   });
 
+  // THE QUARTERS, from the same facts the years came from.
+  quarterlyDropped.length = 0;
+  const quarters = extractQuarterlySEC(facts, match.cik, SEC_COUNT_FIELDS, statements);
+  const quartersDropped = quarterlyDropped.length;
+
   return {
     source: 'SEC EDGAR',
     sourceUrl: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${match.cik}&type=10-K`,
@@ -602,6 +959,12 @@ async function fetchFromSEC(ticker) {
     sicCode,
     sicDescription,
     statements,
+    quarters,
+    // How many field-years the reconciliation refused to show because the
+    // quarters did not add up to the year beside them. Zero on most
+    // companies; where it is not, the table has dashes rather than figures
+    // nobody can reconcile.
+    quartersDropped,
   };
 }
 
@@ -755,8 +1118,15 @@ async function fetchFromYahoo(symbol) {
     // Non-fatal — we can fall back to the ticker as a name.
   }
 
-  // Second call: the actual financial statements.
-  const types = Object.values(YAHOO_FIELDS).join(',');
+  // Second call: the actual financial statements, annual and quarterly in one
+  // request. Every name Yahoo uses is the same word with a different prefix,
+  // so the quarterly list is derived from the annual one rather than written
+  // out again — a second hand-written map is a second thing to keep in step.
+  const QUARTER_TYPES = QUARTER_FIELDS
+    .map((field) => YAHOO_FIELDS[field])
+    .filter(Boolean)
+    .map((name) => name.replace(/^annual/, 'quarterly'));
+  const types = [...Object.values(YAHOO_FIELDS), ...QUARTER_TYPES].join(',');
   const now = Math.floor(Date.now() / 1000);
 
   const res = await fetch(
@@ -799,6 +1169,55 @@ async function fetchFromYahoo(symbol) {
       }
     }
   }
+
+  // ---- THE QUARTERS THE FEED HAPPENS TO CARRY ---------------------------
+  //
+  // "Whatever quarterly data the feed provides", and the honest part is how
+  // little that is: measured on 2026-10-25, Yahoo returned five quarters of
+  // income for Reliance and **two** of balance sheet, both of them year ends;
+  // two quarters of income for HDFC Bank and four of balance sheet. There is
+  // no filing behind any of them and no form, date or accession number to
+  // link — so these rows carry no `filing`, and the screen says what they
+  // are: a vendor feed, for development only.
+  //
+  // PERIOD TYPE IS THE VENDOR’S OWN WORD AND IT IS BELIEVED RATHER THAN
+  // GUESSED. A point marked `3M` is a quarter; one marked `6M` is a half
+  // year; anything else is left alone. That is the same rule the SEC path
+  // applies to its own spans, and it is what keeps a cumulative figure from
+  // being shown as a quarter — the one thing neither source labels for us.
+  const quarterPoints = {};
+  for (const field of QUARTER_FIELDS) {
+    const annualName = YAHOO_FIELDS[field];
+    if (!annualName) continue;
+    const quarterName = annualName.replace(/^annual/, 'quarterly');
+    const block = series.find((entry) => entry?.meta?.type?.[0] === quarterName);
+    for (const point of block?.[quarterName] || []) {
+      if (!point?.asOfDate) continue;
+      const raw = point.reportedValue?.raw;
+      if (typeof raw !== 'number') continue;
+      const months = point.periodType === '3M' ? 3 : point.periodType === '6M' ? 6 : null;
+      if (!months) continue;
+      const key = `${point.asOfDate}|${months}`;
+      if (!quarterPoints[key]) quarterPoints[key] = { periodEnd: point.asOfDate, months, values: {} };
+      quarterPoints[key].values[field] = COUNT_FIELDS.has(field)
+        ? raw
+        : (OUTFLOW_FIELDS.has(field) ? Math.abs(raw) : raw) / 1e6;
+    }
+  }
+  const quarters = Object.values(quarterPoints)
+    .filter((q) => Object.keys(q.values).length)
+    .sort((a, b) => (a.periodEnd < b.periodEnd ? -1 : a.periodEnd > b.periodEnd ? 1 : a.months - b.months))
+    .slice(-QUARTERS_WANTED * 2)
+    .map((q) => ({
+      periodEnd: q.periodEnd,
+      // The vendor gives an end date and a length and no start date, so the
+      // start is the one thing here that IS worked out rather than reported.
+      periodStart: null,
+      fiscalYear: Number(q.periodEnd.slice(0, 4)),
+      fiscalPeriod: null,
+      months: q.months,
+      values: q.values,
+    }));
 
   const years = Object.keys(byField.revenue)
     .map(Number)
@@ -843,6 +1262,7 @@ async function fetchFromYahoo(symbol) {
 
   return {
     source: 'Yahoo Finance',
+    quarters,
     sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`,
     name: profile.price?.longName || profile.price?.shortName || symbol,
     currency: reportingCurrency || 'USD',
@@ -1621,7 +2041,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 5;
+const FETCHER_VERSION = 6;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

@@ -50,9 +50,24 @@ export type ValueState = 'reported' | 'reportedZero' | 'notReported' | 'notAppli
 
 export type RowKind = 'money' | 'shares' | 'percent';
 
+/**
+ * How many interim columns a reader gets: Screener shows thirteen, which is
+ * three years of seasonality plus the quarter they are actually looking at.
+ * The data layer fetches the same number, so this is the ceiling rather than
+ * a second opinion about it.
+ */
+const QUARTERS_SHOWN = 13;
+
 export type Statement = 'income' | 'balance' | 'cash';
 
 export type Frequency = 'annual' | 'quarterly' | 'half' | 'ttm';
+
+export interface Filing {
+  accn: string;
+  form: string | null;
+  filed: string | null;
+  url: string;
+}
 
 export interface Cell {
   state: ValueState;
@@ -62,10 +77,27 @@ export interface Cell {
   reason?: string;
   /** How a derived figure was worked out, in the reader's words. */
   formula?: string;
+  /** The filing this figure was read from, where there is one. */
+  filing?: Filing | null;
+  /**
+   * THE TWO FILINGS A DERIVED QUARTER IS THE DIFFERENCE OF.
+   *
+   * A quarter worked out as this year-to-date less the last one is a claim
+   * about two documents, so one link would be half the provenance. Rule 4
+   * asks for both and `npm run verify` fails if a derived figure carries
+   * fewer than two.
+   */
+  derivedFrom?: Filing[];
 }
 
 export interface Period {
   key: string;
+  /** 3 for a quarter, 6 for a half year, 12 for a year. */
+  months: number;
+  /** `Q3`, `H1`, or null where the source does not say which period it is. */
+  fiscalPeriod?: string | null;
+  /** For a TTM column: the period ends it was built from. */
+  uses?: string[];
   /** The date the period ends. Rule 10 labels a column by this, not by the FY name. */
   endDate: string;
   fiscalYear: number;
@@ -74,7 +106,7 @@ export interface Period {
   /** `27 Sep 2025`. */
   dateLabel: string;
   durationMonths: number | null;
-  kind: 'annual' | 'ttm';
+  kind: 'annual' | 'quarter' | 'half' | 'ttm';
   /** Rule 7's header chips: `12M`, `TTM (FY basis)`, `derived`, `transition`. */
   chips: string[];
   basis: string;
@@ -246,6 +278,58 @@ interface RowDef {
 }
 
 const num = (v: any): v is number => typeof v === 'number' && isFinite(v);
+
+/**
+ * ONE PERIOD AS THE PAYLOAD HOLDS IT, whichever shape it came in.
+ *
+ * An annual row is flat — `{ revenue: 416161, ... }` — because that is what
+ * the engine has always read. A quarter is `{ values, states, filing,
+ * derivedFrom }`, because a quarter has provenance an annual row does not:
+ * which filing, and whether the figure was filed or worked out. Everything
+ * below reads periods through this so the two never need separate code paths.
+ */
+interface SourceRow {
+  kind: 'annual' | 'quarter' | 'half';
+  end: string;
+  start: string | null;
+  months: number;
+  fiscalYear: number;
+  fiscalPeriod: string | null;
+  values: any;
+  /** How long the period actually ran, where the source dates it. */
+  days: number | null;
+  states: Record<string, string>;
+  filing: Filing | null;
+  derivedFrom: Record<string, Filing[]>;
+}
+
+const annualRow = (r: any, months: number): SourceRow => ({
+  kind: 'annual',
+  end: r.periodEnd,
+  start: null,
+  months,
+  fiscalYear: r.fiscalYear,
+  fiscalPeriod: null,
+  values: r,
+  days: null,
+  states: {},
+  filing: null,
+  derivedFrom: {},
+});
+
+const quarterRow = (q: any): SourceRow => ({
+  kind: q.months === 6 ? 'half' : 'quarter',
+  end: q.periodEnd,
+  start: q.periodStart ?? null,
+  months: q.months,
+  fiscalYear: q.fiscalYear,
+  fiscalPeriod: q.fiscalPeriod ?? null,
+  values: q.values || {},
+  days: typeof q.days === 'number' ? q.days : null,
+  states: q.states || {},
+  filing: q.filing ?? null,
+  derivedFrom: q.derivedFrom || {},
+});
 
 /** Every input present, or nothing: a derived figure with a hole in it is a lie. */
 const all = (row: any, fields: string[]): number[] | null => {
@@ -504,7 +588,8 @@ export function sourceEvidence(payload: any): { traceable: boolean; line: string
   };
 }
 
-const cellFor = (def: RowDef, row: any): Cell => {
+const cellFor = (def: RowDef, source: SourceRow): Cell => {
+  const row = source.values;
   if (def.missing) return { state: 'notReported', value: null, reason: def.missing };
   if (def.derive) {
     const v = def.derive.of(row);
@@ -519,7 +604,7 @@ const cellFor = (def: RowDef, row: any): Cell => {
         formula: def.derive.formula,
       };
     }
-    return { state: 'derived', value: v, formula: def.derive.formula };
+    return { state: 'derived', value: v, formula: def.derive.formula, filing: source.filing };
   }
   const raw = def.field ? row?.[def.field] : undefined;
   if (!num(raw)) {
@@ -534,9 +619,25 @@ const cellFor = (def: RowDef, row: any): Cell => {
       state: 'reportedZero',
       value: 0,
       reason: 'Reported as nil, which is a figure the company filed rather than a gap.',
+      filing: source.filing,
     };
   }
-  return { state: 'reported', value: raw };
+  // A QUARTER THE COMPANY DID NOT FILE, WORKED OUT FROM TWO THAT IT DID.
+  // The payload says so, and carries both documents; this is where that
+  // reaches the screen rather than being flattened into a plain figure.
+  if (def.field && source.states[def.field] === 'derived') {
+    return {
+      state: 'derived',
+      value: raw,
+      formula:
+        source.months === 3
+          ? 'This year to date, less the year to date at the end of the previous quarter'
+          : 'Worked out from two filed periods',
+      filing: source.filing,
+      derivedFrom: source.derivedFrom[def.field] || [],
+    };
+  }
+  return { state: 'reported', value: raw, filing: source.filing };
 };
 
 /**
@@ -548,28 +649,102 @@ const cellFor = (def: RowDef, row: any): Cell => {
  * money. Everything else follows `ttmMethod`, and with annual-only periods that
  * is the full year, unchanged.
  */
-const ttmCell = (def: RowDef, rows: any[], method: TtmMethod): Cell => {
-  if (!rows.length || method.method === 'none') {
-    return { state: 'notReported', value: null, reason: method.reason };
-  }
-  const latest = rows[rows.length - 1];
+const ttmCell = (def: RowDef, annual: SourceRow[], all: SourceRow[], method: TtmMethod): Cell => {
+
+  // RULE 6 LIVES HERE, and it comes before every other branch. A balance
+  // sheet line is a moment, so its trailing-twelve-month value is the LATEST
+  // BALANCE and never a sum: adding four quarter-end cash balances produces a
+  // number with no meaning that nonetheless looks like money.
+  // A BALANCE NEEDS NO TRAILING-TWELVE-MONTH METHOD AT ALL, so this comes
+  // before the question of whether there is one. A company whose quarters do
+  // not make up a year has no TTM for its income statement and still has a
+  // most recent balance sheet; asking the method first emptied the balance
+  // sheet column for 119 lines across the set, every one of which was held.
   if (def.pointInTime) {
-    const cell = cellFor(def, latest);
-    if (cell.value === null) return cell;
+    // THE LATEST BALANCE OF THIS LINE, which is not the same as this line in
+    // the latest period. A quarterly balance sheet is thinner than an annual
+    // one — a 10-Q reports total assets and often not goodwill — so taking
+    // the newest period and reading whatever it holds turns every line the
+    // quarter leaves out into a dash, while the figure sits in the year end
+    // three months earlier. "Show the latest balance" means the latest balance
+    // OF THAT LINE, and the date it is as of travels with it.
+    const newestFirst = [...all].sort((a, b) => (a.end < b.end ? 1 : -1));
+    for (const at of newestFirst) {
+      const cell = cellFor(def, at);
+      if (cell.value === null) continue;
+      return {
+        ...cell,
+        reason: `A balance at ${dateLabel(at.end)}, carried across unchanged. A balance sheet line is never summed (rule 6).`,
+      };
+    }
     return {
-      ...cell,
-      reason: `A balance at ${dateLabel(latest.periodEnd)}, carried across unchanged. A balance sheet line is never summed (rule 6).`,
+      state: 'notReported',
+      value: null,
+      reason: 'No period held for this company reports this line, so there is no balance to carry across.',
     };
   }
-  if (method.method === 'annual') return cellFor(def, latest);
-  // No other branch is reachable from an annual-only payload; when quarters
-  // arrive they arrive with the arithmetic rule 4 describes, and this is where
-  // it will go rather than somewhere new.
-  return {
-    state: 'notReported',
-    value: null,
-    reason: `${method.label}: ${method.reason}`,
-  };
+
+  if (method.method === 'none') {
+    return { state: 'notReported', value: null, reason: method.reason };
+  }
+
+  const by = new Map(all.map((r) => [`${r.end}|${r.months}`, r]));
+  const find = (end: string, months: number) => by.get(`${end}|${months}`);
+
+  // THE FOUR QUARTERS THE COMPANY ACTUALLY FILED, added up.
+  if (method.method === 'four-quarters') {
+    const parts = method.uses.map((end) => find(end, 3)).filter(Boolean) as SourceRow[];
+    if (parts.length !== 4) {
+      return {
+        state: 'notReported',
+        value: null,
+        reason: `Four quarters are needed and ${parts.length} are held, so no trailing twelve months is shown.`,
+      };
+    }
+    const cells = parts.map((p) => cellFor(def, p));
+    if (cells.some((c) => c.value === null)) {
+      const missing = parts.filter((p, i) => cells[i].value === null).map((p) => dateLabel(p.end));
+      return {
+        state: 'notReported',
+        value: null,
+        reason: `This line is not reported for ${missing.join(' and ')}, and three quarters of a year is not a year.`,
+      };
+    }
+    return {
+      state: 'derived',
+      value: cells.reduce((t, c) => t + (c.value || 0), 0),
+      formula: `The four quarters to ${dateLabel(method.uses[0])}, added`,
+      derivedFrom: cells.flatMap((c) => (c.filing ? [c.filing] : [])),
+    };
+  }
+
+  // THE YEAR, PLUS THIS HALF, LESS THE SAME HALF A YEAR AGO.
+  if (method.method === 'half-year-bridge') {
+    const [yearEnd, thisHalf, priorHalf] = method.uses;
+    const parts = [find(yearEnd, 12), find(thisHalf, 6), find(priorHalf, 6)];
+    if (parts.some((p) => !p)) {
+      return { state: 'notReported', value: null, reason: method.reason };
+    }
+    const cells = (parts as SourceRow[]).map((p) => cellFor(def, p));
+    if (cells.some((c) => c.value === null)) {
+      return {
+        state: 'notReported',
+        value: null,
+        reason: 'One of the three periods the bridge needs does not report this line, and a bridge with a hole in it is a guess.',
+      };
+    }
+    return {
+      state: 'derived',
+      value: (cells[0].value || 0) + (cells[1].value || 0) - (cells[2].value || 0),
+      formula: `The year to ${dateLabel(yearEnd)}, plus the half to ${dateLabel(thisHalf)}, less the half to ${dateLabel(priorHalf)}`,
+      derivedFrom: cells.flatMap((c) => (c.filing ? [c.filing] : [])),
+    };
+  }
+
+  // THE LATEST FILED PERIOD IS ITSELF THE YEAR.
+  const latest = annual[annual.length - 1];
+  if (!latest) return { state: 'notReported', value: null, reason: method.reason };
+  return cellFor(def, latest);
 };
 
 export interface ViewOptions {
@@ -589,16 +764,32 @@ export function financialsFor(payload: any, opts: ViewOptions): FinancialsView {
   const statements: any[] = Array.isArray(payload?.statements) ? payload.statements : [];
   const source = sourceEvidence(payload);
 
-  // THE PERIODS WE ACTUALLY HOLD. Sorted oldest first, which is the order a
-  // statement is read in and the order the payload already uses.
-  const annual = [...statements]
+  // THE PERIODS WE ACTUALLY HOLD, of both kinds, oldest first — which is the
+  // order a statement is read in and the order the payload already uses.
+  const annualRaw = [...statements]
     .filter((r) => r && typeof r.periodEnd === 'string')
     .sort((a, b) => (a.periodEnd < b.periodEnd ? -1 : 1));
+  const annual: SourceRow[] = annualRaw.map((r, i) =>
+    annualRow(r, i === 0 ? 12 : monthsBetween(annualRaw[i - 1].periodEnd, r.periodEnd) ?? 12)
+  );
 
-  const filed: FiledPeriod[] = annual.map((r, i) => ({
-    end: r.periodEnd,
-    months: i === 0 ? 12 : monthsBetween(annual[i - 1].periodEnd, r.periodEnd) ?? 12,
-  }));
+  const quarterly: SourceRow[] = (Array.isArray(payload?.quarters) ? payload.quarters : [])
+    .filter((q: any) => q && typeof q.periodEnd === 'string' && q.values)
+    .map(quarterRow)
+    .sort((a: SourceRow, b: SourceRow) => (a.end < b.end ? -1 : a.end > b.end ? 1 : a.months - b.months));
+
+  const everything = [...annual, ...quarterly];
+
+  // WHICH PERIODS THIS STATEMENT WAS ACTUALLY FILED FOR, which is rule 5’s
+  // real point: an Indian company files its income quarterly and its balance
+  // sheet and cash flow only at the half year and the year end, so the right
+  // TTM method differs BETWEEN TWO STATEMENTS OF THE SAME COMPANY. Asking per
+  // statement is what makes that fall out rather than needing a country rule.
+  const fields = defs.map((d) => d.field).filter(Boolean) as string[];
+  const carries = (r: SourceRow) => fields.some((f) => num(r.values?.[f]));
+  const filed: FiledPeriod[] = everything
+    .filter(carries)
+    .map((r) => ({ end: r.end, months: r.months }));
   const method = ttmMethod(filed);
 
   const unitLabel =
@@ -606,23 +797,69 @@ export function financialsFor(payload: any, opts: ViewOptions): FinancialsView {
       ? `${symbol} in millions`
       : `${symbol} in millions, at each period end`;
 
-  // Only Annual and TTM have periods today, and the others say so rather than
-  // drawing an empty grid (screen design 1: "showing only periods that exist").
+  // SCREEN DESIGN 1: ONLY THE PERIODS THAT EXIST. A company that files no
+  // half years has no Half-year view, and is told so — an empty grid would
+  // read as a company that filed nothing, which is a lie about the company
+  // rather than about us.
+  const wantMonths = opts.frequency === 'quarterly' ? 3 : opts.frequency === 'half' ? 6 : 12;
   if (opts.frequency === 'quarterly' || opts.frequency === 'half') {
-    return {
-      periods: [],
-      rows: [],
-      template,
-      unitLabel,
-      currency,
-      basisNote: basisNote(payload, source),
-      sourceNote: source.line,
-      ttm: method,
-      empty:
-        opts.frequency === 'quarterly'
-          ? 'No quarterly periods are held for this company. The data layer fetches annual filings only, so there is nothing to show here yet — and an empty grid would suggest a company that files nothing.'
-          : 'No half-year periods are held for this company, for the same reason the quarterly view has none: the data layer fetches annual filings only.',
-    };
+    const interim = quarterly.filter((q) => q.months === wantMonths && carries(q));
+    if (!interim.length) {
+      const otherKind = quarterly.filter((q) => q.months !== wantMonths).length;
+      // THE INDIA CASE, WHICH RULE 5 NAMES: a company can file its income
+      // quarterly and its balance sheet and cash flow only at the half year
+      // and the year end. So "no quarters" and "quarters, but not of this
+      // statement" are different answers, and a reader looking for a quarterly
+      // cash flow is owed the second one rather than being told the company
+      // does not report quarters at all.
+      const periodsOfThisLength = quarterly.filter((q) => q.months === wantMonths).length;
+      const word = opts.statement === 'income' ? 'income statement' : opts.statement === 'balance' ? 'balance sheet' : 'cash flow';
+      if (periodsOfThisLength) {
+        return {
+          periods: [],
+          rows: [],
+          template,
+          unitLabel,
+          currency,
+          basisNote: basisNote(payload, source),
+          sourceNote: source.line,
+          ttm: method,
+          empty:
+            `This company files ${opts.frequency === 'quarterly' ? 'quarters' : 'half years'} — ` +
+            `${periodsOfThisLength} of them are held — but none carries a ${word}. ` +
+            'A balance sheet and a cash flow are often filed only at the half year and the year end ' +
+            'even where the income statement is quarterly, which is the ordinary pattern in India.',
+        };
+      }
+      return {
+        periods: [],
+        rows: [],
+        template,
+        unitLabel,
+        currency,
+        basisNote: basisNote(payload, source),
+        sourceNote: source.line,
+        ttm: method,
+        empty:
+          `No ${opts.frequency === 'quarterly' ? 'quarterly' : 'half-year'} periods are held for this ` +
+          `statement.` +
+          (otherKind
+            ? ` This company files ${opts.frequency === 'quarterly' ? 'half years' : 'quarters'}, and they are ` +
+              'under the other control.'
+            : ' Either the company does not file them or the source does not carry them, and an empty grid ' +
+              'would suggest a company that files nothing.'),
+      };
+    }
+    return buildView(
+      payload,
+      defs,
+      interim.slice(-QUARTERS_SHOWN),
+      everything,
+      annual,
+      method,
+      { ...opts, withTtm: false },
+      { template, unitLabel, currency, source }
+    );
   }
 
   const windowed = (() => {
@@ -631,46 +868,93 @@ export function financialsFor(payload: any, opts: ViewOptions): FinancialsView {
     return annual;
   })();
 
-  const periods: Period[] = windowed.map((r, i) => {
-    const prev = i > 0 ? windowed[i - 1] : null;
-    const months = prev ? monthsBetween(prev.periodEnd, r.periodEnd) : 12;
+  return buildView(payload, defs, windowed, everything, annual, method, { ...opts, withTtm: true }, {
+    template,
+    unitLabel,
+    currency,
+    source,
+  });
+}
+
+/**
+ * The columns and the rows, once it is known which periods they are.
+ *
+ * Shared by the annual and the interim views because the only difference
+ * between them is which periods go in and whether a TTM column is pinned to
+ * the end — and two copies of this would be two sets of rules about zeroes.
+ */
+function buildView(
+  payload: any,
+  defs: RowDef[],
+  shownPeriods: SourceRow[],
+  everything: SourceRow[],
+  annual: SourceRow[],
+  method: TtmMethod,
+  opts: ViewOptions & { withTtm: boolean },
+  about: { template: 'industrial' | 'bank'; unitLabel: string; currency: string; source: any }
+): FinancialsView {
+
+  const periods: Period[] = shownPeriods.map((r, i) => {
+    const prev = i > 0 ? shownPeriods[i - 1] : null;
+    const months =
+      r.kind === 'annual' ? (prev ? monthsBetween(prev.end, r.end) : r.months) : r.months;
     // Rule 9: a year that is not twelve months long gets its own label and is
     // never compared with one that is.
-    const transition = months !== null && months !== 12;
+    const transition = r.kind === 'annual' && months !== null && months !== 12;
+    const quarterLabel = r.fiscalPeriod || `${r.months}M`;
     return {
-      key: `FY${r.fiscalYear}`,
-      endDate: r.periodEnd,
+      key: r.kind === 'annual' ? `FY${r.fiscalYear}` : `${r.end}:${r.months}`,
+      endDate: r.end,
       fiscalYear: r.fiscalYear,
-      label: `FY${String(r.fiscalYear).slice(-2)}`,
-      dateLabel: dateLabel(r.periodEnd),
+      label:
+        r.kind === 'annual'
+          ? `FY${String(r.fiscalYear).slice(-2)}`
+          : `${quarterLabel} FY${String(r.fiscalYear).slice(-2)}`,
+      dateLabel: dateLabel(r.end),
       durationMonths: months,
-      kind: 'annual' as const,
-      chips: transition ? [`${months}M transition`] : ['12M'],
+      months: r.months,
+      fiscalPeriod: r.fiscalPeriod,
+      kind: r.kind === 'annual' ? ('annual' as const) : r.months === 6 ? ('half' as const) : ('quarter' as const),
+      // RULE 9: A PERIOD THAT IS NOT ITS USUAL LENGTH SAYS SO. A 52/53-week
+      // filer divides its year 12, 12, 12 and 16 weeks, and a sixteen-week
+      // quarter compared with a twelve-week one is the kind of comparison
+      // this rule exists to stop being made silently.
+      chips: transition
+        ? [`${months}M transition`]
+        : r.days && Math.abs(r.days - r.months * 30.4) > 12
+          ? [`${Math.round(r.days / 7)}w`]
+          : [`${r.months}M`],
       basis: basisFor(payload),
     };
   });
 
-  if (opts.frequency === 'ttm' || periods.length) {
-    // TTM IS PINNED BESIDE THE LATEST YEAR (screen design 4) rather than being a
-    // view of its own that hides the years it was built from.
-    if (windowed.length) {
-      periods.push({
-        key: 'TTM',
-        endDate: windowed[windowed.length - 1].periodEnd,
-        fiscalYear: windowed[windowed.length - 1].fiscalYear,
-        label: 'TTM',
-        dateLabel: dateLabel(windowed[windowed.length - 1].periodEnd),
-        durationMonths: 12,
-        kind: 'ttm',
-        chips: [method.label],
-        basis: basisFor(payload),
-      });
-    }
+  // TTM IS PINNED BESIDE THE LATEST YEAR (screen design 4) rather than being a
+  // view of its own that hides the years it was built from. Its end date is
+  // the end of the last period it is built FROM, not the last year's end:
+  // where four real quarters exist the trailing twelve months run to the
+  // latest quarter, which is the whole reason a reader wants the column.
+  const ttmEnd = method.uses.length ? method.uses[0] : shownPeriods[shownPeriods.length - 1]?.end;
+  if (opts.withTtm && shownPeriods.length && ttmEnd) {
+    periods.push({
+      key: 'TTM',
+      endDate: ttmEnd,
+      fiscalYear: shownPeriods[shownPeriods.length - 1].fiscalYear,
+      label: 'TTM',
+      dateLabel: dateLabel(ttmEnd),
+      durationMonths: 12,
+      months: 12,
+      kind: 'ttm',
+      chips: [method.label],
+      uses: method.uses,
+      basis: basisFor(payload),
+    });
   }
 
   const rows: Row[] = defs.map((def) => {
-    const cells = windowed.map((r) => cellFor(def, r));
-    if (windowed.length) cells.push(ttmCell(def, windowed, method));
+    const cells = shownPeriods.map((r) => cellFor(def, r));
+    if (opts.withTtm && shownPeriods.length && ttmEnd) {
+      cells.push(ttmCell(def, annual, everything, method));
+    }
     return {
       key: def.key,
       label: def.label,
@@ -688,11 +972,11 @@ export function financialsFor(payload: any, opts: ViewOptions): FinancialsView {
 
   return {
     ...ordered,
-    template,
-    unitLabel,
-    currency,
-    basisNote: basisNote(payload, source),
-    sourceNote: source.line,
+    template: about.template,
+    unitLabel: about.unitLabel,
+    currency: about.currency,
+    basisNote: basisNote(payload, about.source),
+    sourceNote: about.source.line,
     ttm: method,
     empty: periods.length ? null : 'No periods are held for this company at all.',
   };
@@ -741,6 +1025,12 @@ export interface Evidence {
   /** The XBRL concepts the data layer reads for this line, where it reads any. */
   concepts: string[] | null;
   note?: string;
+  /**
+   * The documents behind this figure. One where it was filed as it stands;
+   * TWO where it is the difference between two filings, which is what rule 4
+   * asks for and what a reader needs to check the subtraction themselves.
+   */
+  filings: Filing[];
 }
 
 /**
@@ -813,17 +1103,37 @@ export function evidenceFor(payload: any, view: FinancialsView, row: Row, index:
   const source = sourceEvidence(payload);
   const symbol = String(payload?.currencySymbol || payload?.currency || '');
 
+  // ONE FILING, OR THE TWO A SUBTRACTION NEEDS. `derivedFrom` is what the
+  // data layer recorded when it worked a quarter out; `filing` is the single
+  // document a reported figure came from. A vendor payload has neither, and
+  // the sentence under them says so rather than leaving a reader to wonder.
+  const filings: Filing[] = (cell.derivedFrom?.length ? cell.derivedFrom : cell.filing ? [cell.filing] : [])
+    .filter(Boolean)
+    .filter((f, i, all) => all.findIndex((o) => o.accn === f.accn) === i);
+
   const lines: { label: string; value: string }[] = [
     ['Line', row.label],
     ['Period', `${period.label} · ${period.dateLabel}`],
-    ['Duration', period.kind === 'ttm' ? period.chips[0] : `${period.durationMonths ?? 12} months to ${period.dateLabel}`],
+    [
+      'Duration',
+      period.kind === 'ttm'
+        ? `${period.chips[0]}, to ${period.dateLabel}`
+        : `${period.months ?? period.durationMonths ?? 12} months to ${period.dateLabel}`,
+    ],
     ['Basis', period.basis],
     ['Unit', row.kind === 'money' ? `${symbol}, millions` : row.kind === 'shares' ? 'whole shares' : 'per cent'],
     ['Currency', view.currency || 'not stated'],
     ['State', STATE_LABELS[cell.state]],
-    ['Form', source.traceable ? 'Annual report (10-K / 20-F), as tagged in XBRL' : 'not recorded by the feed'],
-    ['Filing date', 'not recorded by the feed'],
-    ['Filing ID', 'not recorded by the feed'],
+    [
+      'Form',
+      filings[0]?.form
+        ? filings[0].form
+        : source.traceable
+          ? 'Annual report (10-K / 20-F), as tagged in XBRL'
+          : 'not recorded by the feed',
+    ],
+    ['Filing date', filings[0]?.filed || 'not recorded by the feed'],
+    ['Filing ID', filings[0]?.accn || 'not recorded by the feed'],
     ['Restated', 'not known — one capture held, so no earlier version to compare'],
   ].map(([label, value]) => ({ label, value }));
 
@@ -835,9 +1145,10 @@ export function evidenceFor(payload: any, view: FinancialsView, row: Row, index:
     lines,
     source: source.line,
     traceable: source.traceable,
-    url: source.url,
+    url: filings[0]?.url || source.url,
     concepts: source.traceable && !row.formula ? CONCEPTS[row.key] ?? null : null,
     note: cell.formula ? `${cell.formula}.` : cell.reason,
+    filings,
   };
 }
 

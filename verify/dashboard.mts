@@ -2172,14 +2172,26 @@ async function checkCompanyTabsOnScreen(page: Page) {
       const header = ((await table.locator('thead').textContent()) || '').replace(/\s+/g, ' ');
       if (!/TTM/.test(header)) {
         fail('the TTM column', 'a TTM column beside the latest year', `"${header.slice(0, 70)}"`);
-      } else if (!/TTM \(FY basis\)/.test(header)) {
+      } else if (!/TTM \((FY basis|4 quarters|H1 basis)\)/.test(header)) {
         fail(
           'the TTM column saying which basis it is on',
           'the basis in the header, as rule 5 requires',
           `"${header.slice(0, 90)}"`
         );
       } else {
-        ok('Financials loads at its own address, with a TTM column that names its basis');
+        const basis = /TTM \(([^)]+)\)/.exec(header)?.[1];
+        // AND IT IS THE RIGHT BASIS FOR WHAT THIS COMPANY FILED. The fixture
+        // carries four quarters running past its year end, so a TTM still on
+        // the financial year would be a stale figure wearing a fresh label.
+        if (basis !== '4 quarters') {
+          fail(
+            'the TTM basis for a company with four quarters past its year end',
+            'TTM (4 quarters)',
+            `TTM (${basis})`
+          );
+        } else {
+          ok(`Financials loads at its own address, and its TTM says it is the ${basis}`);
+        }
       }
 
       // ---- EVERY NUMBER OPENS AN EVIDENCE SHEET ----
@@ -2267,19 +2279,83 @@ async function checkCompanyTabsOnScreen(page: Page) {
         ok(`${dashes} cells with nothing behind them, every one an em dash on the screen`);
       }
 
-      // ---- A FREQUENCY WITH NO PERIODS SAYS SO, rather than drawing a grid --
+      // ---- THE QUARTERS, AND THE TWO FILINGS BEHIND A DERIVED ONE ---------
+      //
+      // A quarter the company never filed on its own is the difference between
+      // two documents. The screen has to say so and open both, because a
+      // reader who wants to check the subtraction cannot do it with one.
+      // Back to the income statement first: the block above left the balance
+      // sheet showing, and a balance is never derived, so looking for a derived
+      // cell there would be looking in the one place it cannot be.
+      await page
+        .getByRole('button', { name: 'Income statement', exact: true })
+        .evaluate((el: any) => el.click());
+      await page.waitForTimeout(200);
       await page
         .getByRole('button', { name: 'Quarterly', exact: true })
         .evaluate((el: any) => el.click());
-      await page.waitForTimeout(250);
-      const quarterly = ((await page.textContent('main')) || '').replace(/\s+/g, ' ');
-      if (/No quarterly periods are held/i.test(quarterly) && !(await page.locator('[data-financials]').count())) {
+      await page.waitForTimeout(300);
+      const quarterCells = page.locator('[data-financials] [data-state="derived"]');
+      const derivedCount = await quarterCells.count();
+      if (!derivedCount) {
+        fail(
+          'the quarterly view',
+          'at least one quarter worked out from two filings, which the fixture has',
+          'no derived cell on the screen'
+        );
+      } else {
+        await quarterCells.first().evaluate((el: any) => el.click());
+        await page.waitForTimeout(250);
+        const sheet = page.locator('[data-evidence-sheet]');
+        const links = sheet.locator('[data-filing]');
+        const n = await links.count();
+        const said = ((await sheet.textContent()) || '').replace(/\s+/g, ' ');
+        if (n < 2) {
+          fail(
+            'the evidence for a derived quarter',
+            'both of the filings it is the difference of',
+            `${n} filing link${n === 1 ? '' : 's'}`
+          );
+        } else if (!/difference of/i.test(said)) {
+          fail(
+            'the evidence for a derived quarter',
+            'a heading saying the two filings are what it is the difference of',
+            `"${said.slice(0, 80)}"`
+          );
+        } else {
+          const accns = await links.evaluateAll((els: any[]) =>
+            els.map((e) => e.getAttribute('data-filing'))
+          );
+          if (new Set(accns).size < 2) {
+            fail(
+              'the two filings behind a derived quarter',
+              'two different documents',
+              `both links point at ${accns[0]}`
+            );
+          } else {
+            ok(
+              `a derived quarter opens both the filings it is the difference of ` +
+              `(${accns.join(' and ')})`
+            );
+          }
+        }
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(150);
+      }
+
+      // ---- A FREQUENCY WITH NO PERIODS SAYS SO, rather than drawing a grid --
+      await page
+        .getByRole('button', { name: 'Half-year', exact: true })
+        .evaluate((el: any) => el.click());
+      await page.waitForTimeout(300);
+      const halves = ((await page.textContent('main')) || '').replace(/\s+/g, ' ');
+      if (/No half-year periods are held/i.test(halves) && !(await page.locator('[data-financials]').count())) {
         ok('a frequency with no periods behind it says so, and draws no empty table');
       } else {
         fail(
-          'the Quarterly view with no quarterly periods held',
+          'the Half-year view with no half-year periods held',
           'a sentence saying so and no table',
-          `"${quarterly.slice(0, 90)}"`
+          `"${halves.slice(0, 90)}"`
         );
       }
       await page
