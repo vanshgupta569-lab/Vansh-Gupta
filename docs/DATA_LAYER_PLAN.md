@@ -89,8 +89,15 @@ a guess here would be worse than one built on a gap:
   and a deliberately nonexistent path all hash to `233c6915f664185c`. The
   content is drawn by client-side JavaScript from `api.bseindia.com`, which
   refuses automated requests outright (§2.1). So **BSE's position on automated
-  access is unverified.** It must be read in an ordinary browser, or asked,
-  before any BSE adapter.
+  access could not be read from here.**
+
+  **Answered on 2026-10-29**, by Nihar reading the page in a browser and sending
+  the text: the terms prohibit "any reproduction, redistribution or
+  transmission, for consideration or otherwise, of any such information
+  contained on the Website", and require BSE's "express written consent" for
+  any reproduction. **BSE is therefore NSE's position rather than a softer one:
+  licence needed, Paid · last.** Quoted in full in `docs/ARCHIVE_PLAN.md` §2.9.
+  The measurement above stands as the reason it had to be read by a person.
 - **The Integrated Filing endpoint.** Finding it means watching a browser's
   network traffic and then calling an endpoint NSE does not document. The
   endpoint names are built at runtime: neither page's HTML nor the site's 591KB
@@ -461,7 +468,12 @@ storing Content "in any other form of electronic retrieval system". **A hosted
 site that fetches, stores and redisplays the feed is outside all three.** No rate
 limit is published; none was probed.
 
-**BSE.** Unverified — see §1. It must be read before anything is built on BSE.
+**BSE.** Read in a browser on 2026-10-29 (§1, and quoted in
+`docs/ARCHIVE_PLAN.md` §2.9). Reproduction, redistribution and transmission are
+prohibited "for consideration or otherwise", and any reproduction needs BSE's
+"express written consent". **The same position as NSE: a hosted site that
+fetches, stores and redisplays the feed is outside it, and it needs a licence —
+Paid · last.** No rate limit is published; none was probed.
 
 **MCA21.** Fees per document. An authoritative register for private companies and
 for the full annual accounts of listed ones; not a bulk source, and not free.
@@ -893,7 +905,10 @@ want?
 - **(a)** Ask NSE for written permission, or price their data licence, and build
   nothing until there is an answer.
 - **(b)** Read BSE's terms in an ordinary browser first — they are unverified and
-  may be more permissive — and build on BSE if they allow it.
+  may be more permissive — and build on BSE if they allow it. **Closed on
+  2026-10-29: they are not more permissive.** BSE prohibits reproduction,
+  redistribution and transmission and requires express written consent (§4), so
+  there is no cheaper Indian exchange route and this option is gone.
 - **(c)** Treat the company's own website as the primary source, since LODR
   regulation 46 compels every listed company to publish its results there. More
   honest in principle and much harder in practice: no uniformity, and the two
@@ -902,10 +917,17 @@ want?
   redistribute" — keeping the captions and the provenance but not the
   independence.
 
-My recommendation is **(b) then (a)**: read BSE's terms, because it costs one
+My recommendation was **(b) then (a)**: read BSE's terms, because it costs one
 browser visit and the taxonomy is shared so the adapter is the same either way;
 and open the NSE conversation in parallel, because stage 6's redistribution needs
 a written answer regardless.
+
+**(b) came back on 2026-10-29, and the answer was no.** BSE's terms are NSE's,
+so the choice is now between **(a)**, **(c)** and **(d)** — a written permission
+or a licence from either exchange, the companies' own websites under LODR
+regulation 46, or a paid feed. The browser visit was still the right first step:
+it cost one page view and it removed an option that would otherwise have been
+built on a guess.
 
 **2. The two missing years.** The old endpoint stops at the quarter ended
 31 December 2024. Do you want me to (a) find the Integrated Filing route and
@@ -987,7 +1009,7 @@ finding and because this plan's §4.4 forbids working around one:
 
 | Source | Result |
 |---|---|
-| `www.bseindia.com` | **403** on the home page and on the terms page. BSE remains unverified, exactly as §1 and §4 of this document already say. |
+| `www.bseindia.com` | **403** on the home page and on the terms page — which is why the terms had to be read by a person. **Read in a browser on 2026-10-29: reproduction, redistribution and transmission prohibited, express written consent required** (§1, §4, and `docs/ARCHIVE_PLAN.md` §2.9). |
 | `www.mca.gov.in` | **403** (Akamai "Access Denied"). The Companies Act rules could not be read at the source. |
 | `www.indiacode.nic.in` | **403**. Same consequence. |
 | `www.jpx.co.jp` | **403** to one fetcher; the JPX pages below were read through a search index that quoted them, not fetched. |

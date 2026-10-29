@@ -303,13 +303,37 @@ and from `nse-copyright`:
 **Verdict: prohibited, and the second sentence forbids the store as well as the
 fetch.** Decision 1 of the data layer plan is the same decision.
 
-### 2.9 BSE (India) — **unverified**
+### 2.9 BSE (India) — **no**
 
-`www.bseindia.com` returned **403** to an automated request today, on the home
-page and on the terms page. That is the same finding §1 of the data layer plan
-recorded, and it stands: BSE's terms have still not been read. **One browser
-visit by a person settles it**, and it is the cheapest open question in either
-document.
+**Read by Nihar in a browser and sent on 2026-10-29**, which is the only way this
+row was ever going to be answered: `www.bseindia.com` returns **403** to an
+automated request on every path — the home page and the terms page included —
+because the site is a single-page application whose content is drawn by
+JavaScript from an API that refuses automated callers (`docs/DATA_LAYER_PLAN.md`
+§1 and §2.1). The terms themselves say:
+
+> "Any reproduction, redistribution or transmission, for consideration or
+> otherwise, of any such information contained on the Website is strictly
+> prohibited"
+
+and that nothing may be reproduced
+
+> "without the express written consent of BSE".
+
+**Verdict: prohibited, and as with NSE it is the second sentence that settles
+it.** The first forbids redistribution and transmission "for consideration or
+otherwise", which covers a site showing a reader what it captured; the second
+makes any reproduction at all conditional on BSE's **express written consent**.
+An archive is a reproduction that is kept, so both halves bite. **Licence
+needed — Paid · last**, exactly as NSE is, and for the same reason: the fetch
+and the store are each forbidden on their own, so there is no narrower version
+of this that is permitted.
+
+**What this closes.** It was the last unverified row in §2.10, and the only one
+that could not be read from here. It also answers option (b) of
+`docs/DATA_LAYER_PLAN.md` §11: BSE is **not** more permissive than NSE, so there
+is no cheaper Indian exchange route, and the Indian primary-filings layer waits
+on a licence or a written permission whichever exchange it is built on.
 
 ### 2.10 The verdicts, together
 
@@ -323,11 +347,14 @@ document.
 | **SEDAR+ (Canada)** | **No** | scraping, automated search and database construction all prohibited | ✓ |
 | **ASX (Australia)** | **No** | without ASX's prior written consent; personal, non-commercial only | ✓ |
 | **NSE (India)** | **No** | automated collection and third-party storage both prohibited | ✓ (earlier session) |
-| **BSE (India)** | **Unverified** | 403 to an automated request | ✗ |
+| **BSE (India)** | **No** | reproduction, redistribution and transmission prohibited; express written consent required — **Paid · last** | ✓ (browser, by Nihar) |
 
 **So the archive can start in four jurisdictions and not in four.** The US, the
 UK, Japan via EDINET, and Korea are permitted today. Canada, Australia and India
-are not, and Japan's TDnet is a separate question from EDINET. The EU is not in
+are not — India on both of its exchanges, now that BSE has been read — and
+Japan's TDnet is a separate question from EDINET. **No row is unverified any
+more**: every one has been read at its own source, eight of them from here and
+BSE in a browser. The EU is not in
 this table because the brief did not list an EU source; the German Bundesanzeiger
 and the national officially-appointed mechanisms have not been assessed.
 
@@ -625,9 +652,12 @@ built here until there is a written answer or a licence.
    will take on its own**, because it is the only one with a clock on it: the
    free service holds 31 days, so every week of delay is a week that can never
    be captured, whatever the answer turns out to be.
-4. **BSE: Nihar will read the terms page in a browser and send the text.** It is
-   the last unverified row in §2.10, and it cannot be read from here — the site
-   returned 403 to an automated request on two paths on 2026-10-25.
+4. **BSE: read in a browser and sent — answered on 2026-10-29.** The terms
+   prohibit "any reproduction, redistribution or transmission, for consideration
+   or otherwise" of the information on the site, and require BSE's "express
+   written consent" for any reproduction. **So BSE is NSE's position, not a
+   softer one: licence needed, Paid · last** (§2.9). It was the last unverified
+   row in §2.10 and the table now has none.
 
 **Still open, and nothing is blocked on them today:**
 
