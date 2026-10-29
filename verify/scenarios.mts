@@ -2717,6 +2717,458 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 // ---------------------------------------------------------------------------
+// THE RISK AND COST-OF-CAPITAL CARD: FIVE RULES (docs/COST_OF_CAPITAL_SPEC.md)
+// ---------------------------------------------------------------------------
+//
+// The card's own principle is that it shows the numbers the engine uses and
+// never one rate while the model discounts at another. These five are the ways
+// that goes wrong, each measured over every payload on disk and each proved to
+// fail by breaking it on purpose.
+//
+//   THE REGRESSION IS RIGHT (rules 1 to 4). A slope is easy to get wrong in a
+//   way that looks fine — the wrong series on the wrong axis gives 1/beta, and
+//   on a share that moves with its market that is a plausible number. So the
+//   first case here is a constructed one where the answer is known before the
+//   code runs: a share built as exactly 1.3 times an index plus half a point,
+//   whose beta must come back 1.3, whose alpha must come back 0.005 and whose
+//   R squared must be 1.
+//
+//   COUNTRY RISK IS ADDED ONCE (rule 13). With it switched on, the premium in
+//   use must be the mature-market premium plus the country's, and the cost of
+//   equity must be the risk-free rate plus beta times THAT, with nothing added
+//   again. The label has to change too: a reader looking at "4.23% mature" and
+//   "2.85% country" cannot tell a 7.08% premium from a 9.93% one unless the row
+//   says which it is.
+//
+//   NO BANK GETS A WACC (rule 24). A weighted average of deposits and equity
+//   describes nothing, and the engine values banks by residual income at a cost
+//   of equity instead. The card must carry no WACC for any of them and must say
+//   why rather than leaving a blank.
+//
+//   A MINOR UNIT IS NORMALISED (rule 25). London quotes pence. A market
+//   capitalisation struck on the quoted number is a hundred times too big,
+//   which makes the equity weight 100% and the cost of capital the cost of
+//   equity — about two points wrong on a company with real borrowings, in the
+//   direction that makes everything look cheap. The check is an identity across
+//   the card's own rows: the price it shows times the shares it shows must be
+//   the market capitalisation the weights were struck from.
+//
+//   EVERY INPUT SHOWS A SOURCE AND A DATE, or says why there is no figure. A
+//   row with a number, no publisher and no date is the thing this site exists
+//   not to produce.
+//
+//   AN EDIT REACHES THE MODEL. A panel of inputs that look editable and do not
+//   change the valuation is worse than no panel. A point on the risk-free rate
+//   must move the cost of equity by exactly a point and must move the value per
+//   share; so must a change to beta and to the premium.
+{
+  console.log('\n=== the risk and cost-of-capital card: five rules ===');
+  const { costOfCapitalFor, betaEstimate, regress, blume, BETA_MINIMUM } = await import(
+    `file:///${REPO}/src/data/costOfCapital.ts`
+  );
+  const { INDICES, INDEX_SYMBOLS, indexForListing, monthEnds, weekEnds } = await import(
+    `file:///${REPO}/src/data/marketIndex.ts`
+  );
+  const { MATURE_ERP_PCT, countryRiskFor, COUNTRY_RISK_VINTAGE } = await import(
+    `file:///${REPO}/src/data/countryRisk.ts`
+  );
+
+  const faults: string[] = [];
+  const near = (a: number, b: number, tol = 1e-9) => Math.abs(a - b) <= tol;
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+
+  // ---- 0. THE TWO COPIES OF THE ALLOW-LIST AGREE ------------------------
+  //
+  // `api/marketIndex.js` cannot import from `src/`: each file in that
+  // directory is packaged on its own by the host and a shared import that
+  // fails to bundle takes the route down. So the list of indices exists twice,
+  // and a second copy that nothing compares is a second copy that goes stale —
+  // the trap `CLAUDE.md` names as two copies of a positional layout.
+  const routeSource = fs.readFileSync(path.join(REPO, 'api/marketIndex.js'), 'utf8');
+  const routeBlock = routeSource.slice(
+    routeSource.indexOf('const INDEX_NAMES'),
+    routeSource.indexOf('const TERMS')
+  );
+  const routeSymbols = [...routeBlock.matchAll(/'([^']+)':\s*'/g)].map((m) => m[1]);
+  const missingFromRoute = (INDEX_SYMBOLS as string[]).filter((s) => !routeSymbols.includes(s));
+  const extraInRoute = routeSymbols.filter((s) => !(INDEX_SYMBOLS as string[]).includes(s));
+  if (missingFromRoute.length || extraInRoute.length) {
+    faults.push(
+      `the index allow-list differs between src/data/marketIndex.ts and api/marketIndex.js: ` +
+        `${missingFromRoute.length} the route would refuse (${missingFromRoute.join(', ')}), ` +
+        `${extraInRoute.length} the route serves and nothing asks for (${extraInRoute.join(', ')})`
+    );
+  }
+  for (const index of Object.values(INDICES) as any[]) {
+    if (!routeBlock.includes(`'${index.symbol}': '${index.name}'`)) {
+      faults.push(`${index.symbol} is called "${index.name}" here and something else in the route`);
+    }
+  }
+
+  // ---- 1. THE REGRESSION, ON A SERIES WHOSE ANSWER IS KNOWN -------------
+  //
+  // Built rather than recorded: the index moves by a fixed pattern and the
+  // share moves by exactly 1.3 of it plus 0.5% a month, so the slope, the
+  // intercept and the fit are all known before the regression runs. An
+  // off-by-one in the pairing, the two series swapped, or log returns where
+  // simple ones were meant all show up here and nowhere else.
+  const KNOWN_BETA = 1.3;
+  const KNOWN_ALPHA = 0.005;
+  const pattern = [0.031, -0.018, 0.024, 0.009, -0.037, 0.012, 0.028, -0.006, 0.017, -0.022, 0.041, 0.003];
+  const indexCloses: number[] = [100];
+  const stockCloses: number[] = [50];
+  const dates: string[] = [];
+  const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+  dates.push(monthEnd(2019, 0));
+  for (let i = 0; i < 72; i++) {
+    const r = pattern[i % pattern.length];
+    indexCloses.push(indexCloses[i] * (1 + r));
+    stockCloses.push(stockCloses[i] * (1 + KNOWN_BETA * r + KNOWN_ALPHA));
+    dates.push(monthEnd(2019 + Math.floor((i + 1) / 12), (i + 1) % 12));
+  }
+  const constructedIndex = { dates, closes: indexCloses };
+  const constructedStock = { dates, closes: stockCloses };
+  const known = betaEstimate(constructedStock, constructedIndex, 5, 'monthly');
+  if (known.raw === null) {
+    faults.push(`the constructed series produced no beta at all: ${known.missing}`);
+  } else {
+    if (!near(known.raw, KNOWN_BETA, 1e-9)) {
+      faults.push(`a share built as exactly ${KNOWN_BETA} times its index regresses to ${known.raw}`);
+    }
+    if (!near(known.r2, 1, 1e-9)) {
+      faults.push(`a share that is a straight line in its index has an R squared of ${known.r2}, not 1`);
+    }
+    if (!near(known.adjusted!, blume(KNOWN_BETA), 1e-12)) {
+      faults.push(`the Blume adjustment of ${KNOWN_BETA} came back ${known.adjusted}, not ${blume(KNOWN_BETA)}`);
+    }
+    if (known.observations !== 60) {
+      faults.push(`a five-year monthly window over a complete series gave ${known.observations} returns, not 60`);
+    }
+  }
+  const fit = regress(
+    stockCloses.slice(1).map((c, i) => c / stockCloses[i] - 1),
+    indexCloses.slice(1).map((c, i) => c / indexCloses[i] - 1)
+  );
+  if (!fit || !near(fit.intercept, KNOWN_ALPHA, 1e-12)) {
+    faults.push(`the intercept of a series built with ${KNOWN_ALPHA} a month came back ${fit?.intercept}`);
+  }
+  // A series the index cannot explain is not a beta of nought.
+  const flatIndex = { dates, closes: dates.map(() => 100) };
+  const flat = betaEstimate(constructedStock, flatIndex, 5, 'monthly');
+  if (flat.raw !== null) {
+    faults.push(`an index that never moved produced a beta of ${flat.raw} instead of refusing`);
+  }
+  // And too short a history is refused rather than regressed on four points.
+  const short = betaEstimate(
+    { dates: dates.slice(0, 6), closes: stockCloses.slice(0, 6) },
+    { dates: dates.slice(0, 6), closes: indexCloses.slice(0, 6) },
+    5,
+    'monthly'
+  );
+  if (short.raw !== null) {
+    faults.push(`five monthly returns produced a beta; the floor is ${BETA_MINIMUM.monthly}`);
+  }
+
+  // ---- the cards, over every payload on disk ----------------------------
+  const indexCache = new Map<string, any>();
+  const indexFor = (symbol: string) => {
+    if (!indexCache.has(symbol)) {
+      const f = path.join(PAYLOADS, 'indices', `${symbol.replace(/[^A-Za-z0-9]+/g, '_')}.json`);
+      if (!fs.existsSync(f)) indexCache.set(symbol, null);
+      else {
+        const b = JSON.parse(fs.readFileSync(f, 'utf8'));
+        indexCache.set(symbol, { series: { dates: b.dates, closes: b.closes }, asOf: b.asOf });
+      }
+    }
+    return indexCache.get(symbol);
+  };
+
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let cards = 0;
+  let banks = 0;
+  let withKe = 0;
+  let withWacc = 0;
+  let withBeta = 0;
+  let minorUnit = 0;
+  let rowsChecked = 0;
+  let addedOnce = 0;
+  let editsLanded = 0;
+  let editsMovedValue = 0;
+  let indexless = 0;
+  let noRate = 0;
+  const betasSeen: number[] = [];
+  const marketsSeen = new Set<string>();
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const choice = indexForListing(payload);
+    if (choice.index) marketsSeen.add(choice.market);
+    else indexless++;
+    const index = choice.index ? indexFor(choice.index.symbol) : null;
+    const card = costOfCapitalFor(payload, { index });
+    if (!card) {
+      faults.push(`${file} produces no card at all, not even a refusal`);
+      continue;
+    }
+    cards++;
+    if (card.costOfEquity !== null) withKe++;
+    if (card.wacc !== null) withWacc++;
+
+    // ---- 2. NO BANK GETS A WACC ---------------------------------------
+    if (card.template === 'bank') {
+      banks++;
+      if (card.wacc !== null) {
+        faults.push(`${file} is on the bank template and still carries a WACC of ${card.wacc}`);
+      }
+      if (!card.waccMissing || !/not applicable/i.test(card.waccMissing)) {
+        faults.push(`${file} is a bank and does not say its WACC is not applicable: "${card.waccMissing}"`);
+      }
+      // Rule 8: a bank's beta is not relevered.
+      if (card.beta.relevered) {
+        faults.push(`${file} is a bank and its beta has been relevered, which rule 8 forbids`);
+      }
+    }
+
+    // ---- 2b. NO RATE MEANS NO COST OF EQUITY -------------------------
+    //
+    // `null + 0.0423 * 1.02` is 4.31% in JavaScript, so a currency with no
+    // published ten-year yield used to produce a cost of equity equal to the
+    // premium alone — a plausible-looking rate with nothing behind it. This is
+    // the card that would show it, so this is where it is checked.
+    if (!isNum(payload?.riskFree?.rate)) {
+      noRate++;
+      if (card.costOfEquity !== null) {
+        faults.push(
+          `${file} has no risk-free rate and still shows a cost of equity of ` +
+            `${(card.costOfEquity * 100).toFixed(2)}% — a missing rate has been read as nought`
+        );
+      }
+      if (card.wacc !== null) {
+        faults.push(`${file} has no risk-free rate and still shows a WACC of ${card.wacc}`);
+      }
+      const rfRow = card.rows.find((r: any) => r.key === 'riskFree');
+      if (!rfRow?.missing) {
+        faults.push(`${file} has no risk-free rate and the row does not say why`);
+      }
+    }
+
+    // ---- 3. EVERY INPUT SHOWS A SOURCE AND A DATE ----------------------
+    for (const row of card.rows) {
+      rowsChecked++;
+      if (row.value === null) {
+        if (!row.missing) faults.push(`${file} row ${row.key} has no figure and no reason`);
+        continue;
+      }
+      if (!row.source) {
+        faults.push(`${file} row ${row.key} shows ${row.value} with no source`);
+        continue;
+      }
+      if (!row.source.publisher) faults.push(`${file} row ${row.key} has a source with no publisher`);
+      if (!row.source.asOf) faults.push(`${file} row ${row.key} has a source with no date`);
+    }
+
+    // ---- 4. A MINOR UNIT IS NORMALISED --------------------------------
+    const factor = payload?.priceConversion?.minorUnitFactor;
+    if (typeof factor === 'number' && factor !== 1) {
+      minorUnit++;
+      if (card.price.minorUnitFactor !== factor) {
+        faults.push(`${file} is quoted in a minor unit and the card does not say so`);
+      }
+      const { value, shares, marketCap } = card.price;
+      if (value === null || shares === null || marketCap === null) {
+        if (card.wacc !== null) {
+          faults.push(`${file} has a WACC but no price, shares or market capitalisation to weight it on`);
+        }
+      } else if (Math.abs(value * shares - marketCap) > Math.abs(marketCap) * 1e-6) {
+        faults.push(
+          `${file}: the card shows a price of ${value} and ${Math.round(shares)} shares, which is ` +
+            `${Math.round(value * shares)}, but the weights were struck on ${Math.round(marketCap)} — ` +
+            'one of the two is in the wrong unit'
+        );
+      }
+    }
+
+    // ---- 5. COUNTRY RISK IS ADDED ONCE --------------------------------
+    const risk = countryRiskFor(payload?.profile?.country);
+    if (risk && card.costOfEquity !== null && card.beta.used !== null) {
+      // off: the premium is the mature-market one, and the label says so
+      if (!near(card.premium.usedPct, MATURE_ERP_PCT, 1e-12)) {
+        faults.push(`${file}: with country risk off the premium is ${card.premium.usedPct}%, not the mature ${MATURE_ERP_PCT}%`);
+      }
+      if (card.premium.kind !== 'mature-market') {
+        faults.push(`${file}: country risk is off and the premium calls itself "${card.premium.kind}"`);
+      }
+      const on = costOfCapitalFor(payload, { index, edits: { countryRisk: true } })!;
+      const expected = MATURE_ERP_PCT + risk.crpPct;
+      if (!near(on.premium.usedPct, expected, 1e-9)) {
+        faults.push(
+          `${file}: ${MATURE_ERP_PCT}% mature plus ${risk.crpPct}% country should be ${expected.toFixed(2)}%, ` +
+            `and the card uses ${on.premium.usedPct.toFixed(2)}%`
+        );
+      }
+      if (on.premium.kind !== 'total country') {
+        faults.push(`${file}: country risk is on and the premium still calls itself "${on.premium.kind}"`);
+      }
+      const erpRow = on.rows.find((r: any) => r.key === 'erp');
+      if (!erpRow || !near(erpRow.value, expected / 100, 1e-12)) {
+        faults.push(`${file}: the premium row shows ${erpRow?.value} where the premium in use is ${expected / 100}`);
+      }
+      if (!/total/i.test(String(erpRow?.label))) {
+        faults.push(`${file}: with country risk on the premium row is still labelled "${erpRow?.label}"`);
+      }
+      // and the cost of equity is the rate plus beta times THAT premium
+      const rf = on.rows.find((r: any) => r.key === 'riskFree')!.value;
+      if (rf !== null && on.beta.used !== null && on.costOfEquity !== null) {
+        const byHand = rf + on.beta.used * (expected / 100);
+        if (!near(on.costOfEquity, byHand, 1e-9)) {
+          faults.push(
+            `${file}: cost of equity ${(on.costOfEquity * 100).toFixed(4)}% against ` +
+              `${(byHand * 100).toFixed(4)}% worked out by hand — the premium has been counted twice ` +
+              `or not at all`
+          );
+        } else {
+          addedOnce++;
+        }
+      }
+    }
+
+    // ---- 6. AN EDIT REACHES THE MODEL ---------------------------------
+    if (card.costOfEquity !== null && card.beta.used !== null) {
+      const rfRow = card.rows.find((r: any) => r.key === 'riskFree')!;
+      const nudged = costOfCapitalFor(payload, {
+        index,
+        edits: { riskFreePct: (rfRow.value as number) * 100 + 1 },
+      })!;
+      if (nudged.costOfEquity === null) {
+        faults.push(`${file}: a point on the risk-free rate left no cost of equity at all`);
+      } else if (!near(nudged.costOfEquity - card.costOfEquity, 0.01, 1e-9)) {
+        faults.push(
+          `${file}: a point on the risk-free rate moved the cost of equity by ` +
+            `${((nudged.costOfEquity - card.costOfEquity) * 100).toFixed(4)} points, not one`
+        );
+      } else {
+        editsLanded++;
+      }
+      // beta: the cost of equity moves by the premium times the change
+      const betaUp = costOfCapitalFor(payload, { index, edits: { beta: 2 } })!;
+      if (betaUp.beta.used === null || betaUp.costOfEquity === null) {
+        faults.push(`${file}: setting beta to 2 left no cost of equity`);
+      } else {
+        const byHand =
+          (rfRow.value as number) + betaUp.beta.used * (card.premium.usedPct / 100);
+        if (!near(betaUp.costOfEquity, byHand, 1e-9)) {
+          faults.push(
+            `${file}: with beta set to 2 the cost of equity is ${betaUp.costOfEquity}, not the ${byHand} ` +
+              'the card’s own inputs give'
+          );
+        }
+        if (near(betaUp.beta.used, card.beta.used, 1e-9)) {
+          faults.push(`${file}: setting beta to 2 did not change the beta the model uses`);
+        }
+      }
+      // and the value, where the engine produces one
+      if (card.valuePerShare !== null) {
+        const dearer = costOfCapitalFor(payload, {
+          index,
+          edits: { riskFreePct: (rfRow.value as number) * 100 + 2 },
+        })!;
+        if (dearer.valuePerShare === null) {
+          // Two points can take a company past a refusal threshold, which is
+          // the engine working rather than an edit that failed to land.
+        } else if (near(dearer.valuePerShare, card.valuePerShare, 1e-9)) {
+          faults.push(
+            `${file}: two points on the risk-free rate left the value per share at ` +
+              `${card.valuePerShare.toFixed(4)} — the edit never reached the model`
+          );
+        } else {
+          editsMovedValue++;
+        }
+      }
+    }
+
+    const five = card.beta.estimates.find((e: any) => e.frequency === 'monthly');
+    if (five && five.raw !== null) {
+      withBeta++;
+      betasSeen.push(five.raw);
+      if (five.observations < BETA_MINIMUM.monthly) {
+        faults.push(`${file}: a beta was shown on ${five.observations} returns, below the floor`);
+      }
+      if (five.r2 === null || five.standardError === null) {
+        faults.push(`${file}: a beta was shown without its R squared or its standard error (rule 4)`);
+      }
+    }
+  }
+
+  // The sampling is the one thing both sides of every regression share, so it
+  // is worth one assertion of its own: a month-end is the last close IN the
+  // month, and a week-end the last close in the week.
+  const sampleDates = ['2026-01-02', '2026-01-30', '2026-02-02', '2026-02-27', '2026-03-02'];
+  const sampled = monthEnds({ dates: sampleDates, closes: [1, 2, 3, 4, 5] });
+  if (sampled.dates.join(',') !== '2026-01-30,2026-02-27,2026-03-02') {
+    faults.push(`month-end sampling returned ${sampled.dates.join(',')}`);
+  }
+  const weekly = weekEnds({
+    dates: ['2026-01-05', '2026-01-09', '2026-01-12', '2026-01-16'],
+    closes: [1, 2, 3, 4],
+  });
+  if (weekly.dates.join(',') !== '2026-01-09,2026-01-16') {
+    faults.push(`week-end sampling returned ${weekly.dates.join(',')}`);
+  }
+
+  const median = (a: number[]) => {
+    const s = [...a].sort((x, y) => x - y);
+    return s.length ? s[Math.floor(s.length / 2)] : NaN;
+  };
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults on the cost-of-capital card:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  } else {
+    console.log(
+      `  a share built as exactly ${KNOWN_BETA} times its index regresses to ${known.raw!.toFixed(12)} on 60 ` +
+        `monthly returns, with an intercept of ${KNOWN_ALPHA} and an R squared of 1; an index that never moved, ` +
+        'and five returns, are both refused rather than answered'
+    );
+    console.log(
+      `  ${cards} of ${files.length} payloads produce a card: ${withKe} carry a cost of equity, ${withWacc} a WACC, ` +
+        `and ${banks} are on the bank template with no WACC at all and a reason in its place`
+    );
+    console.log(
+      `  a measured beta on ${withBeta} listings across ${marketsSeen.size} markets (median ` +
+        `${median(betasSeen).toFixed(3)}), and ${indexless} listings get none because no broad index for ` +
+        'their market could be read'
+    );
+    console.log(
+      `  ${rowsChecked} rows checked: every one carries a publisher and a date, or says why there is no figure`
+    );
+    console.log(
+      `  ${minorUnit} payloads are quoted in pence, cents or agorot, and on each the price the card shows ` +
+        'times the shares it shows is the market capitalisation the weights were struck on'
+    );
+    console.log(
+      `  country risk is added once on ${addedOnce} companies: the premium in use is the mature ` +
+        `${MATURE_ERP_PCT}% plus that country’s own, the row renames itself to say so, and the cost of ` +
+        `equity is the rate plus beta times that one premium (Damodaran, ${COUNTRY_RISK_VINTAGE})`
+    );
+    console.log(
+      `  a point on the risk-free rate moves the cost of equity by exactly a point on ${editsLanded} ` +
+        `companies and moves the value per share on ${editsMovedValue} of them`
+    );
+    console.log(
+      `  and on the ${noRate} payloads with no published yield for their currency there is no cost of ` +
+        'equity and no WACC at all, which is what a missing rate means'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // THE TYPECHECK ACTUALLY CHECKS COMPONENT PROPS (`KI-28`)
 // ---------------------------------------------------------------------------
 //

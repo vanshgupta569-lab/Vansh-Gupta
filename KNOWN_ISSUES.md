@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-28`. **Next free: `KI-29`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-30`. **Next free: `KI-31`.** Retired, meaning
   fixed and never to be reused: `KI-28` (the typecheck checked no component
   props at all, because `@types/react` was never installed; fixed 2026-10-20,
   and `npm run verify` now compiles a component call that must not compile, so
@@ -104,10 +104,96 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**The list is empty.** Every entry opened against this repository has been
-fixed, measured, and removed in the commit that fixed it.
+### `KI-29` — the cost of debt is a history, not a cost
 
-`KI-25`, `KI-26` and `KI-28` were the last three, all closed on 2026-10-20:
+**What is wrong.** The engine takes the cost of debt as **interest expense over
+average interest-bearing borrowings**, averaged across the forecast
+(`model.js`, `computeWACC`). This project’s own specification
+(`docs/COST_OF_CAPITAL_SPEC.md`) says in rule 18 that this figure may be shown
+**only** as a labelled cross-check — a "historical effective rate" — and never
+as the cost of debt, and in rule 17 that the rate should be the
+currency-matched risk-free rate plus a default spread from the company’s
+rating, or a synthetic rating from its interest coverage where it has none.
+
+**Why it is wrong and not merely different.** An effective rate looks backwards
+and divides by a balance that moved. A company that borrowed cheaply years ago
+shows that old rate as the cost of borrowing a pound today.
+
+**Measured on 2026-10-29**, over the 137 companies carrying both a cost of debt
+and a risk-free rate: **59 of them come out borrowing below their own
+government’s ten-year yield**, which no corporate borrower does. The worst are
+Linde at 0.96% against 4.29%, Sea at 0.87% against 4.29%, Intel at 1.87% and
+Johnson & Johnson at 1.93%; in India, HDFC Bank at 4.46% and ICICI at 4.44%
+against a 6.54% rupee yield. The spread over the risk-free rate across the set
+runs from **-4.25 to +22.37 points**, median +0.24.
+
+**What it moves.** Only through the debt weight, so it is largest on the
+heaviest borrowers: a point on the cost of debt is **0.79 points** of WACC on
+McDonald's, 0.71 on Reliance Infrastructure, 0.40 on Toyota and 0.30 on
+Vodafone. On a company that barely borrows it is worth almost nothing.
+
+**Where it is visible.** The risk and cost-of-capital card labels the row
+"Cost of debt (historical effective rate)", says in as many words that it is a
+cross-check rather than a cost of debt, and shows the interest coverage ratio a
+synthetic rating would be read from. **The label is not the fix.** The fix is
+the synthetic rating, which needs Damodaran’s coverage-to-spread table and his
+separate table for financial firms, and which changes the WACC of every
+borrowing company — so it is a job of its own rather than a side effect of
+building a screen.
+
+### `KI-30` — one share count a million times too small
+
+**What is wrong.** `MCD`’s payload carries **716.4** diluted shares where every
+other SEC filer carries the absolute count, and the derivation divides by a
+million to put share counts in millions. So McDonald’s market capitalisation
+comes out as **0.18** against borrowings of **43,848**, in the same units.
+
+**Measured on 2026-10-29**, over the 117 companies that produce a cost of
+capital: **one** weights equity at under a tenth of a per cent, and it is this
+one — an equity weight of **0.0004%**, a debt weight of **100.0%**, and a WACC
+of **6.21%**, which is the after-tax cost of debt with no cost of equity in it
+at all. Every other company in the set weights equity between 0.4% and 100%
+with a market capitalisation that ties to its own price and share count.
+
+**What it moves: no published value.** McDonald’s discounted cash flow is
+refused for an unrelated reason, so no value per share is shown for it and none
+is wrong. What the defect would do if the refusal lifted is replace the cost of
+equity with the cost of debt, which on this company is about two points of
+WACC.
+
+**How it was found.** By putting the equity weight on a screen. It had been in
+the engine for as long as the weights have, and nothing displayed them.
+
+**What the fix needs**: measuring how the SEC facts tag diluted shares across
+the set, because one payload in the wrong unit means the fetcher trusts a unit
+it should check. It is a data-layer job and it is not this one.
+
+## A defect found and fixed on 29 October 2026, with no number
+
+**A missing risk-free rate was being read as a rate of nought.**
+`computeWACC` computed `c.riskFreeRate + c.marketRiskPremium * beta`, and in
+JavaScript `null + 0.0423 * 1.02` is 4.31%. So every company whose currency has
+no published ten-year government yield this site can read came out with a cost
+of equity equal to the equity risk premium alone: **33 of the 177 payloads** on
+disk, in won, renminbi, riyal, new Taiwan dollars, Canadian dollars, Australian
+dollars, Singapore dollars, reais, Swiss francs and Danish kroner — 4.29% for
+TSMC, 4.30% for Samsung, 4.80% for Alibaba.
+
+**It moved no valuation**, which is why it survived: 32 of the 33 already carry
+the engine’s own refusal for the missing rate, the discounted cash flow never
+runs, and no screen printed a cost of capital the valuation did not use. The
+risk and cost-of-capital card is the first screen that would have, and a card
+whose first rule is to show the numbers the engine uses cannot show that one.
+Fixed in the same commit: the cost of equity and the WACC are null where the
+rate is null, which standing decision 3 requires, and the refusal already there
+is what the reader sees. **Proved by breaking:** `npm run verify` reports the
+card showing a cost of equity on a company with no risk-free rate.
+
+---
+
+## Closed, and what they were
+
+`KI-25`, `KI-26` and `KI-28` were closed on 2026-10-20:
 the news ticker that scrolled headlines which already fitted, the
 render-blocking stylesheet fetched for an icon font nothing drew with, and the
 typecheck that was checking no component props at all. Each left behind a
@@ -116,9 +202,9 @@ branches, every font the page fetches is matched against the families
 `tokens.ts` names, and `npm run verify` compiles a component call that must not
 compile. See the ID ledger above for what each one was.
 
-An empty list is not a claim that the engine is correct. It is a claim that
-nothing known to be wrong is being left alone, which is the only thing this
-file can honestly say.
+A short list is not a claim that the engine is correct. It is a claim that
+nothing known to be wrong is being left alone unrecorded, which is the only
+thing this file can honestly say.
 
 ## A defect found and fixed on 20 October 2026, with no number
 

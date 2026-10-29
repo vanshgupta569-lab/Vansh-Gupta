@@ -598,6 +598,11 @@
         "name": "A Tooltip Is Not A Title",
         "body": "The ⓘ panel is prose — sans, weight 400, upright, 13px — whatever it hangs off. Letting it inherit was invisible while every ⓘ sat on a sans table row, and produced three lines of Newsreader medium the first time one was put at the end of a sentence set in the display face.",
         "section": "components"
+      },
+      {
+        "name": "The Editable Row Rule",
+        "body": "A figure that looks editable must change the answer on the same screen, and the screen must show what the answer was. An input that moves a number beside it and not the valuation under it invites a reader to test an assumption and then lies about the result. A list of such inputs is text with a dashed quiet underline, not a column of bordered boxes: nine boxes reads as a form waiting to be filled in, and this is a statement of what the model used with corrections available.",
+        "section": "components"
       }
     ],
     "dos": [

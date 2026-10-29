@@ -1921,7 +1921,31 @@ export function computeWACC(model, data) {
       : c.betaIsUnlevered
         ? leveredFromAsset
         : c.equityBeta;
-  const costOfEquity = c.riskFreeRate + c.marketRiskPremium * beta;
+
+  // A MISSING RISK-FREE RATE IS NOT A RATE OF NOUGHT.
+  //
+  // `null + 0.0423 * 1.02` is 4.31% in JavaScript, and that is the number this
+  // line used to return for every company whose currency has no published
+  // ten-year government yield this site can read: measured on 2026-10-29,
+  // 33 of the 177 payloads on disk, in won, renminbi, riyal, new Taiwan
+  // dollars, Canadian dollars, Australian dollars, Singapore dollars, reais,
+  // Swiss francs and Danish kroner. The cost of equity came out as the equity
+  // risk premium alone — 4.29% for TSMC, 4.30% for Samsung — which is a rate
+  // nobody would discount an equity at and which looks entirely ordinary
+  // beside a rate that is.
+  //
+  // Nothing showed it, because `meta.riskFreeRefusal` already refuses the
+  // valuation for those companies (`KI-19`) and no screen printed a cost of
+  // capital the valuation never used. The risk and cost-of-capital card is
+  // the screen that would have, which is how this was found: a card whose
+  // first rule is to show the numbers the engine uses cannot show that one.
+  //
+  // So it is null, which standing decision 3 requires — missing data is never
+  // treated as zero — and the WACC below is null with it. The refusal that
+  // was already there is what the reader sees.
+  const costOfEquity = isNum(c.riskFreeRate)
+    ? c.riskFreeRate + c.marketRiskPremium * beta
+    : null;
 
   const totalCapital = marketCap + grossDebt;
   const weightEquity = totalCapital > 0 ? marketCap / totalCapital : 1;
@@ -1937,7 +1961,9 @@ export function computeWACC(model, data) {
     debtToEquity,
     // netDebt is reported because the bridge uses it; the weights do not.
     marketCap, netDebt, grossDebt, weightEquity, weightDebt,
-    wacc: weightEquity * costOfEquity + (weightDebt ? weightDebt * afterTaxCostOfDebt : 0),
+    wacc: isNum(costOfEquity)
+      ? weightEquity * costOfEquity + (weightDebt ? weightDebt * afterTaxCostOfDebt : 0)
+      : null,
   };
 }
 

@@ -25,6 +25,7 @@ import { COMPANY_TABS, type CompanyTab } from '../data/companyRoute';
 import { overviewStats, formatStat, filingLabel } from '../data/companyOverview';
 import { PriceChart } from './priceChart';
 import { FinancialsTab } from './financialsTab';
+import { CostOfCapitalCard } from './costOfCapitalCard';
 import { Hint, HINT_STYLES } from './figuresHint';
 import { EYEBROW, UI, BODY, MetricTile, RefStrip, Pill, Disclose } from './instrument';
 
@@ -176,6 +177,9 @@ export const CompanyPage: React.FC<Props> = ({
                 </h2>
                 <PriceChart payload={payload} currencySymbol={overview.currencySymbol} />
               </section>
+
+              {/* ---- risk and cost of capital, step 3 of the build order -- */}
+              <CostOfCapitalCard payload={payload} ticker={ticker} />
 
               {/* ---- about ---------------------------------------------- */}
               {(payload.profile?.summary || payload.profile?.officers?.length) && (

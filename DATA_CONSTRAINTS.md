@@ -643,6 +643,64 @@ missing from ours.
 that files to a banking schema — RBI Form A for India (`DATA_CONSTRAINTS.md`
 already refuses banks in the India plan for the same reason).
 
+### The index a beta is measured against, and the four markets with none
+
+**Source:** the vendor chart endpoint (index levels). **Affects:** the risk and
+cost-of-capital card on 5 of 177 listings, which get no measured beta at all.
+**Bound:** **none on any valuation** — the model discounts at its own asset
+beta of 1.0 relevered, not at the measured figure (`METHODOLOGY.md` §14) — but
+on those five the card has no beta of its own to show beside it.
+
+**Measured on 2026-10-29**, every symbol fetched once before it was written
+down:
+
+| Index | Symbol | Result |
+|---|---|---|
+| **TOPIX** (Japan), rule 6’s default | `^TOPX`, `^TPX`, `998405.T` | **404 on all three.** An ETF tracking it answers; a fund is not the market, so Japan uses the Nikkei 225 instead and the card names it |
+| **CDAX** (Germany), rule 6’s default | `^CDAXX`, `^CDAX` | **one close and no history**, and 404. Germany uses the DAX, which rule 6 names as the alternative |
+| **Oslo All-Share** (Norway) | `^OSEAX` | **404.** No beta for an Oslo listing |
+| **Tadawul All Share** (Saudi Arabia) | `^TASI.SR` | **one close and no history.** No beta for a Riyadh listing |
+
+The other seventeen answered with ten years of daily closes. Twenty-one markets
+are configured in all, covering **172 of the 177** listings; the five left are
+Norway, Saudi Arabia, two over-the-counter listings and one on the London
+international order book. **A market with no verified broad index is not given a
+neighbour’s**: a beta against the wrong economy is a different quantity wearing
+the same name, so the card shows none and says which index it would need.
+
+**The levels are vendor data, exactly as the share price is.** Free for
+development, licensed before launch — **Paid · last**, the same status
+`docs/VISION.md` §13 gives global prices. Nothing is stored or redistributed:
+the series is fetched on demand through `/api/marketIndex`, whose allow-list is
+the twenty-one symbols and nothing else.
+
+**And the returns are price returns.** The series are closes, split-adjusted
+and **not** dividend-adjusted, so a beta measured here excludes dividends. The
+card says so. The vendor does publish an adjusted series; reading it is a
+fetcher change rather than a missing source.
+
+**A depositary receipt gets no beta either**, and that is rule 7 rather than a
+gap: a beta belongs to the home listing, measured against the home index, and
+where this site holds only the receipt it holds the wrong series. Those
+listings are already refused a value per share for the same reason
+(`METHODOLOGY.md` §3).
+
+### An issuer credit rating, which no free source publishes
+
+**Source:** none of the three. **Affects:** the cost of debt on every company.
+**Bound:** see `KI-29` — the engine uses the historical effective rate instead,
+and on the five most heavily borrowed companies a point on the cost of debt is
+0.30 to 0.79 points on the WACC.
+
+`docs/COST_OF_CAPITAL_SPEC.md` rule 17 wants the risk-free rate plus a default
+spread read from the company’s **actual** rating. The agencies publish ratings
+on their own sites behind their own terms, and none of the three sources this
+site reads carries one. What **is** free is the synthetic route: a rating
+inferred from interest coverage, with Damodaran’s coverage-to-spread table and
+his separate table for financial firms. That is buildable and not built; it is
+on the roadmap, and the card shows the interest coverage it would be read off
+so the missing step is visible rather than implied.
+
 ### How much plant a change in revenue is worth
 
 **Source:** neither. **Affects:** 3 of the 57 companies whose forecast buys
@@ -750,6 +808,27 @@ happens when they move. What is *not* claimed is that either was derived.
 
 **What would remove it:** nothing a free source publishes. These are judgements,
 and the honest treatment is to show them and let the reader move them.
+
+**Where the 4.23% comes from, since 2026-10-29.** It is the **mature-market**
+equity risk premium in Damodaran’s country table, whose own page is dated
+*Last updated: January 5, 2026*; the table is captured whole into
+`src/data/countryRisk.ts`, 178 countries, with that vintage stored beside every
+figure. The mature figure is read off the table rather than typed in: the twelve
+Aaa sovereigns all carry a country premium of nought and a total premium of
+exactly 4.23%. The country premiums are shown on the risk and cost-of-capital
+card and **not added to the cost of equity** — see `METHODOLOGY.md` §14 for why
+that is a decision rather than an oversight.
+
+**His licence, and Kroll’s.** Damodaran states that his data carries no strings
+attached and that permission need not be asked, and asks for acknowledgement;
+there is **no licence text to quote**. He is named on the card wherever one of
+his figures appears. **Getting his written agreement is a launch-time task**,
+not a development one, and it is recorded here so it happens before the site is
+public rather than after. **Kroll’s figures are not used at all**: its 5.0% US
+premium is paired with a 20-year Treasury, which is a different convention from
+ours, and its display terms are unverified. There is no official global equity
+risk premium; the OECD’s country risk classification is a classification and
+not a premium, and is not used as one.
 
 ### Total liabilities the filing does not tag
 

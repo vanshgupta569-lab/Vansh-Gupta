@@ -70,8 +70,15 @@ async function freePort(): Promise<number> {
   });
 }
 
-const { paperPayload, PAPER_TICKER, PAPER_NAME, CONVERTED_TICKER, CONVERTED_RATE, CONVERTED_MINOR_UNIT } =
-  await import(`file:///${REPO}/verify/fixtures/paperCompany.mts`);
+const {
+  paperPayload,
+  paperIndexSeries,
+  PAPER_TICKER,
+  PAPER_NAME,
+  CONVERTED_TICKER,
+  CONVERTED_RATE,
+  CONVERTED_MINOR_UNIT,
+} = await import(`file:///${REPO}/verify/fixtures/paperCompany.mts`);
 const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
 const { COMPANIES_DATA } = await import(`file:///${REPO}/src/data/companies.ts`);
 // The curated model the dashboard itself renders for Apple. The record in
@@ -2104,6 +2111,283 @@ async function checkTradingCurrencyOnScreen(page: Page, ticker: string) {
  *   the other six one line saying what is being built, and nothing that looks
  *                 like data
  */
+/**
+ * THE RISK AND COST-OF-CAPITAL CARD, ON THE SCREEN (docs/COST_OF_CAPITAL_SPEC.md).
+ *
+ * `npm run verify` checks the arithmetic over every payload on disk. What can
+ * only be checked here is whether a reader can SEE it: whether every input
+ * carries a source and a date where a person would look for one, whether the
+ * two figures at the top are the ones the rows underneath add up to, and
+ * whether an edit made with a keyboard reaches the valuation.
+ *
+ * THE ARITHMETIC IS READ OFF THE SCREEN, not recomputed. The check parses the
+ * risk-free rate, the beta and the premium as printed, works out what the cost
+ * of equity must be from those three, and compares it with the cost of equity
+ * as printed. That is exactly the sum a reader would do to decide whether to
+ * trust the card, and it cannot pass by comparing a figure against itself: the
+ * expected value comes from three other figures on the page.
+ */
+async function checkCostOfCapitalOnScreen(page: Page) {
+  console.log('\n=== the company page: the risk and cost-of-capital card ===');
+  const { PAPER_INDEX_BETA } = await import(`file:///${REPO}/verify/fixtures/paperCompany.mts`);
+
+  await page.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'domcontentloaded' });
+  const card = page.locator('section[aria-label="Risk and cost of capital"]').first();
+  try {
+    await card.waitFor({ timeout: 60_000 });
+  } catch {
+    fail('the Overview tab', 'a risk and cost-of-capital card', 'no such card on the page');
+    return;
+  }
+
+  const num = (text: string | null | undefined): number | null => {
+    const m = /(-?[\d,]+\.?\d*)/.exec(String(text ?? '').replace(/\s+/g, ' '));
+    return m ? Number(m[1].replace(/,/g, '')) : null;
+  };
+  const valueOf = async (key: string) =>
+    num(await card.locator(`[data-coc-value="${key}"]`).first().textContent().catch(() => ''));
+  const rowValue = async (key: string) => {
+    const row = card.locator(`[data-coc-row="${key}"]`).first();
+    const edit = row.locator(`[data-coc-edit]`).first();
+    if (await edit.count()) return num(await edit.textContent());
+    return num(await row.locator(`[data-coc-value="${key}"]`).first().textContent().catch(() => ''));
+  };
+
+  // ---- 1. THE TWO FIGURES, AND THE ROWS THEY ARE MADE OF ---------------
+  const ke = await valueOf('costOfEquity');
+  const wacc = await valueOf('wacc');
+  const riskFree = await rowValue('riskFree');
+  const beta = await rowValue('beta');
+  const premium = await rowValue('erp');
+  if (ke === null || wacc === null || riskFree === null || beta === null || premium === null) {
+    fail(
+      'the card',
+      'a cost of equity, a WACC, a risk-free rate, a beta and a premium, all shown',
+      `ke=${ke} wacc=${wacc} rf=${riskFree} beta=${beta} erp=${premium}`
+    );
+  } else {
+    const byHand = riskFree + beta * premium;
+    if (Math.abs(byHand - ke) > 0.02) {
+      fail(
+        'the cost of equity on the card',
+        `${riskFree}% + ${beta} x ${premium}% = ${byHand.toFixed(2)}%, from the rows underneath it`,
+        `${ke}%`
+      );
+    } else {
+      ok(`the cost of equity is the three rows under it: ${riskFree}% + ${beta} x ${premium}% = ${ke}%`);
+    }
+    if (!(wacc < ke)) {
+      fail(
+        'the WACC against the cost of equity',
+        'below it, because this company borrows and debt is cheaper after tax',
+        `WACC ${wacc}% against a cost of equity of ${ke}%`
+      );
+    }
+  }
+
+  // ---- 2. EVERY INPUT SHOWS A SOURCE AND A DATE ------------------------
+  //
+  // Read from the rendered page rather than from the data, because a source
+  // that exists in the object and is not drawn is a source the reader does not
+  // have. A date is a date: either an ISO one or a named vintage.
+  const rows = await card.locator('[data-coc-row]').all();
+  let sourced = 0;
+  const unsourced: string[] = [];
+  for (const row of rows) {
+    const key = (await row.getAttribute('data-coc-row')) || '?';
+    const text = ((await row.textContent()) || '').replace(/\s+/g, ' ');
+    if (/^(costOfEquity|wacc)$/.test(key)) continue; // the two figures, not inputs
+    const sourceLine = row.locator('[data-coc-source]').first();
+    if (!(await sourceLine.count())) {
+      // A row with no figure must say why instead.
+      if (/—/.test(text) && /\b(not|no|cannot|could not)\b/i.test(text)) continue;
+      unsourced.push(`${key}: "${text.slice(0, 80)}"`);
+      continue;
+    }
+    const line = ((await sourceLine.textContent()) || '').replace(/\s+/g, ' ');
+    if (!/\d{4}-\d{2}-\d{2}|\b[A-Z][a-z]+ \d{1,2}, \d{4}\b|\bFY\d{4}\b/.test(line)) {
+      unsourced.push(`${key}: a source with no date — "${line.slice(0, 80)}"`);
+      continue;
+    }
+    sourced++;
+  }
+  if (unsourced.length) {
+    fail(
+      'the inputs on the card',
+      'a publisher and a date on every one, or a reason there is no figure',
+      unsourced.join(' | ').slice(0, 220)
+    );
+  } else {
+    ok(`${sourced} inputs on the card each name a publisher and a date on screen`);
+  }
+
+  // ---- 3. THE BETA WE MEASURED, WITH ITS DIAGNOSTICS -------------------
+  const betaBlock = ((await card.textContent()) || '').replace(/\s+/g, ' ');
+  const measured = /5 years, monthly: raw ([\d.]+), Blume-adjusted ([\d.]+) — (\d+) returns, R² ([\d.]+)%, standard error ([\d.]+)/.exec(
+    betaBlock
+  );
+  if (!measured) {
+    fail(
+      'the measured beta',
+      'the five-year monthly regression with its observations, R squared and standard error (rule 4)',
+      `"${betaBlock.slice(betaBlock.indexOf('Beta, measured here'), betaBlock.indexOf('Beta, measured here') + 160)}"`
+    );
+  } else {
+    const raw = Number(measured[1]);
+    const adjusted = Number(measured[2]);
+    // The fixture's share and index are built from one ratio of daily returns,
+    // so the slope is 1.25 up to the compounding of months of unequal length.
+    if (Math.abs(raw - PAPER_INDEX_BETA) > 0.03) {
+      fail('the measured beta', `${PAPER_INDEX_BETA} give or take 0.03, by construction`, String(raw));
+    } else if (Math.abs(adjusted - ((2 / 3) * raw + 1 / 3)) > 0.002) {
+      fail('the Blume-adjusted beta', `two thirds of ${raw} plus a third of 1`, String(adjusted));
+    } else if (!/not the measured figure above/.test(betaBlock)) {
+      fail(
+        'what the card says about which beta the model uses',
+        'that the model is not using the measured figure (rule 9)',
+        'no such sentence'
+      );
+    } else {
+      ok(
+        `the beta measured on screen is ${raw} raw and ${adjusted} adjusted over ${measured[3]} returns, ` +
+          `R² ${measured[4]}%, standard error ${measured[5]} — and the card says the model is not using it`
+      );
+    }
+  }
+
+  // ---- 4. COUNTRY RISK IS ADDED ONCE, AND SAYS SO ----------------------
+  const toggle = card.locator('[data-coc-country-risk]').first();
+  if (!(await toggle.count())) {
+    fail('the country risk premium row', 'a control saying whether it is included', 'no such control');
+  } else {
+    const before = await toggle.getAttribute('data-coc-country-risk');
+    const crp = await rowValue('crp');
+    const keBefore = await valueOf('costOfEquity');
+    const erpLabelBefore = ((await card.locator('[data-coc-row="erp"] dt').first().textContent()) || '').trim();
+    await toggle.evaluate((el: any) => el.click());
+    await page.waitForTimeout(250);
+    const after = await toggle.getAttribute('data-coc-country-risk');
+    const keAfter = await valueOf('costOfEquity');
+    const erpAfter = await rowValue('erp');
+    const erpLabelAfter = ((await card.locator('[data-coc-row="erp"] dt').first().textContent()) || '').trim();
+    if (before !== 'off' || after !== 'on') {
+      fail('the country risk control', 'off by default and on after a click', `${before} then ${after}`);
+    } else if (crp === null || keBefore === null || keAfter === null || erpAfter === null || beta === null || premium === null) {
+      fail('the country risk premium', 'a figure on the card', `crp=${crp} keBefore=${keBefore} keAfter=${keAfter}`);
+    } else if (Math.abs(erpAfter - (premium + crp)) > 0.02) {
+      fail(
+        'the premium with country risk on',
+        `${premium}% + ${crp}% = ${(premium + crp).toFixed(2)}%`,
+        `${erpAfter}%`
+      );
+    } else if (Math.abs(keAfter - keBefore - beta * crp) > 0.02) {
+      fail(
+        'what country risk does to the cost of equity',
+        `beta ${beta} times ${crp}% = ${(beta * crp).toFixed(2)} points more`,
+        `${(keAfter - keBefore).toFixed(2)} points — it has been counted twice or not at all`
+      );
+    } else if (!/total/i.test(erpLabelAfter) || /total/i.test(erpLabelBefore)) {
+      fail(
+        'the premium row renaming itself',
+        '"mature market" with country risk off and "total" with it on, so a reader can tell them apart',
+        `"${erpLabelBefore}" then "${erpLabelAfter}"`
+      );
+    } else {
+      ok(
+        `switching country risk on takes the premium from ${premium}% to ${erpAfter}% and the cost of equity ` +
+          `up by beta times ${crp}%, and the row renames itself "${erpLabelAfter}"`
+      );
+    }
+    await toggle.evaluate((el: any) => el.click());
+    await page.waitForTimeout(200);
+  }
+
+  // ---- 5. AN EDIT REACHES THE VALUATION -------------------------------
+  const valueBefore = await valueOf('valuePerShare');
+  const edit = card.locator('[data-coc-edit="riskFreePct"]').first();
+  if (!(await edit.count()) || valueBefore === null) {
+    fail(
+      'editing the risk-free rate',
+      'an editable risk-free rate and a value per share beside it',
+      `editable: ${await edit.count()}, value: ${valueBefore}`
+    );
+  } else {
+    await edit.evaluate((el: any) => el.click());
+    const field = card.locator('input[type="text"]').first();
+    await field.waitFor({ timeout: 10_000 });
+    await field.fill(String(((riskFree ?? 4) + 2).toFixed(2)));
+    await field.press('Enter');
+    await page.waitForTimeout(350);
+    const keAfter = await valueOf('costOfEquity');
+    const valueAfter = await valueOf('valuePerShare');
+    const onDefaults = await valueOf('valueOnDefaults');
+    if (keAfter === null || ke === null || Math.abs(keAfter - ke - 2) > 0.02) {
+      fail(
+        'two points on the risk-free rate',
+        `the cost of equity two points higher, at ${ke === null ? '?' : (ke + 2).toFixed(2)}%`,
+        `${keAfter}%`
+      );
+    } else if (valueAfter === null || Math.abs(valueAfter - valueBefore) < 0.005) {
+      fail(
+        'two points on the risk-free rate',
+        'a different value per share — the edit has to reach the model',
+        `${valueBefore} then ${valueAfter}`
+      );
+    } else if (onDefaults === null || Math.abs(onDefaults - valueBefore) > 0.02) {
+      fail(
+        'what the card says the value was before the edit',
+        `${valueBefore}, the figure it showed on the defaults`,
+        String(onDefaults)
+      );
+    } else {
+      ok(
+        `two points on the risk-free rate takes the cost of equity from ${ke}% to ${keAfter}% and the value ` +
+          `per share from ${valueBefore} to ${valueAfter}, with the default kept beside it`
+      );
+    }
+  }
+
+  await readContrast(page, 'the risk and cost-of-capital card');
+
+  // ---- 6. A PRICE QUOTED IN PENCE IS BROUGHT TO POUNDS FIRST ----------
+  await page.goto(`${BASE}/company/${CONVERTED_TICKER}/overview`, { waitUntil: 'domcontentloaded' });
+  const converted = page.locator('section[aria-label="Risk and cost of capital"]').first();
+  try {
+    await converted.waitFor({ timeout: 60_000 });
+  } catch {
+    fail('the card on a company quoted in pence', 'the card', 'it never rendered');
+    return;
+  }
+  const priceRow = ((await converted.locator('[data-coc-row="price"]').first().textContent()) || '').replace(/\s+/g, ' ');
+  const weightsRow = ((await converted.locator('[data-coc-row="weights"]').first().textContent()) || '').replace(/\s+/g, ' ');
+  const shownPrice = num(priceRow.replace(/^Share price/, ''));
+  const capital = /capitalisation ([\d,]+)/.exec(weightsRow);
+  if (!/GBp/.test(priceRow)) {
+    fail('the price row on a company quoted in pence', 'that it was quoted in GBp', `"${priceRow.slice(0, 110)}"`);
+  } else if (shownPrice === null || !capital) {
+    fail('the price and the weights', 'a price and a market capitalisation on the card', `"${priceRow.slice(0, 80)}" / "${weightsRow.slice(0, 80)}"`);
+  } else {
+    // 100 million shares in the fixture, in millions, so the capitalisation is
+    // the price times a hundred — and a hundred times that if the pence figure
+    // had been used.
+    const expected = shownPrice * 100;
+    const shown = Number(capital[1].replace(/,/g, ''));
+    if (Math.abs(expected - shown) > Math.max(1, shown * 0.001)) {
+      fail(
+        'the market capitalisation the weights were struck on',
+        `${expected.toFixed(0)} — the price on the card times its own share count`,
+        `${shown} (a factor of ${(shown / expected).toFixed(2)})`
+      );
+    } else {
+      ok(
+        `a share quoted in pence is brought to pounds before it is multiplied: the card shows ${shownPrice} ` +
+          `and a capitalisation of ${shown}, and says where the pence went`
+      );
+    }
+  }
+  await readContrast(page, 'the cost-of-capital card, quoted in pence');
+}
+
 async function checkCompanyTabsOnScreen(page: Page) {
   console.log('\n=== the company page: every tab has an address, and it loads ===');
   const { COMPANY_TABS } = await import(`file:///${REPO}/src/data/companyRoute.ts`);
@@ -2563,6 +2847,15 @@ try {
   await context.route('**/api/comps*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"comparables":[]}' })
   );
+  // The index a beta is measured against, answered from the fixture: a series
+  // built so the regression's answer is known before it runs.
+  await context.route('**/api/marketIndex*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(paperIndexSeries()),
+    })
+  );
   const page = await context.newPage();
   page.on('pageerror', (error) => {
     problems++;
@@ -2610,6 +2903,10 @@ try {
   // 4. The company page: the hub, and every tab at its own address.
   await checkCompanyTabsOnScreen(page);
   await readContrast(page, 'the company page, overview');
+
+  // AND THE CARD ON IT, which is a screen of its own: nine inputs, each with a
+  // source and a date, and an edit that has to reach the valuation.
+  await checkCostOfCapitalOnScreen(page);
 
   // AND THE STATEMENTS, which is a screen of its own: a table of its own with
   // its own chips, states and evidence sheet, none of which the overview has.

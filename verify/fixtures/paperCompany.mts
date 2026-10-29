@@ -183,6 +183,53 @@ function statementFor(i: number) {
   };
 }
 
+/**
+ * THE INDEX THIS COMPANY'S BETA IS MEASURED AGAINST, also a formula.
+ *
+ * `/api/marketIndex` answers with daily closes and the card samples them, so
+ * this answers in the same shape. It runs on exactly the same weekday calendar
+ * as `paperHistory()` above — not a day more or less — because the point of the
+ * fixture is that the pairing has nothing to trip over, leaving the regression
+ * itself as the only thing under test.
+ *
+ * The share falls a tenth of a per cent a day and the index 0.08%, so a month
+ * of n trading days returns (1 - 0.001)^n - 1 against (1 - 0.0008)^n - 1, and
+ * the slope of one on the other is 1.25 to three places. A check can therefore
+ * assert the beta it expects without recomputing it the way the card does,
+ * which is the trap `CLAUDE.md` calls comparing a figure against itself.
+ */
+export const PAPER_INDEX_SYMBOL = '^GSPC';
+export const PAPER_INDEX_BETA = 1.25;
+
+export function paperIndexSeries() {
+  const dates: string[] = [];
+  const closes: number[] = [];
+  const day = new Date(`${HISTORY_END}T00:00:00Z`);
+  for (let i = 0; i < HISTORY_WEEKDAYS; ) {
+    const weekday = day.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) {
+      dates.push(day.toISOString().slice(0, 10));
+      closes.push(Number((4800 * Math.pow(0.9992, i)).toPrecision(6)));
+      i++;
+    }
+    day.setUTCDate(day.getUTCDate() - 1);
+  }
+  dates.reverse();
+  closes.reverse();
+  return {
+    symbol: PAPER_INDEX_SYMBOL,
+    name: 'S&P 500',
+    currency: 'USD',
+    source: 'Yahoo Finance (chart)',
+    terms: 'Index levels from Yahoo Finance, free for development use.',
+    from: dates[0],
+    to: dates[dates.length - 1],
+    asOf: `${HISTORY_END}T20:00:00.000Z`,
+    dates,
+    closes,
+  };
+}
+
 export const PAPER_TICKER = 'PAPER';
 /** The same filer, quoted in another currency: see `paperPayload`. */
 export const CONVERTED_TICKER = 'PAPERC';
@@ -414,7 +461,9 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
       latest: 0.0418,
       reason: null,
     },
-    profile: { sector: 'Materials', industry: 'Paper Products' },
+    // A COUNTRY, because the cost-of-capital card reads a country risk premium
+    // from it and a fixture with none would leave that row untested.
+    profile: { sector: 'Materials', industry: 'Paper Products', country: 'United States' },
     // The shape this payload is in. The browser asks for the shape it reads and
     // refuses one it does not recognise, so a fixture without this is treated
     // as a cached answer from before the field existed (KI-15).
@@ -423,4 +472,14 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
   };
 }
 
-export default { paperPayload, PAPER_TICKER, PAPER_NAME, CONVERTED_TICKER, CONVERTED_RATE, CONVERTED_MINOR_UNIT };
+export default {
+  paperPayload,
+  paperIndexSeries,
+  PAPER_TICKER,
+  PAPER_NAME,
+  PAPER_INDEX_SYMBOL,
+  PAPER_INDEX_BETA,
+  CONVERTED_TICKER,
+  CONVERTED_RATE,
+  CONVERTED_MINOR_UNIT,
+};

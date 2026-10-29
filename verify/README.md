@@ -19,7 +19,7 @@ Excel, which is how the suite checks formulas rather than the values the
 generator happened to write. It is GPL-3.0 (dual-licensed), used only in
 verification and never bundled into the site.
 
-## The five commands
+## The six commands
 
 | Command | What it does | Needs payloads |
 |---|---|---|
@@ -28,11 +28,13 @@ verification and never bundled into the site.
 | `npm run verify:sweep -- <tag>` | Snapshots what the site would show for every fetched company. | Yes |
 | `npm run verify:compare -- <a> <b>` | Measures two snapshots against each other. | No (reads snapshots) |
 | `npm run verify:workbook` | Checks the workbook reproduces the site, company by company. | Optional |
+| `npm run verify:indices` | Fetches the 21 market indices a beta is measured against. | Writes them |
 
 ### The job loop
 
 ```
 npm run verify:payloads            # once; ~15 minutes, then reused
+npm run verify:indices             # once; 21 requests, ~90 seconds
 npm run verify:sweep -- before     # before touching anything
 #   ...make the change...
 npm run verify                     # scenario suite: every Checks row zero
@@ -144,6 +146,50 @@ nowhere better to put them and each is cheap:
   what makes "the set reads the latest" true rather than intended. Proved by
   editing a capture, deleting another and rewriting a pointer in place: six
   faults, each naming what happened.
+
+### The risk and cost-of-capital card: five rules, and the regression
+
+Measured over every payload on disk, with the index series from
+`npm run verify:indices` so a real beta can be struck for every company
+without a network.
+
+**The regression is checked against a series whose answer is known before the
+code runs**: an index that moves by a fixed pattern and a share built as exactly
+1.3 times it plus half a point a month. The slope must come back 1.3, the
+intercept 0.005 and the fit 1. The two series swapped — the easiest mistake, and
+invisible, because one over beta is a plausible beta — gives 0.769 and the check
+says so. An index that never moved, and a window with five returns in it, must
+both be refused rather than answered.
+
+Then the five rules of the card itself:
+
+1. **Country risk is added once.** With the premium switched on, the premium in
+   use must be the mature-market figure plus that country’s, the row must rename
+   itself to say which of the two it is, and the cost of equity must be the rate
+   plus beta times that one premium. Proved by handing the engine the country
+   premium twice while the card shows it once: 124 faults.
+2. **No bank gets a WACC.** Every company on the bank template must carry no
+   WACC, must say it is not applicable, and must not have had its beta
+   relevered. Proved by letting banks through: 24 faults.
+3. **A minor unit is normalised.** On every listing quoted in pence, cents or
+   agorot, the price the card shows times the share count it shows must equal
+   the market capitalisation the weights were struck on. Proved by showing the
+   quoted figure in the price row: 10 faults, each naming the factor of 100.
+4. **Every input shows a publisher and a date**, or says why there is no figure.
+   Proved by dropping the date from the risk-free rate: 144 faults.
+5. **An edit reaches the model.** A point on the risk-free rate must move the
+   cost of equity by exactly a point; setting beta must move it by the premium
+   times the change; two points must move the value per share. Proved by cutting
+   the edits off from the engine while the rows still show them: 394 faults.
+
+And one the card exposed rather than introduced: **a currency with no published
+yield gets no cost of equity and no WACC at all.** Proved by putting back the
+`null + premium` arithmetic in `computeWACC`: 22 faults.
+
+The two copies of the index allow-list — `src/data/marketIndex.ts` and
+`api/marketIndex.js`, which cannot import from `src/` — are compared symbol by
+symbol and name by name, because a second copy that nothing checks is a second
+copy that goes stale.
 
 ### The scenarios
 
@@ -327,6 +373,7 @@ and skipped.
 | `payloadSet.mts` | What shape the payloads on disk are, and the refusal to measure a stale set. |
 | `fixtures/paperCompany.mts` | Five years of statements for a company that does not exist. |
 | `fetch-payloads.mts` | Fetches the sweep set through the site's own API handler. |
+| `fetch-indices.mts` | Fetches the 21 market indices a beta is measured against, through the site's own route. 21 requests, four seconds apart. |
 | `tickers.txt` | The sweep set. |
 | `payloads/`, `snapshots/`, `out/` | Working directories, all ignored by git. |
 

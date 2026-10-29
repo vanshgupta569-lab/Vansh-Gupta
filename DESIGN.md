@@ -575,6 +575,24 @@ the bar passes throughout the defect — that is luck, not clearance.
 - **Focus:** a 1px read-oxblood `:focus-visible` outline at 2px offset; the caret
   is read oxblood in every input, textarea and editable cell.
 
+**A panel of assumptions is not a form.** Where a screen shows a list of inputs
+the reader may change — the nine on the risk and cost-of-capital card — they are
+**text with a dashed quiet underline**, not nine bordered boxes. The box appears
+when the row is being typed into and goes again when it is committed. Nine boxes
+reads as something waiting to be filled in; this is a statement of what the model
+used, with corrections available. An edited row keeps its default in quiet beside
+it and a "reset" beside that, so nothing a reader changed can look like what the
+engine said.
+
+### Named Rules
+**The Editable Row Rule.** A figure that looks editable must change the answer
+on the same screen, and the screen must show what the answer was. An input that
+moves a number beside it and not the valuation under it is worse than no input:
+it invites a reader to test an assumption and then lies to them about the
+result. `npm run verify` moves every editable input on the cost-of-capital card
+and asserts the cost of equity and the value per share move with it, and
+`npm run verify:dashboard` does it again through the keyboard in a browser.
+
 ### Navigation
 - **Style:** a fixed top bar of uppercase mono chrome labels at 12px / 0.08em,
   never allowed to wrap. Once the full header scrolls out, a condensed bar slides

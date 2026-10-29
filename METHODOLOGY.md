@@ -947,6 +947,16 @@ automatic movement.
 
 ### The cost of debt
 
+**It is the historical effective rate, and the card labels it as one**
+(2026-10-29). `docs/COST_OF_CAPITAL_SPEC.md` rule 17 wants a currency-matched
+risk-free rate plus a default spread from the company’s rating, synthetic from
+interest coverage where it has none, and rule 18 says interest over average
+borrowings may be shown only as a labelled cross-check. The engine uses that
+cross-check as the rate. It is recorded as `KI-29` in
+`KNOWN_ISSUES.md` with what it is worth, and the card shows the interest
+coverage the synthetic rating would be read off, so the missing step is visible
+rather than implied.
+
 **Each company pays its own rate**, not a flat assumption. Each reported year's
 filed interest over the average of that year's and the prior year's borrowings,
 averaged across the years that have both. The first reported year is skipped: it
@@ -1455,6 +1465,20 @@ WACC           = weight of equity × cost of equity
 in, over the year ending at the company's own balance sheet date**, taken from
 the institution that publishes it.
 
+**And where there is none, there is no cost of equity either** (2026-10-29).
+`null + 0.0423 x 1.02` is 4.31% in JavaScript, and that is what this line
+returned for every company whose currency has no published ten-year yield this
+site can read: 33 of the 177 payloads on disk, in won, renminbi, riyal, new
+Taiwan dollars, Canadian dollars, Australian dollars, Singapore dollars, reais,
+Swiss francs and Danish kroner. The cost of equity came out as the equity risk
+premium alone — 4.29% for TSMC, 4.30% for Samsung — a rate nobody would
+discount an equity at, sitting where a plausible one belongs. Nothing showed
+it, because the valuation was already refused for those companies and no screen
+printed a cost of capital the valuation never used; the risk and cost-of-capital
+card is the screen that would have. `computeWACC` now returns a null cost of
+equity and a null WACC where the rate is null, which standing decision 3
+requires, and the refusal that was already there is what the reader sees.
+
 **Which series, for each currency, and who publishes it.** Not every "ten-year
 government yield" is the same quantity: a par yield, a zero-coupon spot rate
 and the yield on whichever bond is currently the benchmark are three different
@@ -1589,6 +1613,53 @@ tax-effected) — partly followed, see the weights below. `DCF 9` (risk-free rat
 beta lookback and market risk premium drawn from one consistent tenor) — **not
 demonstrable**: the two rates are flat constants with no tenor attached.
 
+### The equity risk premium, and the country premium beside it
+
+**4.23%, and it is the mature-market premium.** The source is Damodaran’s
+country table, captured whole into `src/data/countryRisk.ts` on 2026-10-29 with
+the page’s own vintage — *Last updated: January 5, 2026* — and 178 countries in
+it. The mature-market figure is not stored beside the table but **read off it**:
+every country he rates Aaa carries a country risk premium of nought and a total
+equity risk premium of exactly 4.23%, so the table states it twelve times over,
+and the generator refuses to write the file if those twelve disagree or if any
+row’s total is not its own premium plus the mature one.
+
+**The country risk premium is shown and is not added.** Damodaran’s table puts
+India at 2.85% on top of the mature premium, the United Kingdom at 0.78%, Japan
+at 0.91%, Brazil and Mexico higher. The engine adds none of it: every company,
+in every country, is valued on the mature-market 4.23%. That is a deliberate
+default and not an oversight — switching it on would move the cost of equity of
+every non-US company on the site, which is a decision for Nihar rather than a
+side effect of building a screen. The risk and cost-of-capital card shows the
+premium as its own row, says in as many words that it is **not** in the cost of
+equity above, and has a control that adds it. When it is added it is added
+**once**: the premium in use becomes the mature premium plus that country’s, the
+row renames itself "Equity risk premium (total, country included)" so a reader
+cannot read the two rows as additive on top of a total, and `npm run verify`
+adds it a second time on purpose and watches the check report it.
+
+**The pairing is consistent, and that is worth setting out because it easily
+would not be.** Damodaran defines his premiums against an adjusted rate:
+"Riskfree rate in US dollars = US treasury bond rate minus Default spread for
+the US", then "ERP for US = Implied Expected return on the S&P 500 minus
+Riskfree rate in US dollars", and "Mature market ERP = ERP for US minus Default
+spread for the US". Since the Moody’s downgrade the United States carries a
+default spread of its own — 0.23% in this vintage — so his US premium is 4.46%
+and the mature one 4.23%. An expected return built his way is
+`(Treasury - 0.23%) + 4.46%`. Built ours, it is `Treasury + 4.23%`. **They are
+the same number**: pairing the mature premium with the full government yield
+reproduces his implied expected return exactly, where pairing his US premium
+with the full yield would have overstated it by the US default spread. Kroll’s
+5.0% US premium is paired with a 20-year Treasury and is a different
+convention; it is not used, and its display terms are unverified
+(`DATA_CONSTRAINTS.md`).
+
+**Where the country premium should come from, and does not yet.** Damodaran
+applies country risk by where a company’s revenue and operations are. This site
+has no revenue-by-geography data, so the premium offered is the one for the
+country the company is registered in, and the card says so. Segment and
+geography data is in `docs/DATA_LAYER_PLAN.md` §12 as a Company Brain item.
+
 ### The weights: gross debt at book, equity at market
 
 The weights say how the business is financed — what share of the money in it was
@@ -1679,6 +1750,71 @@ Apple file uses it.
 
 There is also a direct WACC override, used by the slider, which bypasses CAPM
 entirely.
+
+#### The beta we measure, which the model does not use
+
+From 2026-10-29 the site **calculates a beta itself** and shows it on the risk
+and cost-of-capital card. It is not what the model discounts at: the model still
+carries the asset beta of 1.0 above, relevered. Both are on the card, and which
+one the model should use is a decision to be taken rather than a screen’s to
+make (`docs/COST_OF_CAPITAL_SPEC.md` rule 9).
+
+**One recipe, stated.** Five years of **monthly** closes against a broad index
+for the market the share trades on, with **two years weekly** beside it as a
+second estimate. Ordinary least squares on simple returns; the slope is the
+beta, the intercept is reported and not used. Both the raw slope and the
+**Blume-adjusted** figure — two thirds of the slope plus one third of 1 — are
+shown together, because research finds a flat 1.0 sometimes predicts as well as
+either, and showing one alone implies a precision none of them has.
+
+**Price returns, not total returns.** The series this site holds are closes,
+split-adjusted and **not** dividend-adjusted, so the returns exclude dividends.
+The card says so. On a high-yielding share the beta from total returns differs
+slightly; the vendor does publish an adjusted series and reading it is a fetcher
+change rather than a missing source.
+
+**The sampling is in one function for both sides.** A month-end is the last
+close the instrument had IN that calendar month, not the last day of the month;
+a week-end is the last close of the ISO week. Both series go through the same
+sampler, and a pair of returns is kept only if it spans one period on both sides
+— 20 to 45 days monthly, 4 to 12 weekly — and if the two observation dates and
+the two intervals are within five days of each other. That last condition is
+there because the price series is as at the day the payload was fetched and the
+index as at the day it was: measured on BP’s London listing, that put a 26-day
+October against the index’s 29-day October.
+
+**Thresholds, which rule 5 asks be set and documented.** A beta needs at least
+**24** monthly or **52** weekly returns; below that there is no estimate at all.
+It is flagged below **36** monthly or **78** weekly, flagged if the share did
+not move at all in more than **20%** of the periods (thin trading), flagged if
+the index explains less than **5%** of the share’s movement, and flagged if the
+standard error of the slope exceeds **0.30**. Every regression reports its
+observations, R squared, standard error, window, frequency and dates — all five
+of the diagnostics rule 4 requires, on the card rather than behind it.
+
+**The index, by market.** Twenty-one markets, each symbol read at the source
+once before it was written down (`src/data/marketIndex.ts`). Rule 6’s eight
+defaults, with two substitutions it accounts for: **TOPIX is not published on
+the endpoint this site reads** — three symbols for it answered 404 — so Japan
+uses the Nikkei 225, and the **CDAX answered with a single close and no
+history**, so Germany uses the DAX, which rule 6 names as the alternative.
+Thirteen further markets were added so that 172 of the 177 listings get an
+index rather than 101. A market with no verified broad index is **not** given a
+neighbour’s: Norway and Saudi Arabia get no beta at all, and the card says
+which index it would need. The index for a listing follows **the exchange the
+quote came from**, not the country of incorporation, because beta is a property
+of a quoted share.
+
+**No bottom-up beta.** It would be the average unlevered beta of a comparable
+set, relevered on this company’s own structure. A derived company carries no
+comparable set and the average of no companies is not an estimate, so the row
+says that rather than being absent.
+
+**A bank is not unlevered or relevered** (rule 8): deposits are operating
+liabilities, not borrowings chosen for being cheaper than equity. The residual
+income model discounts a bank at the risk-free rate plus the carried beta times
+the premium, with no Hamada step, and the card shows that rate and no WACC at
+all.
 
 ---
 
@@ -3423,7 +3559,7 @@ payload contains.**
 
 ## 24. What is verified, and what is not
 
-`verify/`, five commands, runnable from a fresh checkout.
+`verify/`, six commands, runnable from a fresh checkout.
 
 | Command | What it proves |
 |---|---|
