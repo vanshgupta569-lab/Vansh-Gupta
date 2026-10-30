@@ -1312,9 +1312,27 @@ async function checkValued(page: Page, label: string, source: any, symbol: strin
       ? Math.abs(D.exitMultipleValuation.valuePerShare / D.perpetuity.valuePerShare - 1)
       : null;
   if (spread !== null) {
+    // TO THE POINT, NOT TO THE LAST DIGIT. The page prints this percentage
+    // rounded to nothing after the point, and the page's own model carries the
+    // judgement `openFetched` made on the figures screen while the engine side
+    // here does not — so the two agree to several decimal places and can still
+    // straddle a rounding boundary. The paper company sits at 15.5010% on the
+    // premium of 2026-10-30 and the string comparison turned into a coin toss.
+    // What matters is that the page prints the measured spread rather than a
+    // different number, so the figure is read off the page and compared.
+    const printed = /the two methods are (\d+)% apart/.exec(headline || '');
     const sentence = `the two methods are ${(spread * 100).toFixed(0)}% apart`;
-    if (headline?.includes(sentence)) ok(sentence);
-    else fail('the spread between the two methods', sentence, '(not on the page)');
+    if (!printed) {
+      fail('the spread between the two methods', sentence, '(not on the page)');
+    } else if (Math.abs(Number(printed[1]) - spread * 100) > 1) {
+      fail(
+        'the spread between the two methods',
+        `${(spread * 100).toFixed(2)}%, as the engine measures it`,
+        `the page says ${printed[1]}%`
+      );
+    } else {
+      ok(`${printed[0]} on the page, ${(spread * 100).toFixed(2)}% in the engine`);
+    }
   }
 
   // ---- the full working: both terminal methods, line by line
@@ -1637,11 +1655,22 @@ async function checkCardFromFigures(page: Page) {
     await new Promise((r) => setTimeout(r, COLD_MS));
     const url = new URL(route.request().url());
     const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(fixtureFor(ticker) ?? { ...paperPayload('valued'), ticker }),
-    });
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(fixtureFor(ticker) ?? { ...paperPayload('valued'), ticker }),
+      });
+    } catch {
+      // A HANDLER THAT SLEEPS CAN OUTLIVE ITS OWN CHECK. This one holds the
+      // fetch for three seconds on purpose; a request that arrives in the last
+      // moments is still asleep when the check lifts the route, the context
+      // route answers it instead, and fulfilling then throws "Route is already
+      // handled" — out of a promise nothing awaits, which takes the whole run
+      // down mid-suite with no count at the end. That is the harness racing
+      // itself, not a finding about the product, so it is swallowed here and
+      // nowhere else: every assertion in this file still runs through `fail`.
+    }
   });
 
   const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
@@ -1797,11 +1826,18 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     await new Promise((r) => setTimeout(r, HOLD_MS));
     const url = new URL(route.request().url());
     const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(fixtureFor(ticker) ?? { ...paperPayload('valued'), ticker }),
-    });
+    // Swallowed for the same reason as the three-second handler above: a
+    // sleeping handler whose route is lifted while it sleeps cannot fulfil, and
+    // the throw comes out of a promise nothing awaits.
+    try {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(fixtureFor(ticker) ?? { ...paperPayload('valued'), ticker }),
+      });
+    } catch {
+      /* the check has ended and something else answered the request */
+    }
   });
 
   const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
@@ -2255,7 +2291,12 @@ async function checkCostOfCapitalOnScreen(page: Page) {
     }
   }
 
-  // ---- 4. COUNTRY RISK IS ADDED ONCE, AND SAYS SO ----------------------
+  // ---- 4. COUNTRY RISK IS IN THE PREMIUM, ONCE, AND SAYS SO ------------
+  //
+  // On by default since 2026-10-30 (spec rule 14), so the click here takes it
+  // OUT and the arithmetic runs the other way: the premium must fall by this
+  // country's own premium and the cost of equity by beta times it, and the row
+  // must stop calling itself the total.
   const toggle = card.locator('[data-coc-country-risk]').first();
   if (!(await toggle.count())) {
     fail('the country risk premium row', 'a control saying whether it is included', 'no such control');
@@ -2270,36 +2311,111 @@ async function checkCostOfCapitalOnScreen(page: Page) {
     const keAfter = await valueOf('costOfEquity');
     const erpAfter = await rowValue('erp');
     const erpLabelAfter = ((await card.locator('[data-coc-row="erp"] dt').first().textContent()) || '').trim();
-    if (before !== 'off' || after !== 'on') {
-      fail('the country risk control', 'off by default and on after a click', `${before} then ${after}`);
+    if (before !== 'on' || after !== 'off') {
+      fail('the country risk control', 'included by default, and switched off by a click', `${before} then ${after}`);
     } else if (crp === null || keBefore === null || keAfter === null || erpAfter === null || beta === null || premium === null) {
       fail('the country risk premium', 'a figure on the card', `crp=${crp} keBefore=${keBefore} keAfter=${keAfter}`);
-    } else if (Math.abs(erpAfter - (premium + crp)) > 0.02) {
+    } else if (Math.abs(premium - (erpAfter + crp)) > 0.02) {
       fail(
-        'the premium with country risk on',
-        `${premium}% + ${crp}% = ${(premium + crp).toFixed(2)}%`,
-        `${erpAfter}%`
+        'the premium with country risk in it',
+        `${erpAfter}% mature + ${crp}% country = ${(erpAfter + crp).toFixed(2)}%`,
+        `${premium}% before the switch`
       );
-    } else if (Math.abs(keAfter - keBefore - beta * crp) > 0.02) {
+    } else if (Math.abs(keBefore - keAfter - beta * crp) > 0.02) {
       fail(
-        'what country risk does to the cost of equity',
-        `beta ${beta} times ${crp}% = ${(beta * crp).toFixed(2)} points more`,
-        `${(keAfter - keBefore).toFixed(2)} points — it has been counted twice or not at all`
+        'what taking country risk out does to the cost of equity',
+        `beta ${beta} times ${crp}% = ${(beta * crp).toFixed(2)} points less`,
+        `${(keBefore - keAfter).toFixed(2)} points — it has been counted twice or not at all`
       );
-    } else if (!/total/i.test(erpLabelAfter) || /total/i.test(erpLabelBefore)) {
+    } else if (!/total/i.test(erpLabelBefore) || /total/i.test(erpLabelAfter)) {
       fail(
         'the premium row renaming itself',
-        '"mature market" with country risk off and "total" with it on, so a reader can tell them apart',
+        '"total" with country risk in and "mature market" with it switched off, so a reader can tell them apart',
         `"${erpLabelBefore}" then "${erpLabelAfter}"`
       );
     } else {
       ok(
-        `switching country risk on takes the premium from ${premium}% to ${erpAfter}% and the cost of equity ` +
-          `up by beta times ${crp}%, and the row renames itself "${erpLabelAfter}"`
+        `the premium includes country risk by default (${premium}%), switching it off leaves the ` +
+          `mature-market ${erpAfter}% and takes beta times ${crp}% off the cost of equity, and the row ` +
+          `renames itself "${erpLabelAfter}"`
       );
     }
     await toggle.evaluate((el: any) => el.click());
     await page.waitForTimeout(200);
+  }
+
+  // ---- 4b. THE MEASURED BETA GOES INTO THE MODEL FROM THE SCREEN -------
+  //
+  // Nihar's decision of 2026-10-30: the model's default stays the asset beta of
+  // 1.0 and the reader may put either measured figure in, per company. The
+  // button has to do what it says — the beta row must show the figure printed
+  // on the button, and the valuation must move — because an input that moves a
+  // number beside it and not the valuation under it is the Editable Row Rule's
+  // whole point (DESIGN.md).
+  const useRaw = card.locator('[data-coc-use-beta="monthly-raw"]').first();
+  if (!(await useRaw.count())) {
+    fail('the measured beta', 'a control that puts it into the model', 'no such control');
+  } else {
+    const offered = num(await useRaw.textContent());
+    const betaBefore = await rowValue('beta');
+    const valueBefore = await valueOf('valuePerShare');
+    const choiceBefore = await card.locator('[data-coc-beta-choice]').first().getAttribute('data-coc-beta-choice');
+    await useRaw.evaluate((el: any) => el.click());
+    await page.waitForTimeout(300);
+    const betaAfter = await rowValue('beta');
+    const keAfter = await valueOf('costOfEquity');
+    const rfAfter = await rowValue('riskFree');
+    const erpNow = await rowValue('erp');
+    const valueAfter = await valueOf('valuePerShare');
+    const choiceAfter = await card.locator('[data-coc-beta-choice]').first().getAttribute('data-coc-beta-choice');
+    const warned = await card.locator('[data-coc-beta-warning]').count();
+    if (offered === null || betaBefore === null || betaAfter === null || valueBefore === null || valueAfter === null) {
+      fail(
+        'putting the measured beta into the model',
+        'a beta and a value per share before and after',
+        `offered=${offered} beta ${betaBefore}->${betaAfter} value ${valueBefore}->${valueAfter}`
+      );
+    } else if (Math.abs(betaAfter - offered) > 0.0015) {
+      fail(
+        'the beta the model uses after choosing the measured one',
+        `the ${offered} printed on the button, not a figure levered again`,
+        String(betaAfter)
+      );
+    } else if (choiceBefore !== 'default' || choiceAfter !== 'measured-raw') {
+      fail(
+        'what the card says about where its beta came from',
+        'the default before the click and the measured regression after it',
+        `${choiceBefore} then ${choiceAfter}`
+      );
+    } else if (keAfter === null || rfAfter === null || erpNow === null || Math.abs(rfAfter + betaAfter * erpNow - keAfter) > 0.02) {
+      fail(
+        'the cost of equity on the measured beta',
+        `${rfAfter}% + ${betaAfter} x ${erpNow}%, from the rows on the screen`,
+        `${keAfter}%`
+      );
+    } else if (Math.abs(valueAfter - valueBefore) < 1e-9) {
+      fail(
+        'the value per share after choosing the measured beta',
+        'a different value, because the beta the model discounts at has changed',
+        `${valueBefore} both before and after — the button moved the row and not the model`
+      );
+    } else if (warned > 0) {
+      fail(
+        'the warning beside a measured beta',
+        'nothing, on a fit this company is built to produce exactly',
+        'a warning about a loose fit'
+      );
+    } else {
+      ok(
+        `choosing the measured beta of ${offered} takes the model from ${betaBefore} to ${betaAfter}, the ` +
+          `cost of equity to ${keAfter}% and the value per share from ${valueBefore} to ${valueAfter}`
+      );
+    }
+    const resetAll = card.locator('button', { hasText: 'Reset all' }).first();
+    if (await resetAll.count()) {
+      await resetAll.evaluate((el: any) => el.click());
+      await page.waitForTimeout(250);
+    }
   }
 
   // ---- 5. AN EDIT REACHES THE VALUATION -------------------------------

@@ -292,6 +292,22 @@ ordinary five-year forecast would give, shown on every valuation, and where a
 company sits far above it the panel now says **why** rather than only by how
 much.
 
+**A defect that lived for one day and never got a number.** The risk and
+cost-of-capital card shipped on 2026-10-29 with an editable beta row, and the
+figure a reader put into that row was handed to the engine as an ASSET beta —
+which the engine relevers onto the company's own borrowings before taking a cost
+of equity from it. A beta measured by regressing a share price is already
+levered: the borrowings are in the price history. So the button offering BP's
+measured 0.598 put 0.635 into the model, and the row showed one number while the
+valuation used another, which is the single thing that card exists to prevent. It
+was found on 2026-10-30 while building the switch that lets a reader choose the
+measured beta, and fixed in the same commit: an edit to the beta row now sets
+`betaIsUnlevered` to false, the engine uses the figure as given, and
+`npm run verify` asserts the beta the model uses is the figure printed on the
+button that set it. The engine's own default is still an asset beta of 1.0 and is
+still relevered, which is right for a figure that describes the business rather
+than the share (`METHODOLOGY.md` §14).
+
 **A twentieth defect was found and fixed on the same day**, so it never got a
 number, and it is recorded here because the count above would otherwise be
 misleading. Installing thirteen new qualitative factors pointed six of them at

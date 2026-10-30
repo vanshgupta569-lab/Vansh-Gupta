@@ -584,6 +584,13 @@ used, with corrections available. An edited row keeps its default in quiet besid
 it and a "reset" beside that, so nothing a reader changed can look like what the
 engine said.
 
+**A control that sets a figure is labelled with the figure.** The buttons offering
+a measured beta say *use 1.079*, not "apply" or "use this": a reader can see what
+they are about to put into the model without reading the sentence it came from,
+and the row underneath then shows that same 1.079, which is how they can tell it
+landed. The button that is already in use takes the accent border, so the card
+says which of several offers is the one the model is running on.
+
 ### Named Rules
 **The Editable Row Rule.** A figure that looks editable must change the answer
 on the same screen, and the screen must show what the answer was. An input that

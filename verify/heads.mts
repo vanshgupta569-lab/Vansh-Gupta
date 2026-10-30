@@ -612,12 +612,25 @@ export async function checkHeads(ticker = 'RELIANCE.NS'): Promise<HeadsReport> {
   // reproduces 706.52 on the defaults, and at that same price the other two
   // land within half a paisa. Pinning it also means these three figures now
   // test the ONE-OFFS MECHANISM and nothing else, which is what they are for.
+  //
+  // AND THE COST OF CAPITAL MOVED UNDER THEM ON 2026-10-30, which a pinned price
+  // cannot hold still. The country risk premium went into the engine's default
+  // (spec rule 14, Nihar's decision), and India's 2.85% on top of the
+  // mature-market 4.23% takes this company from 706.52 to 443.96 at the same
+  // price. The three figures below are the same three cases re-struck at the new
+  // premium, and the trio they replace — 706.52, 1,683.09, 1,044.32, struck
+  // against a payload fetched on 2026-10-09 at a 4.23% premium — is written here
+  // rather than deleted, because the point of the three is that the one-offs head
+  // reproduces what "excluded as non-recurring" published, and a reader of this
+  // check is owed the figures it was reconciled against. What they test from here
+  // is the mechanism: all three moved by one deliberate change to the discount
+  // rate and by nothing in the heads.
   const reproduced: HeadsReport['reproduced'] = [];
   const STRUCK_AT = 1170.3;
   const want: [string, any, number][] = [
-    ['RELIANCE.NS on the defaults', {}, 706.52],
-    ['RELIANCE.NS, other operating costs set aside', { otherOperatingCosts: { head: 'oneOffs' } }, 1683.09],
-    ['RELIANCE.NS, SG&A set aside', { sga: { head: 'oneOffs' } }, 1044.32],
+    ['RELIANCE.NS on the defaults', {}, 443.96],
+    ['RELIANCE.NS, other operating costs set aside', { otherOperatingCosts: { head: 'oneOffs' } }, 1173.99],
+    ['RELIANCE.NS, SG&A set aside', { sga: { head: 'oneOffs' } }, 696.48],
   ];
   const relToday: any = readPayload('RELIANCE.NS.json');
   const rel: any = { ...relToday, quote: { ...relToday.quote, price: STRUCK_AT } };

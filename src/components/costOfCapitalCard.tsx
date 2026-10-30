@@ -143,6 +143,7 @@ export const CostOfCapitalCard: React.FC<Props> = ({ payload, ticker }) => {
 
   const headline = card.rows.filter((r) => r.headline);
   const inputs = card.rows.filter((r) => !r.headline);
+  const betaRow = card.rows.find((r) => r.key === 'beta');
 
   return (
     <section aria-label="Risk and cost of capital" className="border border-line bg-panel px-5 py-5 lg:px-6">
@@ -357,7 +358,7 @@ export const CostOfCapitalCard: React.FC<Props> = ({ payload, ticker }) => {
             The index series could not be read, so no beta is measured here: {indexError}
           </p>
         )}
-        <ul className={`${UI} text-quiet mt-2 space-y-1`}>
+        <ul className={`${UI} text-quiet mt-2 space-y-2`}>
           {card.beta.estimates.map((e) => (
             <li key={e.label} data-coc-beta={e.frequency}>
               <span className="text-ink">{e.label}</span>
@@ -368,12 +369,45 @@ export const CostOfCapitalCard: React.FC<Props> = ({ payload, ticker }) => {
                   `R² ${(e.r2! * 100).toFixed(1)}%, standard error ${
                     e.standardError === null ? '—' : e.standardError.toFixed(3)
                   }, ${e.from} to ${e.to}`}
-              {e.caution ? ` (${e.caution})` : ''}
+              {/* THE CAUTION IS A WARNING WHERE THE FIT IS WEAK, not a
+                  parenthesis. A reader about to put this figure into the model
+                  has to meet the reason not to in the same glance as the
+                  button that does it (rule 4's diagnostics, put to use). */}
+              {!e.weak && e.caution ? ` (${e.caution})` : ''}
+              {e.missing || e.raw === null ? null : (
+                <span className="ml-2 inline-flex items-center gap-1.5">
+                  {([
+                    ['raw', e.raw] as const,
+                    ['adjusted', e.adjusted!] as const,
+                  ]).map(([which, value]) => (
+                    <button
+                      key={which}
+                      type="button"
+                      onClick={() => setEdits((x) => ({ ...x, beta: value }))}
+                      data-coc-use-beta={`${e.frequency}-${which}`}
+                      title={`Value this company on a beta of ${value.toFixed(3)}`}
+                      className={`${EYEBROW} border px-2 py-0.5 transition-colors cursor-pointer ${
+                        card.beta.used !== null && Math.abs(card.beta.used - value) < 5e-7
+                          ? 'border-accent-text text-ink'
+                          : 'border-line text-muted hover:text-ink'
+                      }`}
+                    >
+                      use {value.toFixed(3)}
+                    </button>
+                  ))}
+                </span>
+              )}
+              {e.weak && e.caution ? (
+                <p className={`${UI} text-read mt-1 max-w-prose`} data-coc-beta-weak={e.frequency}>
+                  Careful: {e.caution}. On a fit this loose the figure moves the value a long way on very
+                  little evidence.
+                </p>
+              ) : null}
             </li>
           ))}
           <li>{card.beta.bottomUp}</li>
         </ul>
-        <p className={`${UI} text-read max-w-prose mt-2`}>
+        <p className={`${UI} text-read max-w-prose mt-3`} data-coc-beta-choice={card.beta.choice}>
           The model is using{' '}
           <span className="text-ink">
             {card.beta.used === null ? 'no beta' : card.beta.used.toFixed(3)}
@@ -381,9 +415,19 @@ export const CostOfCapitalCard: React.FC<Props> = ({ payload, ticker }) => {
           {card.beta.relevered && card.beta.asset !== null
             ? ` — an asset beta of ${card.beta.asset.toFixed(2)} relevered onto this company's own borrowings`
             : ''}
-          , not the measured figure above. Which of the two it should use is a decision taken deliberately,
-          not by this screen.
+          {card.beta.choice === 'default'
+            ? ', not the measured figure above. The default stays the asset beta of 1.0 because across the ' +
+              'companies that have a measured beta, switching to the slope moves the value per share by a ' +
+              'median 2% and by as much as 515% where the fit explains almost nothing. Put a measured ' +
+              'figure into the model for this company with the buttons above.'
+            : `, which you chose on this card: ${betaRow?.source?.method ?? 'a figure set here'}. ` +
+              'Reset the beta row to put the engine’s default back.'}
         </p>
+        {card.beta.warning && (
+          <p className={`${UI} text-read max-w-prose mt-1`} data-coc-beta-warning>
+            {card.beta.warning}
+          </p>
+        )}
       </div>
 
       {/* ---- what the inputs produce ----------------------------------- */}

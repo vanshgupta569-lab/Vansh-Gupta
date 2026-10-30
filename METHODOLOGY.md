@@ -1624,19 +1624,33 @@ equity risk premium of exactly 4.23%, so the table states it twelve times over,
 and the generator refuses to write the file if those twelve disagree or if any
 row’s total is not its own premium plus the mature one.
 
-**The country risk premium is shown and is not added.** Damodaran’s table puts
-India at 2.85% on top of the mature premium, the United Kingdom at 0.78%, Japan
-at 0.91%, Brazil and Mexico higher. The engine adds none of it: every company,
-in every country, is valued on the mature-market 4.23%. That is a deliberate
-default and not an oversight — switching it on would move the cost of equity of
-every non-US company on the site, which is a decision for Nihar rather than a
-side effect of building a screen. The risk and cost-of-capital card shows the
-premium as its own row, says in as many words that it is **not** in the cost of
-equity above, and has a control that adds it. When it is added it is added
-**once**: the premium in use becomes the mature premium plus that country’s, the
-row renames itself "Equity risk premium (total, country included)" so a reader
-cannot read the two rows as additive on top of a total, and `npm run verify`
-adds it a second time on purpose and watches the check report it.
+**The country risk premium is added, by default, since 2026-10-30.** Damodaran’s
+table puts India at 2.85% on top of the mature premium, the United Kingdom at
+0.78%, Japan at 0.91%, Brazil and Mexico higher. Until this date the engine added
+none of it and every company in every country was valued on the mature-market
+4.23%. **Nihar’s decision on 2026-10-30 was to switch it on**, as
+`docs/COST_OF_CAPITAL_SPEC.md` rule 14 says, because discounting a rupee cash
+flow at a mature-market premium says the Indian economy carries mature-market
+risk, and the table that says otherwise is published, dated and free to read.
+
+**What it cost, measured before it was switched on.** Of the valued companies, 50
+carry a premium above nought, and their value per share falls between **3.0% and
+37.2%, median 4.1%**. The largest: Reliance at −37.2% and Infosys at −30.2% on
+India’s 2.85%, Toyota at −35.0% on Japan’s 0.91%, MercadoLibre at −29.5% on
+Uruguay’s 2.07%, Teva at −29.1% on Israel’s, and 31 American companies at −4.9%
+at worst on the 0.23% the United States now carries. Nothing moves the other way:
+a premium is never negative, so this can only lower a value.
+
+**It is added once, and the engine and the card add the same one.** The premium
+`deriveModel` hands the engine is the mature premium plus that country’s, worked
+out in one expression; the card reads that figure rather than composing its own,
+and the premium row renames itself "Equity risk premium (total, country
+included)" so a reader cannot read the two rows as additive on top of a total.
+The reader can switch it off on the card, which runs the engine again on the
+mature premium alone and says in the row that it has been switched off.
+`npm run verify` adds it a second time on purpose (124 faults), leaves the engine
+on the mature premium while the card shows the total (122 faults), and defaults
+the card the other way (923 faults), and watches the checks report each.
 
 **The pairing is consistent, and that is worth setting out because it easily
 would not be.** Damodaran defines his premiums against an adjusted rate:
@@ -1654,11 +1668,17 @@ with the full yield would have overstated it by the US default spread. Kroll’s
 convention; it is not used, and its display terms are unverified
 (`DATA_CONSTRAINTS.md`).
 
-**Where the country premium should come from, and does not yet.** Damodaran
-applies country risk by where a company’s revenue and operations are. This site
-has no revenue-by-geography data, so the premium offered is the one for the
-country the company is registered in, and the card says so. Segment and
-geography data is in `docs/DATA_LAYER_PLAN.md` §12 as a Company Brain item.
+**Which country’s premium, and the label that says so.** Damodaran applies country
+risk by where a company’s revenue and operations are. This site has no
+revenue-by-geography data, so the premium used is the one for the country the
+company is **incorporated** in, and every screen that shows it carries the words
+*by country of incorporation until revenue-by-country data exists* (rule 14, and
+`COUNTRY_RISK_BASIS` in `src/data/costOfCapital.ts`, which is the one copy of
+that sentence). Segment and geography data is in `docs/DATA_LAYER_PLAN.md` §12 as
+a Company Brain item; when it arrives the premium follows revenue and this
+paragraph changes with it. The known understatement is a company registered in a
+mature market that earns in a risky one, and the overstatement is its mirror:
+`DATA_CONSTRAINTS.md` records both and what the source would have to publish.
 
 ### The weights: gross debt at book, equity at market
 
@@ -1751,13 +1771,44 @@ Apple file uses it.
 There is also a direct WACC override, used by the slider, which bypasses CAPM
 entirely.
 
-#### The beta we measure, which the model does not use
+#### The beta we measure, and when the model uses it
 
 From 2026-10-29 the site **calculates a beta itself** and shows it on the risk
-and cost-of-capital card. It is not what the model discounts at: the model still
-carries the asset beta of 1.0 above, relevered. Both are on the card, and which
-one the model should use is a decision to be taken rather than a screen’s to
-make (`docs/COST_OF_CAPITAL_SPEC.md` rule 9).
+and cost-of-capital card. It is not what the model discounts at by default: the
+default stays the asset beta of 1.0 above, relevered.
+
+**Nihar’s decision on 2026-10-30** (rule 9, which forbids changing this
+silently): keep the asset beta of 1.0 as the model default, and let the reader
+put either measured figure — raw or Blume-adjusted — into the model one company
+at a time, with a plain warning where the fit is too loose to carry it.
+
+**Why the default did not change, measured over every payload on disk.** On the
+58 valued companies with a measured beta, switching to the **raw slope** moves
+the value per share from **−50.6% to +515.3%, median −1.9%**; 42 of the 58 move
+more than 20%. The Blume-adjusted figure is tamer and still wide: **−40.8% to
++146.1%, median −0.8%**. The problem is not the spread but where it comes from —
+the largest moves all sit on the weakest fits. Sony’s slope of 0.31 would raise
+its value per share by 515% on an R² of **5%**; AbbVie’s 0.21 by 187% on an R² of
+**2%**; Coca-Cola’s 0.29 by 132% on 7%; Philip Morris’s 0.38 by 114% on 6%. A
+flat 1.0 is a weak estimator that is wrong by a little everywhere; a slope fitted
+through a cloud is a weak estimator that is wrong by a lot in a few places, and
+research finds the flat 1.0 sometimes predicts as well as either. So the site
+offers the measurement, shows what it is worth, and does not impose it.
+
+(An earlier run of the same measurement, reported to Nihar with the decision,
+gave −50.9% to +595.4% and a median of −7.0%. It was taken before two things in
+this same job: the country premium went into the engine’s default, and a chosen
+beta stopped being relevered a second time. The figures above are after both and
+are the ones that stand.)
+
+**A chosen beta is not levered again.** The engine’s own default is an *asset*
+beta and `computeWACC` relevers it onto this company’s borrowings, which is right
+for a figure describing the business. A figure from this card is the other kind:
+a regression on the share price is already levered, because the borrowings are in
+the price history. So an edit to the beta row sets `betaIsUnlevered` to false and
+the model uses the figure as given. Without that, the button offering BP’s
+measured 0.598 put 0.635 into the model — the row showing one number while the
+valuation used another, which is the one failure this card exists to prevent.
 
 **One recipe, stated.** Five years of **monthly** closes against a broad index
 for the market the share trades on, with **two years weekly** beside it as a
@@ -1785,12 +1836,24 @@ October against the index’s 29-day October.
 
 **Thresholds, which rule 5 asks be set and documented.** A beta needs at least
 **24** monthly or **52** weekly returns; below that there is no estimate at all.
-It is flagged below **36** monthly or **78** weekly, flagged if the share did
-not move at all in more than **20%** of the periods (thin trading), flagged if
-the index explains less than **5%** of the share’s movement, and flagged if the
-standard error of the slope exceeds **0.30**. Every regression reports its
-observations, R squared, standard error, window, frequency and dates — all five
-of the diagnostics rule 4 requires, on the card rather than behind it.
+It is flagged below **36** monthly or **78** weekly, and flagged if the share did
+not move at all in more than **20%** of the periods (thin trading). Two further
+thresholds decide whether the fit is **too loose to carry a valuation**, and they
+are the ones the warning on the card is tied to:
+
+- **R² under 0.10** — the index explains less than a tenth of this share’s
+  movement, so the slope is a line through a cloud. 11 of the 58 valued companies
+  with a measured beta are under it, and they hold the largest moves.
+- **a standard error above 0.25** — a 95% interval of roughly half a point of beta
+  either side, which on a premium of 4.23% is two points of cost of equity either
+  side.
+
+Either one makes the estimate `weak`, and the card prints a warning beside the
+button that would put it into the model. 164 of the 341 estimates on the payloads
+on disk are weak by one of the two — mostly the two-year weekly ones, which have
+the shorter window. Every regression reports its observations, R squared,
+standard error, window, frequency and dates — all five of the diagnostics rule 4
+requires, on the card rather than behind it.
 
 **The index, by market.** Twenty-one markets, each symbol read at the source
 once before it was written down (`src/data/marketIndex.ts`). Rule 6’s eight

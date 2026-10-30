@@ -147,7 +147,7 @@ nowhere better to put them and each is cheap:
   editing a capture, deleting another and rewriting a pointer in place: six
   faults, each naming what happened.
 
-### The risk and cost-of-capital card: five rules, and the regression
+### The risk and cost-of-capital card: five rules, two defaults, and the regression
 
 Measured over every payload on disk, with the index series from
 `npm run verify:indices` so a real beta can be struck for every company
@@ -185,6 +185,23 @@ Then the five rules of the card itself:
 And one the card exposed rather than introduced: **a currency with no published
 yield gets no cost of equity and no WACC at all.** Proved by putting back the
 `null + premium` arithmetic in `computeWACC`: 22 faults.
+
+Then the two defaults Nihar decided on 2026-10-30:
+
+6. **The country premium is in the premium the ENGINE discounts at**, not only in
+   the one the card prints. The two are compared company by company to the
+   twelfth decimal place, the engine is asked to say what the premium follows
+   (rule 14's label), and switching the premium off on the card must return the
+   mature-market figure and say so in the row. Proved by leaving the engine on
+   the mature premium while the card shows the total (122 faults) and by
+   defaulting the card the other way (923 faults).
+7. **Either measured beta can be put into the model, per company.** The figure
+   the model uses must be the figure printed on the button that set it — not that
+   figure relevered a second time, which is what it was for one day — the card
+   must say which of the two it is using, the cost of equity must follow, and the
+   warning must appear on exactly the estimates whose R² is under 10% or whose
+   standard error is above 0.25. Proved by making the weak-fit test always
+   false: 164 faults.
 
 The two copies of the index allow-list — `src/data/marketIndex.ts` and
 `api/marketIndex.js`, which cannot import from `src/` — are compared symbol by

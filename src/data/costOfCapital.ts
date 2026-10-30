@@ -175,6 +175,27 @@ export const blume = (raw: number): number => (2 / 3) * raw + (1 / 3) * 1;
 /** Rule 5's thresholds, set here and documented in `METHODOLOGY.md`. */
 export const BETA_MINIMUM = { monthly: 24, weekly: 52 };
 export const BETA_COMFORTABLE = { monthly: 36, weekly: 78 };
+
+// WHEN A MEASURED BETA IS A WARNING RATHER THAN A MEASUREMENT.
+//
+// A reader may put either measured figure into the model (Nihar, 2026-10-30),
+// so the card has to say out loud when the figure it is offering is barely
+// evidence. Two thresholds, both published:
+//
+//   R squared under a tenth — the index explains less than a tenth of this
+//   share's movement, so the slope is a line through a cloud. Eleven of the 59
+//   valued companies with a measured beta are under it, and they hold the
+//   largest moves: Sony's slope of 0.31 on an R squared of 5% would raise its
+//   value per share by 595%.
+//
+//   A standard error above a quarter — a 95% interval of roughly half a point
+//   of beta either side, which on a premium of 4.23% is two points of cost of
+//   equity either side. A number known that loosely cannot carry a valuation.
+export const BETA_WEAK_R2 = 0.1;
+export const BETA_WEAK_STANDARD_ERROR = 0.25;
+/** True where either threshold is breached: the fit is too loose to lean on. */
+export const betaIsWeak = (r2: number | null, standardError: number | null): boolean =>
+  (isNum(r2) && r2 < BETA_WEAK_R2) || (isNum(standardError) && standardError > BETA_WEAK_STANDARD_ERROR);
 /** Above this share of periods with no price change at all, the listing is
  *  treated as thinly traded and the estimate is flagged. */
 export const THIN_TRADING_SHARE = 0.2;
@@ -197,6 +218,10 @@ export interface BetaEstimate {
   flatShare: number | null;
   /** Why this estimate should not be leaned on, or null. */
   caution: string | null;
+  /** True where the fit is too loose to carry a valuation: see
+   *  `BETA_WEAK_R2` and `BETA_WEAK_STANDARD_ERROR`. The card prints a warning
+   *  beside the button that would put this figure into the model. */
+  weak: boolean;
   /** Why there is no estimate at all, or null. */
   missing: string | null;
 }
@@ -306,6 +331,7 @@ export function betaEstimate(
     unpaired: 0,
     flatShare: null,
     caution: null,
+    weak: false,
     missing: null,
   };
   if (!stockDaily?.dates?.length) {
@@ -360,12 +386,12 @@ export function betaEstimate(
       `the share did not move at all in ${Math.round(flatShare * 100)}% of those periods, which is thin trading`
     );
   }
-  if (fit.r2 < 0.05) {
+  if (fit.r2 < BETA_WEAK_R2) {
     cautions.push(
       `the index explains ${(fit.r2 * 100).toFixed(1)}% of this share's movement, so the slope is barely a relationship`
     );
   }
-  if (isNum(fit.standardError) && Math.abs(fit.standardError) > 0.3) {
+  if (isNum(fit.standardError) && Math.abs(fit.standardError) > BETA_WEAK_STANDARD_ERROR) {
     cautions.push(`the standard error is ${fit.standardError.toFixed(2)}, which is wide`);
   }
 
@@ -383,6 +409,7 @@ export function betaEstimate(
     unpaired,
     flatShare,
     caution: cautions.length ? cautions.join('; ') : null,
+    weak: betaIsWeak(fit.r2, isNum(fit.standardError) ? fit.standardError : null),
     missing: null,
   };
 }
@@ -402,6 +429,16 @@ export interface RowSource {
 }
 
 export type EditKey = 'riskFreePct' | 'beta' | 'maturePct' | 'crpPct' | 'countryRisk';
+
+// COUNTRY RISK IS IN THE PREMIUM UNLESS THE READER TAKES IT OUT (spec rule 14,
+// decided by Nihar on 2026-10-30). `deriveModel` adds it to the premium the
+// engine carries, so a card that defaulted the other way would be showing one
+// premium while the model discounted at another — the one thing this card is
+// for. The switch is the reader's, and switching it off runs the engine again
+// on the mature-market premium alone.
+export const COUNTRY_RISK_ON_BY_DEFAULT = true;
+/** Rule 14's label, in one place because three screens print it. */
+export const COUNTRY_RISK_BASIS = 'by country of incorporation until revenue-by-country data exists';
 
 export interface CardRow {
   key: string;
@@ -466,6 +503,11 @@ export interface CostOfCapitalCard {
     /** The asset beta it was relevered from, where it was. */
     asset: number | null;
     relevered: boolean;
+    /** Where the beta in use came from: the engine's default, one of the two
+     *  measured figures chosen on this card, or a figure typed in. */
+    choice: 'default' | 'measured-raw' | 'measured-adjusted' | 'typed';
+    /** The warning for a chosen measured beta whose fit is too loose, or null. */
+    warning: string | null;
     estimates: BetaEstimate[];
     index: MarketIndex | null;
     indexReason: string | null;
@@ -511,7 +553,7 @@ export function costOfCapitalFor(
   // downstream reads `usedPct`; nothing adds a premium to it again.
   const maturePct = isNum(edits.maturePct) ? edits.maturePct : MATURE_ERP_PCT;
   const crpPct = isNum(edits.crpPct) ? edits.crpPct : risk ? risk.crpPct : null;
-  const countryRisk = Boolean(edits.countryRisk) && isNum(crpPct);
+  const countryRisk = (edits.countryRisk ?? COUNTRY_RISK_ON_BY_DEFAULT) && isNum(crpPct);
   const usedPct = maturePct + (countryRisk ? (crpPct as number) : 0);
 
   // A COMPANY THE ENGINE REFUSES STILL HAS A CARD. Four of the 177 payloads on
@@ -546,6 +588,20 @@ export function costOfCapitalFor(
     cc.riskFreeRate = riskFreeUsed;
     cc.equityBeta = betaInput;
     cc.marketRiskPremium = usedPct / 100;
+    // A BETA GIVEN ON THIS CARD IS THE BETA THE MODEL USES, NOT ONE TO BE
+    // LEVERED AGAIN.
+    //
+    // The engine's own default is an ASSET beta of 1.0 and it relevers it onto
+    // this company's borrowings, which is right for a figure that describes the
+    // business rather than the share. A figure from this card is the other kind:
+    // a regression on the share price is already levered — the borrowings are in
+    // the price history — and relevering it would count this company's gearing
+    // twice. On BP that turned a measured 0.598 into 0.635 in the model while
+    // the button offering it said 0.598, so the row showed one number and the
+    // valuation used another, which is the single thing this card exists to
+    // prevent. A typed figure is treated the same way, because the reader types
+    // it into a row that shows the beta in use.
+    if (isNum(edits.beta)) cc.betaIsUnlevered = false;
   }
 
   let M: any = null;
@@ -701,6 +757,42 @@ export function costOfCapitalFor(
     notes: rf?.terms ? [`Terms: ${rf.terms}`] : undefined,
   });
 
+  // WHICH BETA THE MODEL IS USING, AND WHERE IT CAME FROM. The default is the
+  // engine's asset beta of 1.0 (rule 9: that default was not changed, and the
+  // measurements behind the decision are in METHODOLOGY.md section 3). A reader
+  // may put either measured figure in instead, and then the row has to say so
+  // rather than going on calling it the default.
+  const sameFigure = (a: number | null | undefined, b: number) => isNum(a) && Math.abs(a - b) < 5e-7;
+  const chosenFrom = isNum(edits.beta)
+    ? estimates.find((e) => sameFigure(edits.beta, e.raw ?? NaN) || sameFigure(edits.beta, e.adjusted ?? NaN)) ?? null
+    : null;
+  const betaChoice: 'default' | 'measured-raw' | 'measured-adjusted' | 'typed' = !isNum(edits.beta)
+    ? 'default'
+    : chosenFrom && sameFigure(edits.beta, chosenFrom.raw ?? NaN)
+      ? 'measured-raw'
+      : chosenFrom
+        ? 'measured-adjusted'
+        : 'typed';
+  const betaMethod =
+    betaChoice === 'default'
+      ? bank
+        ? 'the engine’s default beta of 1.0, neither unlevered nor relevered (rule 8)'
+        : 'the engine’s default asset beta of 1.0, relevered onto this company’s own borrowings'
+      : betaChoice === 'typed'
+        ? 'a figure typed in on this card'
+        : `the ${chosenFrom!.label} regression measured here, ` +
+          `${betaChoice === 'measured-raw' ? 'raw' : 'Blume-adjusted'}, chosen on this card`;
+  // The warning the card prints beside a chosen measured beta, in one place so
+  // the screen and the checks say the same thing.
+  const betaWarning =
+    chosenFrom && chosenFrom.weak
+      ? `This beta is measured to ${
+          isNum(chosenFrom.r2) ? `an R² of ${(chosenFrom.r2 * 100).toFixed(1)}%` : 'no fit at all'
+        } and a standard error of ${
+          isNum(chosenFrom.standardError) ? chosenFrom.standardError.toFixed(2) : '—'
+        }. A fit that loose will move the value a long way on very little evidence.`
+      : null;
+
   const betaNotes: string[] = [];
   if (!bank && isNum(W?.assetBeta) && isNum(W?.debtToEquity)) {
     betaNotes.push(
@@ -728,14 +820,17 @@ export function costOfCapitalFor(
     value: betaUsed,
     format: 'multiple',
     missing: betaUsed === null ? (deriveRefusal ?? 'The engine carries no beta for this company.') : undefined,
-    source: betaUsed === null ? null : { publisher: 'Marginalia', asOf: quoteAsOf ?? '', method: 'the engine’s default asset beta of 1.0' },
+    source: betaUsed === null ? null : { publisher: 'Marginalia', asOf: quoteAsOf ?? '', method: betaMethod },
     edits: 'beta',
     base: isNum(baseBeta) ? baseBeta : null,
     about:
-      'How much this share has moved with its market. **The number in use is the engine’s default — an ' +
-      'asset beta of 1.0, relevered onto this company’s own borrowings — and not the measured figure ' +
-      'below.** Which of the two the model uses is a decision taken deliberately rather than by this ' +
-      'screen (rule 9). The measured estimates are ours, regressed here from one stated recipe: five years ' +
+      'How much this share has moved with its market. **The model starts from the engine’s default — an ' +
+      'asset beta of 1.0, relevered onto this company’s own borrowings — and not from the measured ' +
+      'figure below**, because across the companies that have one, switching to the measured slope moves ' +
+      'the value per share by a median 2% and by as much as 515% on a fit that explains 5% of the share’s ' +
+      'movement. The measured figures are offered under the estimates below and can be put into the model ' +
+      'one company at a time, with a warning where the fit is too loose to carry it (rule 9, and ' +
+      'METHODOLOGY.md section 3). The measured estimates are ours, regressed here from one stated recipe: five years ' +
       'of monthly price returns against a broad local index, with two years weekly beside it. Price ' +
       'returns, not total returns — dividends are not in the series this site holds — and split-adjusted. ' +
       'Raw and Blume-adjusted are shown together because research finds a flat 1.0 sometimes predicts as ' +
@@ -752,8 +847,9 @@ export function costOfCapitalFor(
       publisher: COUNTRY_RISK_PUBLISHER,
       asOf: COUNTRY_RISK_VINTAGE,
       method: countryRisk
-        ? `the mature-market premium of ${maturePct.toFixed(2)}% plus ${country}’s country risk premium of ${(crpPct as number).toFixed(2)}%`
-        : `the mature-market premium, with no country risk premium added`,
+        ? `the mature-market premium of ${maturePct.toFixed(2)}% plus ${country}’s country risk premium of ` +
+          `${(crpPct as number).toFixed(2)}%, ${COUNTRY_RISK_BASIS}`
+        : `the mature-market premium, with this country’s own risk premium switched off on this card`,
       url: COUNTRY_RISK_SOURCE,
     },
     edits: 'maturePct',
@@ -792,15 +888,17 @@ export function costOfCapitalFor(
     base: risk ? risk.crpPct / 100 : null,
     about:
       'The extra return asked for holding equity in one country rather than a mature market, read from a ' +
-      'sovereign rating and scaled to equities. **It is shown here and is NOT in the cost of equity above ' +
-      'unless it says it is.** Switching it on adds it to the mature-market premium once; the premium row ' +
-      'then renames itself to say so, which is the only way a reader can tell the two apart. Where ' +
-      'revenue by geography exists it should follow the revenue rather than the country of incorporation, ' +
-      'and it does not yet, so this is the country the company is registered in.',
+      'sovereign rating and scaled to equities. **It is in the premium above, and in the premium the engine ' +
+      'itself discounts at, unless this row says it has been switched off.** It is added once: the premium ' +
+      'row renames itself to say which of the two premiums it is, which is the only way a reader can tell ' +
+      'them apart. It follows the country the company is incorporated in — Damodaran’s own rule is that it ' +
+      'should follow where the revenue and the operations are, and no free source publishes revenue by ' +
+      'country for these companies, so it is the register’s country until one does.',
     notes: [
       countryRisk
-        ? 'Included in the premium above.'
-        : 'Not included in the premium above: the cost of equity is struck on the mature-market premium alone.',
+        ? `Included in the premium above, ${COUNTRY_RISK_BASIS}.`
+        : 'Switched off on this card: the cost of equity above is struck on the mature-market premium alone, ' +
+          'which is not the premium the engine carries by default.',
       ...(risk ? [`${risk.country}, Moody’s ${risk.rating}, as at ${COUNTRY_RISK_VINTAGE}`] : []),
     ],
   } as CardRow);
@@ -968,6 +1066,8 @@ export function costOfCapitalFor(
       used: betaUsed,
       asset: isNum(W?.assetBeta) ? W.assetBeta : null,
       relevered: !bank && isNum(W?.assetBeta),
+      choice: betaChoice,
+      warning: betaWarning,
       estimates,
       index: choice.index,
       indexReason: choice.reason,

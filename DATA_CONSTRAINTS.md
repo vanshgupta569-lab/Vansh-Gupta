@@ -815,9 +815,32 @@ equity risk premium in Damodaran’s country table, whose own page is dated
 `src/data/countryRisk.ts`, 178 countries, with that vintage stored beside every
 figure. The mature figure is read off the table rather than typed in: the twelve
 Aaa sovereigns all carry a country premium of nought and a total premium of
-exactly 4.23%. The country premiums are shown on the risk and cost-of-capital
-card and **not added to the cost of equity** — see `METHODOLOGY.md` §14 for why
-that is a decision rather than an oversight.
+exactly 4.23%. **Since 2026-10-30 the country premium is added to it** (spec rule
+14, Nihar’s decision), so the premium the engine discounts at is 4.46% for an
+American company, 5.01% for a British one and 7.08% for an Indian one — see
+`METHODOLOGY.md` §14 for the measurement that went with the decision.
+
+**Which country’s premium, and what that cannot know.** Two gaps sit behind the
+figure, and the label on every screen that shows it — *by country of
+incorporation until revenue-by-country data exists* — names the first of them.
+
+- **Incorporation, not revenue.** Damodaran’s own rule is that the premium
+  follows where the revenue and the operations are. No free source publishes
+  these companies’ revenue by country, so the premium follows the register.
+  **Bound:** a company registered in a mature market that earns in a risky one is
+  discounted too cheaply, and its mirror too dearly, by the difference between
+  the two countries’ premiums times beta — at the extremes of this table, 3.90
+  points of premium, which on a beta of 1 is 3.90 points of cost of equity. **What
+  would remove it:** revenue by geography, a segment-reporting item in
+  `docs/DATA_LAYER_PLAN.md` §12; it is in the filings and not in a
+  machine-readable form any free source exposes.
+- **The country itself is the vendor’s field, not a register.** It is
+  `profile.country` from the quote feed, so a company that has redomiciled can be
+  carried under its former country until the vendor catches up, and a company
+  with no country in the feed gets the mature premium alone and a row saying so.
+  **What would remove it:** the legal-entity registers in
+  `docs/DATA_LAYER_PLAN.md` — the LEI record carries a registered address — which
+  is stage 0 work rather than a gap in what anyone publishes.
 
 **His licence, and Kroll’s.** Damodaran states that his data carries no strings
 attached and that permission need not be asked, and asks for acknowledgement;

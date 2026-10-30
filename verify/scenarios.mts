@@ -2762,10 +2762,18 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 //   must move the cost of equity by exactly a point and must move the value per
 //   share; so must a change to beta and to the premium.
 {
-  console.log('\n=== the risk and cost-of-capital card: five rules ===');
-  const { costOfCapitalFor, betaEstimate, regress, blume, BETA_MINIMUM } = await import(
-    `file:///${REPO}/src/data/costOfCapital.ts`
-  );
+  console.log('\n=== the risk and cost-of-capital card: five rules, and the two defaults ===');
+  const {
+    costOfCapitalFor,
+    betaEstimate,
+    regress,
+    blume,
+    BETA_MINIMUM,
+    BETA_WEAK_R2,
+    BETA_WEAK_STANDARD_ERROR,
+    COUNTRY_RISK_ON_BY_DEFAULT,
+  } = await import(`file:///${REPO}/src/data/costOfCapital.ts`);
+  const { deriveModel } = await import(`file:///${REPO}/src/data/deriveModel.js`);
   const { INDICES, INDEX_SYMBOLS, indexForListing, monthEnds, weekEnds } = await import(
     `file:///${REPO}/src/data/marketIndex.ts`
   );
@@ -2894,6 +2902,9 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   let addedOnce = 0;
   let editsLanded = 0;
   let editsMovedValue = 0;
+  let premiumAgrees = 0;
+  let betaSwitched = 0;
+  let weakWarned = 0;
   let indexless = 0;
   let noRate = 0;
   const betasSeen: number[] = [];
@@ -2993,18 +3004,56 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
       }
     }
 
-    // ---- 5. COUNTRY RISK IS ADDED ONCE --------------------------------
+    // ---- 5. COUNTRY RISK IS ADDED ONCE, AND IT IS ON BY DEFAULT -------
+    //
+    // Switched on by Nihar on 2026-10-30 (spec rule 14). Two things have to
+    // hold together: the card must add the country premium exactly once, and
+    // the premium the card shows must be the premium `deriveModel` hands the
+    // engine. A card that defaulted one way while the engine discounted the
+    // other would be the one failure this screen exists to prevent, and it
+    // would be invisible — both numbers look like ordinary premiums.
     const risk = countryRiskFor(payload?.profile?.country);
     if (risk && card.costOfEquity !== null && card.beta.used !== null) {
-      // off: the premium is the mature-market one, and the label says so
-      if (!near(card.premium.usedPct, MATURE_ERP_PCT, 1e-12)) {
-        faults.push(`${file}: with country risk off the premium is ${card.premium.usedPct}%, not the mature ${MATURE_ERP_PCT}%`);
-      }
-      if (card.premium.kind !== 'mature-market') {
-        faults.push(`${file}: country risk is off and the premium calls itself "${card.premium.kind}"`);
-      }
-      const on = costOfCapitalFor(payload, { index, edits: { countryRisk: true } })!;
       const expected = MATURE_ERP_PCT + risk.crpPct;
+      if (!COUNTRY_RISK_ON_BY_DEFAULT) {
+        faults.push('the card no longer defaults to the country premium, which rule 14 requires');
+      }
+      // THE ENGINE'S OWN PREMIUM, NOT THE CARD'S IDEA OF IT.
+      try {
+        const engine = deriveModel(payload);
+        const enginePct = engine.dcf.costOfCapital.marketRiskPremium * 100;
+        if (!near(enginePct, expected, 1e-9)) {
+          faults.push(
+            `${file}: the engine discounts at a premium of ${enginePct.toFixed(4)}% where the table gives ` +
+              `${expected.toFixed(4)}% for ${risk.country} — the card and the model disagree`
+          );
+        } else if (!near(card.premium.usedPct, enginePct, 1e-9)) {
+          faults.push(
+            `${file}: the card shows a premium of ${card.premium.usedPct.toFixed(4)}% and the engine uses ` +
+              `${enginePct.toFixed(4)}%`
+          );
+        } else {
+          premiumAgrees++;
+        }
+        if (!/country of incorporation/.test(String(engine.provenance.wacc))) {
+          faults.push(`${file}: the engine does not record what the country premium follows (rule 14)`);
+        }
+      } catch {
+        // A company the engine refuses has no premium of its own to compare.
+      }
+      // off: the premium is the mature-market one, and the label says so
+      const switchedOff = costOfCapitalFor(payload, { index, edits: { countryRisk: false } })!;
+      if (!near(switchedOff.premium.usedPct, MATURE_ERP_PCT, 1e-12)) {
+        faults.push(`${file}: with country risk off the premium is ${switchedOff.premium.usedPct}%, not the mature ${MATURE_ERP_PCT}%`);
+      }
+      if (switchedOff.premium.kind !== 'mature-market') {
+        faults.push(`${file}: country risk is off and the premium calls itself "${switchedOff.premium.kind}"`);
+      }
+      const offRow = switchedOff.rows.find((r: any) => r.key === 'crp');
+      if (!/switched off/i.test(String(offRow?.notes?.[0]))) {
+        faults.push(`${file}: country risk is off and the row does not say so: "${offRow?.notes?.[0]}"`);
+      }
+      const on = card;
       if (!near(on.premium.usedPct, expected, 1e-9)) {
         faults.push(
           `${file}: ${MATURE_ERP_PCT}% mature plus ${risk.crpPct}% country should be ${expected.toFixed(2)}%, ` +
@@ -3102,6 +3151,73 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
         faults.push(`${file}: a beta was shown without its R squared or its standard error (rule 4)`);
       }
     }
+
+    // ---- 7. THE READER CAN PUT THE MEASURED BETA IN THE MODEL --------
+    //
+    // Nihar's decision of 2026-10-30: the default stays the asset beta of 1.0
+    // and the measured figure is offered per company, with a warning where the
+    // fit is too loose to carry it. So three things are checked here — the
+    // figure lands in the model, the card says which of the two it is using,
+    // and the warning is present exactly when the thresholds say it should be.
+    for (const e of card.beta.estimates as any[]) {
+      if (e.raw === null) continue;
+      const shouldWarn =
+        (isNum(e.r2) && e.r2 < BETA_WEAK_R2) ||
+        (isNum(e.standardError) && e.standardError > BETA_WEAK_STANDARD_ERROR);
+      if (e.weak !== shouldWarn) {
+        faults.push(
+          `${file} ${e.label}: R² ${e.r2} and standard error ${e.standardError} ` +
+            `${shouldWarn ? 'breach' : 'are inside'} the thresholds and the estimate says weak=${e.weak}`
+        );
+      }
+      if (card.costOfEquity === null || card.beta.used === null) continue;
+      for (const [which, value] of [['measured-raw', e.raw], ['measured-adjusted', e.adjusted]] as const) {
+        const picked = costOfCapitalFor(payload, { index, edits: { beta: value as number } })!;
+        if (picked.beta.choice !== which) {
+          faults.push(
+            `${file}: putting the ${e.label} ${which === 'measured-raw' ? 'raw' : 'adjusted'} beta of ` +
+              `${(value as number).toFixed(3)} into the model leaves the card calling it ` +
+              `"${picked.beta.choice}"`
+          );
+        }
+        const betaRow = picked.rows.find((r: any) => r.key === 'beta');
+        if (!/measured here/.test(String(betaRow?.source?.method))) {
+          faults.push(
+            `${file}: a measured beta is in use and the row still credits ` +
+              `"${betaRow?.source?.method}"`
+          );
+        }
+        if (picked.costOfEquity === null) {
+          faults.push(`${file}: choosing the measured beta left no cost of equity`);
+          continue;
+        }
+        // The cost of equity is the rate plus THIS beta times the premium.
+        const rf = picked.rows.find((r: any) => r.key === 'riskFree')!.value as number;
+        const byHand = rf + (picked.beta.used as number) * (picked.premium.usedPct / 100);
+        if (!near(picked.costOfEquity, byHand, 1e-9)) {
+          faults.push(
+            `${file}: on a chosen beta of ${(value as number).toFixed(3)} the cost of equity is ` +
+              `${picked.costOfEquity} and its own rows give ${byHand}`
+          );
+        }
+        const warned = picked.beta.warning !== null;
+        if (warned !== Boolean(e.weak)) {
+          faults.push(
+            `${file} ${e.label}: the fit is ${e.weak ? 'too loose to lean on' : 'inside both thresholds'} ` +
+              `and the card ${warned ? 'warns about it' : 'says nothing'}`
+          );
+        } else if (warned) {
+          weakWarned++;
+        }
+        if (which === 'measured-raw' && !near(e.raw, card.beta.used ?? NaN, 1e-9)) {
+          if (near(picked.beta.used ?? NaN, card.beta.used ?? NaN, 1e-9)) {
+            faults.push(`${file}: choosing the measured beta did not change the beta the model uses`);
+          } else {
+            betaSwitched++;
+          }
+        }
+      }
+    }
   }
 
   // The sampling is the one thing both sides of every regression share, so it
@@ -3156,6 +3272,17 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
       `  country risk is added once on ${addedOnce} companies: the premium in use is the mature ` +
         `${MATURE_ERP_PCT}% plus that country’s own, the row renames itself to say so, and the cost of ` +
         `equity is the rate plus beta times that one premium (Damodaran, ${COUNTRY_RISK_VINTAGE})`
+    );
+    console.log(
+      `  it is on by default, and on ${premiumAgrees} companies the premium the card shows is the premium ` +
+        'the engine itself discounts at, to the twelfth decimal place; switching it off on the card ' +
+        'returns the mature-market premium and the row says it has been switched off'
+    );
+    console.log(
+      `  either measured beta can be put into the model: it moved the beta on ${betaSwitched} listings, ` +
+        'the cost of equity followed on every one of them, and the card named the figure it had been ' +
+        `given rather than the default; the warning appears on all ${weakWarned} fits with an R² under ` +
+        `${(BETA_WEAK_R2 * 100).toFixed(0)}% or a standard error above ${BETA_WEAK_STANDARD_ERROR}, and on none of the rest`
     );
     console.log(
       `  a point on the risk-free rate moves the cost of equity by exactly a point on ${editsLanded} ` +

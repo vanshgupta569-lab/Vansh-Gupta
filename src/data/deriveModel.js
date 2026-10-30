@@ -13,6 +13,13 @@
 // Every derived figure is recorded in `provenance` so the dashboard can show
 // where each assumption came from rather than presenting it as fact.
 
+import {
+  countryRiskFor,
+  MATURE_ERP_PCT,
+  COUNTRY_RISK_VINTAGE,
+  COUNTRY_RISK_PUBLISHER,
+} from './countryRisk';
+
 const FORECAST_YEARS = 5;
 // The rate the terminal value capitalises at, and the rate the forecast fades
 // to so it arrives there rather than stepping. One constant, because the two
@@ -2040,6 +2047,29 @@ export function deriveModel(fetched) {
       : '') +
     `, FY${claimsYear}`;
 
+  // THE EQUITY RISK PREMIUM, WITH THIS COUNTRY'S OWN RISK IN IT (spec rule 14,
+  // decided by Nihar on 2026-10-30; METHODOLOGY.md section 3 records it).
+  //
+  // Damodaran's mature-market premium plus the country risk premium of the
+  // country this company is incorporated in. Discounting a rupee cash flow at a
+  // mature-market premium says the Indian economy carries mature-market risk,
+  // and the table that says otherwise is published, dated and free to read.
+  //
+  // ONE EXPRESSION, IN ONE PLACE. The risk and cost-of-capital card reads the
+  // premium the engine carries and switches the country part off and on from
+  // this same figure; nothing downstream adds a country premium again. Measured
+  // when it was switched on: the 50 valued companies with a premium above nought
+  // lose a median 4.1% of value per share, an Indian company up to 37.2%, and the
+  // 31 American ones 4.9% at worst on the 0.23% the United States now carries.
+  //
+  // BY INCORPORATION, NOT BY REVENUE, and labelled as such wherever it is shown.
+  // Damodaran's own rule is that the premium follows where the revenue and the
+  // operations are; no free source publishes revenue by country for these
+  // companies, so this is the country of incorporation until one does.
+  const incorporatedIn = fetched?.profile?.country ?? fetched?.listing?.country ?? null;
+  const countryPremium = countryRiskFor(incorporatedIn);
+  const equityRiskPremium = (MATURE_ERP_PCT + (countryPremium ? countryPremium.crpPct : 0)) / 100;
+
   const dcf = {
     sharePrice: price,
     sharePriceDate: (fetched.fetchedAt || new Date().toISOString()).slice(0, 10),
@@ -2105,8 +2135,9 @@ export function deriveModel(fetched) {
       riskFreeRate: isNum(riskFree?.rate) ? riskFree.rate : null,
       // Not fetchable in any currency: an equity risk premium is an estimate
       // that reputable people disagree about by two points, not a published
-      // fact. Shown as the assumption it is (DATA_CONSTRAINTS.md).
-      marketRiskPremium: 0.0423,
+      // fact. Shown as the assumption it is (DATA_CONSTRAINTS.md). The
+      // mature-market premium plus this country's own, worked out above.
+      marketRiskPremium: equityRiskPremium,
       // 1.0 is the no-data default, and for a derived company it is the
       // ASSET beta: the risk of the business before borrowing. The engine
       // relevers it on this company's own debt and equity, which is what
@@ -2128,7 +2159,16 @@ export function deriveModel(fetched) {
   provenance.terminalGrowth =
     `${(TERMINAL_GROWTH * 100).toFixed(1)}% — a flat default, not company-specific. The forecast growth ` +
     'rate fades to it, so the last forecast year and the perpetuity beyond it grow at the same rate';
-  provenance.wacc = 'CAPM with a beta of 1.0 — no comparable set is derived';
+  provenance.wacc =
+    'CAPM with a beta of 1.0 — no comparable set is derived — and an equity risk premium of ' +
+    `${(equityRiskPremium * 100).toFixed(2)}%: ${MATURE_ERP_PCT.toFixed(2)}% mature market` +
+    (countryPremium
+      ? ` plus ${countryPremium.crpPct.toFixed(2)}% for ${countryPremium.country}, rated ` +
+        `${countryPremium.rating}, by country of incorporation until revenue-by-country data exists`
+      : incorporatedIn
+        ? ` and no country risk premium: the table does not carry ${incorporatedIn}`
+        : ' and no country risk premium: the data does not say which country this company is based in') +
+    ` (${COUNTRY_RISK_PUBLISHER}, ${COUNTRY_RISK_VINTAGE})`;
   provenance.segments =
     'single combined revenue line — segment detail is not machine-readable from free sources';
 
