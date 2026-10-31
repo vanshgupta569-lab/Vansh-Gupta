@@ -1166,12 +1166,57 @@ growth rate. Basic shares in a forecast year are the average of opening and
 closing; the dilutive impact is held at the last reported year's absolute
 difference between diluted and basic.
 **Convention:** `IS 18` (basic shares from the filing's cover page) — **not
-followed**: the diluted weighted-average count is used for both, because that is
-what both sources publish. `IS 19` (diluted shares rebuilt by the treasury stock
+followed** as the count: the diluted weighted-average count is used for both,
+because that is what both sources publish. The cover page is read for a
+different purpose, below. `IS 19` (diluted shares rebuilt by the treasury stock
 method) — **not followed**: option and warrant detail is not machine-readable.
 The engine carries the reported diluted count, which already embeds the filer's
 own treasury-stock calculation for the reported years, and holds the dilutive
 increment flat thereafter.
+
+**The scale of a filed share count is settled against the filing's own cover
+page** (2026-10-31, `KI-30`). An XBRL fact in the `shares` unit is meant to be
+an absolute count and all but a handful of registrants file one. **McDonald's
+does not**: its 10-K tags `WeightedAverageNumberOfDilutedSharesOutstanding` as
+**716.4**, the figure as it appears in a statement headed *in millions*. Nothing
+downstream could tell that from a company with 716 shares in issue, so the count
+was divided by a million again and McDonald's market capitalisation came out as
+**0.18 against borrowings of 43,848** — an equity weight of 0.0004% and a WACC
+that was its cost of debt alone.
+
+The filing settles it itself. Form 10-K's cover asks for the number of shares
+outstanding, and the answer is tagged `dei:EntityCommonStockSharesOutstanding`
+— an absolute count from every registrant, McDonald's included: **710,398,642 at
+2026-01-31** against the 716.4 inside. So the ratio of the two says what scale
+the statements are in. It can only be a **power of a thousand**: a ratio within
+a fifth of 1, 1,000 or 1,000,000 is taken as the scale and applied to every
+share count in the payload, annual and quarterly alike; anything else is a
+different question — a second share class, a year of buybacks — and is left as
+filed and recorded rather than guessed at. The band is a fifth either way
+because the cover date and the fiscal year end are up to a year apart and a
+company can buy back several per cent of itself in that time, which is nowhere
+near the thousand that separates one scale from the next.
+
+**A corrected count says it is corrected** (standing decision 5). The payload
+carries `shareScale` — the factor, the cover count, its date and the figure as
+filed — the derivation puts it in `provenance.shares`, and the risk and
+cost-of-capital card prints it beside the share price, the way it prints the
+pence-to-pounds correction.
+
+**What the ratio establishes, and what it does not.** It establishes an order of
+magnitude, and nothing finer. The cover date and the fiscal year end are up to a
+year apart, so the two counts are never expected to agree exactly, and a ratio
+away from 1 is read as a question rather than an answer. On 2026-11-01, over the
+77 SEC filers that carry a cover-page count, three came back with a ratio that is
+neither a match nor a scale, and reading them is what found `KI-31` (a share
+count filed before a stock split, on `APH` and `CRWD`) and `KI-32` (two banks
+whose statements stop years back). The third, `MA`, turned out to be the check
+itself falling short rather than the data: Mastercard's cover count in
+`companyfacts` is from 2010, because a company with more than one share class
+tags the fact once per class and `companyfacts` carries only undimensioned facts
+(`DATA_CONSTRAINTS.md`, *No cover-page share count for a company with more than
+one share class*). Seven filers carry no cover count at all for the same reason,
+and their counts are used as filed and recorded as unchecked.
 
 ---
 

@@ -1029,6 +1029,7 @@ export function costOfCapitalFor(
   // ---- what the price was, and what it was quoted in (rule 25) ------------
   const conversion = payload?.priceConversion ?? null;
   const minorUnitFactor = isNum(conversion?.minorUnitFactor) ? conversion.minorUnitFactor : null;
+  const shareScale = payload?.shareScale ?? null;
   rows.push({
     key: 'price',
     label: 'Share price',
@@ -1056,13 +1057,29 @@ export function costOfCapitalFor(
       'London, cents in Johannesburg, agorot in Tel Aviv — it is brought to the main unit before anything ' +
       'is multiplied by it, because a market capitalisation a hundred times too big makes the equity ' +
       'weight 100% and the cost of capital the cost of equity.',
-    notes:
-      minorUnitFactor !== null && minorUnitFactor !== 1
+    notes: [
+      ...(minorUnitFactor !== null && minorUnitFactor !== 1
         ? [
             `quoted in ${conversion.quotedCurrency}, ${Math.round(1 / minorUnitFactor)} to the ` +
               `${conversion.tradingCurrency}: brought to the main unit before use`,
           ]
-        : undefined,
+        : []),
+      // THE OTHER UNIT A MARKET CAPITALISATION CAN BE A MILLION TIMES WRONG IN
+      // (`KI-30`). A handful of filers tag their share counts the way their
+      // statements print them — in millions — and the count is corrected against
+      // the filing's own cover page before anything is multiplied by it. A
+      // corrected figure says it is corrected (standing decision 5).
+      ...(shareScale && shareScale.factor !== 1
+        ? [
+            `this filing tags its share count as ${Number(shareScale.filedAs).toLocaleString('en-US')} ` +
+              `where its own cover page reports ` +
+              `${Math.round(shareScale.coverCount).toLocaleString('en-US')} shares outstanding at ` +
+              `${shareScale.coverAsOf}: the count is in ` +
+              `${shareScale.factor === 1e6 ? 'millions' : 'thousands'} and is corrected before the ` +
+              'market capitalisation is struck',
+          ]
+        : []),
+    ],
   });
 
   // ---- the value the inputs produce --------------------------------------

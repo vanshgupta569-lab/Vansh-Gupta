@@ -1898,6 +1898,31 @@ export function deriveModel(fetched) {
     ? rows[rows.length - 1].dilutedShares / 1e6
     : null;
 
+  // WHERE THE COUNT CAME FROM, AND WHETHER ITS SCALE WAS CORRECTED (`KI-30`).
+  // The fetcher settles the scale against the filing's own cover page and says
+  // what it did; standing decision 5 asks that a corrected figure never pass as
+  // a filed one, so the record travels with the number.
+  const shareScale = fetched?.shareScale ?? null;
+  if (isNum(shares)) {
+    const asCount = (v) => Math.round(v).toLocaleString('en-US');
+    provenance.shares =
+      `${asCount(shares)} million diluted shares, the weighted average filed for FY${lastRow.fiscalYear}` +
+      (shareScale && shareScale.factor !== 1
+        ? `, CORRECTED FOR SCALE: the filing tags ${shareScale.filedAs.toLocaleString('en-US')}, and its ` +
+          `own cover page reports ${asCount(shareScale.coverCount)} shares outstanding at ` +
+          `${shareScale.coverAsOf}, so the statements count in ` +
+          `${shareScale.factor === 1e6 ? 'millions' : 'thousands'} and every share count is multiplied ` +
+          `by ${shareScale.factor.toLocaleString('en-US')}`
+        : shareScale && shareScale.unexplained
+          ? `. Its cover page reports ${asCount(shareScale.coverCount)} shares outstanding at ` +
+            `${shareScale.coverAsOf}, which is ${shareScale.ratio.toFixed(2)} times the filed count and ` +
+            'not a scale: taken as filed and recorded rather than guessed at'
+          : shareScale
+            ? `, confirmed against its own cover page: ${asCount(shareScale.coverCount)} shares ` +
+              `outstanding at ${shareScale.coverAsOf}`
+            : ', with no cover-page count in the data to settle its scale against');
+  }
+
   // Without a share count there is no such thing as a value per share. Dividing
   // by nothing produced an intrinsic value of infinity and a market
   // capitalisation of zero for Reliance Infrastructure, which reported no

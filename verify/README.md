@@ -208,6 +208,27 @@ The two copies of the index allow-list — `src/data/marketIndex.ts` and
 symbol and name by name, because a second copy that nothing checks is a second
 copy that goes stale.
 
+### A share count is a count
+
+An XBRL fact in the `shares` unit is meant to be an absolute count, and all but
+a handful of registrants file one. McDonald's tags **716.4** — the figure as its
+statements print it, in millions — and the derivation divided it by a million
+again, so its market capitalisation came out as 0.18 against borrowings of
+43,848: an equity weight of 0.0004% and a WACC that was the cost of debt alone
+(`KI-30`). The filing settles its own scale, because the cover page's shares
+outstanding is an absolute count from every registrant.
+
+Checked over every payload: the scale is a power of a thousand and carries the
+cover count and date it was settled against, the correction is applied to the
+statements and not merely recorded, the corrected count agrees with the cover
+page within a fifth or says why not, **no company weighs equity at under a tenth
+of a per cent**, and on every company the market capitalisation the weights are
+struck on is the price times the share count the card shows.
+
+The last one is **constructed**, because a fixed payload cannot show the fault:
+McDonald's share counts are put back into the scale its filing tags them in, and
+the check that catches a share count in the wrong unit has to report it.
+
 ### The cost of debt: a rating, not a history
 
 Measured over every payload on disk. Until 2026-10-31 the engine discounted at

@@ -3296,6 +3296,186 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 // ---------------------------------------------------------------------------
+// A SHARE COUNT IS A COUNT (`KI-30`)
+// ---------------------------------------------------------------------------
+//
+// An XBRL fact in the `shares` unit is meant to be an absolute count and all but
+// a handful of registrants file one. McDonald's tags 716.4 — the figure as its
+// statements print it, in millions — and nothing could tell that from a company
+// with 716 shares in issue, so the derivation divided it by a million again and
+// the market capitalisation came out as 0.18 against borrowings of 43,848: an
+// equity weight of 0.0004% and a WACC that was the cost of debt alone.
+//
+// The filing settles its own scale: the cover page's shares outstanding is an
+// absolute count from every registrant. Four things are checked here, and the
+// last is a constructed case, because once the fault is fixed the payload set
+// cannot show it any more.
+{
+  console.log('\n=== a share count is a count, not a figure in millions ===');
+  const { deriveModel } = await import(`file:///${REPO}/src/data/deriveModel.js`);
+  const { buildModel, computeWACC } = await import(`file:///${REPO}/src/engine/model.js`);
+
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+
+  let settled = 0;
+  let corrected = 0;
+  let unsettled = 0;
+  let weighed = 0;
+  const BAND = 0.2;
+  const corrections: string[] = [];
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const rows = Array.isArray(payload?.statements) ? payload.statements : [];
+    const filed = [...rows].reverse().find((r: any) => isNum(r?.dilutedShares) && r.dilutedShares > 0);
+    const scale = payload?.shareScale ?? null;
+
+    // ---- 1. THE SCALE IS SETTLED, AND SAYS WHAT IT DID -----------------
+    if (scale) {
+      settled++;
+      if (![1, 1e3, 1e6].includes(scale.factor)) {
+        faults.push(`${file}: a share-count scale of ${scale.factor}, which is not a power of a thousand`);
+      }
+      if (!isNum(scale.coverCount) || !scale.coverAsOf) {
+        faults.push(`${file}: a scale record with no cover-page count or no date behind it`);
+      }
+      if (scale.factor !== 1) {
+        corrected++;
+        corrections.push(
+          `${file.replace('.json', '')} tags ${scale.filedAs} and its cover page reports ` +
+            `${Math.round(scale.coverCount).toLocaleString('en-US')} at ${scale.coverAsOf}`
+        );
+      }
+      // the correction was applied to the statements, not only recorded
+      if (filed && isNum(scale.filedAs) && scale.factor !== 1) {
+        const latest = [...rows].reverse().find((r: any) => isNum(r?.dilutedShares) && r.dilutedShares > 0);
+        if (latest && Math.abs(latest.dilutedShares / (scale.filedAs * scale.factor) - 1) > 1e-9) {
+          faults.push(
+            `${file}: the scale says ${scale.filedAs} x ${scale.factor} and the statements carry ` +
+              `${latest.dilutedShares}`
+          );
+        }
+      }
+      // and the corrected count agrees with the cover page, or says why not
+      if (filed && isNum(scale.coverCount)) {
+        const ratio = scale.coverCount / filed.dilutedShares;
+        if (Math.abs(ratio - 1) > BAND && !scale.unexplained) {
+          faults.push(
+            `${file}: ${Math.round(filed.dilutedShares).toLocaleString('en-US')} shares filed against ` +
+              `${Math.round(scale.coverCount).toLocaleString('en-US')} on the cover page — ` +
+              `${ratio.toFixed(3)} times, which is neither a match nor a scale, and nothing says so`
+          );
+        }
+      }
+    } else if (payload?.source === 'SEC EDGAR' && filed) {
+      unsettled++;
+    }
+
+    // ---- 2. NOBODY IS FINANCED ALMOST ENTIRELY BY DEBT BY ACCIDENT ------
+    //
+    // The symptom KI-30 was measured by. A real company can be geared to 95% and
+    // more; what no company is, is financed 99.99% by borrowing, and that is what
+    // a market capitalisation a million times too small produces.
+    try {
+      const source = deriveModel(payload);
+      const M = buildModel(source);
+      const W = computeWACC(M, source);
+      if (isNum(W.weightEquity) && isNum(W.marketCap) && W.marketCap > 0) {
+        weighed++;
+        if (W.weightEquity < 0.001) {
+          faults.push(
+            `${file}: an equity weight of ${(W.weightEquity * 100).toFixed(4)}% — a market ` +
+              `capitalisation of ${Math.round(W.marketCap).toLocaleString('en-US')} against borrowings ` +
+              `of ${Math.round(W.grossDebt).toLocaleString('en-US')}, which is a share count in the ` +
+              'wrong unit rather than a company'
+          );
+        }
+        // and the capitalisation really is the price times the count
+        const price = payload?.quote?.price;
+        const shares = source?.dcf?.dilutedSharesCount;
+        const factor = isNum(payload?.priceConversion?.minorUnitFactor) ? payload.priceConversion.minorUnitFactor : 1;
+        if (isNum(price) && isNum(shares)) {
+          const byHand = price * shares;
+          if (Math.abs(byHand / W.marketCap - 1) > 1e-12) {
+            faults.push(
+              `${file}: a market capitalisation of ${W.marketCap} against ${byHand} from the price and ` +
+                `the share count the card shows (minor unit factor ${factor})`
+            );
+          }
+        }
+      }
+    } catch {
+      // a company the engine refuses has no weights to check
+    }
+  }
+
+  // ---- 3. THE FAULT, PUT BACK ON PURPOSE -------------------------------
+  //
+  // CONSTRUCTED, because a fixed payload cannot show it. McDonald's payload with
+  // its share counts returned to the scale the filing tags them in is exactly
+  // what was on disk until 2026-10-31, and the check above has to report it.
+  {
+    const file = 'MCD.json';
+    const full = path.join(PAYLOADS, file);
+    if (!fs.existsSync(full)) {
+      faults.push('MCD.json is not on disk, so the share-count fault could not be put back');
+    } else {
+      const payload = JSON.parse(fs.readFileSync(full, 'utf8'));
+      const scale = payload?.shareScale;
+      if (!scale || scale.factor === 1) {
+        faults.push(
+          `MCD.json carries no share-count correction (${JSON.stringify(scale)}): either the fetcher ` +
+            'stopped reading the cover page, or McDonald’s has started tagging an absolute count'
+        );
+      } else {
+        const asFiled = JSON.parse(JSON.stringify(payload));
+        for (const row of asFiled.statements) {
+          if (isNum(row.dilutedShares)) row.dilutedShares /= scale.factor;
+        }
+        const source = deriveModel(asFiled);
+        const M = buildModel(source);
+        const W = computeWACC(M, source);
+        if (!(W.weightEquity < 0.001)) {
+          faults.push(
+            `with the correction undone MCD weighs equity at ${(W.weightEquity * 100).toFixed(4)}%, so ` +
+              'the check that catches a share count in the wrong unit would not have caught it'
+          );
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the share counts:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  } else {
+    console.log(
+      `  ${settled} payloads settle their share counts against their own cover page, and ${corrected} ` +
+        `of them are in a scale the cover page contradicts: ${corrections.join('; ') || 'none'}`
+    );
+    console.log(
+      `  ${weighed} companies weigh equity against debt, none of them under a tenth of a per cent, and ` +
+        'on every one the market capitalisation the weights are struck on is the price times the share ' +
+        'count the card shows'
+    );
+    console.log(
+      `  ${unsettled} SEC filers carry no cover-page count to settle against, and the fault put back on ` +
+        'purpose — McDonald’s share counts returned to the scale its filing tags them in — is reported ' +
+        'by the check above'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // THE COST OF DEBT IS A RATING, NOT A HISTORY (`KI-29`, spec rules 17 and 18)
 // ---------------------------------------------------------------------------
 //

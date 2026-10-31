@@ -853,6 +853,64 @@ ours, and its display terms are unverified. There is no official global equity
 risk premium; the OECD’s country risk classification is a classification and
 not a premium, and is not used as one.
 
+### No cover-page share count outside the SEC
+
+**Source:** the vendor feed. **Affects:** every company whose figures do not
+come from SEC XBRL.
+
+An SEC filer's own cover page states its shares outstanding as an absolute
+count, and `METHODOLOGY.md` §10 uses it to settle what scale the statements'
+share counts are in — which is how `KI-30` was fixed. **The vendor feed
+publishes no equivalent.** For a company sourced that way the counts are taken
+as they come, and a feed that one day reported a count in millions would not be
+caught the same way. **Bound:** a factor of a thousand or a million on the
+market capitalisation, and so on the equity weight and the WACC — which is what
+it was worth on McDonald's before the fix. **What limits it:** the feed has
+reported absolute counts on every company measured, and the listing-comparability
+check already refuses a listing whose shares outstanding and filed count differ
+by more than 1.5× either way, which catches a factor of a thousand wherever the
+feed reports both.
+
+### No cover-page share count for a company with more than one share class
+
+**Source:** SEC XBRL (`companyfacts`). **Affects:** 9 of the 84 SEC filers in
+the set.
+
+The cover page of a 10-K asks for the number of shares outstanding, and the
+answer is tagged `dei:EntityCommonStockSharesOutstanding` — the fact
+`METHODOLOGY.md` §10 settles the scale of a filed share count against. **A
+company with more than one class of stock answers it once per class**, tagging
+each with a class dimension, and `companyfacts` carries only facts with no
+dimensions. So for those filers the fact is either missing entirely or frozen at
+whatever year the company last tagged a single undimensioned total.
+
+**Measured on 2026-11-01.** Seven SEC filers carry no cover-page count at all —
+`BRK-B`, `DELL`, `GOOGL`, `META`, `PLTR`, `SHOP`, `V` — and every one of the
+seven has multiple share classes, which is the whole of the explanation. Two
+more carry one only from 2010, the year each stopped tagging a single total:
+`ACN` (2010-03-19) and `MA` (2010-10-27, 122,530,193 against the 906,000,000
+Mastercard now files — a 0.135 ratio that is sixteen years of a ten-for-one
+split and buybacks, not a scale). Of the 77 that do settle against a cover
+page, 71 are dated within six months and 3 more within eighteen; the third of
+the older ones is `BLK`, at 2025-04-30, whose ratio is 0.963 and matches.
+
+**Bound: none on the scale check, and it is worth saying why.** The ratio only
+has to establish an order of magnitude. A cover count sixteen years old still
+differs from a current one by a factor of a few at the very most, and the three
+candidate scales are a thousand apart, so a stale cover page can still tell a
+count in millions from a count in units — which is the only thing it is asked
+to do. What a stale cover page cannot do is the second, weaker job: confirm that
+a count that looks right really is right. On `MA` that confirmation is simply
+absent, and the payload says so rather than implying a check that did not
+happen. On the seven with no cover count the counts are taken as filed,
+unchecked and recorded as unchecked.
+
+**What limits it:** the class-level facts do exist in the filings themselves —
+in each 10-K's own XBRL instance, which carries the dimensions `companyfacts`
+strips. Reading them means fetching and parsing the instance document per
+filing rather than one JSON per company, which is a different data layer and
+not a gap in what the SEC publishes.
+
 ### No issuer rating any free source publishes
 
 **Source:** neither. **Affects:** every company that borrows — 171 of the 177

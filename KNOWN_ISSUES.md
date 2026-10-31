@@ -29,8 +29,18 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-30`. **Next free: `KI-31`.** Retired, meaning
-  fixed and never to be reused: `KI-29` (the cost of debt was the historical
+- Taken so far: `KI-1` to `KI-32`. **Next free: `KI-33`.** Retired, meaning
+  fixed and never to be reused: `KI-30` (`MCD`'s payload carried 716.4 diluted
+  shares where every other SEC filer carries the absolute count, because
+  McDonald's tags the figure as its statements print it — in millions — and the
+  derivation divided it by a million again; its market capitalisation came out
+  as 0.18 against borrowings of 43,848, an equity weight of 0.0004% and a WACC
+  that was its cost of debt alone. Fixed 2026-10-31 by reading the scale off the
+  filing's own cover page, which every registrant tags as an absolute count
+  (`dei:EntityCommonStockSharesOutstanding`, 710,398,642 at 2026-01-31 against
+  the 716.4 inside), applying it to every share count in the payload and
+  recording what was done; `npm run verify` puts the fault back on purpose and
+  watches the check report it), `KI-29` (the cost of debt was the historical
   effective rate — interest over average borrowings — which rule 18 allows only
   as a cross-check, and 59 of 137 companies came out borrowing below their own
   government's ten-year yield; fixed 2026-10-31 by striking it as the
@@ -115,32 +125,104 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-### `KI-30` — one share count a million times too small
+Both were found on 2026-11-01 by the sweep `KI-30` asked for — *check whether any
+other company has the same fault*. Neither is the same fault: no other company in
+the set tags a share count in millions. Both were found because the cover-page
+check `KI-30` installed compares a filed share count against the filing’s own
+cover page, and three companies came back with a ratio that is neither a match
+nor a scale. The mechanism left all three alone and said so, which is what it is
+built to do; what the ratios then revealed is below.
 
-**What is wrong.** `MCD`’s payload carries **716.4** diluted shares where every
-other SEC filer carries the absolute count, and the derivation divides by a
-million to put share counts in millions. So McDonald’s market capitalisation
-comes out as **0.18** against borrowings of **43,848**, in the same units.
+### `KI-31` — a share count from before a stock split
 
-**Measured on 2026-10-29**, over the 117 companies that produce a cost of
-capital: **one** weights equity at under a tenth of a per cent, and it is this
-one — an equity weight of **0.0004%**, a debt weight of **100.0%**, and a WACC
-of **6.21%**, which is the after-tax cost of debt with no cost of equity in it
-at all. Every other company in the set weights equity between 0.4% and 100%
-with a market capitalisation that ties to its own price and share count.
+**What is wrong.** The share count comes from the latest annual filing and the
+price comes from today. When a company splits its stock **after** its last 10-K,
+the two stop belonging to each other: the price is post-split and the count is
+pre-split, so the market capitalisation is too small by the split ratio and the
+value per share is too large by it. Nothing in the engine notices, because a
+split leaves no trace in the income statement — the filer restates the count in
+its *next* annual report, and until then the only record of it is the cover page.
 
-**What it moves: no published value.** McDonald’s discounted cash flow is
-refused for an unrelated reason, so no value per share is shown for it and none
-is wrong. What the defect would do if the refusal lifted is replace the cost of
-equity with the cost of debt, which on this company is about two points of
-WACC.
+**Measured on 2026-11-01**, over the 77 SEC filers that carry a cover-page count:
+**two** are mid-split.
 
-**How it was found.** By putting the equity weight on a screen. It had been in
-the engine for as long as the weights have, and nothing displayed them.
+| | last 10-K count | cover page | split |
+|---|---|---|---|
+| `APH` Amphenol | 1,277,500,000 (FY2025) | 2,469,261,188 at 2026-10-27 | **2 for 1** |
+| `CRWD` CrowdStrike | 250,576,000 (FY2026, year ended 31 January) | 1,023,934,842 at 2026-08-20 | **4 for 1** |
 
-**What the fix needs**: measuring how the SEC facts tag diluted shares across
-the set, because one payload in the wrong unit means the fetcher trusts a unit
-it should check. It is a data-layer job and it is not this one.
+Both are confirmed at source rather than inferred from the ratio: Amphenol’s own
+cover-page series runs 1,230,234,445 at 2026-04-28 and 1,232,983,457 at
+2026-07-28 before doubling to 2,469,261,188 at 2026-10-27, and CrowdStrike’s runs
+252,098,440 and 254,564,820 before quadrupling. Amphenol’s history shows the same
+thing from its last split: FY2023 was filed as 620,600,000 in the FY2023 10-K and
+restated to 1,241,200,000 in the FY2024 one.
+
+**What it moves.** Amphenol is the one of the two that carries a valuation, and
+it is the largest single error this file has ever recorded on a published number:
+its market capitalisation is **101,306** against the **202,612** the same price
+and the split-adjusted count give, its equity weight 86.73% against 92.89%, its
+WACC 8.53% against 8.63%, and its value per share **89.58 against 43.99 — the
+pre-split count overstates it by 103.7%**. Against a price of 79.30 that turns a
+45% overvaluation into a 13% undervaluation: the sign of the answer is wrong, not
+merely the size. CrowdStrike runs an operating loss and is refused a discounted
+cash flow for that reason, so no value per share of its is wrong; its market
+capitalisation is 62,752 against 251,007 and its equity weight 98.83% against
+99.70%, which moves nothing that is shown.
+
+**What the fix needs.** The cover page already carries the answer and the payload
+already records the ratio. What it does not have is the right to act on it: a
+ratio of 2.00 could be a split or a share issue that doubled the company, and
+telling them apart needs either the restated prior-year count from the next 10-Q
+(`WeightedAverageNumberOfDilutedSharesOutstanding` for the quarter, which is
+filed post-split) or the split ratio itself, which filers tag on the stock-split
+note. Both are in the same XBRL facts the fetcher already holds, so this is a
+data-layer job of a known shape and not a guess. **Left alone deliberately until
+then** (`CLAUDE.md`: refuse rather than approximate) — and left alone at Nihar’s
+explicit instruction on 2026-11-01, pending his decision on how to treat it.
+
+### `KI-32` — two banks’ statements stop years back
+
+**What is wrong.** Which fiscal years a company has is anchored on revenue: the
+years that carry one of the four revenue tags in `US_TAGS.revenue` are the years
+the model is built from. Morgan Stanley and Wells Fargo both stopped tagging
+`Revenues` and now tag **`RevenuesNetOfInterestExpense`**, which is not in the
+list. So their models are built from whatever years still carry the old tag.
+
+**Measured on 2026-11-01**, over the 176 payloads in the set: **two** have a
+latest fiscal year before FY2024, and these are the two. The other 174 end at
+FY2025 (128) or FY2026 (46).
+
+| | latest year shown | revenue shown | what FY2025 actually was |
+|---|---|---|---|
+| `MS` Morgan Stanley | **FY2014** | 34,275 | 70,645 |
+| `WFC` Wells Fargo | **FY2019** | 85,063 | 83,699 |
+
+Confirmed at source: `us-gaap:Revenues` has its last annual value at 2014-12-31
+for Morgan Stanley and 2019-12-31 for Wells Fargo, while
+`us-gaap:RevenuesNetOfInterestExpense` runs to 2025-12-31 for both.
+
+**What it moves: no published value, and every published figure.** Both are on
+the bank template, so neither gets a WACC or a discounted cash flow and no value
+per share of either is wrong. What is wrong is everything the company page and
+the financials tab show: Morgan Stanley is presented as a company half its
+current size with figures **eleven years** out of date, and the chart overlays,
+the per-share figures and the quarterly bridge are all struck against them. A
+reader has no way to tell, because every figure is correctly labelled with the
+year it belongs to — the years are simply the wrong ones.
+
+**What the fix needs.** Adding the tag is one line, and that is the reason to be
+careful rather than quick: `Revenues` and `RevenuesNetOfInterestExpense` are not
+the same quantity — the second is already net of interest expense — so a bank
+whose years come from one tag and whose interest lines are read for the other
+would double-count. It needs the bank template’s revenue definition settled
+first, and measuring across all 36 banks in the set, not just these two.
+
+**How both were found.** Neither by a check that was looking for them. The
+cover-page comparison `KI-30` installed exists to catch a share count in the
+wrong unit; what it actually does is hold a filed count against a figure from a
+different filing, and any disagreement is worth reading. A check is worth more
+than the fault it was built for.
 
 ## A defect found and fixed on 29 October 2026, with no number
 

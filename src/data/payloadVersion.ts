@@ -32,13 +32,17 @@
 //      with the state of every figure (reported or derived) and, for an SEC
 //      filer, the filing each one came from — both filings where a quarter
 //      is the difference between two cumulative figures
+//   7  `shareScale`: what scale an SEC filer tags its share counts in, read
+//      off its own cover page, and the counts corrected to an absolute
+//      number of shares. McDonald's tags 716.4 where every other filer tags
+//      716,400,000 (`KI-30`)
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 6;
+export const PAYLOAD_VERSION = 7;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

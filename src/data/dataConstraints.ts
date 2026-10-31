@@ -233,8 +233,10 @@ export function buildDataConstraints(
       code: 'costOfDebtAssumed',
       label: "The company's own cost of debt cannot be read",
       detail:
-        `The filed interest expense cannot be turned into a borrowing rate for this company, so the forecast uses ` +
-        `4.5%, an assumption rather than its own. ${modelData?.provenance?.interest ?? ''}`,
+        `The filed interest expense cannot be turned into a borrowing rate for this company, so the forecast's ` +
+        `interest charge uses 4.5%, an assumption rather than its own. The rate the valuation DISCOUNTS at is ` +
+        `not this one: it is the risk-free rate plus a default spread from a synthetic rating ` +
+        `(METHODOLOGY.md section 9). ${modelData?.provenance?.interest ?? ''}`,
       source,
       effect:
         bound === null

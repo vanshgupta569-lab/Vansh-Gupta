@@ -395,6 +395,72 @@ const US_TAGS = {
   ],
 };
 
+// WHAT SCALE A FILER TAGS ITS SHARE COUNTS IN, SETTLED AGAINST ITS OWN COVER
+// PAGE (`KI-30`).
+//
+// An XBRL fact in the `shares` unit is meant to be an absolute count, and all
+// but a handful of registrants file one. McDonald's does not: its 10-K tags
+// `WeightedAverageNumberOfDilutedSharesOutstanding` as **716.4**, the figure as
+// it appears in a statement headed "in millions". Nothing downstream could tell
+// that from a company with 716 shares in issue, so the derivation divided it by
+// a million again and McDonald's market capitalisation came out as 0.18 against
+// borrowings of 43,848 — an equity weight of 0.0004% and a WACC that was its
+// cost of debt alone.
+//
+// The filing settles it itself. Every cover page asks for the number of shares
+// outstanding, and the answer is tagged `dei:EntityCommonStockSharesOutstanding`
+// — an absolute count from every registrant, McDonald's included: 710,398,642 on
+// its 10-K cover against the 716.4 inside. The MOST RECENT such fact is used,
+// from whichever filing carries it, so McDonald's settles against the 707,641,531
+// on its latest 10-Q; the ratio only has to establish an order of magnitude and
+// the form it came from is recorded beside it.
+//
+// The ratio can only be a power of a thousand: anything else is a different
+// question (a second share class, a year of buybacks) and is left alone and
+// recorded rather than guessed at.
+function coverPageShares(facts) {
+  const points = facts?.dei?.EntityCommonStockSharesOutstanding?.units?.shares;
+  if (!Array.isArray(points)) return null;
+  let best = null;
+  for (const p of points) {
+    if (typeof p.val !== 'number' || !isFinite(p.val) || p.val <= 0 || !p.end) continue;
+    if (!best || p.end > best.end) best = p;
+  }
+  return best ? { count: best.val, asOf: best.end, form: best.form || null } : null;
+}
+
+// A fifth either way: wide enough for a year of buybacks between the cover date
+// and the fiscal year end, and nowhere near the thousand that separates one
+// scale from the next.
+const SHARE_SCALE_BAND = 0.2;
+
+function shareCountScale(cover, filed) {
+  if (!cover || typeof filed !== 'number' || !isFinite(filed) || filed <= 0) return null;
+  const ratio = cover.count / filed;
+  for (const factor of [1, 1e3, 1e6]) {
+    if (Math.abs(ratio / factor - 1) <= SHARE_SCALE_BAND) {
+      return {
+        factor,
+        ratio,
+        coverCount: cover.count,
+        coverAsOf: cover.asOf,
+        coverForm: cover.form,
+        filedAs: filed,
+      };
+    }
+  }
+  // Neither a scale nor a near match: reported as it stands, and said so.
+  return {
+    factor: 1,
+    ratio,
+    coverCount: cover.count,
+    coverAsOf: cover.asOf,
+    coverForm: cover.form,
+    filedAs: filed,
+    unexplained: true,
+  };
+}
+
 // Pull one line item out of the giant XBRL blob, for the annual periods only.
 // Returns an object like { 2023: 383285000000, 2024: 391035000000 }
 function extractUSFact(facts, tagList, unitsSeen) {
@@ -731,7 +797,11 @@ function quarterValue(field, period, points, cik, wantMonths) {
 // module-level list because it is a diagnostic, not part of any answer.
 const quarterlyDropped = [];
 
-function extractQuarterlySEC(facts, cik, countFields, annualRows) {
+// `shareScale` is the factor the cover page settled for this filer's share
+// counts (`KI-30`); the quarters carry the same counts and must carry the same
+// correction, or a quarterly share count disagrees with the annual one beside
+// it by a million.
+function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1) {
   const anchor = collectPoints(facts, US_TAGS.revenue);
   const calendar = reportingCalendar(anchor.flows);
   if (!calendar.length) return [];
@@ -777,7 +847,7 @@ function extractQuarterlySEC(facts, cik, countFields, annualRows) {
         if (!points) continue;
         const got = quarterValue(field, period, points, cik, months);
         if (!got || typeof got.value !== 'number' || !isFinite(got.value)) continue;
-        values[field] = countFields.has(field) ? got.value : got.value / 1e6;
+        values[field] = countFields.has(field) ? got.value * shareScale : got.value / 1e6;
         if (got.state !== 'reported') states[field] = got.state;
         if (got.derivedFrom) derivedFrom[field] = got.derivedFrom.filter(Boolean);
         if (!filing && got.filing) filing = got.filing;
@@ -918,6 +988,17 @@ async function fetchFromSEC(ticker) {
 
   if (years.length === 0) return null;
 
+  // THE SCALE THE SHARE COUNTS ARE IN, read off the filing's own cover page and
+  // settled on the most recent year that reports one (`KI-30`). The same factor
+  // applies to every year and to the quarters, because a filer tags one way.
+  const cover = coverPageShares(facts);
+  const latestFiled = years
+    .map((y) => extracted.dilutedShares[y])
+    .filter((v) => typeof v === 'number' && isFinite(v) && v > 0)
+    .at(-1) ?? null;
+  const shareScaleRecord = shareCountScale(cover, latestFiled);
+  const shareScale = shareScaleRecord ? shareScaleRecord.factor : 1;
+
   // The date each of those years ended, from the same tags that anchored them.
   const periodEnds = extractPeriodEnds(facts, US_TAGS.revenue);
 
@@ -929,17 +1010,19 @@ async function fetchFromSEC(ticker) {
       // millions, and raw XBRL is in whole currency units.
       row[field] = typeof value === 'number' ? value / 1e6 : null;
     }
-    // Share counts must NOT be divided; they are counts, not currency.
+    // Share counts must NOT be divided; they are counts, not currency — but they
+    // must be in the scale the filer tagged them in, which is what `shareScale`
+    // settles against the cover page (`KI-30`).
     for (const field of SEC_COUNT_FIELDS) {
       const count = extracted[field][year];
-      row[field] = typeof count === 'number' ? count : null;
+      row[field] = typeof count === 'number' ? count * shareScale : null;
     }
     return row;
   });
 
   // THE QUARTERS, from the same facts the years came from.
   quarterlyDropped.length = 0;
-  const quarters = extractQuarterlySEC(facts, match.cik, SEC_COUNT_FIELDS, statements);
+  const quarters = extractQuarterlySEC(facts, match.cik, SEC_COUNT_FIELDS, statements, shareScale);
   const quartersDropped = quarterlyDropped.length;
 
   return {
@@ -956,6 +1039,11 @@ async function fetchFromSEC(ticker) {
     // A 10-K filer's statements count the registered shares that trade under
     // its own ticker, so the share count and the price are for the same security.
     listing: { shareBasis: 'registeredShares' },
+    // WHAT WAS DONE TO THE SHARE COUNTS, AND AGAINST WHAT. Null where the filing
+    // has no cover-page count to settle it against, in which case the counts are
+    // exactly as filed. Standing decision 5: a corrected figure is never shown as
+    // filed, and this is the record that lets a screen say which it is.
+    shareScale: shareScaleRecord,
     sicCode,
     sicDescription,
     statements,
@@ -2041,7 +2129,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 6;
+const FETCHER_VERSION = 7;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;
