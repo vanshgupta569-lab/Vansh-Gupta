@@ -853,6 +853,54 @@ ours, and its display terms are unverified. There is no official global equity
 risk premium; the OECD’s country risk classification is a classification and
 not a premium, and is not used as one.
 
+### No issuer rating any free source publishes
+
+**Source:** neither. **Affects:** every company that borrows — 171 of the 177
+payloads carry a rating, and every one of them is synthetic.
+
+`docs/COST_OF_CAPITAL_SPEC.md` rule 17 asks for a default spread from **an
+actual rating where available**, and a synthetic one only where it is not. The
+agencies' issuer ratings are licensed products: Moody's, S&P and Fitch publish
+them behind terms, and no free endpoint this site reads carries one. So the
+first clause never runs and the second always does.
+
+**What the synthetic route cannot know, with the bound on each:**
+
+- **One year's coverage ratio rates the company.** A single loss year reads as
+  a default: Intel's EBIT was negative in FY2025, so its coverage is −2.0x, its
+  synthetic rating D2/D and its cost of debt 23.30% — against the 1.87% it has
+  actually been paying. Four companies on disk are rated D2/D this way (Intel,
+  Honda, CrowdStrike and Shopify's Toronto line). **Bound:** the error is the
+  spread error times the debt weight times one less the tax rate — on Intel,
+  about 16 points of spread on a debt weight of 10.2%, which takes its WACC from
+  8.19% to 9.28%. Honda is the largest: 40.4% of its capital borrowed, and a WACC
+  of 13.25% against 6.30%. Damodaran's own answer is to normalise EBIT for a cyclical company,
+  which is a judgement this site does not make for the reader. **What would
+  remove it:** an actual rating, or a normalised-earnings judgement on the
+  figures screen.
+- **The ratio can be years old.** It is struck in the last reported year that
+  carries both an EBIT and an interest expense, and 10 companies are rated on a
+  ratio more than a year old — Apple on FY2023, T-Mobile on FY2021 — because
+  they stopped tagging interest expense. The card prints the year beside the
+  ratio, so it is visible rather than implied.
+- **Six companies have no filed interest at all** in any year (Caterpillar, GE,
+  GE Vernova, NextEra, Arm, MercadoLibre). Their ratio is struck on the interest
+  the model itself charges, and the card says so. **Bound:** the charge is the
+  4.5% assumption on their own borrowings, so the rating describes the
+  assumption as much as the company.
+- **The financial ladder is defined on a ratio the filings do not isolate.** His
+  table for financial service firms reads a **long-term** interest coverage
+  ratio; a bank files one interest expense line, most of which is what it pays
+  depositors. The ratio used is therefore the whole-interest one, which runs low
+  and rates a bank worse than its bonds say. **It reaches no valuation**: a bank
+  has no WACC at all (rule 24) and is valued by residual income. **What would
+  remove it:** the interest-expense split in the notes to the accounts, which is
+  filed text rather than tagged data.
+- **The table is a year's vintage.** *January 2026*, stored with every figure
+  in `src/data/defaultSpread.ts`, and the page publishes only the large-firm and
+  financial ladders — the small-firm ladder of earlier years is not on this
+  vintage, so a small company is rated on the large-firm bands.
+
 ### Total liabilities the filing does not tag
 
 **Source:** both. **Affects:** 23 modelled.

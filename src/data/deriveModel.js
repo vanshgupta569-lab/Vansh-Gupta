@@ -19,6 +19,8 @@ import {
   COUNTRY_RISK_VINTAGE,
   COUNTRY_RISK_PUBLISHER,
 } from './countryRisk';
+import { DEFAULT_SPREAD_VINTAGE } from './defaultSpread';
+import { isFinancialCompany } from './residualIncome.js';
 
 const FORECAST_YEARS = 5;
 // The rate the terminal value capitalises at, and the rate the forecast fades
@@ -2147,6 +2149,16 @@ export function deriveModel(fetched) {
       betaSource: 'equityBeta',
       betaIsUnlevered: true,
       comparables: [],
+
+      // WHICH OF DAMODARAN'S TWO LADDERS THE COST OF DEBT IS READ OFF (spec
+      // rule 17, and the fix for `KI-29`). The engine strikes the interest
+      // coverage ratio itself, because EBIT is a figure it builds rather than
+      // one the filing always reports, and it needs to know which table to
+      // look the answer up in. A financial company's interest expense is
+      // mostly what it pays depositors rather than what it pays lenders, so the
+      // same ratio means something different and the bands are far lower at
+      // every rating.
+      financialTemplate: isFinancialCompany(fetched),
     },
 
     sensitivity: {
@@ -2159,6 +2171,15 @@ export function deriveModel(fetched) {
   provenance.terminalGrowth =
     `${(TERMINAL_GROWTH * 100).toFixed(1)}% — a flat default, not company-specific. The forecast growth ` +
     'rate fades to it, so the last forecast year and the perpetuity beyond it grow at the same rate';
+  provenance.costOfDebt =
+    'the risk-free rate plus a default spread for a synthetic rating, read off this company’s ' +
+    'interest coverage — EBIT over interest expense — against Damodaran’s table of coverage ratios, ' +
+    `ratings and traded-bond spreads (${DEFAULT_SPREAD_VINTAGE})` +
+    (isFinancialCompany(fetched) ? ', on his table for financial service firms' : '') +
+    `. The ${costOfDebtSource} is the historical effective rate: it drives the forecast interest ` +
+    'charge, because borrowings already taken out cost what they were contracted at, and it is shown ' +
+    'beside the cost of debt as a cross-check rather than used as one (rule 18)';
+
   provenance.wacc =
     'CAPM with a beta of 1.0 — no comparable set is derived — and an equity risk premium of ' +
     `${(equityRiskPremium * 100).toFixed(2)}%: ${MATURE_ERP_PCT.toFixed(2)}% mature market` +

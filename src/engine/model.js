@@ -6,6 +6,16 @@
 // (src/data/AAPL.js, src/data/META.js, ...) and returns a fully built
 // 3-statement model plus a DCF. Every company runs through this same code.
 //
+// IT HAS ONE IMPORT, AND THIS IS THE ACCOUNT OF IT. `computeWACC` reads a
+// default spread off Damodaran's published table of interest-coverage ratios,
+// ratings and traded-bond spreads (spec rule 17). The lookup has to happen
+// here because the ratio is struck on the EBIT this file BUILDS — most filings
+// never tag operating income, so the data layer cannot hand the answer over
+// without computing an EBIT of its own, and a second EBIT is a second EBIT that
+// goes stale. The table is a published constant with a vintage, not a figure
+// about any company, so the sentence above still holds.
+import { syntheticRating, DEFAULT_SPREAD_VINTAGE } from '../data/defaultSpread';
+//
 // Order of calculation (each step only needs the ones above it, which is why
 // no circular reference is required):
 //   1  segment revenue build      6  debt schedule
@@ -1559,6 +1569,29 @@ export function checkValuationApplicability(model, data, wacc) {
     }
   }
 
+  // 2c. NO COST OF CAPITAL, NO DISCOUNTED CASH FLOW.
+  //
+  // A null WACC was not refused here, and `(1 + null) ** t` is 1 in JavaScript:
+  // the cash flows came back undiscounted and the terminal value with them. It
+  // never showed, because the only way to get a null WACC was a currency with no
+  // published government yield and those companies are refused upstream — until
+  // the cost of debt became a rating on 2026-10-31 and a company that reports no
+  // interest expense in any year stopped having one. MercadoLibre came out at
+  // -2,378.96 a share, which is what an undiscounted forecast of a loss-making
+  // year looks like. A missing rate is not a rate of nought here either.
+  if (!isNum(wacc)) {
+    return {
+      applicable: false,
+      code: 'noCostOfCapital',
+      message:
+        'No cost of capital could be struck for this company: either the currency has no published ' +
+        'government bond yield to start from, or the filing reports no interest expense in any year, ' +
+        'so there is no interest-coverage ratio to read a credit rating from. Without a rate there is ' +
+        'nothing to discount at, so no implied value is shown. The reported figures below are ' +
+        'unaffected.',
+    };
+  }
+
   // 3. Terminal growth at or above the discount rate — the formula breaks
   const g = data.dcf.longTermGrowthRate;
   if (wacc != null && g >= wacc) {
@@ -1818,12 +1851,62 @@ function grid(rowSteps, colSteps, fn) {
 // ===========================================================================
 // WACC
 // ===========================================================================
+/**
+ * EBIT over interest expense in the last reported year that carries both: the
+ * ratio a synthetic rating is read off (spec rule 17).
+ *
+ * THE LAST YEAR THAT CARRIES BOTH, not simply the last. Apple stopped tagging
+ * interest expense after FY2023 and is carried by its earlier years everywhere
+ * else in this model; reading only the final column gave it no ratio, no rating
+ * and no cost of debt at all. The year is returned with the figure so a screen
+ * can say which one it is rather than passing a two-year-old ratio as this
+ * year's.
+ *
+ * AND THE DEBT SCHEDULE'S OWN CHARGE WHERE THE INCOME STATEMENT HAS NONE. A
+ * hand-built file may fold interest into other income the way the filing does —
+ * the curated Apple model is one, and its income statement carries no interest
+ * line at all — while the debt schedule still charges interest on the borrowings
+ * year by year. That charge is this company's interest expense just as much, and
+ * without it Apple had no coverage ratio, no rating, no cost of debt and in the
+ * end no valuation.
+ */
+export function interestCoverage(model) {
+  const M = model;
+  const none = { ratio: null, year: null, filed: null };
+  if (!M || !isNum(M.nH)) return none;
+  // A FILED INTEREST EXPENSE FIRST, in every year, before any modelled one:
+  // standing decision 5 asks that reported and modelled stay distinguishable,
+  // and a ratio struck on a charge this engine worked out is not the company's
+  // own statement about itself. Which of the two it is comes back with it.
+  for (const filedOnly of [true, false]) {
+    for (let t = M.nH - 1; t >= 0; t--) {
+      const ebit = M.ebit?.[t];
+      const filed = M.interestExpense?.[t];
+      const interest = filedOnly ? filed : M.debt?.interestExpense?.[t];
+      if (isNum(ebit) && isNum(interest) && Math.abs(interest) > 0) {
+        return { ratio: ebit / Math.abs(interest), year: M.years?.[t] ?? null, filed: filedOnly };
+      }
+    }
+  }
+  return none;
+}
+
 export function computeWACC(model, data) {
   const c = data.dcf.costOfCapital;
   const M = model;
   const lastFcst = M.nH + M.nF - 1;
 
-  // Cost of debt = average weighted-average interest rate across the forecast
+  // THE HISTORICAL EFFECTIVE RATE, WHICH IS A CROSS-CHECK AND NOT A COST
+  // (`docs/COST_OF_CAPITAL_SPEC.md` rule 18, and the fix for `KI-29`).
+  //
+  // The average of the debt schedule's own rate across the last reported year
+  // and the forecast: interest over average borrowings. It was the cost of debt
+  // until 2026-10-31 and it is not one. It divides interest contracted at
+  // whatever rates applied when the debt was raised by a balance that moved, so
+  // 59 of 137 companies came out borrowing below their own government's ten-year
+  // yield — Linde at 0.96% against 4.29% — which no corporate borrower does. It
+  // is returned, labelled, and shown beside the cost of debt, because what a
+  // company HAS been paying is worth seeing next to what it would pay now.
   const rates = [];
   for (let t = M.nH - 1; t <= lastFcst; t++) {
     if (M.debt.weightedAverageRate[t] != null) rates.push(M.debt.weightedAverageRate[t]);
@@ -1835,8 +1918,25 @@ export function computeWACC(model, data) {
   // leaves it out, which is the same arithmetic when the debt weight is nil and
   // an honest blank on the screen. A company that DOES owe and reports no
   // interest is a different case, handled as a data constraint.
-  const costOfDebt = rates.length ? avg(rates) : null;
+  const effectiveCostOfDebt = rates.length ? avg(rates) : null;
   const taxRate = M.taxRate[lastFcst];
+
+  // THE COST OF DEBT: THE RISK-FREE RATE PLUS A DEFAULT SPREAD (rule 17).
+  //
+  // The spread comes with the data, not from here: `deriveModel` reads it off
+  // Damodaran's published table from this company's interest coverage and hands
+  // it over with its rating and its vintage, the way it hands over the risk-free
+  // rate and the premium. This file does the arithmetic and no lookups, which is
+  // standing decision 2 and the reason the engine still imports nothing.
+  //
+  // A MISSING RISK-FREE RATE OR A MISSING SPREAD IS NOT A RATE OF NOUGHT, for the
+  // same reason the cost of equity below is null without a rate: a company that
+  // cannot be rated does not borrow for free.
+  const coverage = interestCoverage(M);
+  const rated = syntheticRating(coverage.ratio, { financial: c.financialTemplate === true });
+  const spreadPct = rated ? rated.spreadPct : null;
+  const costOfDebt =
+    isNum(c.riskFreeRate) && isNum(spreadPct) ? c.riskFreeRate + spreadPct / 100 : null;
   const afterTaxCostOfDebt = isNum(costOfDebt) ? costOfDebt * (1 - taxRate) : null;
 
   // CAPITAL IS WEIGHTED ON GROSS DEBT, NOT NET DEBT.
@@ -1953,6 +2053,27 @@ export function computeWACC(model, data) {
 
   return {
     costOfDebt, taxRate, afterTaxCostOfDebt,
+    // What the rate is made of, so a screen can show the rating it came from
+    // rather than a number with no account of itself.
+    defaultSpreadPct: spreadPct,
+    rating: rated ? rated.rating : null,
+    // Synthetic, always: no free source publishes an issuer rating, which
+    // `DATA_CONSTRAINTS.md` records. The field is here so a screen never has to
+    // assume it, and so the day a real rating can be read the two are told apart.
+    ratingIsSynthetic: rated ? true : null,
+    interestCoverage: coverage.ratio,
+    interestCoverageYear: coverage.year,
+    // False where the ratio was struck on the interest this model charges
+    // because the filing reports none in any year (six companies on the
+    // payloads on disk: Caterpillar, GE, GE Vernova, NextEra, Arm and
+    // MercadoLibre, plus the curated Apple file, which folds interest into
+    // other income the way its filing does).
+    interestCoverageFiled: coverage.filed,
+    defaultSpreadVintage: DEFAULT_SPREAD_VINTAGE,
+    financialTemplate: c.financialTemplate === true,
+    // The rate this company has been paying, which rule 18 allows beside the
+    // cost of debt and never as it.
+    effectiveCostOfDebt,
     riskFreeRate: c.riskFreeRate, marketRiskPremium: c.marketRiskPremium,
     beta, costOfEquity, comps, industryDelevered, releveredBeta: relevered,
     // What the beta was before this company's own borrowings were put back on
@@ -1961,9 +2082,17 @@ export function computeWACC(model, data) {
     debtToEquity,
     // netDebt is reported because the bridge uses it; the weights do not.
     marketCap, netDebt, grossDebt, weightEquity, weightDebt,
-    wacc: isNum(costOfEquity)
-      ? weightEquity * costOfEquity + (weightDebt ? weightDebt * afterTaxCostOfDebt : 0)
-      : null,
+    // BORROWED MONEY WITH NO PRICE ON IT IS NOT FREE MONEY. `weightDebt * null`
+    // is nought in JavaScript, so a company that borrows and could not be rated
+    // would have had its debt weighted in at a cost of nothing — a WACC below
+    // its own cost of equity for the best possible reason and the worst possible
+    // arithmetic. On the payloads on disk every company with borrowings has an
+    // interest-coverage ratio, so this guard fires on none of them today; it is
+    // here for the company it fires on one day.
+    wacc:
+      isNum(costOfEquity) && (!weightDebt || isNum(afterTaxCostOfDebt))
+        ? weightEquity * costOfEquity + (weightDebt ? weightDebt * afterTaxCostOfDebt : 0)
+        : null,
   };
 }
 

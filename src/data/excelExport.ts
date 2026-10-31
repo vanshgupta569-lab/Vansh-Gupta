@@ -2157,10 +2157,40 @@ export async function buildWorkbook(input: ExportInput): Promise<ExcelJS.Workboo
   // came out 114% above the site before the prefix went in.
   const allIn = (t: number) =>
     `'3-StatementModel'!${L(cOf(t))}${R.debtRate}+'3-StatementModel'!${L(cOf(t))}${R.pikRate}`;
-  if (codYears.length) {
+  // AND FROM 2026-10-31 THE ROW IS NOT THAT AVERAGE AT ALL (`KI-29`).
+  //
+  // The cost of debt is the risk-free rate plus a default spread for this
+  // company's credit, so the row is `= risk-free + spread` and reads the
+  // risk-free CELL above it: moving that cell moves the cost of debt, the WACC
+  // and the value, which is what `KI-24` asked of this row and still holds.
+  // The spread itself is a constant inside the formula, because it is a figure
+  // read out of a published table — an assumption, like the equity risk premium
+  // two rows up — and the label names the rating and the coverage ratio it came
+  // from. What a reader cannot do in the workbook is re-rate the company by
+  // editing EBIT; that is written down in METHODOLOGY.md section 22 with the
+  // rest of the places the workbook does something different.
+  //
+  // The averaged schedule rate is not lost: it is the historical effective rate,
+  // it still drives the interest charge on the model sheet, and the Assumptions
+  // sheet carries it as the cross-check rule 18 allows.
+  const spreadPct = isNum(D.waccDetail?.defaultSpreadPct) ? D.waccDetail.defaultSpreadPct : null;
+  if (isNum(spreadPct) && isNum(D.waccDetail?.interestCoverage)) {
     vOne(
       DR.preTaxCostOfDebt,
-      `Cost of debt, before tax — the schedule's own rate, averaged over ${codYears.length} year${codYears.length === 1 ? '' : 's'}`,
+      `Cost of debt, before tax — risk-free + ${spreadPct.toFixed(2)}% default spread, synthetic ` +
+        `${D.waccDetail.rating} rating from interest coverage of ` +
+        `${D.waccDetail.interestCoverage.toFixed(1)}x (Damodaran, ${D.waccDetail.defaultSpreadVintage})`,
+      `${F}${DR.riskFree}+${(spreadPct / 100).toFixed(6)}`,
+      PCT2,
+      { unit: '%' }
+    );
+  } else if (codYears.length) {
+    // No spread to add: the company could not be rated, so the row shows what it
+    // has been paying and says that is what it is.
+    vOne(
+      DR.preTaxCostOfDebt,
+      `Cost of debt, before tax — no rating could be read, so the schedule's own historical rate, ` +
+        `averaged over ${codYears.length} year${codYears.length === 1 ? '' : 's'}`,
       `(${codYears.map(allIn).join('+')})/${codYears.length}`,
       PCT2,
       { unit: '%' }

@@ -91,6 +91,11 @@ import { buildModel, buildDCF, computeWACC, listingRefusal } from '../engine/mod
 // @ts-ignore
 import { isFinancialCompany } from './residualIncome.js';
 import {
+  DEFAULT_SPREAD_PUBLISHER,
+  DEFAULT_SPREAD_SOURCE,
+  DEFAULT_SPREAD_VINTAGE,
+} from './defaultSpread';
+import {
   countryRiskFor,
   MATURE_ERP_PCT,
   COUNTRY_RISK_VINTAGE,
@@ -904,36 +909,68 @@ export function costOfCapitalFor(
   } as CardRow);
 
   // ---- cost of debt, tax and the weights ---------------------------------
-  const coverage = coverageRatio(M);
+  //
+  // THE RATE A VALUATION NEEDS, NOT THE RATE THE COMPANY HAS BEEN PAYING
+  // (rule 17, and `KI-29`, which this closed on 2026-10-31). Read off the
+  // engine, which adds the spread `deriveModel` looked up to the risk-free rate
+  // above — so editing that rate moves this one by the same point.
+  const coverage = isNum(W?.interestCoverage) ? W.interestCoverage : null;
+  const spreadPct = isNum(W?.defaultSpreadPct) ? W.defaultSpreadPct : null;
+  const effective = isNum(W?.effectiveCostOfDebt) ? W.effectiveCostOfDebt : null;
   rows.push({
     key: 'costOfDebt',
-    label: 'Cost of debt (historical effective rate)',
+    label: 'Cost of debt',
     value: isNum(W?.costOfDebt) ? W.costOfDebt : null,
     format: 'percent',
     missing: isNum(W?.costOfDebt)
       ? undefined
-      : M
-        ? 'This company reports no borrowings, so it has no cost of debt — which is not a cost of nought.'
-        : (deriveRefusal ?? 'No model could be built for this company.'),
+      : !M
+        ? (deriveRefusal ?? 'No model could be built for this company.')
+        : !isNum(riskFreeUsed)
+          ? (rfRefusal ?? 'No risk-free rate for this currency, so there is no rate to add a spread to.')
+          : 'No interest-coverage ratio can be read from this filing, so no rating and no spread — which ' +
+            'is not a cost of nought.',
     source: isNum(W?.costOfDebt)
       ? {
-          publisher: 'the filings',
-          asOf: lastYear(payload),
-          method: 'interest expense over average interest-bearing borrowings, averaged across the forecast',
+          publisher: DEFAULT_SPREAD_PUBLISHER,
+          asOf: W.defaultSpreadVintage ?? DEFAULT_SPREAD_VINTAGE,
+          method:
+            `the risk-free rate above plus a default spread of ${(spreadPct as number).toFixed(2)}% for a ` +
+            `synthetic ${W.rating} rating, read off interest coverage of ${(coverage as number).toFixed(1)}x` +
+            (W.financialTemplate ? ', on his table for financial service firms' : ''),
+          url: DEFAULT_SPREAD_SOURCE,
         }
       : null,
     about:
-      'What this company has actually been paying, from the filings: interest over average borrowings. ' +
-      '**That is a cross-check, not a cost of debt** — it looks backwards, it moves with how much was ' +
-      'borrowed and when, and a company that refinanced last month still shows last year’s rate. The ' +
-      'rate a valuation should use is the risk-free rate plus a default spread from the company’s rating, ' +
-      'or a synthetic rating read off its interest coverage where it has none. That step is not built: ' +
-      'the engine uses the effective rate, and this row says so rather than dressing it up.',
+      'What this company would pay to borrow now: the risk-free rate in the currency of the accounts plus ' +
+      'a **default spread** for its credit. It has no published rating this site can read, so the rating ' +
+      'is **synthetic** — read off its interest coverage, EBIT over interest expense, against Damodaran’s ' +
+      'table of coverage ratios, ratings and traded-bond spreads. **What it has been paying is a ' +
+      'different question**: interest over average borrowings looks backwards, divides interest ' +
+      'contracted years ago by a balance that moved, and had 59 of 137 companies borrowing below their ' +
+      'own government’s ten-year yield. That figure is shown under this row as a cross-check, which is ' +
+      'all rule 18 allows it to be. The forecast interest charge still uses it, because borrowings ' +
+      'already taken out really do cost what they were contracted at; a discount rate asks what the ' +
+      'next pound of debt costs, and that is this.',
     notes: [
-      ...(isNum(coverage)
-        ? [`interest coverage (EBIT over interest) ${coverage.toFixed(1)}x — what a synthetic rating would be read from`]
+      ...(isNum(coverage) && isNum(spreadPct)
+        ? [
+            `interest coverage ${coverage.toFixed(1)}x in FY${W.interestCoverageYear} → ${W.rating} → a ` +
+              `${spreadPct.toFixed(2)}% spread (${DEFAULT_SPREAD_PUBLISHER}, ${W.defaultSpreadVintage})` +
+              // REPORTED OR MODELLED, SAID OUT LOUD (standing decision 5). Six
+              // companies on disk file no interest expense in any year, so the
+              // ratio is struck on the charge this model works out instead.
+              (W.interestCoverageFiled === false
+                ? ', on the interest this model charges, because the filing reports none in any year'
+                : ''),
+          ]
         : []),
-      'The rating and spread step of rule 17 is not built.',
+      ...(isNum(effective)
+        ? [
+            `cross-check — the historical effective rate, interest over average borrowings, is ` +
+              `${pct(effective)}: what it has been paying, not what it would pay (rule 18)`,
+          ]
+        : []),
     ],
   });
 
@@ -1092,16 +1129,6 @@ export function costOfCapitalFor(
   };
 }
 
-/** EBIT over interest expense, in the last reported year: what a synthetic
- *  rating is read off (rule 17), shown because the rating step is not built. */
-function coverageRatio(M: any): number | null {
-  if (!M) return null;
-  const last = M.nH - 1;
-  const ebit = M.ebit?.[last];
-  const interest = M.interestExpense?.[last] ?? M.debt?.interestExpense?.[last];
-  if (!isNum(ebit) || !isNum(interest) || interest === 0) return null;
-  return ebit / Math.abs(interest);
-}
 
 const lastYear = (payload: any): string => {
   const rows = Array.isArray(payload?.statements) ? payload.statements : [];

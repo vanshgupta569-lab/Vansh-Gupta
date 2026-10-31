@@ -2241,7 +2241,12 @@ async function checkCostOfCapitalOnScreen(page: Page) {
       continue;
     }
     const line = ((await sourceLine.textContent()) || '').replace(/\s+/g, ' ');
-    if (!/\d{4}-\d{2}-\d{2}|\b[A-Z][a-z]+ \d{1,2}, \d{4}\b|\bFY\d{4}\b/.test(line)) {
+    // A DATE IS A DAY, A MONTH-AND-YEAR OR A FISCAL YEAR. Damodaran's ratings
+    // table is dated "January 2026" on its own page and his country table
+    // "January 5, 2026"; a vintage with no day in it is still a date, and the row
+    // carries what the publisher published rather than a day invented to satisfy
+    // a pattern.
+    if (!/\d{4}-\d{2}-\d{2}|\b[A-Z][a-z]+ \d{1,2}, \d{4}\b|\b[A-Z][a-z]+ \d{4}\b|\bFY\d{4}\b/.test(line)) {
       unsourced.push(`${key}: a source with no date — "${line.slice(0, 80)}"`);
       continue;
     }

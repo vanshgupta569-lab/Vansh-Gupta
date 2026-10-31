@@ -3296,6 +3296,295 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 // ---------------------------------------------------------------------------
+// THE COST OF DEBT IS A RATING, NOT A HISTORY (`KI-29`, spec rules 17 and 18)
+// ---------------------------------------------------------------------------
+//
+// Until 2026-10-31 the engine discounted at what a company HAD been paying:
+// interest expense over average borrowings. That divides interest contracted at
+// whatever rates applied when the debt was raised by a balance that moved, and
+// 59 of 137 companies came out borrowing BELOW their own government's ten-year
+// yield, which no corporate borrower does. The rate is now the currency-matched
+// risk-free rate plus a default spread for a synthetic rating read off interest
+// coverage, from Damodaran's published table.
+//
+// Five things have to hold, and each is proved by breaking it:
+//
+//   THE RATE IS THE SUM OF ITS TWO PARTS, on every company, to the last decimal
+//   place. A rate that merely looks sensible is the thing this replaces.
+//
+//   THE SPREAD IS THE TABLE'S, for that coverage ratio and that kind of firm.
+//   The bands are read independently here, including at their exact edges: a
+//   coverage of 8.5 is Aaa and 8.499999 is Aa2, and a lookup that is off by one
+//   band is invisible in the answer.
+//
+//   NOBODY BORROWS BELOW THEIR OWN GOVERNMENT. Every spread in the table is
+//   positive, so this is the symptom `KI-29` was measured by and it must be
+//   gone.
+//
+//   THE EFFECTIVE RATE IS SHOWN AND NEVER USED (rule 18). It is still computed,
+//   it still drives the forecast interest charge, and it appears on the card as
+//   a cross-check — but the rate the WACC is struck on must never equal it.
+//
+//   A COMPANY THAT CANNOT BE RATED HAS NO COST OF DEBT, and borrowed money with
+//   no price on it is not free money: the WACC is null and the valuation is
+//   refused rather than discounted at a rate with a hole in it.
+{
+  console.log('\n=== the cost of debt: a rating, not a history ===');
+  const { deriveModel } = await import(`file:///${REPO}/src/data/deriveModel.js`);
+  const { buildModel, buildDCF, computeWACC, interestCoverage } = await import(
+    `file:///${REPO}/src/engine/model.js`
+  );
+  const { NON_FINANCIAL_BANDS, FINANCIAL_BANDS, syntheticRating, DEFAULT_SPREAD_VINTAGE } =
+    await import(`file:///${REPO}/src/data/defaultSpread.ts`);
+
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const near = (a: number, b: number, tol = 1e-12) => Math.abs(a - b) <= tol;
+
+  // ---- 0. THE TABLE ITSELF, AT ITS EDGES -------------------------------
+  //
+  // Fifteen bands that must tile the line with no gap and no overlap, and a
+  // lookup that must answer at the exact boundary rather than falling through
+  // it. The two ladders are different tables and the financial one is read for
+  // financial companies, which rule 17 asks for by name.
+  for (const [name, bands] of [['non-financial', NON_FINANCIAL_BANDS], ['financial', FINANCIAL_BANDS]] as const) {
+    for (let i = 0; i < (bands as any[]).length; i++) {
+      const b = (bands as any[])[i];
+      const atFrom = syntheticRating(b.from, { financial: name === 'financial' });
+      const atTo = syntheticRating(b.to, { financial: name === 'financial' });
+      if (atFrom?.rating !== b.rating || atTo?.rating !== b.rating) {
+        faults.push(
+          `${name} band ${b.from} to ${b.to} is ${b.rating}, and the lookup gives ` +
+            `${atFrom?.rating} at its bottom and ${atTo?.rating} at its top`
+        );
+      }
+      if (i && !((bands as any[])[i - 1].to < b.from)) {
+        faults.push(`${name} bands ${i - 1} and ${i} overlap`);
+      }
+    }
+  }
+  if (syntheticRating(null) !== null) {
+    faults.push('a company with no coverage ratio was given a rating anyway');
+  }
+  // The two ladders must really be different, or the financial table is
+  // decoration: at a coverage of 2.5 an ordinary company is Baa2/BBB and a
+  // financial one is Aa2/AA, because a bank's interest expense is mostly what it
+  // pays depositors and the bands are far lower at every rating.
+  const atTwoAndAHalf = [syntheticRating(2.5), syntheticRating(2.5, { financial: true })];
+  if (atTwoAndAHalf[0]!.rating === atTwoAndAHalf[1]!.rating) {
+    faults.push(
+      `the financial ladder answers ${atTwoAndAHalf[1]!.rating} where the ordinary one answers ` +
+        `${atTwoAndAHalf[0]!.rating}: the two tables are the same table`
+    );
+  }
+
+  // ---- 1. EVERY COMPANY ON DISK ----------------------------------------
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let rated = 0;
+  let modelledInterest = 0;
+  let unrated = 0;
+  let belowGovernment = 0;
+  let movedWithTheRate = 0;
+  let refusedWithoutARate = 0;
+  let constructedRefusal = '';
+  const spreadsSeen = new Set<string>();
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    let source: any;
+    let M: any;
+    let W: any;
+    try {
+      source = deriveModel(payload);
+      M = buildModel(source);
+      W = computeWACC(M, source);
+    } catch {
+      continue; // a company the engine refuses outright has no cost of debt to check
+    }
+
+    // the coverage ratio is struck on the model's OWN EBIT, not on a second one
+    const coverage = interestCoverage(M);
+    if (!near(coverage.ratio ?? NaN, W.interestCoverage ?? NaN, 1e-12) &&
+        !(coverage.ratio === null && W.interestCoverage === null)) {
+      faults.push(`${file}: the WACC was struck on a coverage ratio of ${W.interestCoverage} and the model gives ${coverage.ratio}`);
+    }
+    if (isNum(coverage.ratio)) {
+      const t = (() => {
+        for (let i = M.nH - 1; i >= 0; i--) if (M.years?.[i] === coverage.year) return i;
+        return -1;
+      })();
+      if (t >= 0) {
+        const filed = M.interestExpense?.[t];
+        const interest = coverage.filed ? filed : M.debt?.interestExpense?.[t];
+        const byHand = M.ebit[t] / Math.abs(interest);
+        if (!near(byHand, coverage.ratio, 1e-9)) {
+          faults.push(
+            `${file}: interest coverage ${coverage.ratio} against ${byHand} worked out from the ` +
+              `model's own EBIT and interest for FY${coverage.year}`
+          );
+        }
+        if (coverage.filed === false) modelledInterest++;
+      }
+    }
+
+    if (W.rating) {
+      rated++;
+      spreadsSeen.add(W.rating);
+      // the spread is the one the published table gives, read again here
+      const bands: any[] = W.financialTemplate ? (FINANCIAL_BANDS as any) : (NON_FINANCIAL_BANDS as any);
+      const band = bands.find((b) => (W.interestCoverage as number) >= b.from && (W.interestCoverage as number) <= b.to);
+      const expected = band ?? ((W.interestCoverage as number) > 0 ? bands[bands.length - 1] : bands[0]);
+      if (W.rating !== expected.rating || !near(W.defaultSpreadPct, expected.spreadPct, 1e-12)) {
+        faults.push(
+          `${file}: coverage of ${(W.interestCoverage as number).toFixed(2)}x on the ` +
+            `${W.financialTemplate ? 'financial' : 'non-financial'} table is ${expected.rating} at ` +
+            `${expected.spreadPct}%, and the engine used ${W.rating} at ${W.defaultSpreadPct}%`
+        );
+      }
+      // THE RATE IS THE SUM OF ITS TWO PARTS
+      if (isNum(W.riskFreeRate)) {
+        const byHand = W.riskFreeRate + expected.spreadPct / 100;
+        if (!near(W.costOfDebt, byHand, 1e-12)) {
+          faults.push(
+            `${file}: the cost of debt is ${W.costOfDebt} and the risk-free rate plus the spread is ${byHand}`
+          );
+        }
+        // NOBODY BORROWS BELOW THEIR OWN GOVERNMENT
+        if ((W.costOfDebt as number) <= W.riskFreeRate) {
+          belowGovernment++;
+          faults.push(
+            `${file}: a cost of debt of ${((W.costOfDebt as number) * 100).toFixed(2)}% against a ` +
+              `government yield of ${(W.riskFreeRate * 100).toFixed(2)}% — the symptom KI-29 was measured by`
+          );
+        }
+        // THE EFFECTIVE RATE IS NEVER THE RATE IN USE (rule 18)
+        if (isNum(W.effectiveCostOfDebt) && near(W.costOfDebt, W.effectiveCostOfDebt, 1e-12)) {
+          faults.push(
+            `${file}: the cost of debt is exactly the historical effective rate, which rule 18 allows ` +
+              'only as a cross-check'
+          );
+        }
+        // AND IT FOLLOWS THE RISK-FREE RATE, POINT FOR POINT
+        const dearer = JSON.parse(JSON.stringify(source.dcf.costOfCapital));
+        source.dcf.costOfCapital.riskFreeRate = W.riskFreeRate + 0.01;
+        const W2 = computeWACC(M, source);
+        source.dcf.costOfCapital = dearer;
+        if (!near(W2.costOfDebt - (W.costOfDebt as number), 0.01, 1e-12)) {
+          faults.push(
+            `${file}: a point on the risk-free rate moved the cost of debt by ` +
+              `${((W2.costOfDebt - (W.costOfDebt as number)) * 100).toFixed(4)} points, not one`
+          );
+        } else {
+          movedWithTheRate++;
+        }
+      }
+    } else {
+      unrated++;
+      // A COMPANY THAT CANNOT BE RATED HAS NO COST OF DEBT, AND NO WACC IF IT BORROWS
+      if (W.costOfDebt !== null) {
+        faults.push(`${file}: no rating could be read and the cost of debt is ${W.costOfDebt}`);
+      }
+      if (W.weightDebt > 0) {
+        if (W.wacc !== null) {
+          faults.push(
+            `${file}: borrows ${(W.weightDebt * 100).toFixed(1)}% of its capital with no price on that ` +
+              `debt, and still has a WACC of ${W.wacc}`
+          );
+        }
+        const D = buildDCF(M, source);
+        if (D?.applicable !== false) {
+          faults.push(`${file}: no cost of capital, and the discounted cash flow ran anyway`);
+        } else {
+          refusedWithoutARate++;
+        }
+      }
+    }
+  }
+
+  // ---- 2. A COST OF CAPITAL WITH A HOLE IN IT REFUSES ------------------
+  //
+  // CONSTRUCTED, because the payload set cannot exercise it: no company on disk
+  // both borrows and fails to be rated, so the guard above would be a check that
+  // cannot fail. A WACC comes out null two ways — no rating for the debt, or no
+  // risk-free rate for the equity — and the second can be made on any company by
+  // taking its rate away. What must NOT happen is the arithmetic that was there
+  // until 2026-10-31: `(1 + null) ** t` is 1, so the forecast came back
+  // undiscounted and the terminal value with it, which on MercadoLibre read
+  // -2,378.96 a share.
+  {
+    const whole = files.find((f) => {
+      try {
+        const p = JSON.parse(fs.readFileSync(path.join(PAYLOADS, f), 'utf8'));
+        const s = deriveModel(p);
+        const m = buildModel(s);
+        return isNum(computeWACC(m, s).wacc) && isNum(buildDCF(m, s)?.perpetuity?.valuePerShare);
+      } catch {
+        return false;
+      }
+    });
+    if (!whole) {
+      faults.push('no payload on disk produces a value per share, so the refusal could not be constructed');
+    } else {
+      const payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, whole), 'utf8'));
+      const source = deriveModel(payload);
+      const M = buildModel(source);
+      const before = buildDCF(M, source);
+      source.dcf.costOfCapital.riskFreeRate = null;
+      const W = computeWACC(M, source);
+      const after = buildDCF(M, source);
+      if (W.wacc !== null) {
+        faults.push(`${whole}: with no risk-free rate the WACC is ${W.wacc} rather than nothing`);
+      }
+      if (after?.applicable !== false || after?.code !== 'noCostOfCapital') {
+        faults.push(
+          `${whole}: with no cost of capital the discounted cash flow answered ` +
+            `${after?.perpetuity?.valuePerShare} instead of refusing — it was ` +
+            `${before?.perpetuity?.valuePerShare?.toFixed(2)} a share with one`
+        );
+      } else {
+        constructedRefusal = `${whole.replace('.json', '')} values at ${before.perpetuity.valuePerShare.toFixed(2)} and refuses with no rate`;
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the cost of debt:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  } else {
+    console.log(
+      `  the two ladders tile the line at every edge: a coverage ratio at the bottom and the top of ` +
+        `each of the ${(NON_FINANCIAL_BANDS as any[]).length} bands reads back the rating that band ` +
+        `publishes, 2.5x is ${atTwoAndAHalf[0]!.rating} for an ordinary company and ` +
+        `${atTwoAndAHalf[1]!.rating} for a financial one, and no ratio at all is no rating`
+    );
+    console.log(
+      `  ${rated} companies carry a synthetic rating across ${spreadsSeen.size} of them, every one the ` +
+        `spread the table publishes for its own coverage ratio (Damodaran, ${DEFAULT_SPREAD_VINTAGE}); ` +
+        `${modelledInterest} are struck on the interest this model charges because the filing reports ` +
+        'none in any year, and the engine says which'
+    );
+    console.log(
+      `  the cost of debt is the risk-free rate plus that spread to the twelfth decimal place, a point ` +
+        `on the rate moves it by a point on ${movedWithTheRate} companies, ${belowGovernment} borrow ` +
+        'below their own government against 59 before this, and none of them is the historical ' +
+        'effective rate, which is computed, shown beside it and never used (rule 18)'
+    );
+    console.log(
+      `  ${unrated} companies cannot be rated at all, and neither borrows: they have no cost of debt ` +
+        'rather than a cost of nought. A cost of capital with a hole in it refuses the valuation ' +
+        `rather than discounting at one — ${constructedRefusal}, which no payload on disk can show ` +
+        'and a constructed case can'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // THE TYPECHECK ACTUALLY CHECKS COMPONENT PROPS (`KI-28`)
 // ---------------------------------------------------------------------------
 //

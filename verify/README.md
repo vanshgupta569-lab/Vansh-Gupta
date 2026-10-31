@@ -208,6 +208,36 @@ The two copies of the index allow-list — `src/data/marketIndex.ts` and
 symbol and name by name, because a second copy that nothing checks is a second
 copy that goes stale.
 
+### The cost of debt: a rating, not a history
+
+Measured over every payload on disk. Until 2026-10-31 the engine discounted at
+what a company HAD been paying — interest over average borrowings — and **59 of
+137 came out borrowing below their own government's ten-year yield** (`KI-29`).
+The rate is now the risk-free rate plus a default spread for a synthetic rating
+read off interest coverage, so five things are checked:
+
+1. **The table tiles the line.** Both of Damodaran's ladders are read at the
+   bottom and the top of each of their fifteen bands, because a lookup that is
+   off by one band is invisible in the answer. The two must also differ: 2.5x is
+   Baa2/BBB for an ordinary company and Aa2/AA for a financial one, or the
+   second table is decoration.
+2. **The rate is the sum of its two parts**, to the twelfth decimal place, and
+   the spread is the one the table publishes for that company's own coverage
+   ratio. Proved by taking the spread away (589 faults) and by reading financial
+   firms off the ordinary ladder (52 faults).
+3. **Nobody borrows below their own government**, which is the symptom the
+   defect was measured by. Proved by putting the effective rate back as the cost
+   of debt: 476 faults, naming the companies.
+4. **The effective rate is shown and never used** (rule 18): it is still
+   computed, it still drives the forecast interest charge, and the rate the WACC
+   is struck on must never equal it.
+5. **A cost of capital with a hole in it refuses the valuation.** A company that
+   cannot be rated has no cost of debt, and if it borrows it has no WACC — and a
+   null WACC must refuse rather than discount at `(1 + null)`, which is 1. No
+   payload on disk both borrows and fails to be rated, so this one is
+   **constructed**: a company that values normally, with its risk-free rate taken
+   away. Proved by removing the refusal: Sony answers −7,418.65 a share.
+
 ### The scenarios
 
 | | Scenario |

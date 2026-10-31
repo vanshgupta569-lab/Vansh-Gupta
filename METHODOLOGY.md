@@ -947,15 +947,70 @@ automatic movement.
 
 ### The cost of debt
 
-**It is the historical effective rate, and the card labels it as one**
-(2026-10-29). `docs/COST_OF_CAPITAL_SPEC.md` rule 17 wants a currency-matched
-risk-free rate plus a default spread from the company’s rating, synthetic from
-interest coverage where it has none, and rule 18 says interest over average
-borrowings may be shown only as a labelled cross-check. The engine uses that
-cross-check as the rate. It is recorded as `KI-29` in
-`KNOWN_ISSUES.md` with what it is worth, and the card shows the interest
-coverage the synthetic rating would be read off, so the missing step is visible
-rather than implied.
+**There are two of them, and they answer different questions** (2026-10-31).
+
+| | What it is | What it drives |
+|---|---|---|
+| **Cost of debt** | the currency-matched risk-free rate **plus a default spread** for a synthetic rating read off interest coverage | the WACC, and so the discounting |
+| **Historical effective rate** | interest expense over average borrowings, from the filings | the **forecast interest charge** on the debt schedule, and a labelled cross-check on the card |
+
+Borrowings already taken out really do cost what they were contracted at, so
+the schedule charges the effective rate. A discount rate asks a different
+question — what the next pound of debt costs — and the answer to that is a
+rating. Until 2026-10-31 the effective rate did both jobs, which was `KI-29`:
+**59 of 137 companies came out borrowing below their own government's ten-year
+yield**, Linde at 0.96% against 4.29%, which no corporate borrower does.
+
+**The rating is synthetic, and it is read off a published table.** No free
+source publishes issuer ratings, so rule 17's first clause — a spread from an
+actual rating — is unavailable and `DATA_CONSTRAINTS.md` records it. The second
+clause is what runs: **interest coverage, EBIT over interest expense**, looked
+up in Damodaran's table of coverage ratios, ratings and traded-bond spreads
+(`src/data/defaultSpread.ts`, captured whole from his page, vintage *January
+2026*, fifteen bands from Aaa/AAA at 0.40% to D2/D at 19.00%). Rule 17's
+**separate table for financial service firms** is carried and used for them: a
+bank's interest expense is mostly what it pays depositors, so the same ratio
+means something different and the bands sit far lower at every rating — a
+coverage of 2.5x is Baa2/BBB for an ordinary company and Aa2/AA for a financial
+one.
+
+**The ratio is struck on the engine's own EBIT**, in the last reported year that
+carries both an EBIT and an interest expense, and the year is shown with it.
+Not the filed operating income: roughly forty companies — Pfizer, Merck, Lilly,
+IBM, Chevron among them — never tag it, and the engine builds an EBIT for them
+anyway. Not simply the last year either: Apple stopped tagging interest expense
+after FY2023 and is rated on its FY2023 coverage of 29.1x, which the card says.
+Where the filing reports no interest expense **in any year**, the ratio is
+struck on the charge the model itself works out, and the card says that too
+(six companies: Caterpillar, GE, GE Vernova, NextEra, Arm and MercadoLibre).
+
+**What it moved, measured over every payload on disk on 2026-10-31.** The cost
+of debt changed on 137 companies, from **−19.16 to +21.43 points, median
++0.41**; the WACC on 141, from **−9.32 to +6.95 points, median +0.01**, 28 of
+them by more than half a point; and the value per share on the 59 valued
+companies by **−30.1% to +14.0%, median −0.19%**, 26 by more than 1% and 4 by
+more than 10% — Toyota −30.1%, Vodafone −17.9%, Rio Tinto +14.0%, Volvo −13.7%.
+The largest WACC moves are banks (ING −9.32 points), whose WACC values nothing:
+they are on residual income. **No company gained or lost a valuation** except
+MercadoLibre, and that was a second defect: see below.
+
+**A company that cannot be rated has no cost of debt**, which is not a cost of
+nought, and if it borrows it has no WACC either — `weightDebt * null` is nought
+in JavaScript, which would have weighted borrowed money in at a price of
+nothing. Two companies on disk have no coverage ratio at all and neither
+borrows.
+
+**And a cost of capital with a hole in it now refuses the valuation.** A null
+WACC was not refused: `(1 + null) ** t` is 1, so the forecast came back
+undiscounted and the terminal value with it. Nothing had shown it, because the
+only way to get a null WACC was a currency with no published government yield
+and those companies are refused upstream — until a company could fail to be
+rated. MercadoLibre came out at **−2,378.96 a share**, which is what an
+undiscounted forecast of a loss-making year looks like. Fixed in the same commit
+as the rating; `npm run verify` builds the case on purpose, because no payload
+on disk both borrows and fails to be rated.
+
+#### The historical effective rate, which still drives the interest charge
 
 **Each company pays its own rate**, not a flat assumption. Each reported year's
 filed interest over the average of that year's and the prior year's borrowings,
@@ -1710,6 +1765,14 @@ arithmetic, since the debt weight is nil, and an honest blank on the screen. A
 company that *does* owe and reports no interest is a different case, handled as
 a data constraint (§23).
 
+**Where the rate itself comes from is §9**, which carries both of them: the
+cost of debt is the currency-matched risk-free rate plus a default spread for a
+synthetic rating read off interest coverage (rule 17), and the historical
+effective rate — interest over average borrowings — drives the forecast interest
+charge and appears on the card as the cross-check rule 18 allows it to be. The
+card shows the coverage ratio, the year it was struck in, the rating and the
+spread, so the rate can be checked against the published table by hand.
+
 ### The share-count tolerance, and where it comes from
 
 A listing is refused as `shareCountMismatch` when its shares outstanding and its
@@ -2370,6 +2433,19 @@ Now, in both the workbook and on the screen (§5 has the engine's side):
   cash balance, which is a filed fact at both ends.
 - **The basis change is stated** rather than left to be inferred: a note under
   the statement in the workbook, and a subtitle on the screen's schedule.
+
+**The cost of debt is a formula with the spread written into it.** The DCF
+sheet's *cost of debt, before tax* row is `= risk-free rate + 0.0055`, reading
+the risk-free cell above it, so moving that cell moves the cost of debt, the
+WACC and the value — which is what `KI-24` asked of this row. The spread is a
+constant inside the formula rather than a cell of its own, because the DCF
+sheet's rows are a contract a firm's macro may depend on and adding one would
+move everything below it. The row's label carries the rating and the coverage
+ratio the spread came from, so nothing is unexplained. **What a reader cannot do
+in the workbook is re-rate the company by editing EBIT**: the rating is struck
+on the site and the workbook carries its answer, the way it carries the equity
+risk premium two rows up. Where no rating could be read the row falls back to
+the schedule's own historical rate and the label says so.
 
 **Every driver row is the engine's rule, written out.** A row that asserts a
 rule of its own is the defect `KI-4` was: each assumption is seeded with the

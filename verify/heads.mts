@@ -613,24 +613,31 @@ export async function checkHeads(ticker = 'RELIANCE.NS'): Promise<HeadsReport> {
   // land within half a paisa. Pinning it also means these three figures now
   // test the ONE-OFFS MECHANISM and nothing else, which is what they are for.
   //
-  // AND THE COST OF CAPITAL MOVED UNDER THEM ON 2026-10-30, which a pinned price
-  // cannot hold still. The country risk premium went into the engine's default
-  // (spec rule 14, Nihar's decision), and India's 2.85% on top of the
-  // mature-market 4.23% takes this company from 706.52 to 443.96 at the same
-  // price. The three figures below are the same three cases re-struck at the new
-  // premium, and the trio they replace — 706.52, 1,683.09, 1,044.32, struck
-  // against a payload fetched on 2026-10-09 at a 4.23% premium — is written here
-  // rather than deleted, because the point of the three is that the one-offs head
-  // reproduces what "excluded as non-recurring" published, and a reader of this
-  // check is owed the figures it was reconciled against. What they test from here
-  // is the mechanism: all three moved by one deliberate change to the discount
-  // rate and by nothing in the heads.
+  // AND THE COST OF CAPITAL MOVED UNDER THEM TWICE, which a pinned price cannot
+  // hold still. Both moves were deliberate decisions about the discount rate and
+  // neither touched the heads:
+  //
+  //   2026-10-30  the country risk premium went into the engine's default (spec
+  //               rule 14), and India's 2.85% on top of the mature-market 4.23%
+  //               took this company from 706.52 to 443.96 at the same price.
+  //   2026-10-31  the cost of debt became the risk-free rate plus a default
+  //               spread from a synthetic rating (rule 17, `KI-29`), and Reliance
+  //               — rated A2/A on an interest coverage of 5.05x, so 7.32% against
+  //               the 6.32% it has been paying — went from 443.96 to 433.08.
+  //
+  // The figures below are the three cases as they stand after both. The trio they
+  // replace — 706.52, 1,683.09, 1,044.32, struck against a payload fetched on
+  // 2026-10-09 — is written here rather than deleted, because the point of the
+  // three is that the one-offs head reproduces what "excluded as non-recurring"
+  // published, and a reader of this check is owed the figures it was reconciled
+  // against. What they test from here is the mechanism: every move has had a
+  // named cause outside the heads, and a move without one is what this reports.
   const reproduced: HeadsReport['reproduced'] = [];
   const STRUCK_AT = 1170.3;
   const want: [string, any, number][] = [
-    ['RELIANCE.NS on the defaults', {}, 443.96],
-    ['RELIANCE.NS, other operating costs set aside', { otherOperatingCosts: { head: 'oneOffs' } }, 1173.99],
-    ['RELIANCE.NS, SG&A set aside', { sga: { head: 'oneOffs' } }, 696.48],
+    ['RELIANCE.NS on the defaults', {}, 433.08],
+    ['RELIANCE.NS, other operating costs set aside', { otherOperatingCosts: { head: 'oneOffs' } }, 1152.83],
+    ['RELIANCE.NS, SG&A set aside', { sga: { head: 'oneOffs' } }, 682.04],
   ];
   const relToday: any = readPayload('RELIANCE.NS.json');
   const rel: any = { ...relToday, quote: { ...relToday.quote, price: STRUCK_AT } };
