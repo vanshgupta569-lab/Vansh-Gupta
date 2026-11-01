@@ -743,6 +743,25 @@ is wrong.
 every ⓘ sat on a sans table row and produced three lines of Newsreader medium
 the first time one was put at the end of a display-face sentence.
 
+## The age band
+
+One band, above the tab bar on a company page and under the title on the
+figures screen, saying **`Latest figures: FY2014`** and one sentence of why
+it matters. It appears only where the newest statements are more than
+eighteen months old (`METHODOLOGY.md` §10, `KI-32`); on a company that is up
+to date there is nothing there at all, because a warning that is always on
+screen is furniture rather than a warning.
+
+**Amber, not oxblood.** The figures are real and the company is not being
+refused: this is a caution about their date. Oxblood stays rationed to the
+one action and the one thing that changed.
+
+**A band, not a tooltip.** It has to be on the screen whether or not the
+reader hovers anything, and it has to be impossible to mistake for one of
+the figures. It is rendered once, by `StaleFigures`, which every screen that
+presents filed statements uses — a second copy of a warning is a warning
+that stops matching the rule behind it.
+
 ## How a figure is printed
 
 Settled on 2026-10-30 from `docs/VISUAL_SYSTEM.md` finding 1, which was

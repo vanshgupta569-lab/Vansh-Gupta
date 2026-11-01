@@ -28,6 +28,7 @@ import { FinancialsTab } from './financialsTab';
 import { CostOfCapitalCard } from './costOfCapitalCard';
 import { Hint, HINT_STYLES } from './figuresHint';
 import { EYEBROW, UI, BODY, MetricTile, RefStrip, Pill, Disclose } from './instrument';
+import { StaleFigures } from './staleFigures';
 
 interface Props {
   ticker: string;
@@ -84,6 +85,12 @@ export const CompanyPage: React.FC<Props> = ({
             />
           </div>
         </header>
+
+        {/* ---- how old these figures are, if that needs saying ------------
+            Above the tabs on purpose: every tab below presents the same
+            statements, so the warning belongs to the company and not to one
+            screen of it (`KI-32`). */}
+        <StaleFigures payload={payload} className="border-t-0" />
 
         {/* ---- the tabs, each one an address ------------------------------ */}
         <nav

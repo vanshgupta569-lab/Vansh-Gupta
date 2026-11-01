@@ -30,7 +30,15 @@ mistakes and would never be fixed:
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
 - Taken so far: `KI-1` to `KI-34`. **Next free: `KI-35`.** Retired, meaning
-  fixed and never to be reused: `KI-31` (a share count filed before a stock
+  fixed and never to be reused: `KI-32` (which fiscal years a company has is
+  anchored on revenue, and Morgan Stanley and Wells Fargo had both stopped
+  tagging `Revenues` for `RevenuesNetOfInterestExpense`, which the anchor did
+  not read — so their models were built from whatever years still carried the
+  old tag, FY2014 and FY2019, every figure correct about itself and eleven and
+  six years out of date. Fixed 2026-11-01 by settling what the top line of a
+  financial company is, measured across all twelve SEC-sourced financial
+  companies in the set, and by adding a guard that warns on every screen when
+  any company’s figures are more than eighteen months old), `KI-31` (a share count filed before a stock
   split was paired with a price struck after one, so Amphenol's market
   capitalisation was half what it is and its value per share 89.58 against
   43.99 — a 45% overvaluation published as a 13% undervaluation. Fixed
@@ -133,59 +141,12 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-`KI-32` was found on 2026-11-01 by the sweep `KI-30` asked for — *check whether
-any other company has the same fault*. It is not the same fault: no other
-company in the set tags a share count in millions. It was found because the
-cover-page check `KI-30` installed holds a filed share count against the
-filing’s own cover page, and three companies came back with a ratio that is
-neither a match nor a scale. Two of those three turned out to be `KI-31`,
-fixed on 2026-11-01; the third was Mastercard, where the check itself falls
-short rather than the data (`DATA_CONSTRAINTS.md`, *No cover-page share count
-for a company with more than one share class*). This one came from the same
-reading and is a different fault again.
-
-### `KI-32` — two banks’ statements stop years back
-
-**What is wrong.** Which fiscal years a company has is anchored on revenue: the
-years that carry one of the four revenue tags in `US_TAGS.revenue` are the years
-the model is built from. Morgan Stanley and Wells Fargo both stopped tagging
-`Revenues` and now tag **`RevenuesNetOfInterestExpense`**, which is not in the
-list. So their models are built from whatever years still carry the old tag.
-
-**Measured on 2026-11-01**, over the 176 payloads in the set: **two** have a
-latest fiscal year before FY2024, and these are the two. The other 174 end at
-FY2025 (128) or FY2026 (46).
-
-| | latest year shown | revenue shown | what FY2025 actually was |
-|---|---|---|---|
-| `MS` Morgan Stanley | **FY2014** | 34,275 | 70,645 |
-| `WFC` Wells Fargo | **FY2019** | 85,063 | 83,699 |
-
-Confirmed at source: `us-gaap:Revenues` has its last annual value at 2014-12-31
-for Morgan Stanley and 2019-12-31 for Wells Fargo, while
-`us-gaap:RevenuesNetOfInterestExpense` runs to 2025-12-31 for both.
-
-**What it moves: no published value, and every published figure.** Both are on
-the bank template, so neither gets a WACC or a discounted cash flow and no value
-per share of either is wrong. What is wrong is everything the company page and
-the financials tab show: Morgan Stanley is presented as a company half its
-current size with figures **eleven years** out of date, and the chart overlays,
-the per-share figures and the quarterly bridge are all struck against them. A
-reader has no way to tell, because every figure is correctly labelled with the
-year it belongs to — the years are simply the wrong ones.
-
-**What the fix needs.** Adding the tag is one line, and that is the reason to be
-careful rather than quick: `Revenues` and `RevenuesNetOfInterestExpense` are not
-the same quantity — the second is already net of interest expense — so a bank
-whose years come from one tag and whose interest lines are read for the other
-would double-count. It needs the bank template’s revenue definition settled
-first, and measuring across all 36 banks in the set, not just these two.
-
-**How both were found.** Neither by a check that was looking for them. The
-cover-page comparison `KI-30` installed exists to catch a share count in the
-wrong unit; what it actually does is hold a filed count against a figure from a
-different filing, and any disagreement is worth reading. A check is worth more
-than the fault it was built for.
+Both were found on 2026-11-01, by two jobs that were looking for something
+else. `KI-33` came out of putting every share count on one basis for `KI-31`,
+which made a quarterly count that had always been nonsense impossible to miss;
+`KI-34` came out of refetching the set twice in a day and watching a different
+company lose its valuation each time. Neither was caused by the job that found
+it, and both are measured below rather than described.
 
 ### `KI-33` — a quarterly share count worked out by subtraction
 

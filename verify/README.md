@@ -235,6 +235,33 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### The top line of a financial company, and the age of any figures
+
+Which fiscal years a company has is anchored on revenue, so the tag that is
+read decides which years exist. Morgan Stanley and Wells Fargo moved off
+`Revenues` and their models were built from the years that still carried it —
+FY2014 and FY2019 (`KI-32`).
+
+In `scenarios.mts`: the eighteen-month threshold on six **constructed dates**
+asked on a fixed day, because a threshold tested against the clock is a test
+that changes its own answer over time — and both sides of the line, including
+that a set eighteen months old is current where one nineteen months old is
+not. Then over every payload: each SEC-sourced financial company reads its
+top line from a named tag, one tag for the whole series, every year the model
+carries is a year that tag reports, the tag reaches the latest year any
+candidate reaches, no candidate earlier in the order was passed over, and no
+financial company is modelled on a contract-revenue line while it also files
+a total. A company that is not an SEC-sourced financial carries no financial
+revenue definition at all.
+
+In `dashboard.mts`: the warning on the screen, on a **constructed** company
+whose statements stop twelve years back — constructed because the fix means
+no payload on disk is stale any more. Checked on two tabs of the company
+page, to show the band belongs to the company and not to one screen of it;
+on the figures screen, which is a screen of its own; and **absent** on a
+company that is up to date, which is the assertion that makes the other two
+worth having.
+
 ### A share count filed before a split
 
 The count comes from a filing and the price comes from today, so a split

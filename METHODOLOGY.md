@@ -1203,6 +1203,76 @@ filed — the derivation puts it in `provenance.shares`, and the risk and
 cost-of-capital card prints it beside the share price, the way it prints the
 pence-to-pounds correction.
 
+**The top line of a financial company is total revenue as the filer reports
+it** (2026-11-01, `KI-32`). Which fiscal years a company has is anchored on
+revenue: the years that carry a revenue tag are the years the model is built
+from, so the tag that is read decides which years exist. Morgan Stanley and
+Wells Fargo both stopped tagging `Revenues` and moved to
+`RevenuesNetOfInterestExpense`, which was not in the list, so their models
+were built from the years that still carried the old tag — **FY2014 and
+FY2019**, every figure correct about itself and eleven and six years out of
+date.
+
+The definition, settled before it was written down and measured across all
+twelve SEC-sourced financial companies in the set:
+
+> A financial company’s top line is **total revenue as the filer reports it on
+> the face of its income statement**. In XBRL that is
+> `RevenuesNetOfInterestExpense` where the filer tags it and `Revenues`
+> otherwise. `RevenueFromContractWithCustomer...` is **never** the top line of
+> a financial company, because it is an ASC 606 measure: it excludes net
+> interest income, lease income under ASC 842 and investment results, each of
+> which is revenue to a financial company rather than a side issue.
+
+**One tag for the whole series, never a mix.** Everywhere else in the engine a
+later tag may fill a year the preferred one left empty; here it may not, since
+two tags that disagree would put a step in the series that no reader could see
+and no growth rate should be taken from. **And the chosen tag must reach the
+latest year any candidate reaches** — the clause that makes the order safe
+rather than merely plausible, because a tag a filer has stopped using is not
+the tag it reports on now. BlackRock files `Revenues` for 2022 to 2024 at
+about half its contract revenue and nothing for 2025, so preferring it blindly
+would have cost BlackRock its latest year and halved its top line.
+
+**Measured at the filings, tag against tag and year against year**, before
+anything was changed: JPMorgan’s two tags are **identical in all thirteen**
+overlapping years; Morgan Stanley’s are identical in 2013 and 2014, the only
+two years both exist, so the move was a rename and the series is continuous
+across it; Wells Fargo’s are identical in 2018 and differ by 2.0% in 2019,
+which is a restatement of the same line and not a different measure of it. So
+for the three companies where both tags exist the definition does not change a
+single figure that was already being read — it only reaches the years the old
+list could not.
+
+**What it moved**, over the twelve: Morgan Stanley from FY2014 to FY2025 and
+Wells Fargo from FY2019 to FY2025, which is the defect; and three companies
+whose top line was an ASC 606 line while they filed a total — **American
+Express 41,304 to 72,229** (+74.9%), **Berkshire Hathaway 247,244 to 371,444**
+(+50.2%) and **Welltower 8,453 to 10,838** (+28.2%, where the missing part is
+rental income, which for a REIT is most of the business). The other seven are
+unchanged to the figure.
+
+**How old the figures are is now said on the screen.** The defect above was
+possible because every figure is labelled with the year it belongs to, which
+is honest about each figure and silent about the set: a reader looking at a
+correctly labelled FY2014 column cannot tell whether 2014 is the latest year
+that exists or the latest year this site managed to read. So
+`src/data/figuresAge.ts` measures the gap between the end of the latest period
+and today, and **more than eighteen months carries a plain warning on every
+screen that presents those statements** — the company page above its tabs,
+which covers all nine of them, and the figures screen.
+
+**Eighteen months is chosen rather than picked.** A 10-K is due 60 to 90 days
+after the fiscal year end and a 20-F up to four months after, so a company’s
+latest annual figures are legitimately up to about a year old for most of the
+year, and a little over a year old in the weeks before its next report lands.
+Twelve months would warn about companies that are entirely up to date.
+Eighteen is past the point where the **next** annual report should also have
+arrived, so a gap that wide means a year is missing rather than merely
+pending. It is measured from the end of the period and not from the filing
+date, because the question is how old the figures are: a filing published
+yesterday about 2014 does not make 2014 recent.
+
 **A share count is put on today’s basis by the splits filed after it**
 (2026-11-01, `KI-31`). The count comes from a filing and the price comes from
 today, so a stock split between the two stops the pair belonging to each

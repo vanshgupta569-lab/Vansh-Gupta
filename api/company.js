@@ -140,6 +140,120 @@ async function lookupCIK(ticker) {
 // XBRL is the structured data format inside SEC filings. The same real-world
 // number can be filed under different tag names by different companies, so for
 // each line item we try several tags and take the first that exists.
+// ---------------------------------------------------------------------------
+// WHAT THE TOP LINE OF A FINANCIAL COMPANY IS (`KI-32`)
+// ---------------------------------------------------------------------------
+//
+// Which fiscal years a company has is anchored on revenue: the years that
+// carry a revenue tag are the years the model is built from. So the tag that
+// is read is not a detail of presentation — it decides which years exist.
+// Morgan Stanley and Wells Fargo both stopped tagging `Revenues` and moved to
+// `RevenuesNetOfInterestExpense`, which was not in the list, so their models
+// were built from whatever years still carried the old tag: Morgan Stanley
+// stopped at FY2014 and Wells Fargo at FY2019, eleven and six years stale,
+// every figure correctly labelled with a year that was simply the wrong one.
+//
+// THE DEFINITION, settled on 2026-11-01 and measured over all twelve
+// SEC-sourced financial companies in the set before it was written down:
+//
+//   A financial company’s top line is TOTAL REVENUE AS THE FILER REPORTS IT
+//   ON THE FACE OF ITS INCOME STATEMENT. In XBRL that is
+//   `RevenuesNetOfInterestExpense` where the filer tags it, and `Revenues`
+//   otherwise. `RevenueFromContractWithCustomer...` is NEVER the top line of
+//   a financial company, because it is an ASC 606 measure: it excludes net
+//   interest income, lease income under ASC 842 and investment results, each
+//   of which is revenue to a financial company rather than a side issue.
+//
+// ONE TAG FOR THE WHOLE SERIES, NEVER A MIX. Everywhere else a later tag may
+// fill a year the preferred one left empty; here it may not. Two tags that
+// disagree would put a step in the series that no reader could see and no
+// growth rate should be taken from.
+//
+// AND THE CHOSEN TAG MUST REACH THE LATEST YEAR ANY CANDIDATE REACHES, which
+// is the clause that makes the order safe rather than merely plausible. A tag
+// a filer has stopped using is not the tag it reports on now: BlackRock files
+// `Revenues` for 2022 to 2024 at about half its contract revenue and nothing
+// for 2025, so preferring `Revenues` blindly would have cost it its latest
+// year and halved its top line.
+//
+// MEASURED AT THE FILINGS, tag against tag, year against year:
+//   JPM   the two tags are IDENTICAL in all thirteen overlapping years
+//   MS    identical in 2013 and 2014, the only two years both exist — so the
+//         move was a rename and the series is continuous across it
+//   WFC   identical in 2018; 2019 differs by 2.0%, which is a restatement of
+//         the same line and not a different measure of it
+// So for the three companies where both tags exist, this definition does not
+// change a single figure that was already being read; it only reaches the
+// years the old list could not.
+const FINANCIAL_REVENUE_TAGS = [
+  'RevenuesNetOfInterestExpense',
+  'Revenues',
+  'RevenueFromContractWithCustomerExcludingAssessedTax',
+  'RevenueFromContractWithCustomerIncludingAssessedTax',
+];
+
+// The same test the engine uses for the bank template
+// (`src/data/residualIncome.js`, `isFinancialCompany`), minus the sector
+// field, which the profile supplies and the profile is fetched after this
+// runs. Every SEC filer carries a SIC code, so for the companies this decides
+// anything about the two tests agree. Deliberately a second copy: each file
+// in `api/` is packaged on its own by the host and a shared import there
+// takes the route down, which is the same reason `payloadVersion.ts` exists.
+function filerIsFinancial(sicCode, sicDescription) {
+  const sic = sicCode != null ? Number(sicCode) : null;
+  if (sic != null && sic >= 6000 && sic <= 6799) return true;
+  return /financ|bank|insur|capital market|credit/i.test(String(sicDescription || ''));
+}
+
+/** The fiscal years one tag carries an annual 10-K figure for. */
+function annualYearsOf(facts, tag) {
+  const entry = facts['us-gaap']?.[tag];
+  const years = new Set();
+  if (!entry) return years;
+  const unitKey = Object.keys(entry.units || {})[0];
+  if (!unitKey) return years;
+  for (const point of entry.units[unitKey] || []) {
+    if (typeof point.val !== 'number' || !point.end) continue;
+    if (!String(point.form || '').startsWith('10-K')) continue;
+    if (point.start) {
+      const days = (new Date(point.end) - new Date(point.start)) / 86400000;
+      if (days < 300 || days > 400) continue;
+    }
+    const year = Number(point.end.slice(0, 4));
+    if (year) years.add(year);
+  }
+  return years;
+}
+
+/**
+ * Which revenue tag a financial company’s top line is read from, and the
+ * record of how that was decided. Returns null where no candidate carries an
+ * annual figure at all, and the caller then falls back to the ordinary list.
+ */
+function financialRevenueTag(facts) {
+  const considered = FINANCIAL_REVENUE_TAGS.map((tag) => ({ tag, years: annualYearsOf(facts, tag) })).filter(
+    (c) => c.years.size > 0
+  );
+  if (!considered.length) return null;
+  const latest = Math.max(...considered.flatMap((c) => [...c.years]));
+  const chosen = considered.find((c) => c.years.has(latest));
+  if (!chosen) return null;
+  return {
+    tag: chosen.tag,
+    latestYear: latest,
+    years: [...chosen.years].sort((a, b) => a - b),
+    basis:
+      'total revenue as the filer reports it on the face of its income statement: ' +
+      '`RevenuesNetOfInterestExpense` where it is tagged, `Revenues` otherwise, and one tag for the ' +
+      'whole series',
+    considered: considered.map((c) => ({
+      tag: c.tag,
+      years: c.years.size,
+      reachesLatest: c.years.has(latest),
+    })),
+  };
+}
+
 const US_TAGS = {
   revenue: [
     'RevenueFromContractWithCustomerExcludingAssessedTax',
@@ -1095,14 +1209,19 @@ const quarterlyDropped = [];
 // counts (`KI-30`); the quarters carry the same counts and must carry the same
 // correction, or a quarterly share count disagrees with the annual one beside
 // it by a million.
-function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1) {
-  const anchor = collectPoints(facts, US_TAGS.revenue);
+function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1, revenueTags = US_TAGS.revenue) {
+  // THE SAME TOP LINE THE YEARS WERE READ FROM (KI-32). The quarterly calendar
+  // is anchored on revenue too, so a bank whose years come from
+  // RevenuesNetOfInterestExpense and whose quarters came from Revenues would
+  // have had a calendar that stopped years before its own statements.
+  const anchor = collectPoints(facts, revenueTags);
   const calendar = reportingCalendar(anchor.flows);
   if (!calendar.length) return [];
 
   const byField = {};
   for (const field of QUARTER_FIELDS) {
-    if (US_TAGS[field]) byField[field] = collectPoints(facts, US_TAGS[field]);
+    const tags = field === 'revenue' ? revenueTags : US_TAGS[field];
+    if (tags) byField[field] = collectPoints(facts, tags);
   }
 
   const rows = [];
@@ -1264,12 +1383,19 @@ async function fetchFromSEC(ticker) {
   // not in that count yet. Only the counts need it, because only a count moves
   // on a split.
   const countFiledAt = {};
-  for (const [field, tags] of Object.entries(US_TAGS)) {
+  // WHICH REVENUE TAG THIS COMPANY'S TOP LINE IS READ FROM (`KI-32`). For a
+  // financial company it is chosen rather than taken in order, and the choice
+  // is recorded, because the tag decides which fiscal years exist at all.
+  const financial = filerIsFinancial(sicCode, sicDescription);
+  const revenueDefinition = financial ? financialRevenueTag(facts) : null;
+  const revenueTags = revenueDefinition ? [revenueDefinition.tag] : US_TAGS.revenue;
+  const tagsFor = (field) => (field === 'revenue' ? revenueTags : US_TAGS[field]);
+  for (const field of Object.keys(US_TAGS)) {
     const isCount = SEC_COUNT_FIELDS.has(field);
     if (isCount) countFiledAt[field] = {};
     extracted[field] = extractUSFact(
       facts,
-      tags,
+      tagsFor(field),
       isCount ? null : monetaryUnits,
       isCount ? countFiledAt[field] : null
     );
@@ -1305,7 +1431,7 @@ async function fetchFromSEC(ticker) {
   const shareScale = shareScaleRecord ? shareScaleRecord.factor : 1;
 
   // The date each of those years ended, from the same tags that anchored them.
-  const periodEnds = extractPeriodEnds(facts, US_TAGS.revenue);
+  const periodEnds = extractPeriodEnds(facts, revenueTags);
 
   const statements = years.map((year) => {
     const row = { fiscalYear: year, periodEnd: periodEnds[year] ?? null };
@@ -1327,7 +1453,7 @@ async function fetchFromSEC(ticker) {
 
   // THE QUARTERS, from the same facts the years came from.
   quarterlyDropped.length = 0;
-  const quarters = extractQuarterlySEC(facts, match.cik, SEC_COUNT_FIELDS, statements, shareScale);
+  const quarters = extractQuarterlySEC(facts, match.cik, SEC_COUNT_FIELDS, statements, shareScale, revenueTags);
   const quartersDropped = quarterlyDropped.length;
 
   return {
@@ -1353,6 +1479,10 @@ async function fetchFromSEC(ticker) {
     // the handler, after the price request has reported the split events, and
     // this is what tells it which counts already carry them.
     shareCountFiledAt: countFiledAt,
+    // WHICH LINE THE TOP LINE IS, and how that was decided (`KI-32`). Recorded
+    // for a financial company, where it is a choice; null everywhere else,
+    // where the ordinary order of preference applies unchanged.
+    revenueDefinition,
     sicCode,
     sicDescription,
     statements,
@@ -2447,7 +2577,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 8;
+const FETCHER_VERSION = 9;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

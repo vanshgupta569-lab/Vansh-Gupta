@@ -78,6 +78,7 @@ import { Mark } from '../design/Mark';
 // ONE DECIMAL RULE PER ROW, defined once for both tables that print these
 // figures (`docs/VISUAL_SYSTEM.md` finding 1).
 import { inMillions, asCount, asPerShare } from '../data/figureFormat';
+import { StaleFigures } from './staleFigures';
 
 const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, quiet: DIM, line: LINE } = DARK;
 
@@ -676,6 +677,12 @@ export const FiguresEditor: React.FC<Props> = ({
             )}
           </div>
         </div>
+
+        {/* HOW OLD THESE FIGURES ARE, if that needs saying (`KI-32`). Built
+            from the statements this screen is showing rather than from the
+            payload, because a curated fixture has statements and no payload,
+            and the age is a property of what is on screen. */}
+        <StaleFigures payload={payload ?? { statements }} className="mt-4" />
 
         <p className="mt-2.5 flex items-start" style={{ fontSize: 14, color: MUTED, lineHeight: 1.5 }}>
           <span>

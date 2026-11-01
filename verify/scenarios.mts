@@ -3453,6 +3453,184 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 // ---------------------------------------------------------------------------
+// WHAT THE TOP LINE OF A FINANCIAL COMPANY IS, AND HOW OLD THE FIGURES ARE
+// (`KI-32`)
+// ---------------------------------------------------------------------------
+//
+// Which years a company has is anchored on revenue, so the tag that is read
+// decides which years exist. Morgan Stanley and Wells Fargo moved off
+// `Revenues` and their models were built from the years that still carried it
+// — FY2014 and FY2019. Two things are checked: the definition that fixed it,
+// and the guard that means the next one of these is seen rather than silent.
+{
+  console.log('\n=== the top line of a financial company, and the age of any figures ===');
+  const { figuresAge, STALE_MONTHS } = await import(`file:///${REPO}/src/data/figuresAge.ts`);
+  const { isFinancialCompany } = await import(`file:///${REPO}/src/data/residualIncome.js`);
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let thresholdCases = 0;
+
+  // ---- 1. THE THRESHOLD, ON CONSTRUCTED DATES -------------------------
+  //
+  // Asked on a FIXED day, because a threshold tested against the clock is a
+  // test that changes its own answer over time. Both sides of the line, and
+  // the reason the line is where it is: a company that reported eleven months
+  // ago is up to date and must not be warned about.
+  {
+    const today = new Date('2026-11-01T00:00:00Z');
+    const at = (end: string) => (figuresAge as any)({ statements: [{ fiscalYear: Number(end.slice(0, 4)), periodEnd: end }] }, today);
+    const cases: [string, boolean][] = [
+      ['2026-06-30', false],
+      ['2025-12-31', false],
+      ['2025-06-30', false],
+      ['2025-04-30', false],
+      ['2025-04-01', true],
+      ['2019-12-31', true],
+      ['2014-12-31', true],
+    ];
+    thresholdCases = cases.length;
+    for (const [end, wantStale] of cases) {
+      const got = at(end);
+      if (got.stale !== wantStale) {
+        faults.push(
+          `figures to ${end} read as ${got.monthsBehind} months behind and ` +
+            `${got.stale ? 'stale' : 'current'}, against a threshold of ${STALE_MONTHS}`
+        );
+      }
+      if (wantStale && !String(got.label).includes(`FY${end.slice(0, 4)}`)) {
+        faults.push(`figures to ${end} are labelled "${got.label}" rather than naming their year`);
+      }
+      if (!wantStale && got.detail !== null) {
+        faults.push(`figures to ${end} are current and still carry a warning`);
+      }
+    }
+    // An eighteen-month-old set is not stale; a nineteen-month-old one is.
+    // EXACTLY AT THE LINE AND JUST OVER IT. 2026-11-01 less eighteen months
+    // is 2025-05-02, so figures to that day are eighteen months old and current,
+    // and figures two days older are past the line. Flooring the gap before the
+    // test used to make "more than eighteen months" mean nineteen or more.
+    // EXACTLY AT THE LINE, AND ONE MONTH PAST IT, in calendar months a reader
+    // can check: eighteen months after 2025-04-30 is 2026-10-30, which is on or
+    // before today, so those figures are eighteen months old and current.
+    const atLine = (figuresAge as any)({ statements: [{ fiscalYear: 2025, periodEnd: '2025-04-30' }] }, today);
+    const pastLine = (figuresAge as any)({ statements: [{ fiscalYear: 2025, periodEnd: '2025-04-01' }] }, today);
+    if (atLine.monthsBehind !== 18 || atLine.stale) {
+      faults.push(`figures to 2025-04-30 read ${atLine.monthsBehind} months, stale ${atLine.stale}: eighteen months is not more than eighteen`);
+    }
+    if (!pastLine.stale || pastLine.monthsBehind !== 19) {
+      faults.push(`figures to 2025-04-01 read ${pastLine.monthsBehind} months, stale ${pastLine.stale}: nineteen months is past the line`);
+    }
+    // AND A MONTH END IS NOT PUSHED PAST ITSELF: 31 January plus a month is the
+    // end of February, not the start of March.
+    const janEnd = (figuresAge as any)({ statements: [{ fiscalYear: 2025, periodEnd: '2025-01-31' }] }, new Date('2026-07-31T00:00:00Z'));
+    if (janEnd.monthsBehind !== 18 || janEnd.stale) {
+      faults.push(`figures to 2025-01-31 read ${janEnd.monthsBehind} months at 2026-07-31, stale ${janEnd.stale}`);
+    }
+  }
+
+  // ---- 2. NO COMPANY IN THE SET IS STALE, AND THE GUARD SAYS SO -------
+  let stale = 0;
+  let financials = 0;
+  let chosen = 0;
+  const byTag: Record<string, number> = {};
+  const staleOnes: string[] = [];
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (payload?.error) continue;
+    const t = file.replace('.json', '');
+    const age = (figuresAge as any)(payload);
+    if (age.stale) {
+      stale++;
+      staleOnes.push(`${t} FY${age.latestFiscalYear} (${age.monthsBehind} months)`);
+      // Not a fault in itself — a company really can be late — but it must
+      // carry the words that say so.
+      if (!age.label || !age.detail) {
+        faults.push(`${t} is ${age.monthsBehind} months behind and the guard produced no words for it`);
+      }
+    }
+
+    // ---- 3. THE DEFINITION, WHERE IT APPLIES --------------------------
+    const rd = payload?.revenueDefinition ?? null;
+    const isSec = payload?.source === 'SEC EDGAR';
+    const fin = isFinancialCompany(payload);
+    if (fin && isSec) {
+      financials++;
+      if (!rd) {
+        faults.push(`${t} is on the bank template and carries no record of which line its top line is`);
+        continue;
+      }
+      chosen++;
+      byTag[rd.tag] = (byTag[rd.tag] ?? 0) + 1;
+      // ONE TAG FOR THE WHOLE SERIES.
+      if (!Array.isArray(rd.years) || !rd.years.length) {
+        faults.push(`${t}: a revenue definition naming no years`);
+        continue;
+      }
+      // AND IT REACHES THE LATEST YEAR ANY CANDIDATE REACHES, which is the
+      // clause that stops the order of preference costing BlackRock its
+      // latest year.
+      if (!rd.years.includes(rd.latestYear)) {
+        faults.push(`${t}: its top line comes from ${rd.tag}, which does not reach FY${rd.latestYear}`);
+      }
+      const reaching = (rd.considered ?? []).filter((c: any) => c.reachesLatest);
+      if (!reaching.length) {
+        faults.push(`${t}: no candidate reaches FY${rd.latestYear} and one was chosen anyway`);
+      } else if (reaching[0].tag !== rd.tag) {
+        faults.push(
+          `${t}: ${rd.tag} was chosen over ${reaching[0].tag}, which also reaches FY${rd.latestYear} and ` +
+            'comes first in the order'
+        );
+      }
+      // AND THE YEARS THE MODEL CARRIES REALLY COME FROM IT.
+      const modelled = (payload.statements ?? []).map((r: any) => Number(r.fiscalYear));
+      for (const y of modelled) {
+        if (!rd.years.includes(y)) {
+          faults.push(`${t}: the model carries FY${y}, which ${rd.tag} does not report`);
+        }
+      }
+      // A financial company must never be modelled on a contract-revenue line
+      // where it files a total: that is the measure that excludes net interest
+      // income, lease income and investment results.
+      const contract = (rd.considered ?? []).find((c: any) => /RevenueFromContractWithCustomer/.test(c.tag));
+      const total = (rd.considered ?? []).find((c: any) => /^Revenues(NetOfInterestExpense)?$/.test(c.tag) && c.reachesLatest);
+      if (total && contract && rd.tag === contract.tag) {
+        faults.push(`${t}: modelled on ${contract.tag} while it also files ${total.tag} for FY${rd.latestYear}`);
+      }
+    } else if (rd) {
+      faults.push(`${t} is not an SEC-sourced financial company and carries a financial revenue definition`);
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the top line or the age of the figures:`);
+    faults.slice(0, 15).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 15) console.log(`           ... and ${faults.length - 15} more`);
+  } else {
+    console.log(
+      `  the ${STALE_MONTHS}-month threshold holds on both sides of the line on ${thresholdCases} constructed dates, and ` +
+        'a set eighteen months old is current where one nineteen months old is not'
+    );
+    console.log(
+      `  ${chosen} of ${financials} SEC-sourced financial companies read their top line from a named tag, ` +
+        `one tag for the whole series and every one reaching its own latest year: ` +
+        `${Object.entries(byTag).map(([k, v]) => `${v} from ${k}`).join(', ')}`
+    );
+    console.log(
+      `  and ${stale} companies in the set are more than ${STALE_MONTHS} months behind` +
+        `${staleOnes.length ? ': ' + staleOnes.join('; ') : ', so no screen carries the warning — which is ' +
+          'why the screen check drives a constructed company'}`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // A SHARE COUNT FILED BEFORE A SPLIT (`KI-31`)
 // ---------------------------------------------------------------------------
 //

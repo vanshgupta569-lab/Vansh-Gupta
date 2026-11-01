@@ -100,9 +100,38 @@ const FIXTURES: Record<string, 'valued' | 'refused' | 'converted'> = {
   [REFUSED_TICKER]: 'refused',
   [CONVERTED_TICKER]: 'converted',
 };
+
+// A COMPANY WHOSE STATEMENTS STOP TWELVE YEARS BACK (`KI-32`).
+//
+// Constructed, and it has to be: the whole point of the fix is that no
+// company in the set is stale any more, so there is nothing on disk left to
+// show the warning with. Built by shifting the valued fixture’s years rather
+// than by writing a second fixture, so the two cannot drift apart — what is
+// under test is the age of the figures and nothing else about them. The
+// quarters go, because a quarter newer than every year is a different
+// question from a year that is missing.
+const STALE_TICKER = 'PAPEROLD';
+const STALE_YEARS_BACK = 12;
+const staleFixture = () => {
+  const p = JSON.parse(JSON.stringify(paperPayload('valued')));
+  for (const row of p.statements ?? []) {
+    if (Number.isFinite(Number(row.fiscalYear))) row.fiscalYear = Number(row.fiscalYear) - STALE_YEARS_BACK;
+    if (typeof row.periodEnd === 'string' && /^\d{4}-/.test(row.periodEnd)) {
+      row.periodEnd = `${Number(row.periodEnd.slice(0, 4)) - STALE_YEARS_BACK}${row.periodEnd.slice(4)}`;
+    }
+  }
+  p.quarters = [];
+  p.ticker = STALE_TICKER;
+  return p;
+};
+
 /** The payload for a ticker this check knows, or null for one it does not. */
 const fixtureFor = (ticker: string) =>
-  FIXTURES[ticker] ? { ...paperPayload(FIXTURES[ticker]), ticker } : null;
+  ticker === STALE_TICKER
+    ? staleFixture()
+    : FIXTURES[ticker]
+      ? { ...paperPayload(FIXTURES[ticker]), ticker }
+      : null;
 
 let problems = 0;
 const fail = (what: string, expected: string, got: string) => {
@@ -643,6 +672,88 @@ async function checkSharedRightEdge(page: Page, label: string, table: string, he
     );
   }
 }
+/**
+ * HOW OLD THE FIGURES ARE, SAID ON THE SCREEN (`KI-32`).
+ *
+ * Every figure on this site is labelled with the year it belongs to, which is
+ * honest about each figure and silent about the set: a reader looking at a
+ * correctly labelled FY2014 column cannot tell whether 2014 is the latest year
+ * that exists or the latest this site managed to read. Morgan Stanley was
+ * presented for months as a company half its size with figures eleven years
+ * out of date, and nothing on the screen said so.
+ *
+ * Driven on a constructed company, because the fix means no payload on disk is
+ * stale any more. Both screens that present these statements are checked, and
+ * so is the company that is NOT stale — a warning that is always on screen is
+ * not a warning.
+ */
+async function checkStaleFigures(page: Page) {
+  console.log('\n=== how old the figures are, said on the screen ===');
+  const { figuresAge, STALE_MONTHS } = await import(`file:///${REPO}/src/data/figuresAge.ts`);
+  const fixture = staleFixture();
+  const age: any = (figuresAge as any)(fixture);
+  if (!age.stale) {
+    fail(
+      'the constructed stale company',
+      `statements more than ${STALE_MONTHS} months old`,
+      `${age.monthsBehind} months, so the case under test is not stale at all`
+    );
+    return;
+  }
+
+  // ---- 1. THE COMPANY PAGE, WHICH IS EVERY TAB ----------------------
+  //
+  // One band above the tab bar rather than one per tab: all nine tabs present
+  // the same statements, so the age belongs to the company. Checked on two
+  // tabs to show that it is the page and not the Overview.
+  for (const tab of ['overview', 'financials']) {
+    await page.goto(`${BASE}/company/${STALE_TICKER}/${tab}`, { waitUntil: `domcontentloaded` });
+    const band = page.locator(`[data-stale-figures]`).first();
+    try {
+      await band.waitFor({ state: `visible`, timeout: 30_000 });
+    } catch {
+      fail(`the ${tab} tab of a company whose figures stop in FY${age.latestFiscalYear}`, 'a warning saying so', 'nothing on the screen');
+      continue;
+    }
+    const said = ((await band.textContent()) || '').replace(/\s+/g, ' ').trim();
+    const year = await band.getAttribute(`data-stale-figures`);
+    if (year !== String(age.latestFiscalYear)) {
+      fail(`the ${tab} tab’s warning`, `the year FY${age.latestFiscalYear}`, `FY${year}`);
+    } else if (!said.includes(`Latest figures: FY${age.latestFiscalYear}`)) {
+      fail(`the ${tab} tab’s warning`, `"Latest figures: FY${age.latestFiscalYear}"`, `"${said.slice(0, 90)}"`);
+    } else {
+      ok(`the ${tab} tab says "Latest figures: FY${age.latestFiscalYear}" — ${age.monthsBehind} months behind`);
+    }
+  }
+
+  // ---- 2. AND THE FIGURES SCREEN, which is a screen of its own ------
+  await search(page, STALE_TICKER);
+  const onFigures = page.locator(`[data-stale-figures]`).first();
+  try {
+    await onFigures.waitFor({ state: `visible`, timeout: 30_000 });
+    ok('the figures screen carries the same warning, from the same rule');
+  } catch {
+    fail('the figures screen', 'the same warning as the company page', 'nothing on the screen');
+  }
+
+  // ---- 3. AND A COMPANY THAT IS CURRENT CARRIES NO WARNING ----------
+  //
+  // The assertion that makes the other two worth having.
+  await page.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: `domcontentloaded` });
+  await page.locator(`[data-coc-card]`).first().waitFor({ timeout: 30_000 }).catch(() => {});
+  const current: any = (figuresAge as any)(fixtureFor(PAPER_TICKER));
+  const strays = await page.locator(`[data-stale-figures]`).count();
+  if (strays) {
+    fail(
+      'a company whose figures are current',
+      'no warning about their age',
+      `a warning, on figures ${current.monthsBehind} months old against a threshold of ${STALE_MONTHS}`
+    );
+  } else {
+    ok(`a company ${current.monthsBehind} months behind carries no warning, so the band is a warning and not furniture`);
+  }
+}
+
 async function checkHeadsOnScreen(page: Page) {
   console.log(`\n=== the figures screen: the lines under their heads ===`);
   const title = page.getByRole('heading', { name: /^reported figures/i });
@@ -3217,6 +3328,9 @@ try {
   await page.waitForTimeout(300);
   await readContrast(page, 'the evidence behind a figure');
   await page.keyboard.press(`Escape`);
+
+  // 4b. HOW OLD THE FIGURES ARE, on both screens that show them.
+  await checkStaleFigures(page);
 
   // 5. The same company again, quoted in a currency its statements are not
   //    in: the one case where a value per share is shown twice.

@@ -36,6 +36,12 @@
 //      off its own cover page, and the counts corrected to an absolute
 //      number of shares. McDonald's tags 716.4 where every other filer tags
 //      716,400,000 (`KI-30`)
+//   9  `revenueDefinition`: which revenue tag a FINANCIAL company's top
+//      line is read from, chosen rather than taken in order, because the
+//      tag decides which fiscal years exist. Morgan Stanley and Wells Fargo
+//      moved to `RevenuesNetOfInterestExpense` and their models were being
+//      built from the years that still carried `Revenues`  FY2014 and
+//      FY2019 (`KI-32`)
 //   8  `splitAdjustment` and `quote.splits`: every stock split the price
 //      source reports, and every share count put on today's basis by the
 //      splits that fall after the date that count was filed — so a count
@@ -49,7 +55,7 @@
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 8;
+export const PAYLOAD_VERSION = 9;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>
