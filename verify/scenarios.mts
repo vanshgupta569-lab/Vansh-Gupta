@@ -3453,6 +3453,105 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 // ---------------------------------------------------------------------------
+// A TICKER THAT HAS NEVER ONCE ANSWERED
+// ---------------------------------------------------------------------------
+//
+// `TATAMOTORS.NS` sat in the sweep set for eleven days returning an error on
+// every attempt, and the only thing that ever said so was one clause at the
+// end of a fetch run — "1 carrying a fetch error" — which is indistinguishable
+// from a source having a bad afternoon. It was not a bad afternoon: Tata Motors
+// had demerged, the exchange had retired the symbol, and the archive shows the
+// FIRST capture failing as well as the last. Nothing was wrong with the
+// fetcher; the set was asking for a company that no longer exists under that
+// name.
+//
+// A transient failure and a dead ticker look identical in one run and quite
+// different across the archive, which is what this reads. A ticker that has
+// answered before and is failing now is the source’s business; a ticker that
+// has NEVER answered is ours.
+{
+  console.log('\n=== every ticker in the set has answered at least once ===');
+  const faults: string[] = [];
+  const VERSIONS = path.join(PAYLOADS, 'versions');
+  const tickers = fs
+    .readFileSync(path.join(REPO, 'verify/tickers.txt'), 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+
+  let answered = 0;
+  let unfetched = 0;
+  let failingNow = 0;
+  const neverAnswered: string[] = [];
+  const extras: string[] = [];
+
+  for (const t of tickers) {
+    const file = path.join(PAYLOADS, `${t}.json`);
+    const onDisk = fs.existsSync(file);
+    let erroring = false;
+    if (onDisk) {
+      try {
+        erroring = Boolean(JSON.parse(fs.readFileSync(file, 'utf8'))?.error);
+      } catch {
+        erroring = true;
+      }
+    }
+    if (!onDisk) {
+      unfetched++;
+      continue;
+    }
+    if (!erroring) {
+      answered++;
+      continue;
+    }
+    failingNow++;
+    // IT IS FAILING NOW. Has it ever not?
+    const dir = path.join(VERSIONS, t);
+    let everAnswered = false;
+    let captures = 0;
+    if (fs.existsSync(dir)) {
+      for (const c of fs.readdirSync(dir).filter((f) => f.endsWith('.json'))) {
+        captures++;
+        try {
+          if (!JSON.parse(fs.readFileSync(path.join(dir, c), 'utf8'))?.error) everAnswered = true;
+        } catch {
+          /* an unreadable capture is not an answer */
+        }
+      }
+    }
+    if (!everAnswered) {
+      neverAnswered.push(`${t} (${captures} captures, not one of them statements)`);
+      faults.push(
+        `${t} is in the sweep set and has never once returned statements, across ${captures} captures — ` +
+          'a symbol that does not exist rather than a source having a bad afternoon'
+      );
+    }
+  }
+
+  // A payload nobody asked for is not a fault, but it is worth saying: it is
+  // measured over and reported on while belonging to no list.
+  for (const f of fs.readdirSync(PAYLOADS).filter((x) => x.endsWith('.json'))) {
+    const t = f.replace('.json', '');
+    if (!tickers.includes(t)) extras.push(t);
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} tickers that have never answered:`);
+    faults.forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  ${answered} of ${tickers.length} tickers answered with statements, ${failingNow} are failing now ` +
+        'and have answered before, and none has failed on every attempt it has ever had'
+    );
+    if (unfetched) console.log(`  ${unfetched} have not been fetched yet, which is not a failure`);
+    if (extras.length) {
+      console.log(`  ${extras.length} payloads belong to no list and are measured anyway: ${extras.join(', ')}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // WHAT THE TOP LINE OF A FINANCIAL COMPANY IS, AND HOW OLD THE FIGURES ARE
 // (`KI-32`)
 // ---------------------------------------------------------------------------

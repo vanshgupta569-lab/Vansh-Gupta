@@ -871,6 +871,45 @@ check already refuses a listing whose shares outstanding and filed count differ
 by more than 1.5× either way, which catches a factor of a thousand wherever the
 feed reports both.
 
+### A ticker is not a company, and no source says when one is retired
+
+**Source:** the vendor feed. **Affects:** every company reached by a symbol
+rather than by a registration number — the 92 in the set whose statements
+come from the vendor, and the price of all 178.
+
+A company is identified here by its exchange symbol, and a symbol is a
+tenancy rather than a name. When a company demerges, renames itself or is
+taken over, the exchange reassigns or retires the symbol, and **the only
+signal is that requests begin to fail**. There is no feed of retirements to
+read, and the failure is the same 404 a mistyped ticker gives.
+
+`TATAMOTORS.NS` is the worked example. Tata Motors demerged; the exchange
+retired the symbol; two companies are now listed where there was one —
+`TMPV.NS`, the continuing entity, whose price history runs back to 1991 and
+carries the 1995 and 2011 splits, and `TMCV.NS`, the commercial-vehicle
+company that took the Tata Motors Limited name and first traded on
+2025-11-12. Nothing announced it to this site. The symbol simply stopped
+answering, and **every capture in the archive is an error, the first one
+included**, because the symbol had already gone by the time it was first
+asked for.
+
+**Bound: the company, entirely.** A retired symbol yields no statements at
+all, so there is nothing to misvalue — what is lost is the company rather
+than its accuracy. The dangerous case is the opposite one, and it is why
+this is written down: a symbol REASSIGNED to a different company would
+answer, with somebody else’s figures under the name the reader asked for.
+Nothing in the data would say so.
+
+**What limits it:** `npm run verify` now reports any ticker in the sweep set
+that has never once returned statements across its whole capture history,
+which is what distinguishes a retired symbol from a source having a bad
+afternoon — and that distinction can only be drawn from the archive, not
+from one run. A reassignment would be caught instead by the
+listing-comparability refusal, which already compares the shares the listing
+reports against the filed count and refuses a listing that cannot be the
+company; it is not proof against a reassignment between two companies of
+similar size, and nothing available is.
+
 ### No primary source publishes a corporate action
 
 **Source:** the vendor feed (Yahoo chart events). **Affects:** every company,

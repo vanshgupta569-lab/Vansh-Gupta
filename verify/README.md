@@ -235,6 +235,25 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### Every ticker in the set has answered at least once
+
+`TATAMOTORS.NS` sat in the sweep set for eleven days returning an error on
+every attempt, and the only thing that said so was one clause at the end of a
+fetch run — *1 carrying a fetch error* — which is indistinguishable from a
+source having a bad afternoon. It was not a bad afternoon: Tata Motors had
+demerged and the exchange had retired the symbol.
+
+A transient failure and a dead ticker look identical in one run and quite
+different across the archive, so the archive is what this reads. A ticker
+that has answered before and is failing now is the source’s business; a
+ticker that has **never** answered, across every capture ever taken of it, is
+ours. Payloads belonging to no list are counted and named too, since they are
+measured over while belonging to nothing.
+
+Proved by breaking: the retired symbol put back into the set with its last
+error payload, which the check reports as *never once returned statements,
+across 8 captures*.
+
 ### The top line of a financial company, and the age of any figures
 
 Which fiscal years a company has is anchored on revenue, so the tag that is

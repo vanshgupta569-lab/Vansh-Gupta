@@ -150,12 +150,20 @@ SNDK
 SONY
 STX
 T
-TATAMOTORS.NS
 TCS.NS
 TD
 TD.TO
 TEVA.TA
 TM
+# TATAMOTORS.NS was retired by the exchange after Tata Motors demerged, and
+# every capture of it this archive holds is an error — the first one included,
+# because the symbol was already gone when it was first asked for. Two
+# companies are listed where there was one, and both are carried: TMPV is the
+# continuing entity, whose price history runs back to 1991-01-02 and carries
+# the 1995 and 2011 splits, and TMCV is the commercial-vehicle company that
+# took the Tata Motors Limited name, first traded 2025-11-12.
+TMCV.NS
+TMPV.NS
 TMO
 TMUS
 TSLA
