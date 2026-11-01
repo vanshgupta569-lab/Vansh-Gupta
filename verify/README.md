@@ -235,6 +235,25 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### The risk-free rate: one fetch per currency, three tries, a fallback behind
+
+A single request that did not answer used to take a company’s whole valuation
+away (`KI-34`). Five things are checked, every one by standing in for the
+publisher rather than waiting for it to have a bad day.
+
+**One fetch per currency, and each company its own window**: four companies
+in one currency fetch the series once between them, and two of them three
+months apart on a rising curve still get different rates — which is what
+makes sharing the series right and sharing the rate wrong. **Three attempts**:
+a publisher that drops two requests and answers the third still produces a
+rate, and the retry counter proves the retry is what saved it. **A refusal is
+not retried**: a 403 is asked once per publisher and respected. **The primary
+blocked outright**: with the US Treasury answering 503 the rate is 4.4000%
+from *FRED, republishing US Treasury*, and the answer says why it was used.
+**A blank cell is not a yield of nought**: a series whose holidays are empty
+cells still averages 4.4000% rather than reading them as 0%, which cost 19.7
+basis points before this.
+
 ### A share count is never a subtraction
 
 Rule 4 earns most of the quarterly figures here by taking one cumulative

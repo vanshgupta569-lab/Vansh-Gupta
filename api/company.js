@@ -2103,6 +2103,22 @@ const RISK_FREE_WINDOW_DAYS = 365;
 
 const ymd = (d) => d.toISOString().slice(0, 10);
 const asRate = (v) => {
+  // A BLANK IS NOT A NOUGHT, and `Number('')` is 0.
+  //
+  // FRED prints an EMPTY cell for a day its series has no observation — every
+  // US market holiday — so reading the cell as a number put 1 January, Martin
+  // Luther King Day, Good Friday, Independence Day and eight more into a year
+  // of Treasury yields at 0%. Measured on 2026-11-01: the two sources agreed
+  // to the last decimal on all 250 days they shared and the mean came out
+  // 4.0977% against 4.2944%, because of twelve days that were not days. That
+  // is 19.7 basis points straight onto every discount rate the fallback ever
+  // served, and `CLAUDE.md`'s trap list names it: a blank cell reads as a
+  // reported nil.
+  //
+  // A GENUINE NOUGHT IS KEPT. A ten-year government bond really can yield 0%
+  // — Japan's did for years — so only the blank is refused, never the zero.
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
   const n = Number(v);
   return typeof n === 'number' && isFinite(n) ? n : null;
 };
@@ -2115,6 +2131,157 @@ const asRate = (v) => {
 // it is carried through to the page so a reader is never told a monthly series
 // is a daily one. Daily is the default because every source here was daily
 // until INR.
+// ---------------------------------------------------------------------------
+// ONE FETCH PER CURRENCY, THREE TRIES, AND SOMETHING BEHIND IT (`KI-34`)
+// ---------------------------------------------------------------------------
+//
+// The rate was fetched once per COMPANY, with no retry and, for five of the
+// six currencies, nothing standing behind the publisher. So a single HTTP
+// request that did not answer took a company’s whole valuation away: no cost
+// of equity, no WACC, no value per share, and a refusal naming a missing rate.
+// The refusal was right — discounting at an invented number would be worse —
+// but it was not a fact about the company. It was a fact about one request,
+// and a reader could not tell the difference.
+//
+// MEASURED ACROSS ONE FULL REFETCH on 2026-11-01: 6 of the 115 dollar payloads
+// came back with no US Treasury yield and 3 of the 6 rupee ones with no OECD
+// yield, while the other 112 and 3 succeeded in the same run against the same
+// publishers. The casualty moved between companies from one refetch to the
+// next — Walmart on 2026-10-31, Coca-Cola on 2026-11-01 — which is how a
+// transient failure looks and is nothing like a company with no bond market.
+//
+// Three things together, because each covers a different failure:
+//
+//   ONE FETCH PER CURRENCY. 115 companies asking one publisher for the same
+//   number on the same day is both the reason some of them fail and the
+//   easiest thing to stop doing. The SERIES is cached rather than the rate,
+//   because the rate is not shareable: every company averages its own window,
+//   anchored to its own last balance sheet date. The span is padded by a year
+//   either side so that companies with different year ends share one fetch
+//   instead of each widening it, and the arithmetic is untouched — the window
+//   is filtered out of the cached series exactly as it was out of a fresh one.
+//
+//   THREE ATTEMPTS, BACKING OFF. A publisher that drops one request usually
+//   answers the next. This is not a way around a refusal: a 403, a challenge
+//   or a block page is a refusal and is not retried, because retrying it is
+//   defeating a protection (the data-layer plan §4.4). Only a failure that
+//   says nothing about intent — a timeout, a reset, a 5xx — is tried again.
+//
+//   SOMETHING BEHIND EACH PUBLISHER, where a free one exists and carries
+//   enough observations to be averaged the same way. Checked at every source
+//   on 2026-11-01; what was found and what was not is in
+//   `DATA_CONSTRAINTS.md`.
+
+/** Whether a failure is the publisher saying no, or just a bad moment. */
+function worthRetrying(error) {
+  const says = String(error && error.message ? error.message : error);
+  // A REFUSAL IS NOT RETRIED. 401, 403, 404, 429 and a block page are the
+  // publisher telling us something; asking again is not persistence.
+  if (/\b(401|403|404|405|410|429)\b/.test(says)) return false;
+  if (/block page|not the CSV|captcha|challenge/i.test(says)) return false;
+  // Nor is an answer that arrived and was simply too thin: fetching it again
+  // returns the same thin answer.
+  if (/observations in the window|no observations|no TIME_PERIOD|unknown publication/i.test(says)) return false;
+  return true;
+}
+
+const RISK_FREE_ATTEMPTS = 3;
+const RISK_FREE_BACKOFF_MS = [400, 1200];
+
+/** One source read, with three attempts and a widening pause between them. */
+async function readWithRetry(spec, from, to) {
+  let last;
+  for (let attempt = 1; attempt <= RISK_FREE_ATTEMPTS; attempt++) {
+    try {
+      return await spec.read(from, to);
+    } catch (error) {
+      last = error;
+      if (attempt === RISK_FREE_ATTEMPTS || !worthRetrying(error)) break;
+      riskFreeCacheStats.retries++;
+      await new Promise((r) => setTimeout(r, RISK_FREE_BACKOFF_MS[attempt - 1]));
+    }
+  }
+  throw last;
+}
+
+// The cached series, per currency and per publisher within it. Keyed by the
+// publisher as well as the currency so a fallback cannot be served the
+// primary's numbers. Six hours is the same life the HTTP cache above gives a
+// payload, so a warm instance cannot hold a yield curve longer than it holds
+// the figures discounted at it.
+const riskFreeSeries = new Map();
+const RISK_FREE_CACHE_MS = 6 * 60 * 60 * 1000;
+const RISK_FREE_PAD_DAYS = 366;
+
+/** Reset between checks, so one test cannot be answered out of another. */
+export function clearRiskFreeCache() {
+  riskFreeSeries.clear();
+}
+
+/** What the cache has done, so a check can prove it did it. */
+export const riskFreeCacheStats = { fetches: 0, hits: 0, retries: 0 };
+
+async function readSeriesShared(spec, currency, from, to) {
+  const key = `${currency}|${spec.publisher}|${spec.name}`;
+  const held = riskFreeSeries.get(key);
+  const fresh = held && Date.now() - held.at < RISK_FREE_CACHE_MS;
+  if (fresh && held.from <= from.getTime() && held.to >= to.getTime()) {
+    riskFreeCacheStats.hits++;
+    return held.rows;
+  }
+  // Not held, or not wide enough: fetch a span that covers what is asked AND
+  // what was already held, padded so the next company with a different year
+  // end is answered from memory rather than from the publisher.
+  //
+  // THE PAD IS A YEAR, NOT "UP TO TODAY". Stretching the span to today looked
+  // tidier and cost real requests: the Treasury is read a calendar year per
+  // request, so a company with a 2025 year end was fetching four years to use
+  // one. A year either side already covers every year end in the set.
+  const pad = RISK_FREE_PAD_DAYS * 86400000;
+  const wantFrom = new Date(Math.min(from.getTime() - pad, fresh ? held.from : Infinity));
+  const wantTo = new Date(Math.max(to.getTime() + pad, fresh ? held.to : -Infinity));
+  riskFreeCacheStats.fetches++;
+  const rows = await readWithRetry(spec, wantFrom, wantTo);
+  riskFreeSeries.set(key, { from: wantFrom.getTime(), to: wantTo.getTime(), rows, at: Date.now() });
+  return rows;
+}
+
+/**
+ * FRED's CSV for one series, read the one way, so four fallbacks do not become
+ * four copies of a parser that can drift apart.
+ */
+function fredSeries({ id, name, frequency, standsIn }) {
+  return {
+    name,
+    publisher: `FRED, republishing ${standsIn}`,
+    terms: `${standsIn} data, redistributed by FRED`,
+    url: `https://fred.stlouisfed.org/series/${id}`,
+    frequency,
+    async read(from, to) {
+      const res = await fetch(
+        `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${ymd(from)}&coed=${ymd(to)}`,
+        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'text/csv' } }
+      );
+      if (!res.ok) throw new Error(`FRED ${res.status}`);
+      const lines = (await res.text()).trim().split('\n');
+      if (!/observation_date/i.test(lines[0] || '')) {
+        throw new Error('FRED: not the CSV, probably a block page');
+      }
+      const out = [];
+      for (const line of lines.slice(1)) {
+        const [rawDate, rawValue] = line.split(',');
+        const percent = asRate(rawValue);
+        const date = String(rawDate).trim().slice(0, 10);
+        // FRED prints a full stop for a day with no observation; `asRate`
+        // returns null for it and it is dropped rather than read as nought.
+        if (percent !== null && /^\d{4}-\d{2}-\d{2}$/.test(date)) out.push({ date, percent });
+      }
+      if (!out.length) throw new Error('FRED: no observations in the window');
+      return out;
+    },
+  };
+}
+
 export const RISK_FREE_SOURCES = {
   USD: {
     name: '10-year US Treasury par yield',
@@ -2141,6 +2308,19 @@ export const RISK_FREE_SOURCES = {
       }
       return out;
     },
+    // STANDING BEHIND THE TREASURY (`KI-34`). The same series, daily, from a
+    // publisher that is not the Treasury's own web server: FRED's DGS10 IS the
+    // Treasury's 10-year constant-maturity yield, redistributed. Verified at
+    // source on 2026-11-01 — 259 daily observations over the window, against
+    // the Treasury's own for the same days.
+    fallbacks: [
+      fredSeries({
+        id: 'DGS10',
+        name: '10-year US Treasury par yield',
+        frequency: 'daily',
+        standsIn: 'US Treasury',
+      }),
+    ],
   },
 
   EUR: {
@@ -2168,6 +2348,12 @@ export const RISK_FREE_SOURCES = {
       }
       return out;
     },
+    // NO FALLBACK, DELIBERATELY (`KI-34`). FRED republishes the OECD's euro
+    // area long-term rate as `IRLTLT01EZM156N`, and it was verified at source
+    // on 2026-11-01: it carried THREE observations over a twelve-month window,
+    // against the nine a monthly series needs to be averaged here. A fallback
+    // that cannot fill the window is not a fallback — it is a second failure
+    // with a publisher's name on it — so none is installed and this says why.
   },
 
   JPY: {
@@ -2201,6 +2387,19 @@ export const RISK_FREE_SOURCES = {
       if (!out.length) throw new Error('MOF: no rows');
       return out;
     },
+    // Behind the Ministry of Finance: the OECD's long-term rate for Japan, as
+    // FRED republishes it. A DIFFERENT SERIES FROM A DIFFERENT PUBLISHER, and
+    // monthly where the primary is daily, so the page is told which it got —
+    // `frequency` is carried through for exactly this reason. Verified at
+    // source on 2026-11-01: 11 monthly observations over the window.
+    fallbacks: [
+      fredSeries({
+        id: 'IRLTLT01JPM156N',
+        name: '10-year Japanese government bond yield',
+        frequency: 'monthly',
+        standsIn: 'the OECD',
+      }),
+    ],
   },
 
   GBP: {
@@ -2236,6 +2435,17 @@ export const RISK_FREE_SOURCES = {
       }
       return out;
     },
+    // Behind the Bank of England, the OECD's long-term rate for the United
+    // Kingdom as FRED republishes it; monthly, and labelled so. Verified at
+    // source on 2026-11-01: 11 monthly observations over the window.
+    fallbacks: [
+      fredSeries({
+        id: 'IRLTLT01GBM156N',
+        name: '10-year UK gilt yield',
+        frequency: 'monthly',
+        standsIn: 'the OECD',
+      }),
+    ],
   },
 
   SEK: {
@@ -2255,6 +2465,17 @@ export const RISK_FREE_SOURCES = {
         .map((row) => ({ date: String(row.date).slice(0, 10), percent: asRate(row.value) }))
         .filter((row) => row.percent !== null);
     },
+    // Behind the Riksbank, the OECD's long-term rate for Sweden as FRED
+    // republishes it; monthly, and labelled so. Verified at source on
+    // 2026-11-01: 11 monthly observations over the window.
+    fallbacks: [
+      fredSeries({
+        id: 'IRLTLT01SEM156N',
+        name: '10-year Swedish government bond yield',
+        frequency: 'monthly',
+        standsIn: 'the OECD',
+      }),
+    ],
   },
 
   // THE INDIAN TEN-YEAR, AND WHY IT IS THE ONLY MONTHLY ONE HERE.
@@ -2395,7 +2616,10 @@ export async function fetchRiskFreeRate(reportingCurrency, valuationDate) {
  * fallback exists to prevent.
  */
 async function readRiskFreeWindow(spec, start, end, reportingCurrency, failures = []) {
-  const all = await spec.read(start, end);
+  // THE SERIES IS SHARED; THE WINDOW IS NOT. Every company filters its own
+  // window out of the same fetched series, so two companies with different
+  // year ends still get different rates from one request (`KI-34`).
+  const all = await readSeriesShared(spec, reportingCurrency, start, end);
   const from = ymd(start);
   const to = ymd(end);
   const window = all.filter((row) => row.date >= from && row.date <= to);

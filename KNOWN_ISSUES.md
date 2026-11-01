@@ -30,7 +30,18 @@ mistakes and would never be fixed:
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
 - Taken so far: `KI-1` to `KI-34`. **Next free: `KI-35`.** Retired, meaning
-  fixed and never to be reused: `KI-33` (a quarterly share count was worked
+  fixed and never to be reused: `KI-34` (the risk-free rate was fetched once
+  per COMPANY with no retry and, for five of the six currencies, nothing
+  behind the publisher, so one HTTP request that did not answer took a
+  company's whole valuation away — 6 of 115 dollar payloads and 3 of 6 rupee
+  ones in a single refetch, the casualty moving between companies from one run
+  to the next. Fixed 2026-11-01: the SERIES is fetched once per currency and
+  shared, while each company still averages its own window; three attempts
+  with a backoff, and never against a refusal; and a fallback behind the US
+  Treasury, the Bank of Japan, the Bank of England and the Riksbank. A latent
+  defect was found with it: FRED prints an empty cell for every market
+  holiday and `Number('')` is 0, which put twelve days of 0% into a year of
+  Treasury yields and took 19.7 basis points off the mean), `KI-33` (a quarterly share count was worked
   out as this year to date less the last, which is right for a flow and wrong
   for an average: the average over a year is not the four quarterly averages
   added up, so the difference between a year and nine months of it is not the
@@ -150,38 +161,19 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-`KI-34` was found on 2026-11-01 by refetching the set twice in one day and
-watching a different company lose its valuation each time. It was not caused
-by the job that found it, and it is measured below rather than described.
+**There are none open, as of 2026-11-01.** `KI-31` to `KI-34` were the last
+four and all were fixed within two days of each other: a share count filed
+before a split, a financial company read off the wrong revenue tag, a
+quarterly share count worked out by subtracting two averages, and a yield
+that cost a company its whole valuation when one HTTP request did not answer.
+The ID ledger above says what each retired number was.
 
-### `KI-34` — a yield that fails to fetch costs a company its valuation
-
-**What is wrong.** The risk-free rate is fetched once per company, with no
-retry. When the publisher does not answer for that one request the payload is
-written with no rate, and the engine then refuses the valuation — correctly,
-because discounting at an invented rate would be worse. But the refusal is
-not a fact about the company. It is a fact about one HTTP request, and a
-reader cannot tell the difference.
-
-**Measured on 2026-11-01**, across one full refetch of the set: **6 of the
-115 payloads reported in US dollars came back with no US Treasury yield**
-(`KLAC`, `KO`, `LIN`, `ENB`, `PEP`, `WELL`) and **3 of the 6 in rupees came
-back with no OECD yield**, while the other 112 and 3 succeeded in the same
-run against the same publishers. The failures move between companies from one
-refetch to the next: Walmart lost its valuation this way on 2026-10-31 and
-regained it on 2026-11-01, when Coca-Cola lost one instead. This is also the
-whole of the reason the workbook check covered 58 models rather than 59.
-
-**What it moves: one valuation at a time, at random.** Each affected company
-loses its cost of equity, its WACC and its value per share entirely, and is
-given a refusal naming a missing rate. Nothing shown is wrong; what is wrong
-is that it is withheld for no reason to do with the company.
-
-**What the fix needs.** A retry with a short backoff around each yield fetch,
-and — better — a rate cached across the set within one run, since every
-dollar-reporting company in a refetch asks the same publisher for the same
-number on the same day. 115 identical requests is also the reason some of
-them fail.
+An empty list is not a claim that the model is right about everything. It is a
+claim that **nothing is known to be wrong and left standing**, which is the
+only thing this file can honestly assert. What the sources do not publish is
+in `DATA_CONSTRAINTS.md`; what the engine does on purpose is in
+`METHODOLOGY.md`. The next defect found goes here with a measured number, as
+`KI-35`.
 
 ## A defect found and fixed on 29 October 2026, with no number
 

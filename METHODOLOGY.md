@@ -1273,6 +1273,60 @@ pending. It is measured from the end of the period and not from the filing
 date, because the question is how old the figures are: a filing published
 yesterday about 2014 does not make 2014 recent.
 
+**The risk-free rate is fetched once per currency, with three tries and
+something behind it** (2026-11-01, `KI-34`). It used to be fetched once per
+COMPANY, with no retry, and for five of the six currencies nothing stood
+behind the publisher — so a single request that did not answer removed a
+company's cost of equity, its WACC and its value per share, and gave a
+refusal naming a missing rate. The refusal was right; it was simply not a
+fact about the company.
+
+**The series is shared, the window is not.** A rate cannot be shared, because
+every company averages the twelve months to its own balance sheet date; the
+series it is averaged out of can be. So one fetch per currency per run
+serves every company in it, each filtering its own window from the same
+figures. 115 companies asking one publisher for the same number on the same
+day was both the reason some of them failed and the easiest thing to stop
+doing.
+
+**Three attempts, backing off, and never against a refusal.** A 401, 403,
+404, 429 or a block page is the publisher saying no, and asking again is
+defeating a protection rather than persistence; so is re-asking for a window
+that came back too thin, which would return the same thin answer. Only a
+failure that says nothing about intent is tried again.
+
+**What stands behind each publisher**, verified at source on 2026-11-01 and
+measured against the primary over the same window:
+
+| Currency | Primary | Behind it | Agreement |
+|---|---|---|---|
+| USD | US Treasury | FRED `DGS10` | **identical** on all 250 shared days, 4.2944% both |
+| JPY | Ministry of Finance | FRED, the OECD monthly series | 1.0 basis point |
+| GBP | Bank of England | FRED, the OECD monthly series | 3.6 basis points |
+| SEK | Sveriges Riksbank | FRED, the OECD monthly series | 0.05 of a basis point |
+| INR | OECD | FRED, the same OECD series | identical to the last digit |
+| EUR | European Central Bank | **none** | — |
+
+The euro area has no fallback deliberately: FRED republishes the OECD rate
+for it, and the series carried **three** observations over a twelve-month
+window against the nine a monthly series needs here. A fallback that cannot
+fill the window is a second failure with a publisher’s name on it.
+
+Where a fallback is a different series from a different publisher — a
+central bank's daily curve against an OECD monthly one — the frequency is
+carried through to the screen, so a reader is never told a monthly series is
+a daily one.
+
+**A blank cell is not a yield of nought**, found while measuring the above.
+FRED prints an empty cell for every US market holiday and `Number('')` is 0,
+so reading the cell as a number put 1 January, Martin Luther King Day, Good
+Friday, Independence Day and eight more into a year of Treasury yields at
+0%. The two sources agreed to the last decimal on all 250 days they shared
+and the means came out **4.0977% against 4.2944%** — 19.7 basis points
+straight onto every discount rate the fallback would ever have served. A
+genuine nought is still kept: a ten-year government bond really can yield 0%,
+as Japan’s did for years, so only the blank is refused.
+
 **A quarterly share count is the one the company filed, or nothing**
 (2026-11-01, `KI-33`). Rule 4 earns most of the quarterly figures on this site
 by subtraction — `Q2 = H1 − Q1`, `Q3 = 9M − H1`, `Q4 = FY − 9M` — because a

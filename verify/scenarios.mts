@@ -2525,8 +2525,248 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 // 2026-10-24, where 175 of the 178 months they both carry are identical to the
 // last digit and the other three agree to within 7e-7 of a percentage point.
 {
+// ---------------------------------------------------------------------------
+// ONE FETCH PER CURRENCY, THREE TRIES, AND SOMETHING BEHIND IT (`KI-34`)
+// ---------------------------------------------------------------------------
+//
+// A single request that did not answer used to take a company’s whole
+// valuation away. Five things are checked, each against a different failure,
+// and every one of them is driven by standing in for the publisher rather than
+// by waiting for it to have a bad day.
+{
+  console.log('\n=== the risk-free rate: one fetch per currency, three tries, a fallback behind ===');
+  const { fetchRiskFreeRate, clearRiskFreeCache, riskFreeCacheStats } = await import(
+    `file:///${REPO}/api/company.js`
+  );
+  const realFetch = globalThis.fetch;
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+
+  // The Treasury answers XML, a year per request. Written out here in its own
+  // shape so what is under test is the code that reads it.
+  const treasuryXml = (days: [string, number][]) =>
+    '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" ' +
+    'xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices" ' +
+    'xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">' +
+    days
+      .map(
+        ([date, value]) =>
+          '<entry><content><m:properties>' +
+            `<d:NEW_DATE m:type="Edm.DateTime">${date}T00:00:00</d:NEW_DATE>` +
+            `<d:BC_10YEAR m:type="Edm.Double">${value}</d:BC_10YEAR>` +
+            '</m:properties></content></entry>'
+      )
+      .join('') +
+    '</feed>';
+
+  // A year of trading days, so the thirty-observation floor is met.
+  const tradingDays = (from: string, n: number, rate: (i: number) => number): [string, number][] => {
+    const out: [string, number][] = [];
+    const d = new Date(`${from}T00:00:00Z`);
+    for (let i = 0; out.length < n; i++) {
+      d.setUTCDate(d.getUTCDate() + 1);
+      const day = d.getUTCDay();
+      if (day === 0 || day === 6) continue;
+      out.push([d.toISOString().slice(0, 10), rate(out.length)]);
+    }
+    return out;
+  };
+
+  // ---- 1. ONE FETCH PER CURRENCY, AND EACH COMPANY ITS OWN WINDOW ----
+  //
+  // The rate cannot be shared, because every company averages the window to
+  // its own balance sheet date; the SERIES can. So the test is both halves at
+  // once: one request, and two companies with different year ends getting
+  // DIFFERENT rates out of it. A sloped series is used for exactly that — on a
+  // flat one, caching the rate and caching the series look identical.
+  {
+    clearRiskFreeCache();
+    let asked = 0;
+    // Rising by a basis point a day, from 2024 so every window is covered.
+    const days = tradingDays('2024-06-28', 700, (i) => 3 + i * 0.01);
+    globalThis.fetch = (async (input: any) => {
+      const url = String(typeof input === 'string' ? input : input?.url ?? input);
+      if (/home\.treasury\.gov/.test(url)) {
+        asked++;
+        const year = Number((url.match(/field_tdr_date_value=(\d{4})/) || [])[1]);
+        return new Response(treasuryXml(days.filter(([d]) => Number(d.slice(0, 4)) === year)), {
+          status: 200, headers: { 'Content-Type': 'application/xml' },
+        });
+      }
+      return new Response('', { status: 503 });
+    }) as any;
+
+    const a = await fetchRiskFreeRate('USD', '2025-12-31');
+    const askedAfterFirst = asked;
+    const b = await fetchRiskFreeRate('USD', '2025-09-30');
+    const c = await fetchRiskFreeRate('USD', '2025-06-30');
+    const d = await fetchRiskFreeRate('USD', '2025-12-31');
+    globalThis.fetch = realFetch;
+
+    if (asked !== askedAfterFirst) {
+      faults.push(
+        `four companies in one currency asked the publisher ${asked} times, ${askedAfterFirst} of them for ` +
+          'the first of them: the series is being fetched again rather than shared'
+      );
+    }
+    if (!(askedAfterFirst > 0)) faults.push('nothing was fetched at all, so the test proves nothing');
+    for (const [label, got] of [['a', a], ['b', b], ['c', c]] as [string, any][]) {
+      if (!isNum(got.rate)) faults.push(`company ${label} got no rate from a series that covers its window`);
+    }
+    // AND THE WINDOWS REALLY DIFFER, which is what makes sharing the series
+    // right and sharing the rate wrong.
+    if (isNum(a.rate) && isNum(b.rate) && Math.abs(a.rate - b.rate) < 1e-9) {
+      faults.push(
+        'two companies three months apart on a rising curve were given the same rate, so the rate is ' +
+          'being shared rather than the series'
+      );
+    }
+    if (isNum(a.rate) && isNum(d.rate) && Math.abs(a.rate - d.rate) > 1e-12) {
+      faults.push('the same company asked twice got two different rates out of one series');
+    }
+  }
+
+  // ---- 2. THREE ATTEMPTS, AND THE RATE STILL ARRIVES -----------------
+  {
+    clearRiskFreeCache();
+    const days = tradingDays('2024-12-28', 300, () => 4.2);
+    let calls = 0;
+    const before = riskFreeCacheStats.retries;
+    globalThis.fetch = (async (input: any) => {
+      const url = String(typeof input === 'string' ? input : input?.url ?? input);
+      if (/home\.treasury\.gov/.test(url)) {
+        calls++;
+        // The first two years-worth of requests fail the way a bad moment
+        // fails: a 503, which says nothing about intent.
+        if (calls <= 2) return new Response('upstream wobble', { status: 503 });
+        const year = Number((url.match(/field_tdr_date_value=(\d{4})/) || [])[1]);
+        return new Response(treasuryXml(days.filter(([d]) => Number(d.slice(0, 4)) === year)), {
+          status: 200, headers: { 'Content-Type': 'application/xml' },
+        });
+      }
+      return new Response('', { status: 503 });
+    }) as any;
+    const got = await fetchRiskFreeRate('USD', '2025-12-31');
+    globalThis.fetch = realFetch;
+    if (!isNum(got.rate)) {
+      faults.push(`a publisher that dropped two requests and answered the third gave no rate (${got.reason})`);
+    }
+    if (riskFreeCacheStats.retries <= before) {
+      faults.push('the rate arrived without anything being retried, so the retry is not what saved it');
+    }
+  }
+
+  // ---- 3. A REFUSAL IS NOT RETRIED -----------------------------------
+  //
+  // Persistence against a publisher that has said no is defeating a
+  // protection, which `docs/` §4.4 forbids. A 403 is asked once.
+  {
+    clearRiskFreeCache();
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls++;
+      return new Response('go away', { status: 403 });
+    }) as any;
+    const got = await fetchRiskFreeRate('SEK', '2025-12-31');
+    globalThis.fetch = realFetch;
+    if (isNum(got.rate)) faults.push('a publisher that refused twice over still produced a rate');
+    // One for the Riksbank and one for the fallback behind it, and no more.
+    if (calls > 2) {
+      faults.push(`a 403 was asked ${calls} times, so a refusal is being retried rather than respected`);
+    }
+  }
+
+  // ---- 4. THE PRIMARY BLOCKED, AND THE FALLBACK NAMED ----------------
+  {
+    clearRiskFreeCache();
+    const days = tradingDays('2024-12-28', 300, () => 4.4);
+    globalThis.fetch = (async (input: any) => {
+      const url = String(typeof input === 'string' ? input : input?.url ?? input);
+      // THE TREASURY BLOCKED ENTIRELY, which is what happened on 2026-10-31.
+      if (/home\.treasury\.gov/.test(url)) return new Response('', { status: 503 });
+      if (/fredgraph\.csv/.test(url)) {
+        return new Response('observation_date,DGS10\n' + days.map(([d, v]) => `${d},${v}`).join('\n'), {
+          status: 200, headers: { 'Content-Type': 'text/csv' },
+        });
+      }
+      return new Response('', { status: 503 });
+    }) as any;
+    const got = await fetchRiskFreeRate('USD', '2025-12-31');
+    globalThis.fetch = realFetch;
+    if (!isNum(got.rate)) {
+      faults.push(`with the Treasury blocked there was no rate at all (${got.reason})`);
+    } else if (Math.abs(got.rate - 0.044) > 1e-9) {
+      faults.push(`the fallback answered ${(got.rate * 100).toFixed(4)}% on a flat 4.4% series`);
+    }
+    if (!/FRED, republishing US Treasury/.test(String(got.publisher))) {
+      faults.push(`the fallback answered as "${got.publisher}" rather than naming who it stood in for`);
+    }
+    if (!/used because/.test(String(got.publisher))) {
+      faults.push(`the fallback did not say why it was used: "${got.publisher}"`);
+    }
+  }
+
+  // ---- 5. A BLANK CELL IS NOT A YIELD OF NOUGHT ----------------------
+  //
+  // FRED prints an EMPTY cell for every US market holiday, and `Number('')` is
+  // 0. Reading those as rates put twelve days of 0% into a year of Treasury
+  // yields and took 19.7 basis points off the mean — measured on 2026-11-01,
+  // when the two sources agreed to the last decimal on all 250 days they
+  // shared and disagreed by 4.0977% against 4.2944% on the mean.
+  {
+    clearRiskFreeCache();
+    const days = tradingDays('2024-12-28', 300, () => 4.4);
+    globalThis.fetch = (async (input: any) => {
+      const url = String(typeof input === 'string' ? input : input?.url ?? input);
+      if (/home\.treasury\.gov/.test(url)) return new Response('', { status: 503 });
+      if (/fredgraph\.csv/.test(url)) {
+        // Every tenth day blank, the way a holiday arrives.
+        const body =
+          'observation_date,DGS10\n' +
+          days.map(([d, v], i) => `${d},${i % 10 === 0 ? '' : v}`).join('\n');
+        return new Response(body, { status: 200, headers: { 'Content-Type': 'text/csv' } });
+      }
+      return new Response('', { status: 503 });
+    }) as any;
+    const got = await fetchRiskFreeRate('USD', '2025-12-31');
+    globalThis.fetch = realFetch;
+    if (!isNum(got.rate)) {
+      faults.push(`a series with blank holidays produced no rate at all (${got.reason})`);
+    } else if (Math.abs(got.rate - 0.044) > 1e-9) {
+      faults.push(
+        `blank cells moved the mean to ${(got.rate * 100).toFixed(4)}% on a flat 4.4% series, so an empty ` +
+          'cell is still being read as a yield of nought'
+      );
+    }
+  }
+
+  clearRiskFreeCache();
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in how the risk-free rate is fetched:`);
+    faults.forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      '  four companies in one currency fetch the series once between them, and two of them three months ' +
+        'apart on a rising curve still get different rates: the series is shared and the window is not'
+    );
+    console.log(
+      '  a publisher that drops two requests and answers the third still produces a rate, and a 403 is ' +
+        'asked once and respected rather than retried'
+    );
+    console.log(
+      '  with the US Treasury blocked outright the rate is 4.4000% from "FRED, republishing US Treasury", ' +
+        'which names the publisher it stood in for'
+    );
+    console.log(
+      '  and a series whose holidays are blank cells averages 4.4000% rather than reading an empty cell as ' +
+        'a yield of nought, which cost 19.7 basis points before this'
+    );
+  }
+}
+
   console.log('\n=== the rupee rate: the OECD first, FRED behind it ===');
-  const { fetchRiskFreeRate } = await import(`file:///${REPO}/api/company.js`);
+  const { fetchRiskFreeRate, clearRiskFreeCache } = await import(`file:///${REPO}/api/company.js`);
 
   // The year to a 31 March balance sheet date, which is most Indian companies.
   const MONTHS: [string, number][] = [
@@ -2586,18 +2826,27 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   let fromShort: any = null;
   let fromNeither: any = null;
   try {
+    // A NEW STUB NEEDS A NEW CACHE. The series is now fetched once per
+    // currency and shared (`KI-34`), so a scenario that blocks a publisher is
+    // answered out of the scenario before it unless the cache is cleared with
+    // the stub. Nothing here is testing the cache; it is being kept out of the
+    // way of what is.
+    clearRiskFreeCache();
     globalThis.fetch = stub(MONTHS, MONTHS) as any;
     fromOecd = await fetchRiskFreeRate('INR', '2026-03-31');
     const askedFredAnyway = asked.fred;
 
     asked.oecd = 0;
     asked.fred = 0;
+    clearRiskFreeCache();
     globalThis.fetch = stub(null, MONTHS) as any;
     fromFred = await fetchRiskFreeRate('INR', '2026-03-31');
 
+    clearRiskFreeCache();
     globalThis.fetch = stub(MONTHS.slice(0, 3), MONTHS) as any;
     fromShort = await fetchRiskFreeRate('INR', '2026-03-31');
 
+    clearRiskFreeCache();
     globalThis.fetch = stub(null, null) as any;
     fromNeither = await fetchRiskFreeRate('INR', '2026-03-31');
 
