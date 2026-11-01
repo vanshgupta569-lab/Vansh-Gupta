@@ -871,6 +871,61 @@ check already refuses a listing whose shares outstanding and filed count differ
 by more than 1.5× either way, which catches a factor of a thousand wherever the
 feed reports both.
 
+### No ten-year yield this site may use for eight currencies
+
+**Source:** the publishers themselves. **Affects:** 26 payloads, which get no
+cost of equity, no WACC and no value per share.
+
+A cash flow in a currency is discounted at that currency’s own risk-free
+rate, and a US Treasury yield is not the risk-free rate for a non-dollar cash
+flow. Eight currencies in the set have no yield this site can read and use:
+**CNY, BRL, KRW, TWD, SAR, AUD, SGD and CHF**. Canada and Denmark were in
+this list until 2026-11-01 and are not any longer.
+
+**Switzerland is a licence rather than a gap, and it is the important case.**
+The Swiss National Bank publishes the Confederation bond yield in exactly the
+shape this site reads — a public keyless CSV — and **its terms do not permit
+commercial reuse without written permission**. So it is not read. The figure
+is available and the right to use it is not, which is a different kind of
+absence from the other seven and is recorded as one: **Paid · last**, pending
+either written permission from the SNB or a licensed source. One company
+(`NESN.SW`) is refused on this ground alone. This rests on Nihar’s reading of
+the SNB’s terms, recorded 2026-11-01; the SNB’s own terms pages did not
+resolve when they were looked for, so it has not been read here.
+
+**For the other seven, nothing free and machine-readable was found** when
+every one was checked on 2026-11-01. FRED’s country series 404 for all of
+them; the OECD covers only its members and partners; and China, Taiwan and
+Saudi Arabia publish no open series at all. Australia, Singapore and Brazil
+each have an official statistics service that was not reachable on the
+obvious endpoint, and each is worth another attempt rather than written off.
+
+**Bound: the whole valuation.** There is no cost of equity without a
+risk-free rate, so these companies show their reported figures and no implied
+value. **What limits it:** nothing is approximated. The refusal names the
+currency and says a dollar yield is not a substitute, which is the honest
+answer rather than a discount rate nobody chose.
+
+### Terms that are not published, for a source already in use
+
+**Source:** Sveriges Riksbank. **Affects:** 1 payload, and any public
+redistribution of what is derived from it.
+
+The Riksbank’s SWEA API is public and keyless and the ten-year benchmark
+yield comes straight from it. **The Riksbank publishes no licence for its
+statistics**: the pages read on 2026-11-01 state no terms, and the only
+conditions of use it does publish cover SWESTR, which is a different series.
+So the terms recorded beside the rate say UNCONFIRMED in those words rather
+than describing it as open data.
+
+**Bound: none on any figure.** The rate is right and its publisher is named.
+What is unresolved is the right to redistribute it, which matters at the
+point this site exports or publishes a figure derived from it rather than at
+the point it reads one. **What limits it:** `npm run verify` refuses any
+source whose terms are not a statement of something, which is what found
+this — the field had read "Riksbank open data", three words asserting a
+licence nobody had seen.
+
 ### A ticker is not a company, and no source says when one is retired
 
 **Source:** the vendor feed. **Affects:** every company reached by a symbol

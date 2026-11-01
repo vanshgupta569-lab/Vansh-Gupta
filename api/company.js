@@ -2451,7 +2451,15 @@ export const RISK_FREE_SOURCES = {
   SEK: {
     name: '10-year Swedish government benchmark bond yield',
     publisher: 'Sveriges Riksbank',
-    terms: 'Riksbank open data',
+    // UNCONFIRMED, AND SAID SO. The SWEA API is public and keyless, and the
+    // Riksbank states no licence for its statistics on the pages read on
+    // 2026-11-01  its only published conditions of use cover SWESTR, which is
+    // a different series. Recorded as unconfirmed rather than described as
+    // open, and listed in `DATA_CONSTRAINTS.md` so a public export or a
+    // redistribution asks about it first.
+    terms:
+      'Riksbank SWEA open data, public and keyless; the Riksbank publishes no licence for its statistics, ' +
+      'so these terms are UNCONFIRMED and a public redistribution needs them checked first',
     url: 'https://www.riksbank.se/en-gb/statistics/',
     async read(from, to) {
       const res = await fetch(
@@ -2563,6 +2571,113 @@ export const RISK_FREE_SOURCES = {
           return out;
         },
       },
+    ],
+  },
+  // TWO CURRENCIES THAT HAD NO PUBLISHER AT ALL until 2026-11-01. Seven
+  // Canadian and two Danish payloads were refused a cost of equity outright,
+  // not because the rate was unknowable but because nobody here had looked for
+  // it. Both sources below are the country's own, both were read at source
+  // before being written down, and both were checked against their publisher's
+  // terms rather than assumed to be free.
+  //
+  // SWITZERLAND IS DELIBERATELY ABSENT. The Swiss National Bank publishes the
+  // Confederation bond yield in the same shape and its terms do not permit
+  // commercial reuse without written permission, so it is not read. That is a
+  // licence, not a gap in the data, and it is recorded in
+  // `DATA_CONSTRAINTS.md` as Paid · last rather than left as a silent refusal.
+  CAD: {
+    name: '10-year Government of Canada benchmark bond yield',
+    publisher: 'Bank of Canada',
+    // Read at https://www.bankofcanada.ca/terms/ on 2026-11-01: "the Bank
+    // permits you to freely use, copy, distribute and transmit its website
+    // content" with the Bank credited as the source and any changes stated.
+    // Where the content appears in a paid service, purchasers must be told it
+    // is available free on the Bank's own website — which is why the publisher
+    // and the source link travel with every figure on the card.
+    terms:
+      'Bank of Canada website content, freely usable with the Bank credited as the source; where it ' +
+      "appears in a paid service, purchasers are told it is available free on the Bank's website",
+    url: 'https://www.bankofcanada.ca/valet/docs',
+    frequency: 'daily',
+    async read(from, to) {
+      const res = await fetch(
+        'https://www.bankofcanada.ca/valet/observations/BD.CDN.10YR.DQ.YLD/json' +
+          `?start_date=${ymd(from)}&end_date=${ymd(to)}`,
+        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'application/json' } }
+      );
+      if (!res.ok) throw new Error(`Bank of Canada ${res.status}`);
+      const body = await res.json();
+      const rows = Array.isArray(body?.observations) ? body.observations : [];
+      const out = [];
+      for (const row of rows) {
+        // Valet nests each series under its own key, and a day with no
+        // observation carries an empty string rather than being absent. A
+        // blank is not a yield of nought; `asRate` refuses it.
+        const percent = asRate(row?.['BD.CDN.10YR.DQ.YLD']?.v);
+        const date = String(row?.d ?? '').trim().slice(0, 10);
+        if (percent !== null && /^\d{4}-\d{2}-\d{2}$/.test(date)) out.push({ date, percent });
+      }
+      if (!out.length) throw new Error('Bank of Canada: no observations in the window');
+      return out;
+    },
+    // Measured against the Bank's own figures over the year to 2025-12-31:
+    // 3.2347% against 3.2366%, which is a fifth of a basis point apart.
+    fallbacks: [
+      fredSeries({
+        id: 'IRLTLT01CAM156N',
+        name: '10-year Government of Canada bond yield',
+        frequency: 'monthly',
+        standsIn: 'the OECD',
+      }),
+    ],
+  },
+  DKK: {
+    // THE LONG-TERM RATE FOR CONVERGENCE PURPOSES, which is what the ECB calls
+    // it and what it is: the yield on a Danish government bond of about ten
+    // years, compiled on one definition across the European Union so member
+    // states can be compared. Named here the way the publisher names it rather
+    // than relabelled as a plain ten-year yield.
+    name: '10-year Danish government bond yield (the long-term rate for convergence purposes)',
+    publisher: 'European Central Bank',
+    terms: 'ECB statistics, reusable with the source acknowledged',
+    url: 'https://data.ecb.europa.eu/data/datasets/IRS',
+    frequency: 'monthly',
+    async read(from, to) {
+      const month = (d) => ymd(d).slice(0, 7);
+      const res = await fetch(
+        'https://data-api.ecb.europa.eu/service/data/IRS/M.DK.L.L40.CI.0000.DKK.N.Z' +
+          `?startPeriod=${month(from)}&endPeriod=${month(to)}&format=csvdata`,
+        { headers: { 'User-Agent': SEC_CONTACT, Accept: 'text/csv' } }
+      );
+      if (!res.ok) throw new Error(`ECB ${res.status}`);
+      const lines = (await res.text()).trim().split('\n');
+      const head = (lines[0] || '').split(',').map((h) => h.trim());
+      const dateAt = head.indexOf('TIME_PERIOD');
+      const valueAt = head.indexOf('OBS_VALUE');
+      if (dateAt < 0 || valueAt < 0) throw new Error('ECB: no TIME_PERIOD/OBS_VALUE column');
+      const out = [];
+      for (const line of lines.slice(1)) {
+        const cells = line.split(',');
+        if (cells.length <= Math.max(dateAt, valueAt)) continue;
+        const percent = asRate(cells[valueAt]);
+        const period = String(cells[dateAt]).trim();
+        // DATED AT THE FIRST OF THE MONTH, the same way the fallback dates it,
+        // so the same window picks the same months whichever answered.
+        if (percent !== null && /^\d{4}-\d{2}$/.test(period)) out.push({ date: `${period}-01`, percent });
+      }
+      if (!out.length) throw new Error('ECB: no observations in the window');
+      return out;
+    },
+    // Measured over the year to 2025-12-31: 2.4693% against the ECB's 2.4265%,
+    // 4.3 basis points apart. Two compilations of the same bond market rather
+    // than one series twice, and the difference is recorded rather than hidden.
+    fallbacks: [
+      fredSeries({
+        id: 'IRLTLT01DKM156N',
+        name: '10-year Danish government bond yield',
+        frequency: 'monthly',
+        standsIn: 'the OECD',
+      }),
     ],
   },
 };

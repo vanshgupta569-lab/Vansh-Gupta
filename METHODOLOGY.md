@@ -227,6 +227,17 @@ included.
    `financialCurrency` cross-checked against the currency stamped on each
    figure — never inferred. Figures stamped with a second currency refuse the
    company.
+
+   **Measured on 2026-11-01: this costs three of the 178 companies in the set
+   their whole valuation** — `ENB` and `WELL`, which tag facts in Canadian and
+   US dollars, and `PEP`, which tags them in euros and US dollars. In each case
+   the dominant currency is obvious to a reader and the rule does not guess at
+   it, because a figure stamped EUR inside a dollar filing is a real euro
+   amount and averaging the two would be inventing a company. Without a
+   reporting currency there is no ten-year yield to discount at and no price to
+   compare against, so the refusal is the whole model rather than one line of
+   it. Whether a dominant currency may be chosen where a handful of facts
+   disagree is a decision for Nihar, not a code change.
 2. **The share count must count the security the price is for.** An SEC filer's
    statements count the registered shares its ticker trades. For a Yahoo
    listing: London's international order book (`IOB`) is refused outright as a
@@ -1306,6 +1317,8 @@ measured against the primary over the same window:
 | SEK | Sveriges Riksbank | FRED, the OECD monthly series | 0.05 of a basis point |
 | INR | OECD | FRED, the same OECD series | identical to the last digit |
 | EUR | European Central Bank | **none** | — |
+| CAD | Bank of Canada | FRED, the OECD monthly series | 0.19 of a basis point |
+| DKK | European Central Bank | FRED, the OECD monthly series | 4.3 basis points |
 
 The euro area has no fallback deliberately: FRED republishes the OECD rate
 for it, and the series carried **three** observations over a twelve-month
@@ -1316,6 +1329,26 @@ Where a fallback is a different series from a different publisher — a
 central bank's daily curve against an OECD monthly one — the frequency is
 carried through to the screen, so a reader is never told a monthly series is
 a daily one.
+
+**Canada and Denmark were added on 2026-11-01**, and Switzerland was not.
+Seven Canadian and two Danish payloads had been refused a cost of equity
+outright — not because the rate was unknowable but because nobody had looked
+for it. Canada’s comes from the **Bank of Canada’s own Valet API** (the
+10-year Government of Canada benchmark bond yield, 250 daily observations in
+a year) and Denmark’s from the **ECB**, which compiles a long-term rate for
+convergence purposes on one definition across the European Union — named
+here the way its publisher names it rather than relabelled as a plain
+ten-year yield.
+
+**Each was checked against its publisher’s terms before it was read.** The
+Bank of Canada permits free use, copying and distribution of its content with
+the Bank credited, and requires that purchasers of any paid service be told
+the content is free on its own website. The ECB’s statistics are reusable
+with the source acknowledged. **The Swiss National Bank publishes the same
+figure in the same shape and its terms do not permit commercial reuse without
+written permission, so it is not read** — a licence rather than a gap, and
+recorded as one in `DATA_CONSTRAINTS.md`. `npm run verify` fails if a source
+for the Swiss franc ever appears without that decision being revisited.
 
 **A blank cell is not a yield of nought**, found while measuring the above.
 FRED prints an empty cell for every US market holiday and `Number('')` is 0,

@@ -235,6 +235,29 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### Every rate names its publisher, and every publisher its terms
+
+Canada and Denmark were added because their own central banks publish the
+yield and permit its reuse; Switzerland was not, although the Swiss National
+Bank publishes the same figure, because its terms do not allow commercial
+reuse without written permission. The only thing that keeps that distinction
+honest is that every source carries its terms beside its link.
+
+So: every source and every fallback must have a name, a publisher, a
+statement of terms that is a statement of something, a link those terms can
+be read back at, and a stated publication frequency; every rate on disk must
+come from a publisher this code declares and carry its terms; and **a source
+for the Swiss franc fails the check**, so it cannot be added without the
+decision being revisited rather than forgotten.
+
+The terms rule is written as "four words or more" because that is what it
+takes to say anything, and it earned its place immediately: the Riksbank’s
+terms read "Riksbank open data", three words asserting a licence nobody had
+seen. The Riksbank publishes none, and the field now says so.
+
+Proved by breaking: the terms removed from one source, and a source added
+for the Swiss franc.
+
 ### The risk-free rate: one fetch per currency, three tries, a fallback behind
 
 A single request that did not answer used to take a company’s whole valuation

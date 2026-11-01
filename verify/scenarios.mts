@@ -2534,6 +2534,106 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 // and every one of them is driven by standing in for the publisher rather than
 // by waiting for it to have a bad day.
 {
+// ---------------------------------------------------------------------------
+// NO RATE IS READ FROM A PUBLISHER WHOSE TERMS ARE NOT RECORDED
+// ---------------------------------------------------------------------------
+//
+// Canada and Denmark were added on 2026-11-01 because their own central banks
+// publish the yield and permit its reuse. Switzerland was NOT, although the
+// Swiss National Bank publishes the same figure in the same shape: its terms
+// do not allow commercial reuse without written permission. That is a licence
+// rather than a gap, and the only thing that keeps the distinction honest is
+// that every source carries its terms beside its URL — so this checks that
+// nothing is ever read from a publisher whose terms nobody wrote down.
+{
+  console.log('\n=== every rate names its publisher, and every publisher its terms ===');
+  const { RISK_FREE_SOURCES } = await import(`file:///${REPO}/api/company.js`);
+  const faults: string[] = [];
+  const known = new Set<string>();
+  let sources = 0;
+
+  for (const [currency, spec] of Object.entries(RISK_FREE_SOURCES as Record<string, any>)) {
+    for (const source of [spec, ...(Array.isArray(spec.fallbacks) ? spec.fallbacks : [])]) {
+      sources++;
+      known.add(String(source.publisher));
+      for (const field of ['name', 'publisher', 'terms', 'url', 'read']) {
+        if (!source[field]) faults.push(`${currency}: a source with no ${field}`);
+      }
+      // TERMS ARE A SENTENCE, NOT A WORD. "free" on its own records nothing a
+      // reader or a lawyer could act on.
+      if (String(source.terms || '').trim().split(/\s+/).length < 4) {
+        faults.push(`${currency}: terms of "${source.terms}", which is not a statement of anything`);
+      }
+      if (!/^https:\/\//.test(String(source.url || ''))) {
+        faults.push(`${currency}: a source whose terms cannot be read back (${source.url})`);
+      }
+      const freq = source.frequency || 'daily';
+      if (!['daily', 'weekly', 'monthly'].includes(freq)) {
+        faults.push(`${currency}: a publication frequency of "${freq}", which has no observation floor`);
+      }
+    }
+  }
+
+  // AND SWITZERLAND IS ABSENT ON PURPOSE. If a Swiss source is ever added, it
+  // must come with terms that permit this use; until then its absence is the
+  // decision, and a check that did not notice it being added quietly would
+  // make the decision worthless.
+  if (RISK_FREE_SOURCES.CHF) {
+    faults.push(
+      'a source has been added for CHF. The Swiss National Bank’s terms do not permit commercial reuse ' +
+        'without written permission (DATA_CONSTRAINTS.md, Paid · last), so this needs its terms checked ' +
+        'and this check updated rather than deleted'
+    );
+  }
+
+  // ---- AND EVERY RATE ON DISK CAME FROM ONE OF THEM -------------------
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let rated = 0;
+  const byPublisher: Record<string, number> = {};
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (payload?.error) continue;
+    const rf = payload?.riskFree;
+    if (!rf || typeof rf.rate !== 'number') continue;
+    rated++;
+    // The publisher may carry "— used because ..." when a fallback answered;
+    // the name in front of it is the one that must be in the table.
+    const named = String(rf.publisher || '').split(' — used because ')[0];
+    byPublisher[named] = (byPublisher[named] ?? 0) + 1;
+    if (!known.has(named)) {
+      faults.push(`${file}: a rate published by "${named}", which is not a source this code declares`);
+    }
+    if (!rf.terms || !rf.sourceUrl) {
+      faults.push(`${file}: a rate with no terms or no source link beside it`);
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in how the rate sources are declared:`);
+    faults.slice(0, 12).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  ${sources} sources across ${Object.keys(RISK_FREE_SOURCES).length} currencies, every one with a ` +
+        'name, a publisher, a statement of terms, a link those terms can be read back at, and a stated ' +
+        'publication frequency'
+    );
+    console.log(
+      `  ${rated} payloads carry a rate, every one from a declared publisher and carrying its terms: ` +
+        `${Object.entries(byPublisher).map(([k, v]) => `${v} ${k}`).join(', ')}`
+    );
+    console.log(
+      '  and there is no source for the Swiss franc, which is a licence rather than a gap: the Swiss ' +
+        'National Bank publishes the figure and does not permit this use of it'
+    );
+  }
+}
+
   console.log('\n=== the risk-free rate: one fetch per currency, three tries, a fallback behind ===');
   const { fetchRiskFreeRate, clearRiskFreeCache, riskFreeCacheStats } = await import(
     `file:///${REPO}/api/company.js`
