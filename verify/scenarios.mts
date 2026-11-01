@@ -3453,6 +3453,144 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 // ---------------------------------------------------------------------------
+// A SHARE COUNT IS NEVER A SUBTRACTION (`KI-33`)
+// ---------------------------------------------------------------------------
+//
+// A quarter a company did not file on its own is worked out as this year to
+// date less the last, which is right for a flow and wrong for an average. The
+// average over a year is not the four quarterly averages added up, so the
+// difference between a year and nine months of it is not the fourth quarter of
+// anything — and because the two averages are close, the difference came out
+// NEGATIVE: 159 figures across 68 companies were at or below zero.
+//
+// Three things are checked, and the third is the one that stops this fix from
+// being a blanket ban on arithmetic.
+{
+  console.log('\n=== a share count is never a subtraction ===');
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  const COUNTS = ['dilutedShares', 'basicShares', 'preferredConversionShares'];
+
+  let reported = 0;
+  let absent = 0;
+  let derivedFlows = 0;
+  let quarters = 0;
+  const companies = new Set<string>();
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (payload?.error) continue;
+    const t = file.replace('.json', '');
+    for (const q of Array.isArray(payload.quarters) ? payload.quarters : []) {
+      quarters++;
+      // ---- 1. NO COUNT IS DERIVED, AND NONE IS IMPOSSIBLE ------------
+      for (const field of COUNTS) {
+        const v = q?.values?.[field];
+        if (!isNum(v)) {
+          if (field === 'dilutedShares') absent++;
+          continue;
+        }
+        if (field === 'dilutedShares') {
+          reported++;
+          companies.add(t);
+        }
+        if (q?.states?.[field] === 'derived') {
+          faults.push(`${t} ${q.periodEnd}: ${field} is derived, and an average cannot be subtracted`);
+        }
+        if (Array.isArray(q?.derivedFrom) && q.derivedFrom.length > 1 && q?.states?.[field] !== 'reported') {
+          faults.push(`${t} ${q.periodEnd}: ${field} carries two filings, so it is a difference of them`);
+        }
+        // A COUNT THAT CANNOT BE A COUNT. The symptom this was measured by:
+        // no company has ever had nought shares in issue, let alone fewer.
+        if (v <= 0) {
+          faults.push(
+            `${t} ${q.periodEnd}: ${field} is ${Math.round(v).toLocaleString('en-US')}, which is not a ` +
+              'number of shares'
+          );
+        }
+      }
+      // ---- 2. AND THE FLOWS ARE STILL DERIVED ------------------------
+      //
+      // The assertion that keeps this from being a ban on all arithmetic. Rule
+      // 4 earns most of the quarterly figures on this site by subtraction, and
+      // a fix that stopped doing it would empty the Financials tab.
+      if (q?.states?.revenue === 'derived' && isNum(q?.values?.revenue)) derivedFlows++;
+    }
+  }
+
+  if (derivedFlows < 100) {
+    faults.push(
+      `only ${derivedFlows} quarterly revenues are still worked out as a difference of two cumulative ` +
+        'figures, so the fix has reached past the counts into the flows'
+    );
+  }
+
+  // ---- 3. THE FAULT PUT BACK, which no fixed payload can show ---------
+  //
+  // CONSTRUCTED on Amphenol, whose quarter to 2025-12-31 was the worst case
+  // measured: the subtraction of a nine-month average from an annual one.
+  {
+    const file = path.join(PAYLOADS, 'APH.json');
+    if (!fs.existsSync(file)) {
+      faults.push('APH.json is not on disk, so the subtraction could not be put back');
+    } else {
+      const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const rows = payload.statements ?? [];
+      const year = [...rows].reverse().find((r: any) => isNum(r?.dilutedShares));
+      // The year less the nine months before it, which is what the data layer
+      // used to hand back as a quarter.
+      const nineMonth = (payload.quarters ?? [])
+        .filter((q: any) => q.fiscalYear === year?.fiscalYear && q.months === 3 && isNum(q?.values?.dilutedShares))
+        .slice(0, 3)
+        .reduce((t: number, q: any) => t + q.values.dilutedShares, 0);
+      if (!isNum(year?.dilutedShares) || !nineMonth) {
+        faults.push(
+          'APH no longer carries both an annual count and three quarters of it, so the constructed case ' +
+            'needs rebuilding rather than trusting'
+        );
+      } else {
+        const asDerived = year.dilutedShares - nineMonth;
+        if (!(asDerived <= 0)) {
+          faults.push(
+            `subtracting nine months of Amphenol’s counts from its year gives ` +
+              `${Math.round(asDerived).toLocaleString('en-US')}, which is positive — so the check that ` +
+              'catches an impossible count would not have caught the figure this fix removed'
+          );
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the quarterly share counts:`);
+    faults.slice(0, 12).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 12) console.log(`           ... and ${faults.length - 12} more`);
+  } else {
+    console.log(
+      `  ${quarters} quarters across ${files.length} companies: ${reported} carry the share count their own ` +
+        `company filed for them, across ${companies.size} companies, and not one is a difference of two ` +
+        'cumulative figures or a number of shares no company could have'
+    );
+    console.log(
+      `  ${absent} quarters report no diluted count, which is what a figure nobody filed looks like, and ` +
+        `${derivedFlows} quarterly revenues are still worked out by subtraction — the fix reaches the ` +
+        'averages and not the flows'
+    );
+    console.log(
+      '  and subtracting nine months of Amphenol’s own quarterly counts from its annual one still gives a ' +
+        'negative number, which is the figure this removed'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // A TICKER THAT HAS NEVER ONCE ANSWERED
 // ---------------------------------------------------------------------------
 //

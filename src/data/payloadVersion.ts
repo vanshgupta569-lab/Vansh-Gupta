@@ -36,6 +36,11 @@
 //      off its own cover page, and the counts corrected to an absolute
 //      number of shares. McDonald's tags 716.4 where every other filer tags
 //      716,400,000 (`KI-30`)
+//  10  a quarterly share count is never derived by subtracting one
+//      cumulative figure from another: a weighted average is not a sum, so
+//      the difference between a year and nine months of it is not the
+//      fourth quarter of anything. The quarter carries the count the
+//      company filed for it, or it is not reported (`KI-33`)
 //   9  `revenueDefinition`: which revenue tag a FINANCIAL company's top
 //      line is read from, chosen rather than taken in order, because the
 //      tag decides which fiscal years exist. Morgan Stanley and Wells Fargo
@@ -55,7 +60,7 @@
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 9;
+export const PAYLOAD_VERSION = 10;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

@@ -1273,6 +1273,39 @@ pending. It is measured from the end of the period and not from the filing
 date, because the question is how old the figures are: a filing published
 yesterday about 2014 does not make 2014 recent.
 
+**A quarterly share count is the one the company filed, or nothing**
+(2026-11-01, `KI-33`). Rule 4 earns most of the quarterly figures on this site
+by subtraction — `Q2 = H1 − Q1`, `Q3 = 9M − H1`, `Q4 = FY − 9M` — because a
+flow a company reports cumulatively can be recovered that way. **A
+weighted-average share count cannot.** The average over a year is not the four
+quarterly averages added up, so the difference between a year and nine months
+of it is not the fourth quarter of anything. And because the annual and
+nine-month averages are close, the difference came out **negative**: 159
+figures across 68 companies were at or below zero, Amphenol’s quarter to
+2025-12-31 reporting −1,270,100,000 shares.
+
+XBRL is what made it reachable: a weighted-average count spans a period, so it
+is filed the way revenue is filed and the subtraction found it. So the fields
+that may not be derived are now named — `dilutedShares`, `basicShares` and
+`preferredConversionShares` — and a quarter carries the count its company
+filed for it or **is not reported**, which is standing decision 3 rather than a
+special case.
+
+**Measured on 2026-11-01**: 249 quarterly share-count figures went, across **82
+companies** — 164 of them impossible and **85 positive enough to look
+ordinary**, which are the dangerous ones. 1,449 remain, every one filed by the
+company for that quarter. No valuation uses a quarterly count, so no value per
+share moved; what changed is the diluted-share row of the Financials tab, which
+now shows an em dash where it used to show a figure nobody could have earned.
+
+**Earnings per share would belong to the same rule and is not fetched at all.**
+No EPS tag is read, annually or quarterly; the per-share figures on the
+overview are divided out of annual rows that carry both halves from one filing,
+and `companyOverview.ts` already refuses to divide a profit by another year’s
+denominator. The rule is written down here, and the field list carries the
+note, so that adding EPS later lands on it rather than rediscovering the
+arithmetic.
+
 **A share count is put on today’s basis by the splits filed after it**
 (2026-11-01, `KI-31`). The count comes from a filing and the price comes from
 today, so a stock split between the two stops the pair belonging to each

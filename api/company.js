@@ -1019,6 +1019,32 @@ const QUARTER_FLOW_FIELDS = new Set([
   'depreciation', 'stockComp', 'dividendsPaid', 'buybacks',
 ]);
 
+// AND THE ONES THAT ARE A PERIOD BUT STILL DO NOT SUBTRACT (`KI-33`).
+//
+// `QUARTER_FLOW_FIELDS` above says which fields can be RECONCILED against the
+// year. This says something narrower and more dangerous to get wrong: which
+// fields may be DERIVED by taking one cumulative figure away from another.
+//
+// A weighted-average share count spans a period, so XBRL files it the way it
+// files revenue and the subtraction Q4 = FY - 9M reaches it. But an average
+// is not a sum: the average over a year is not the four quarterly averages
+// added up, and the difference between a year and nine months of it is not
+// the fourth quarter of anything. Because the two averages are close, the
+// difference is usually NEGATIVE — Amphenol's quarter to 2025-12-31 came out
+// at -1,270,100,000 shares, and 159 figures across 68 companies were at or
+// below zero when this was measured on 2026-11-01.
+//
+// There is no honest way to work one out, so there is no figure: the quarter
+// carries the count the company filed for it, or it is not reported. That is
+// standing decision 3, and it is the whole of the fix.
+//
+// Earnings per share would belong here too and is not fetched at all — no EPS
+// tag is read, annually or quarterly, and the per-share figures on the
+// overview are divided out of ANNUAL rows that carry both halves from one
+// filing. Named here so that adding EPS later lands on this list rather than
+// rediscovering the arithmetic.
+const NOT_ADDITIVE = new Set(['dilutedShares', 'basicShares', 'preferredConversionShares']);
+
 const daySpan = (start, end) => Math.round((new Date(end) - new Date(start)) / 86400000);
 const near = (a, b, slack) => Math.abs(a - b) <= slack;
 
@@ -1169,7 +1195,7 @@ function quarterValue(field, period, points, cik, wantMonths) {
   // 2. THE DIFFERENCE OF TWO CUMULATIVE FIGURES, which is rule 4 in one line:
   //    Q2 = H1 − Q1, Q3 = 9M − H1, Q4 = FY − 9M, and a cash flow quarter is
   //    this year-to-date less the last one.
-  if (wantMonths === 3 && period.previousEnd) {
+  if (wantMonths === 3 && period.previousEnd && !NOT_ADDITIVE.has(field)) {
     const now = flows.get(`${period.fiscalYearStart}|${period.end}`);
     const before = flows.get(`${period.fiscalYearStart}|${period.previousEnd}`);
     // BOTH ENDS OF THE SUBTRACTION MUST BE THE SAME LINE. A company that files
@@ -2577,7 +2603,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 9;
+const FETCHER_VERSION = 10;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

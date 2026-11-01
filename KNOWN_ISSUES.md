@@ -30,7 +30,16 @@ mistakes and would never be fixed:
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
 - Taken so far: `KI-1` to `KI-34`. **Next free: `KI-35`.** Retired, meaning
-  fixed and never to be reused: `KI-32` (which fiscal years a company has is
+  fixed and never to be reused: `KI-33` (a quarterly share count was worked
+  out as this year to date less the last, which is right for a flow and wrong
+  for an average: the average over a year is not the four quarterly averages
+  added up, so the difference between a year and nine months of it is not the
+  fourth quarter of anything. 159 figures across 68 companies were at or below
+  zero, Amphenol’s quarter to 2025-12-31 reporting −1,270,100,000 shares.
+  Fixed 2026-11-01 by naming the fields that may not be derived by
+  subtraction and leaving the quarter to carry the count its company filed or
+  nothing at all; 249 figures went, 164 of them impossible and 85 positive
+  enough to look ordinary, across 82 companies), `KI-32` (which fiscal years a company has is
   anchored on revenue, and Morgan Stanley and Wells Fargo had both stopped
   tagging `Revenues` for `RevenuesNetOfInterestExpense`, which the anchor did
   not read — so their models were built from whatever years still carried the
@@ -141,42 +150,9 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-Both were found on 2026-11-01, by two jobs that were looking for something
-else. `KI-33` came out of putting every share count on one basis for `KI-31`,
-which made a quarterly count that had always been nonsense impossible to miss;
-`KI-34` came out of refetching the set twice in a day and watching a different
-company lose its valuation each time. Neither was caused by the job that found
-it, and both are measured below rather than described.
-
-### `KI-33` — a quarterly share count worked out by subtraction
-
-**What is wrong.** A quarter a company did not file on its own is worked out
-as this year to date less the last — `Q4 = FY − 9M` — which is right for a
-flow and **wrong for a share count**. A weighted-average diluted share count
-is not additive: the average over a year is not the sum of the averages over
-its quarters, and subtracting one from another produces a number that means
-nothing. Because the annual average and the nine-month average are close, the
-difference is usually a **negative share count**.
-
-**Measured on 2026-11-01**, over the 176 payloads: **159 quarterly share
-counts at or below zero, across 68 companies** — Apple, Microsoft, Alphabet,
-JPMorgan and 64 more. Worst example: Amphenol’s quarter to 2025-12-31 reports
-**−1,270,100,000 shares**. The figures are identical before and after the
-split adjustment of 2026-11-01, measured both ways, so this is not that job’s
-doing — it found it.
-
-**What it moves: no value, and a visible figure.** No valuation uses a
-quarterly share count; the annual one drives everything. What it reaches is
-the Financials tab, where the diluted-share row prints the derived quarter as
-a figure like any other, correctly labelled derived and plainly impossible.
-
-**What the fix needs.** A list of fields that may not be derived by
-subtraction, checked in `quarterValue` beside the guard that already stops a
-subtraction between two different tags (the Arista fix of 2026-10-26). A
-count that cannot be filed honestly is not reported rather than derived,
-which standing decision 3 requires. It is a one-guard change, and it moves
-the quarterly figures of 68 companies, so it wants its own commit and its own
-measurement rather than a corner of another job.
+`KI-34` was found on 2026-11-01 by refetching the set twice in one day and
+watching a different company lose its valuation each time. It was not caused
+by the job that found it, and it is measured below rather than described.
 
 ### `KI-34` — a yield that fails to fetch costs a company its valuation
 

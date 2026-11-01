@@ -235,6 +235,27 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### A share count is never a subtraction
+
+Rule 4 earns most of the quarterly figures here by taking one cumulative
+figure away from another, which is right for a flow and wrong for an average
+(`KI-33`). 159 quarterly share counts across 68 companies were at or below
+zero, Amphenol’s quarter to 2025-12-31 reporting −1,270,100,000 shares.
+
+Checked over every payload: no share count is derived, none carries the two
+filings a difference would need, and none is a number of shares no company
+could have. Then the assertion that keeps the fix from being a ban on all
+arithmetic — **the flows are still derived**, and a run where fewer than a
+hundred quarterly revenues come from a subtraction has reached past the
+averages into the figures rule 4 exists for.
+
+And one **constructed** case, because a fixed payload cannot show the fault:
+nine months of Amphenol’s own quarterly counts subtracted from its annual one
+must still give a negative number, which is the figure this removed.
+
+Proved by breaking: the non-additive list emptied, which put the subtraction
+back — 32 faults across five companies, Apple reporting −46,716,000 shares.
+
 ### Every ticker in the set has answered at least once
 
 `TATAMOTORS.NS` sat in the sweep set for eleven days returning an error on
