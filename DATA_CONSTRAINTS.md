@@ -871,6 +871,42 @@ check already refuses a listing whose shares outstanding and filed count differ
 by more than 1.5× either way, which catches a factor of a thousand wherever the
 feed reports both.
 
+### No primary source publishes a corporate action
+
+**Source:** the vendor feed (Yahoo chart events). **Affects:** every company,
+and decided the figures of 2 of the 176 in the set on 2026-11-01.
+
+A stock split, a bonus issue and a change to an ADR’s ratio all change how
+many shares a price refers to, and a share count filed before one is no
+longer the count that price belongs to (`METHODOLOGY.md` §10, `KI-31`). **No
+primary source this site can read publishes them as data.** An SEC filer
+announces a split on an 8-K in prose; an Indian issuer files a bonus issue
+with the exchange as a PDF. The only machine-readable record is the price
+vendor’s own event list, which is the same vendor whose figures the site is
+not licensed to redistribute.
+
+**And the vendor does not distinguish a corporate action from a quotation
+change.** AstraZeneca shows a "1:2 split" on 2026-02-02 which is an **ADR
+ratio change**: the number of shares the company has issued did not move at
+all, and applying it would have halved a correct market capitalisation.
+Nothing in the event says which kind it is.
+
+**Bound: the split ratio, on the market capitalisation and on the value per
+share.** A factor of two or four, not a rounding — on Amphenol it was the
+difference between a 45% overvaluation and a 13% undervaluation, which is the
+sign of the answer and not its size.
+
+**What limits it:** the event is never acted on alone. It supplies the factor
+and the date, and an **independently reported count of shares outstanding**
+decides whether it applies: the filing’s own cover page, else the latest
+quarterly count that carries a filing date, else the shares outstanding the
+source reports for the listing. The adjustment is made only where the
+adjusted count agrees with that independent count and the filed count does
+not. So a mislabelled event cannot move a figure on its own, and where the
+evidence does not settle it nothing is adjusted and the reason is recorded.
+This is why the constraint warns rather than refuses: the bound is large, and
+what closes it is a second source rather than a judgement.
+
 ### No cover-page share count for a company with more than one share class
 
 **Source:** SEC XBRL (`companyfacts`). **Affects:** 9 of the 84 SEC filers in

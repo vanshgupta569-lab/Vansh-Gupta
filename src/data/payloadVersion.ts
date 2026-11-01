@@ -36,13 +36,20 @@
 //      off its own cover page, and the counts corrected to an absolute
 //      number of shares. McDonald's tags 716.4 where every other filer tags
 //      716,400,000 (`KI-30`)
+//   8  `splitAdjustment` and `quote.splits`: every stock split the price
+//      source reports, and every share count put on today's basis by the
+//      splits that fall after the date that count was filed — so a count
+//      filed before a split is no longer paired with a price struck after
+//      one. `shareCountFiledAt` carries the filing date each annual count
+//      came from. An event that did not change the issuer's share count, such
+//      as an ADR ratio change, is recorded and not applied (`KI-31`)
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 7;
+export const PAYLOAD_VERSION = 8;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

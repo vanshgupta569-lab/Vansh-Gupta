@@ -235,6 +235,39 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### A share count filed before a split
+
+The count comes from a filing and the price comes from today, so a split
+between the two stops them belonging to each other and nothing in the figures
+shows it (`KI-31`). Amphenol split 2 for 1 on 2026-09-03 and CrowdStrike 4
+for 1 on 2026-07-02, both after their last annual report.
+
+Checked over every payload: every split event carries a date, a ratio that is
+its own numerator over its denominator, and words for it; **no company
+anywhere in the set has a split dated after the figures it is built on
+without a record of what was decided about it**; where it was applied the
+factor is the product of the events named, the statements carry the adjusted
+count rather than only the record, each year moved by the splits that fall
+after the day that year was filed, every reported quarter now sits near the
+adjusted annual count, and the result agrees within a fifth with the
+independent count that settled it; and where it was declined there is a
+reason and nothing moved.
+
+Two of the cases are **constructed**, because a fixed payload cannot show
+either fault. Amphenol with its adjustment undone is the state the set was in
+until 2026-11-01, and the cover-page comparison has to report it; AstraZeneca
+with its ADR ratio change forced through has to produce a count its own
+source contradicts, because that guard is the whole reason the adjustment is
+safe to make anywhere.
+
+Proved by breaking, four ways: the adjustment removed (3 faults, two of them
+the invariant above); the reconciliation guard removed so every event applies
+blindly (6 — AstraZeneca halved to 781,000,000 against 1,550,905,742
+reported, HDFC Bank doubled to 10,212,578,808 against 5,144,097,830); one
+factor used for every year instead of each figure’s own filing date (1 —
+Amphenol’s FY2021 needs four, having been filed before two of them); and the
+quarters left alone (23).
+
 ### A share count is a count
 
 An XBRL fact in the `shares` unit is meant to be an absolute count, and all but

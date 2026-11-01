@@ -1203,6 +1203,53 @@ filed — the derivation puts it in `provenance.shares`, and the risk and
 cost-of-capital card prints it beside the share price, the way it prints the
 pence-to-pounds correction.
 
+**A share count is put on today’s basis by the splits filed after it**
+(2026-11-01, `KI-31`). The count comes from a filing and the price comes from
+today, so a stock split between the two stops the pair belonging to each
+other: the market capitalisation is out by the split ratio and the value per
+share is out by it the other way. Nothing in the figures shows it, because a
+split leaves no trace in an income statement.
+
+**A split is a property of a figure, not of a company.** Each share count is
+on the basis of whatever was true when it was filed, and a filer restates its
+comparatives at its next report. Amphenol’s own data says so: the quarter to
+2023-09-30, filed 2024-10-25, carries 1,244,100,000 shares, and the quarter to
+2026-09-30, filed 2026-10-30, carries 2,582,900,000. So the factor applied to a
+figure is **the product of the splits dated after the day that figure was
+filed** — which puts every year of share-count history on one basis rather
+than only the latest, and makes the per-share history and the split-adjusted
+price series comparable for the first time. Where a figure carries no filing
+date, which is every company whose statements come from the vendor feed, the
+end of the period it covers is used instead, and that is weaker: a figure
+published months after its period end may already be on the new basis.
+
+**The event supplies the factor and the date; an independently reported share
+count decides whether it applies.** A split on a price line is not always a
+split at the company: the vendor reports an **ADR ratio change as a split**,
+and a ratio change leaves the issuer’s share count untouched. AstraZeneca shows
+a 1-for-2 reverse split on 2026-02-02 and its 1,562,000,000 shares are
+unchanged by it, so halving them would have put a correct market capitalisation
+out by half. So the adjustment is applied only where the adjusted count agrees
+with an independently reported count of shares outstanding **and the filed
+count does not**, within a fifth either way. The independent count is taken, in
+order, from the filing’s own cover page, then the latest quarterly diluted
+count (which a filer restates for a split at its next report), then the shares
+outstanding the data source reports for the listing. Where neither count
+agrees, or both do, nothing is adjusted and the reason is recorded.
+
+**Measured on 2026-11-01**, over the 176 payloads: 50 companies have had a
+split in the last ten years, and **three have one dated after the period their
+latest statements cover** — Amphenol 2 for 1 on 2026-09-03 and CrowdStrike 4
+for 1 on 2026-07-02, both applied; AstraZeneca’s ADR ratio change, declined
+against its own quarterly count of 1,560,000,000.
+
+**An adjusted count says it is adjusted** (standing decision 5). The payload
+carries `splitAdjustment` — every event the source reported, the factor, the
+count before and after, the independent count that settled it, and the reason
+where it was declined — the derivation puts it in `provenance.shares`, and the
+risk and cost-of-capital card names the event and its date beside the share
+price: *adjusted for a 2-for-1 split on 2026-09-03*.
+
 **What the ratio establishes, and what it does not.** It establishes an order of
 magnitude, and nothing finer. The cover date and the fiscal year end are up to a
 year apart, so the two counts are never expected to agree exactly, and a ratio

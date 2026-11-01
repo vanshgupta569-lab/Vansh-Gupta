@@ -29,8 +29,16 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-32`. **Next free: `KI-33`.** Retired, meaning
-  fixed and never to be reused: `KI-30` (`MCD`'s payload carried 716.4 diluted
+- Taken so far: `KI-1` to `KI-34`. **Next free: `KI-35`.** Retired, meaning
+  fixed and never to be reused: `KI-31` (a share count filed before a stock
+  split was paired with a price struck after one, so Amphenol's market
+  capitalisation was half what it is and its value per share 89.58 against
+  43.99 — a 45% overvaluation published as a 13% undervaluation. Fixed
+  2026-11-01: every share count is put on today's basis by the splits dated
+  after the day that figure was filed, with the event applied only where an
+  independently reported count of shares outstanding agrees with the adjusted
+  count and not with the filed one, so an ADR ratio change is recorded and not
+  applied), `KI-30` (`MCD`'s payload carried 716.4 diluted
   shares where every other SEC filer carries the absolute count, because
   McDonald's tags the figure as its statements print it — in millions — and the
   derivation divided it by a million again; its market capitalisation came out
@@ -125,61 +133,16 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-Both were found on 2026-11-01 by the sweep `KI-30` asked for — *check whether any
-other company has the same fault*. Neither is the same fault: no other company in
-the set tags a share count in millions. Both were found because the cover-page
-check `KI-30` installed compares a filed share count against the filing’s own
-cover page, and three companies came back with a ratio that is neither a match
-nor a scale. The mechanism left all three alone and said so, which is what it is
-built to do; what the ratios then revealed is below.
-
-### `KI-31` — a share count from before a stock split
-
-**What is wrong.** The share count comes from the latest annual filing and the
-price comes from today. When a company splits its stock **after** its last 10-K,
-the two stop belonging to each other: the price is post-split and the count is
-pre-split, so the market capitalisation is too small by the split ratio and the
-value per share is too large by it. Nothing in the engine notices, because a
-split leaves no trace in the income statement — the filer restates the count in
-its *next* annual report, and until then the only record of it is the cover page.
-
-**Measured on 2026-11-01**, over the 77 SEC filers that carry a cover-page count:
-**two** are mid-split.
-
-| | last 10-K count | cover page | split |
-|---|---|---|---|
-| `APH` Amphenol | 1,277,500,000 (FY2025) | 2,469,261,188 at 2026-10-27 | **2 for 1** |
-| `CRWD` CrowdStrike | 250,576,000 (FY2026, year ended 31 January) | 1,023,934,842 at 2026-08-20 | **4 for 1** |
-
-Both are confirmed at source rather than inferred from the ratio: Amphenol’s own
-cover-page series runs 1,230,234,445 at 2026-04-28 and 1,232,983,457 at
-2026-07-28 before doubling to 2,469,261,188 at 2026-10-27, and CrowdStrike’s runs
-252,098,440 and 254,564,820 before quadrupling. Amphenol’s history shows the same
-thing from its last split: FY2023 was filed as 620,600,000 in the FY2023 10-K and
-restated to 1,241,200,000 in the FY2024 one.
-
-**What it moves.** Amphenol is the one of the two that carries a valuation, and
-it is the largest single error this file has ever recorded on a published number:
-its market capitalisation is **101,306** against the **202,612** the same price
-and the split-adjusted count give, its equity weight 86.73% against 92.89%, its
-WACC 8.53% against 8.63%, and its value per share **89.58 against 43.99 — the
-pre-split count overstates it by 103.7%**. Against a price of 79.30 that turns a
-45% overvaluation into a 13% undervaluation: the sign of the answer is wrong, not
-merely the size. CrowdStrike runs an operating loss and is refused a discounted
-cash flow for that reason, so no value per share of its is wrong; its market
-capitalisation is 62,752 against 251,007 and its equity weight 98.83% against
-99.70%, which moves nothing that is shown.
-
-**What the fix needs.** The cover page already carries the answer and the payload
-already records the ratio. What it does not have is the right to act on it: a
-ratio of 2.00 could be a split or a share issue that doubled the company, and
-telling them apart needs either the restated prior-year count from the next 10-Q
-(`WeightedAverageNumberOfDilutedSharesOutstanding` for the quarter, which is
-filed post-split) or the split ratio itself, which filers tag on the stock-split
-note. Both are in the same XBRL facts the fetcher already holds, so this is a
-data-layer job of a known shape and not a guess. **Left alone deliberately until
-then** (`CLAUDE.md`: refuse rather than approximate) — and left alone at Nihar’s
-explicit instruction on 2026-11-01, pending his decision on how to treat it.
+`KI-32` was found on 2026-11-01 by the sweep `KI-30` asked for — *check whether
+any other company has the same fault*. It is not the same fault: no other
+company in the set tags a share count in millions. It was found because the
+cover-page check `KI-30` installed holds a filed share count against the
+filing’s own cover page, and three companies came back with a ratio that is
+neither a match nor a scale. Two of those three turned out to be `KI-31`,
+fixed on 2026-11-01; the third was Mastercard, where the check itself falls
+short rather than the data (`DATA_CONSTRAINTS.md`, *No cover-page share count
+for a company with more than one share class*). This one came from the same
+reading and is a different fault again.
 
 ### `KI-32` — two banks’ statements stop years back
 
@@ -223,6 +186,65 @@ cover-page comparison `KI-30` installed exists to catch a share count in the
 wrong unit; what it actually does is hold a filed count against a figure from a
 different filing, and any disagreement is worth reading. A check is worth more
 than the fault it was built for.
+
+### `KI-33` — a quarterly share count worked out by subtraction
+
+**What is wrong.** A quarter a company did not file on its own is worked out
+as this year to date less the last — `Q4 = FY − 9M` — which is right for a
+flow and **wrong for a share count**. A weighted-average diluted share count
+is not additive: the average over a year is not the sum of the averages over
+its quarters, and subtracting one from another produces a number that means
+nothing. Because the annual average and the nine-month average are close, the
+difference is usually a **negative share count**.
+
+**Measured on 2026-11-01**, over the 176 payloads: **159 quarterly share
+counts at or below zero, across 68 companies** — Apple, Microsoft, Alphabet,
+JPMorgan and 64 more. Worst example: Amphenol’s quarter to 2025-12-31 reports
+**−1,270,100,000 shares**. The figures are identical before and after the
+split adjustment of 2026-11-01, measured both ways, so this is not that job’s
+doing — it found it.
+
+**What it moves: no value, and a visible figure.** No valuation uses a
+quarterly share count; the annual one drives everything. What it reaches is
+the Financials tab, where the diluted-share row prints the derived quarter as
+a figure like any other, correctly labelled derived and plainly impossible.
+
+**What the fix needs.** A list of fields that may not be derived by
+subtraction, checked in `quarterValue` beside the guard that already stops a
+subtraction between two different tags (the Arista fix of 2026-10-26). A
+count that cannot be filed honestly is not reported rather than derived,
+which standing decision 3 requires. It is a one-guard change, and it moves
+the quarterly figures of 68 companies, so it wants its own commit and its own
+measurement rather than a corner of another job.
+
+### `KI-34` — a yield that fails to fetch costs a company its valuation
+
+**What is wrong.** The risk-free rate is fetched once per company, with no
+retry. When the publisher does not answer for that one request the payload is
+written with no rate, and the engine then refuses the valuation — correctly,
+because discounting at an invented rate would be worse. But the refusal is
+not a fact about the company. It is a fact about one HTTP request, and a
+reader cannot tell the difference.
+
+**Measured on 2026-11-01**, across one full refetch of the set: **6 of the
+115 payloads reported in US dollars came back with no US Treasury yield**
+(`KLAC`, `KO`, `LIN`, `ENB`, `PEP`, `WELL`) and **3 of the 6 in rupees came
+back with no OECD yield**, while the other 112 and 3 succeeded in the same
+run against the same publishers. The failures move between companies from one
+refetch to the next: Walmart lost its valuation this way on 2026-10-31 and
+regained it on 2026-11-01, when Coca-Cola lost one instead. This is also the
+whole of the reason the workbook check covered 58 models rather than 59.
+
+**What it moves: one valuation at a time, at random.** Each affected company
+loses its cost of equity, its WACC and its value per share entirely, and is
+given a refusal naming a missing rate. Nothing shown is wrong; what is wrong
+is that it is withheld for no reason to do with the company.
+
+**What the fix needs.** A retry with a short backoff around each yield fetch,
+and — better — a rate cached across the set within one run, since every
+dollar-reporting company in a refetch asks the same publisher for the same
+number on the same day. 115 identical requests is also the reason some of
+them fail.
 
 ## A defect found and fixed on 29 October 2026, with no number
 

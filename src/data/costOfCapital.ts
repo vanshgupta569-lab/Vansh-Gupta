@@ -1030,6 +1030,7 @@ export function costOfCapitalFor(
   const conversion = payload?.priceConversion ?? null;
   const minorUnitFactor = isNum(conversion?.minorUnitFactor) ? conversion.minorUnitFactor : null;
   const shareScale = payload?.shareScale ?? null;
+  const splitAdjustment = payload?.splitAdjustment ?? null;
   rows.push({
     key: 'price',
     label: 'Share price',
@@ -1077,6 +1078,30 @@ export function costOfCapitalFor(
               `${shareScale.coverAsOf}: the count is in ` +
               `${shareScale.factor === 1e6 ? 'millions' : 'thousands'} and is corrected before the ` +
               'market capitalisation is struck',
+          ]
+        : []),
+      // AND THE OTHER WAY A SHARE COUNT AND A PRICE STOP BELONGING TO EACH
+      // OTHER (`KI-31`): a split between the filing and today. The event is
+      // named with its date, because "adjusted" on its own is not a reason.
+      ...(splitAdjustment && splitAdjustment.applied
+        ? [
+            `adjusted for ${splitAdjustment.appliedEvents
+              .map((e: any) => `a ${e.label} on ${e.date}`)
+              .join(' and ')}, which fell after this count was filed: ` +
+              `${Number(splitAdjustment.filedCount).toLocaleString('en-US')} as filed becomes ` +
+              `${Math.round(splitAdjustment.adjustedCount).toLocaleString('en-US')}, which agrees with the ` +
+              `${Math.round(splitAdjustment.independent.count).toLocaleString('en-US')} shares outstanding ` +
+              `${splitAdjustment.independent.source} reports`,
+          ]
+        : []),
+      // A SPLIT SEEN AND DELIBERATELY NOT APPLIED is worth more words than one
+      // applied, not fewer: the reader can see the event on any price chart,
+      // and silence here would look like an oversight.
+      ...(splitAdjustment && !splitAdjustment.applied && splitAdjustment.events.length && splitAdjustment.reason
+        ? [
+            `${splitAdjustment.events
+              .map((e: any) => `${e.label} on ${e.date}`)
+              .join('; ')} — not applied to the share count, because ${splitAdjustment.reason}`,
           ]
         : []),
     ],

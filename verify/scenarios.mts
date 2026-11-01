@@ -3453,6 +3453,279 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   }
 }
 // ---------------------------------------------------------------------------
+// A SHARE COUNT FILED BEFORE A SPLIT (`KI-31`)
+// ---------------------------------------------------------------------------
+//
+// The count comes from a filing and the price comes from today, so a split
+// between the two breaks the pair and nothing in the figures shows it. Six
+// things are checked, and the last two are constructed because a fixed payload
+// cannot show the fault it was built to stop.
+{
+  console.log('\n=== a share count filed before a split ===');
+  const { deriveModel } = await import(`file:///${REPO}/src/data/deriveModel.js`);
+  const { buildModel, computeWACC } = await import(`file:///${REPO}/src/engine/model.js`);
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  const BAND = 0.2;
+
+  let withEvents = 0;
+  let applied = 0;
+  let declined = 0;
+  let predated = 0;
+  let eventsSeen = 0;
+  const appliedTo: string[] = [];
+  const declinedFor: string[] = [];
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (payload?.error) continue;
+    const t = file.replace('.json', '');
+    const splits = Array.isArray(payload?.quote?.splits) ? payload.quote.splits : [];
+    const rec = payload?.splitAdjustment ?? null;
+    eventsSeen += splits.length;
+
+    // ---- 1. EVERY EVENT IS A WELL-FORMED EVENT -------------------------
+    for (const s of splits) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s?.date ?? ''))) {
+        faults.push(`${t}: a split with no usable date (${JSON.stringify(s?.date)})`);
+      }
+      if (!isNum(s?.ratio) || s.ratio <= 0 || s.ratio === 1) {
+        faults.push(`${t}: a split with a ratio of ${JSON.stringify(s?.ratio)}, which is not a split`);
+      } else if (Math.abs(s.numerator / s.denominator - s.ratio) > 1e-12) {
+        faults.push(`${t}: a split whose ratio ${s.ratio} is not ${s.numerator}/${s.denominator}`);
+      }
+      if (!/split$/.test(String(s?.label ?? ''))) {
+        faults.push(`${t}: a split with no words for it (${JSON.stringify(s?.label)})`);
+      }
+    }
+
+    // ---- 2. NO SPLIT AFTER THE FIGURES IS EVER SILENTLY IGNORED --------
+    //
+    // The invariant that makes the rest worth having. For every company, either
+    // no split falls after the figures the model is built on, or the payload
+    // says what was decided about it and why.
+    const rows = Array.isArray(payload.statements) ? payload.statements : [];
+    const latestRow = [...rows].reverse().find((r: any) => isNum(r?.dilutedShares) && r.dilutedShares > 0);
+    const since =
+      payload?.shareCountFiledAt?.dilutedShares?.[latestRow?.fiscalYear] ??
+      latestRow?.periodEnd ??
+      null;
+    const after = since ? splits.filter((s: any) => s.date > String(since).slice(0, 10)) : [];
+    if (after.length && !rec) {
+      faults.push(
+        `${t}: ${after.length} split(s) fall after its share count was filed (${since}) and the payload ` +
+          'carries no record of what was done about them'
+      );
+    }
+    if (!rec) continue;
+    withEvents++;
+    if (!rec.applied && !rec.reason) {
+      faults.push(`${t}: a split adjustment that was not applied and gives no reason`);
+    }
+
+    // ---- 3. WHERE IT WAS APPLIED, THE ARITHMETIC AND THE AGREEMENT -----
+    if (rec.applied) {
+      applied++;
+      appliedTo.push(`${t} x${rec.factor} (${rec.appliedEvents.map((e: any) => `${e.label} on ${e.date}`).join(', ')})`);
+      const want = rec.appliedEvents.reduce((f: number, e: any) => f * e.ratio, 1);
+      if (Math.abs(want - rec.factor) > 1e-12) {
+        faults.push(`${t}: a factor of ${rec.factor} against ${want} from the events it names`);
+      }
+      if (!isNum(rec.adjustedCount) || Math.abs(rec.adjustedCount - rec.filedCount * rec.factor) > 1e-6) {
+        faults.push(`${t}: ${rec.filedCount} x ${rec.factor} is not the ${rec.adjustedCount} recorded`);
+      }
+      // the statements really carry it, and not only the record
+      if (latestRow && Math.abs(latestRow.dilutedShares - rec.adjustedCount) > 1e-6) {
+        faults.push(
+          `${t}: the record says ${rec.adjustedCount} and the statements carry ${latestRow.dilutedShares}`
+        );
+      }
+      // and it agrees with the count that settled it
+      const ind = rec.independent?.count;
+      if (!isNum(ind)) {
+        faults.push(`${t}: a split applied with no independent count behind it`);
+      } else if (Math.abs(ind / rec.adjustedCount - 1) > BAND) {
+        faults.push(
+          `${t}: the adjusted ${Math.round(rec.adjustedCount).toLocaleString('en-US')} is ` +
+            `${(ind / rec.adjustedCount).toFixed(3)} times the ${Math.round(ind).toLocaleString('en-US')} ` +
+            'that settled it, which is not agreement'
+        );
+      }
+      // EVERY YEAR, not only the latest: a per-share history on one basis.
+      for (const row of rows) {
+        if (!isNum(row.dilutedShares)) continue;
+        const filed = payload?.shareCountFiledAt?.dilutedShares?.[row.fiscalYear] ?? row.periodEnd ?? null;
+        const f = (filed ? splits.filter((s: any) => s.date > String(filed).slice(0, 10)) : []).reduce(
+          (a: number, s: any) => a * s.ratio,
+          1
+        );
+        const recorded = rec.factorByYear?.[row.fiscalYear] ?? 1;
+        if (Math.abs(recorded - f) > 1e-12) {
+          faults.push(
+            `${t} FY${row.fiscalYear}: ${f} of splits fall after it was filed (${filed}) and the record ` +
+              `says ${recorded}`
+          );
+        }
+      }
+      // AND THE QUARTERS, which is what "all the per-share history" means.
+      //
+      // A quarter filed before the split needed multiplying and one filed
+      // after it did not, so the test is not the factor but the RESULT:
+      // every quarterly count should now sit near the adjusted annual one,
+      // because a quarterly weighted average and an annual one differ by
+      // issuance and buybacks and not by a factor of two.
+      //
+      // REPORTED QUARTERS ONLY, and the exclusion is named rather than
+      // quiet: a DERIVED quarterly share count is nonsense before this job
+      // and after it, because a weighted-average count is not additive and
+      // the data layer subtracts one cumulative figure from another to get
+      // it. That is `KI-33`, measured and recorded, and it is not this
+      // check’s business.
+      if (!(rec.quartersAdjusted > 0)) {
+        faults.push(`${t}: a split applied to the years and to no quarter at all`);
+      }
+      for (const q of Array.isArray(payload.quarters) ? payload.quarters : []) {
+        const count = q?.values?.dilutedShares;
+        if (!isNum(count) || q?.states?.dilutedShares === 'derived') continue;
+        if (Math.abs(count / rec.adjustedCount - 1) > 0.35) {
+          faults.push(
+            `${t}: the quarter to ${q.periodEnd} (filed ${q.filing?.filed ?? '?'}) reports ` +
+              `${Math.round(count).toLocaleString('en-US')} against an adjusted annual ` +
+              `${Math.round(rec.adjustedCount).toLocaleString('en-US')}, so it is on the other side of ` +
+              'the split from the years'
+          );
+        }
+      }
+    } else {
+      declined++;
+      // A split older than every figure needed no decision; the rest did,
+      // and only those are worth printing by name.
+      if (/falls before the figures/.test(String(rec.reason))) predated++;
+      else declinedFor.push(`${t} (${rec.reason})`);
+      // AND A DECLINED EVENT MOVED NOTHING.
+      if (rec.factorByYear) {
+        faults.push(`${t}: a split that was not applied still records a factor per year`);
+      }
+    }
+  }
+
+  // ---- 4. THE FAULT PUT BACK: AMPHENOL WITHOUT ITS ADJUSTMENT ---------
+  //
+  // CONSTRUCTED, because a fixed payload cannot show it. Undoing the
+  // adjustment is exactly the state the set was in until 2026-11-01, and the
+  // cover-page comparison has to report it.
+  {
+    const file = path.join(PAYLOADS, 'APH.json');
+    if (!fs.existsSync(file)) {
+      faults.push('APH.json is not on disk, so the split fault could not be put back');
+    } else {
+      const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const rec = payload?.splitAdjustment;
+      if (!rec?.applied) {
+        faults.push(
+          `APH carries no applied split adjustment (${JSON.stringify(rec?.reason ?? null)}): either the ` +
+            'price source stopped reporting its 2026-09-03 split, or its next annual report has restated ' +
+            'the count and this case needs re-striking'
+        );
+      } else {
+        const asFiled = JSON.parse(JSON.stringify(payload));
+        for (const row of asFiled.statements) {
+          const f = rec.factorByYear?.[row.fiscalYear] ?? 1;
+          if (isNum(row.dilutedShares) && f !== 1) row.dilutedShares /= f;
+        }
+        asFiled.splitAdjustment = { ...rec, applied: false };
+        const src = deriveModel(asFiled);
+        const M = buildModel(src);
+        const W = computeWACC(M, src);
+        const ratio = rec.independent.count / src.dcf.dilutedSharesCount / 1e6;
+        if (!(ratio > 1 + BAND)) {
+          faults.push(
+            `with the adjustment undone APH is ${ratio.toFixed(3)} times its own cover page, so the check ` +
+              'that catches a count filed before a split would not have caught it'
+          );
+        }
+        // and the market capitalisation really was half
+        const now = deriveModel(payload);
+        const Wnow = computeWACC(buildModel(now), now);
+        if (!(Math.abs(Wnow.marketCap / W.marketCap - rec.factor) < 1e-6)) {
+          faults.push(
+            `undoing the adjustment changes APH’s market capitalisation by ` +
+              `${(Wnow.marketCap / W.marketCap).toFixed(4)} where the split was ${rec.factor}`
+          );
+        }
+      }
+    }
+  }
+
+  // ---- 5. AND THE OTHER WAY ROUND: AN EVENT THAT IS NOT THE COMPANY’S --
+  //
+  // CONSTRUCTED on AstraZeneca, whose "1:2 split" is an ADR ratio change. The
+  // guard that declines it is the whole reason the adjustment is safe to apply
+  // anywhere, so applying it anyway has to produce a count its own filings
+  // contradict.
+  {
+    const file = path.join(PAYLOADS, 'AZN.json');
+    if (!fs.existsSync(file)) {
+      faults.push('AZN.json is not on disk, so the ADR ratio change could not be tested');
+    } else {
+      const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const rec = payload?.splitAdjustment;
+      if (!rec) {
+        faults.push('AZN carries no split record, so the event the guard exists for is no longer in the data');
+      } else if (rec.applied) {
+        faults.push(
+          'AZN had its ADR ratio change applied to its share count, which halves a count its own quarterly figures confirm'
+        );
+      } else {
+        // Applied anyway, by hand: the count must then disagree with the
+        // independent one it was settled against.
+        const forced = rec.filedCount * rec.events.reduce((f: number, e: any) => f * e.ratio, 1);
+        const ind = rec.independent?.count;
+        if (!isNum(ind)) {
+          faults.push('AZN has no independent count, so nothing could have declined the event');
+        } else if (!(Math.abs(ind / forced - 1) > BAND)) {
+          faults.push(
+            `forcing AZN’s ratio change through gives ${Math.round(forced).toLocaleString('en-US')} ` +
+              `against ${Math.round(ind).toLocaleString('en-US')} reported, which the band would accept — ` +
+              'so the guard is not what is keeping it out'
+          );
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the split adjustment:`);
+    faults.slice(0, 15).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 15) console.log(`           ... and ${faults.length - 15} more`);
+  } else {
+    console.log(
+      `  ${eventsSeen} split events across ${files.length} companies, every one with a date, a ratio that is ` +
+        'its own numerator over its denominator, and words for it'
+    );
+    console.log(
+      `  ${applied} companies had every share count put on today’s basis, annual and quarterly: ` +
+        `${appliedTo.join('; ') || 'none'}`
+    );
+    console.log(
+      `  ${declined} had an event recorded and not applied: ${predated} because every split on record ` +
+        `predates the figures the model is built on, and ${declinedFor.length} that needed settling ` +
+        `— ${declinedFor.join('; ') || 'none'}`
+    );
+    console.log(
+      '  no company anywhere in the set has a split after the figures it is built on without a record of what was decided, and the two constructed cases — Amphenol without its adjustment, AstraZeneca with one forced on it — are both reported'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // A SHARE COUNT IS A COUNT (`KI-30`)
 // ---------------------------------------------------------------------------
 //

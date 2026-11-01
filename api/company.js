@@ -461,9 +461,294 @@ function shareCountScale(cover, filed) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// A SHARE COUNT FILED BEFORE A SPLIT (`KI-31`)
+// ---------------------------------------------------------------------------
+//
+// The share count comes from a filing; the price comes from today. A stock
+// split between the two breaks the pair, and nothing in the figures shows it:
+// a split leaves no trace in an income statement. Amphenol split 2 for 1 on
+// 2026-09-03 and CrowdStrike 4 for 1 on 2026-07-02, both after their last
+// annual report, so Amphenol’s market capitalisation came out as half what it
+// is and its value per share as 89.58 against 43.99 — a 45% overvaluation
+// reported as a 13% undervaluation.
+//
+// A SPLIT IS NOT A PROPERTY OF A COMPANY, IT IS A PROPERTY OF A FIGURE. Each
+// share count is on the basis of whatever was true when it was filed, and a
+// filer restates its comparatives at the next report. Amphenol’s own data says
+// so: the quarter to 2023-09-30, filed 2024-10-25, carries 1,244,100,000, and
+// the quarter to 2026-09-30, filed 2026-10-30, carries 2,582,900,000. So the
+// factor applied to a figure is the product of the splits that fall AFTER the
+// date that figure was filed — which puts every year of share-count history on
+// today’s basis, and not only the latest.
+//
+// AND A SPLIT ON A PRICE LINE IS NOT ALWAYS A SPLIT AT THE COMPANY. Yahoo
+// reports an ADR ratio change as a split, and a ratio change does not alter
+// the issuer’s share count at all: AstraZeneca shows a "1:2 split" on
+// 2026-02-02, and its 1,562,000,000 shares are unchanged by it. Halving them
+// would have put a correct market capitalisation out by half.
+//
+// So the event supplies the factor and the date, and an INDEPENDENTLY REPORTED
+// COUNT OF SHARES OUTSTANDING decides whether it applies to the issuer: the
+// event is applied only where the adjusted count agrees with that independent
+// count and the filed count does not. On Amphenol the filed 1,277,500,000 is
+// 1.93 times its cover page and the adjusted 2,555,000,000 is 0.97 of it, so it
+// applies; on AstraZeneca the filed count is already 0.99 of the shares
+// outstanding its source reports and the adjusted one would be 1.99, so it does
+// not. Where neither agrees, or both do, nothing is adjusted and the reason is
+// recorded — refuse rather than approximate.
+
+const isFiniteNum = (v) => typeof v === 'number' && isFinite(v);
+
+/**
+ * The split events on a chart response, oldest first.
+ *
+ * Yahoo gives `numerator` and `denominator` the way the market says them: a
+ * 2-for-1 is 2/1, so the share count multiplies by 2, and a 1-for-10 reverse
+ * split is 1/10. A ratio of exactly 1 is not an event and is dropped.
+ */
+function splitsFrom(result) {
+  const raw = result?.events?.splits;
+  if (!raw || typeof raw !== 'object') return [];
+  const out = [];
+  for (const key of Object.keys(raw)) {
+    const s = raw[key];
+    const numerator = Number(s?.numerator);
+    const denominator = Number(s?.denominator);
+    const stamp = Number(s?.date);
+    if (!isFiniteNum(numerator) || !isFiniteNum(denominator)) continue;
+    if (numerator <= 0 || denominator <= 0 || !isFiniteNum(stamp)) continue;
+    const ratio = numerator / denominator;
+    if (!isFiniteNum(ratio) || ratio <= 0 || ratio === 1) continue;
+    out.push({
+      date: new Date(stamp * 1000).toISOString().slice(0, 10),
+      ratio,
+      numerator,
+      denominator,
+      label: splitWords(numerator, denominator),
+      asQuoted: typeof s.splitRatio === 'string' ? s.splitRatio : null,
+    });
+  }
+  out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return out;
+}
+
+/** "a 2-for-1 split", "a 1-for-10 reverse split" — words, not a ratio. */
+function splitWords(numerator, denominator) {
+  const tidy = (n) => (Number.isInteger(n) ? String(n) : String(Number(n.toFixed(4))));
+  return numerator > denominator
+    ? `${tidy(numerator / denominator)}-for-1 split`
+    : `1-for-${tidy(denominator / numerator)} reverse split`;
+}
+
+/** The product of every split after a date, with the events that made it. */
+function splitFactorAfter(splits, since) {
+  const out = { factor: 1, events: [] };
+  if (!Array.isArray(splits) || !since) return out;
+  const at = String(since).slice(0, 10);
+  for (const s of splits) {
+    if (s.date > at) {
+      out.factor *= s.ratio;
+      out.events.push(s);
+    }
+  }
+  return out;
+}
+
+// The same fifth either way as the scale band, and for the same reason: an
+// independent count is dated differently from a filed one, so buybacks,
+// issuance and the difference between a point-in-time count and a weighted
+// average all sit inside it — while the thing being told apart is a factor of
+// two or more.
+const SPLIT_RECONCILE_BAND = 0.2;
+
+const agrees = (count, independent) =>
+  isFiniteNum(count) &&
+  count > 0 &&
+  isFiniteNum(independent) &&
+  independent > 0 &&
+  Math.abs(independent / count - 1) <= SPLIT_RECONCILE_BAND;
+
+/**
+ * The best independently reported count of shares outstanding, and where it
+ * came from. In order of preference:
+ *
+ *   1. the filing’s own cover page (`dei:EntityCommonStockSharesOutstanding`),
+ *      which is a count of shares in issue on a stated date;
+ *   2. the latest quarterly diluted count, which an SEC filer restates for a
+ *      split at its next report, so a quarter filed after one is already on the
+ *      new basis — and ONLY where the quarter carries the date it was filed,
+ *      because that date is the whole of what makes it interpretable. A
+ *      quarterly count with no filing date cannot be placed on one side of a
+ *      split or the other, and on the vendor path it is not even reliably on
+ *      the same basis as the annual series it sits beside: HDFC Bank's quarter
+ *      to 2025-06-30 reports 2,565,958,018 against an annual 5,106,289,404 for
+ *      the year that ended three months earlier. Taking that as the arbiter
+ *      made a company whose count is fine look unsettleable;
+ *   3. the shares outstanding the vendor reports for the listing, which is all
+ *      there is for a company whose statements do not come from the SEC, and
+ *      which is at least the same kind of figure: a count on a date.
+ */
+function independentShareCount(data) {
+  const cover = data?.shareScale;
+  if (cover && isFiniteNum(cover.coverCount) && cover.coverCount > 0) {
+    return {
+      count: cover.coverCount,
+      asOf: cover.coverAsOf ?? null,
+      source: `the cover page of its ${cover.coverForm || 'filing'}`,
+    };
+  }
+  const quarters = Array.isArray(data?.quarters) ? data.quarters : [];
+  for (let i = quarters.length - 1; i >= 0; i--) {
+    const q = quarters[i];
+    const count = q?.values?.dilutedShares;
+    if (!q?.filing?.filed) continue;
+    if (isFiniteNum(count) && count > 0) {
+      return {
+        count,
+        asOf: q.periodEnd ?? null,
+        source: `its own quarter to ${q.periodEnd}, filed ${q.filing.filed}`,
+      };
+    }
+  }
+  const listed = data?.listing?.sharesOutstanding;
+  if (isFiniteNum(listed) && listed > 0) {
+    return { count: listed, asOf: null, source: 'the shares outstanding its data source reports for the listing' };
+  }
+  return null;
+}
+
+// Every share count in a payload, annual and quarterly. Named here so the
+// adjustment cannot miss one that is added later without the check noticing.
+const SHARE_COUNT_FIELDS = ['dilutedShares', 'basicShares', 'preferredConversionShares'];
+
+/**
+ * Puts every share count on today’s basis, or says why it did not.
+ *
+ * Mutates `data.statements` and `data.quarters` and returns the record that
+ * goes on the payload. Returns null only where there is nothing to say: no
+ * split events at all.
+ */
+function applySplitAdjustment(data, splits) {
+  const events = Array.isArray(splits) ? splits : [];
+  const rows = Array.isArray(data?.statements) ? data.statements : [];
+  if (!events.length || !rows.length) return null;
+
+  const source = 'Yahoo Finance (chart, events=split)';
+  // The date a figure is on the basis of: when it was FILED where the filing
+  // says (SEC), and otherwise the end of the period it covers, which is the
+  // best a vendor feed gives and is weaker — a figure published months after
+  // its period end may already be on the new basis.
+  const filedAt = data?.shareCountFiledAt || null;
+  const basis = filedAt ? 'the date each count was filed' : 'the end of the period each count covers';
+  const sinceFor = (field, row) =>
+    filedAt?.[field]?.[row.fiscalYear] ??
+    row.periodEnd ??
+    (row.fiscalYear ? `${row.fiscalYear}-12-31` : null);
+
+  // THE LATEST COUNT DECIDES, because it is the one every weight, every
+  // multiple and every value per share is struck on.
+  const latestRow = [...rows].reverse().find((r) => isFiniteNum(r?.dilutedShares) && r.dilutedShares > 0);
+  const record = { source, events, basis, applied: false, factor: 1, appliedEvents: [], reason: null };
+  if (!latestRow) {
+    record.reason = 'no share count is reported in any year, so there is nothing to adjust';
+    return record;
+  }
+
+  const latest = splitFactorAfter(events, sinceFor('dilutedShares', latestRow));
+  record.filedCount = latestRow.dilutedShares;
+  record.filedFor = latestRow.fiscalYear ?? null;
+  record.filedAsOf = sinceFor('dilutedShares', latestRow);
+  if (latest.factor === 1) {
+    record.reason = 'every split on record falls before the figures this model is built on, so they already carry it';
+    return record;
+  }
+
+  const independent = independentShareCount(data);
+  const adjusted = latestRow.dilutedShares * latest.factor;
+  record.adjustedCount = adjusted;
+  record.independent = independent;
+  const filedAgrees = agrees(latestRow.dilutedShares, independent?.count);
+  const adjustedAgrees = agrees(adjusted, independent?.count);
+
+  if (!independent) {
+    record.reason =
+      'there is no independently reported count of shares outstanding to settle it against, and a ' +
+      'split on a price line is not always a split at the company';
+    return record;
+  }
+  if (filedAgrees && !adjustedAgrees) {
+    record.reason =
+      `the count as filed already agrees with ${independent.source}, so either this event did not ` +
+      `change the issuer’s share count — which is what an ADR ratio change looks like on a price ` +
+      `line — or the figures already carry it, which is what the vendor feed does: it restates its ` +
+      `own share-count history for a split`;
+    return record;
+  }
+  if (!adjustedAgrees) {
+    record.reason =
+      `neither the filed count nor the adjusted one agrees with ${independent.source}, so what ` +
+      `the event means for this company cannot be settled from the data`;
+    return record;
+  }
+  if (filedAgrees && adjustedAgrees) {
+    record.reason =
+      `both the filed count and the adjusted one agree with ${independent.source}, so the event ` +
+      `cannot be settled either way`;
+    return record;
+  }
+
+  // APPLIED, field by field and year by year.
+  record.applied = true;
+  record.factor = latest.factor;
+  record.appliedEvents = latest.events;
+  const byYear = {};
+  for (const row of rows) {
+    for (const field of SHARE_COUNT_FIELDS) {
+      if (!isFiniteNum(row[field]) || row[field] === 0) continue;
+      const f = splitFactorAfter(events, sinceFor(field, row));
+      if (f.factor === 1) continue;
+      row[field] *= f.factor;
+      if (field === 'dilutedShares') byYear[row.fiscalYear] = f.factor;
+    }
+  }
+  // AND THE QUARTERS, each on the basis of the filing that reported it. A
+  // derived quarter is a difference of two filings, so it is on the basis of
+  // the later one.
+  let quartersMoved = 0;
+  for (const q of Array.isArray(data?.quarters) ? data.quarters : []) {
+    const dates = [q?.filing?.filed, ...(Array.isArray(q?.derivedFrom) ? q.derivedFrom.map((d) => d?.filed) : [])]
+      .filter(Boolean)
+      .sort();
+    const since = dates.at(-1) ?? q?.periodEnd ?? null;
+    const f = splitFactorAfter(events, since);
+    if (f.factor === 1) continue;
+    for (const field of SHARE_COUNT_FIELDS) {
+      if (!q?.values || !isFiniteNum(q.values[field]) || q.values[field] === 0) continue;
+      q.values[field] *= f.factor;
+      if (field === 'dilutedShares') quartersMoved++;
+    }
+  }
+  record.factorByYear = byYear;
+  record.quartersAdjusted = quartersMoved;
+
+  // AND THE SCALE RECORD IS RE-READ, because `KI-30`’s cover-page ratio was
+  // struck against the count as filed and that count has just moved. Left
+  // alone it would go on reporting Amphenol as 1.93 times its own cover page
+  // when it is now 0.97 of it.
+  if (data?.shareScale && isFiniteNum(data.shareScale.coverCount)) {
+    const ratio = data.shareScale.coverCount / (latestRow.dilutedShares || 1);
+    data.shareScale.ratio = ratio;
+    data.shareScale.filedAs = latestRow.dilutedShares;
+    data.shareScale.splitAdjusted = true;
+    if (Math.abs(ratio - 1) <= SHARE_SCALE_BAND) delete data.shareScale.unexplained;
+  }
+  return record;
+}
+
 // Pull one line item out of the giant XBRL blob, for the annual periods only.
 // Returns an object like { 2023: 383285000000, 2024: 391035000000 }
-function extractUSFact(facts, tagList, unitsSeen) {
+function extractUSFact(facts, tagList, unitsSeen, filedOut) {
   // Two different ideas of "which value wins" apply here, and they must not be
   // confused — mixing them up is how Apple's SG&A briefly came back as bare
   // G&A, missing the selling costs entirely:
@@ -488,6 +773,11 @@ function extractUSFact(facts, tagList, unitsSeen) {
 
     // Collect this tag's figures on their own first.
     const thisTag = {};
+    // WHEN EACH FIGURE WAS FILED, recorded alongside it and never used to
+    // choose between figures — the order of preference above is unchanged.
+    // `KI-31` needs it because a share count is on the basis of whatever was
+    // true when it was filed, so a split after that date is not in it yet.
+    const thisTagFiled = {};
 
     for (const point of entry.units[unitKey]) {
       if (!point.form?.startsWith('10-K') || !point.end) continue;
@@ -509,11 +799,15 @@ function extractUSFact(facts, tagList, unitsSeen) {
 
       // Later entries come from more recent filings, so let them overwrite.
       thisTag[year] = point.val;
+      thisTagFiled[year] = point.filed || null;
     }
 
     // Now fold into the result, never displacing a preferred tag's figure.
     for (const [year, value] of Object.entries(thisTag)) {
-      if (merged[year] === undefined) merged[year] = value;
+      if (merged[year] === undefined) {
+        merged[year] = value;
+        if (filedOut) filedOut[year] = thisTagFiled[year] ?? null;
+      }
     }
   }
 
@@ -966,8 +1260,19 @@ async function fetchFromSEC(ticker) {
   const SEC_COUNT_FIELDS = new Set(['dilutedShares', 'preferredConversionShares']);
   const extracted = {};
   const monetaryUnits = new Set();
+  // The filing date of each share count, kept for `KI-31`: a split after it is
+  // not in that count yet. Only the counts need it, because only a count moves
+  // on a split.
+  const countFiledAt = {};
   for (const [field, tags] of Object.entries(US_TAGS)) {
-    extracted[field] = extractUSFact(facts, tags, SEC_COUNT_FIELDS.has(field) ? null : monetaryUnits);
+    const isCount = SEC_COUNT_FIELDS.has(field);
+    if (isCount) countFiledAt[field] = {};
+    extracted[field] = extractUSFact(
+      facts,
+      tags,
+      isCount ? null : monetaryUnits,
+      isCount ? countFiledAt[field] : null
+    );
   }
   // The currency every monetary figure was filed in, from the XBRL units. A
   // single ISO code is the reporting currency; anything else (no units, mixed
@@ -1044,6 +1349,10 @@ async function fetchFromSEC(ticker) {
     // exactly as filed. Standing decision 5: a corrected figure is never shown as
     // filed, and this is the record that lets a screen say which it is.
     shareScale: shareScaleRecord,
+    // WHEN EACH SHARE COUNT WAS FILED (`KI-31`). The split adjustment runs in
+    // the handler, after the price request has reported the split events, and
+    // this is what tells it which counts already carry them.
+    shareCountFiledAt: countFiledAt,
     sicCode,
     sicDescription,
     statements,
@@ -1991,14 +2300,19 @@ async function readRiskFreeWindow(spec, start, end, reportingCurrency, failures 
  * 20KB, against one source that is already being called for the price.
  */
 async function fetchQuote(symbol) {
-  const chart = (range, interval) =>
+  const chart = (range, interval, events) =>
     fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
         symbol
-      )}?range=${range}&interval=${interval}`,
+      )}?range=${range}&interval=${interval}${events ? `&events=${events}` : ''}`,
       { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Marginalia/1.0)' } }
     );
-  const res = await chart('10y', '1d');
+  // THE SPLIT EVENTS RIDE ON THE REQUEST THAT WAS ALREADY BEING MADE. `KI-31`
+  // needs to know whether a split falls after the filing a share count came
+  // from, and `events=split` puts them on this same ten-year daily response at
+  // no extra request. Ten years is also the right window: a split older than
+  // every figure the model holds cannot change one.
+  const res = await chart('10y', '1d', 'split');
   if (!res.ok) return null;
 
   const body = await res.json();
@@ -2092,6 +2406,10 @@ async function fetchQuote(symbol) {
     // converted at is recorded separately so the conversion can be undone or
     // checked. The screen converts it with that same rate.
     history,
+    // EVERY SPLIT IN THE WINDOW, as the source reported it (`KI-31`). Kept
+    // whether or not any of them turns out to apply to the share count, because
+    // a reader is owed the event as well as the decision taken about it.
+    splits: splitsFrom(result),
   };
 }
 
@@ -2129,7 +2447,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 7;
+const FETCHER_VERSION = 8;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;
@@ -2197,6 +2515,15 @@ export default async function handler(req, res) {
       fetchRiskFreeRate(data.currencyEvidence?.reportingCurrency ?? null, lastPeriodEnd),
     ]);
     data.riskFree = riskFree;
+
+    // EVERY SHARE COUNT ON TODAY'S BASIS (`KI-31`), which can only happen here:
+    // the statements are built before the price is fetched, and it is the price
+    // request that reports the splits. A share count filed before a split does
+    // not carry it, and the price always does, so the two stop belonging to
+    // each other until this runs. It mutates the counts and records both what
+    // it did and, where it declined, why.
+    data.splitAdjustment = applySplitAdjustment(data, quotedPrice?.splits);
+
     const { quote, conversion } = await quoteInReportingCurrency(
       quotedPrice,
       data.currencyEvidence?.reportingCurrency ?? null

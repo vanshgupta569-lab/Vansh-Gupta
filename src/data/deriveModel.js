@@ -1921,6 +1921,25 @@ export function deriveModel(fetched) {
             ? `, confirmed against its own cover page: ${asCount(shareScale.coverCount)} shares ` +
               `outstanding at ${shareScale.coverAsOf}`
             : ', with no cover-page count in the data to settle its scale against');
+
+    // AND WHETHER A SPLIT WAS PUT BACK INTO IT (`KI-31`). A count filed before
+    // a split does not carry it while the price always does, so the adjustment
+    // is part of what this figure IS and belongs in the sentence that says
+    // where it came from — including when it was declined, because declining
+    // is also a decision taken about the reader's number.
+    const split = fetched?.splitAdjustment ?? null;
+    if (split && split.applied) {
+      provenance.shares +=
+        `. ADJUSTED FOR ${split.appliedEvents.map((e) => `a ${e.label} on ${e.date}`).join(' and ')}, ` +
+        `which fell after the figures were filed: ${split.filedCount.toLocaleString('en-US')} as filed ` +
+        `becomes ${Math.round(split.adjustedCount).toLocaleString('en-US')}, settled against ` +
+        `${Math.round(split.independent.count).toLocaleString('en-US')} shares outstanding from ` +
+        `${split.independent.source}`;
+    } else if (split && split.events.length && split.reason) {
+      provenance.shares +=
+        `. ${split.events.map((e) => `A ${e.label} on ${e.date}`).join('; ')} ` +
+        `— not applied, because ${split.reason}`;
+    }
   }
 
   // Without a share count there is no such thing as a value per share. Dividing
