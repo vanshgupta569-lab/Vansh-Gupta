@@ -208,6 +208,33 @@ The two copies of the index allow-list — `src/data/marketIndex.ts` and
 symbol and name by name, because a second copy that nothing checks is a second
 copy that goes stale.
 
+### One decimal rule per row
+
+`docs/VISUAL_SYSTEM.md` finding 1, severity H: a single row printed **9,439.0,
+then 11,618, then 16,621**, because the decimals came from each figure’s own
+magnitude. Right alignment puts every last glyph on one edge whatever it is, so
+the trailing `.0` lines up and pushes the units digit — the digit a reader
+compares down a column — left by its own width.
+
+Checked in two places, because it is two different questions. In
+`scenarios.mts`, over **53,324 figures across 9,784 rows and 177 companies**:
+every row prints one number of decimal places, a row in millions prints none,
+zero prints as `0`, a figure nobody reported prints as an em dash, every
+negative carries U+2212 and none a hyphen, and **both tables read the rule from
+`src/data/figureFormat.ts`** rather than keeping a copy of it. In
+`dashboard.mts`, in a real browser on both tables: every figure ends on its
+column header’s right edge, and every row stops its **digits** on one edge —
+measured with a Range that ends before the decimal point, which is where the
+finding’s 6px actually was.
+
+Proved by breaking, five ways: the decimals put back by magnitude (4,979 faults
+in `verify`, and the browser reporting “Net income” spreading **6.5px** across
+$92.25, $102.4, $112.5, $122.6, $132.8, $146.0 — the finding’s own 6px,
+reproduced); the em dash replaced by a zero, the minus sign replaced by a
+hyphen, and one table given back its own copy of the rule (8,990 between them);
+and the figure cells’ right padding cut from 12px to 4px, which the browser
+reported as 8.0px off the column head on every column.
+
 ### A share count is a count
 
 An XBRL fact in the `shares` unit is meant to be an absolute count, and all but

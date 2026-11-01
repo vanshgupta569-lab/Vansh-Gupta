@@ -75,21 +75,45 @@ import { DARK } from '../design/tokens';
 import { Hint, RowMenu, HINT_STYLES } from './figuresHint';
 import { useBottomBarInset } from './instrument';
 import { Mark } from '../design/Mark';
+// ONE DECIMAL RULE PER ROW, defined once for both tables that print these
+// figures (`docs/VISUAL_SYSTEM.md` finding 1).
+import { inMillions, asCount, asPerShare } from '../data/figureFormat';
 
 const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, quiet: DIM, line: LINE } = DARK;
 
 /* Money is carried in millions everywhere in the engine; share counts are whole
    counts. Both are printed the way a person writes them, and an absent figure
    prints as an em dash rather than as a zero — the filing not saying something
-   and the filing saying nothing are different facts. */
-const show = (v: any, count?: boolean, locale = 'en-US'): string => {
-  if (typeof v !== 'number' || !isFinite(v)) return '—';
-  if (count) return Math.round(v).toLocaleString(locale);
-  if (Math.abs(v) < 0.05) return '0';
-  const abs = Math.abs(v);
-  const dp = abs >= 10000 ? 0 : abs >= 100 ? 1 : 2;
-  return v.toLocaleString(locale, { minimumFractionDigits: dp, maximumFractionDigits: dp });
-};
+   and the filing saying nothing are different facts.
+
+   ONE DECIMAL RULE PER ROW, AND IT IS THE ROW'S, NOT THE FIGURE'S
+   (`docs/VISUAL_SYSTEM.md` finding 1). This used to choose the decimals from
+   the magnitude — two below a hundred, one below ten thousand, none above — so
+   a single row of cost of sales printed 9,439.0, then 11,618, then 16,621. In a
+   right-aligned tabular column a trailing ".0" pushes the integer part left by
+   its own width, so the figures a reader compares down the column stopped
+   lining up with each other and with the column head, about 6px adrift. The
+   decimals also implied a precision the filing does not have: a figure in
+   millions is not reported to the nearest hundred thousand.
+
+   So a figure in millions prints with NO decimal places, every row the same,
+   and the only other rules are the ones the same finding sets: zero is 0, not
+   reported is an em dash, and a negative carries a real minus sign (U+2212)
+   rather than the hyphen `toLocaleString` would give it. A hyphen is narrower
+   than a digit even in a tabular font, and it is not a minus sign.
+
+   A VALUE PER SHARE IS NOT A FIGURE IN MILLIONS and does not take this rule —
+   it is a price, and two decimal places are its precision. `perShare` below is
+   the only other formatter on this screen, and the two value-per-share figures
+   under the table are the only things that use it. */
+const show = (v: any, count?: boolean, locale = 'en-US'): string =>
+  // `count` used to pick whole numbers for a share count while money kept
+  // decimals; now that a figure in millions has none either, both print the
+  // same way. The flag is kept because every call site passes it and it says
+  // there which kind of figure is in that cell.
+  count ? asCount(v, locale) : inMillions(v, locale);
+
+const perShare = (v: any, locale = 'en-US'): string => asPerShare(v, locale);
 
 interface Props {
   ticker: string;
@@ -152,6 +176,9 @@ export const FiguresEditor: React.FC<Props> = ({
      reads in lakh and crore; a dollar filing does not. */
   const locale = currency === 'INR' || currencySymbol === '₹' ? 'en-IN' : 'en-US';
   const fmt = (v: any, count?: boolean) => show(v, count, locale);
+  // A VALUE PER SHARE IS A PRICE, not a figure in millions: two decimals, not
+  // none (`docs/VISUAL_SYSTEM.md` finding 1 sets the rule per row).
+  const fmtPerShare = (v: any) => perShare(v, locale);
 
   const years = useMemo(() => statements.map((s) => String(s.fiscalYear)), [statements]);
   const changed = correctionCount(corrections);
@@ -879,10 +906,10 @@ export const FiguresEditor: React.FC<Props> = ({
                     {label}{' '}
                     <strong style={{ color: INK, fontWeight: 600 }}>
                       {currencySymbol}
-                      {fmt(now)}
+                      {fmtPerShare(now)}
                     </strong>
                     <span style={{ color: DIM }}>
-                      {typeof before === 'number' ? ` · was ${currencySymbol}${fmt(before)}` : ' · the engine refuses a value on its own defaults'}
+                      {typeof before === 'number' ? ` · was ${currencySymbol}${fmtPerShare(before)}` : ' · the engine refuses a value on its own defaults'}
                     </span>
                   </span>
                 ))}

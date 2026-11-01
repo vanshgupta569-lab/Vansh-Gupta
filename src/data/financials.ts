@@ -45,6 +45,7 @@
 // restatement history needs the archive (`docs/ARCHIVE_PLAN.md`), which was
 // built on 2026-10-25 and has one capture per company so far.
 import { isFinancialCompany } from './residualIncome.js';
+import { inMillions, asCount, asPercent, MINUS, NOT_REPORTED } from './figureFormat';
 
 export type ValueState = 'reported' | 'reportedZero' | 'notReported' | 'notApplicable' | 'derived';
 
@@ -1088,13 +1089,21 @@ const STATE_LABELS: Record<ValueState, string> = {
   derived: 'Derived',
 };
 
+/**
+ * ONE DECIMAL RULE PER ROW (`docs/VISUAL_SYSTEM.md` finding 1). The rules
+ * themselves — no decimals on a figure in millions, zero as 0, an em dash for
+ * a figure nobody reported, and a real minus sign — are defined once in
+ * `figureFormat.ts`, because the figures screen prints the same figures and a
+ * second copy of the rule would go stale. The only thing decided here is which
+ * rule each kind of row takes, and where the currency symbol sits.
+ */
 export function formatValue(cell: Cell, kind: RowKind, symbol: string): string {
-  if (cell.value === null) return '—';
-  if (kind === 'percent') return `${(cell.value * 100).toFixed(1)}%`;
-  if (kind === 'shares') return cell.value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  const n = cell.value;
-  const body = Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return `${n < 0 ? '−' : ''}${symbol}${body}`;
+  if (cell.value === null) return NOT_REPORTED;
+  if (kind === 'percent') return asPercent(cell.value);
+  if (kind === 'shares') return asCount(cell.value);
+  // The symbol sits inside the sign: −$1,234, never $−1,234.
+  const printed = inMillions(cell.value);
+  return printed.startsWith(MINUS) ? `${MINUS}${symbol}${printed.slice(MINUS.length)}` : `${symbol}${printed}`;
 }
 
 export function evidenceFor(payload: any, view: FinancialsView, row: Row, index: number): Evidence {

@@ -743,9 +743,38 @@ is wrong.
 every ⓘ sat on a sans table row and produced three lines of Newsreader medium
 the first time one was put at the end of a display-face sentence.
 
+## How a figure is printed
+
+Settled on 2026-10-30 from `docs/VISUAL_SYSTEM.md` finding 1, which was
+severity H — *breaks a stated rule or hurts data trust*. One table of figures
+printed 9,439.0, then 11,618, then 16,621 in a single row, because the number
+of decimals was chosen from each figure's own magnitude.
+
+| | Rule |
+|---|---|
+| **One decimal rule per row** | The row decides, never the figure. A figure in millions takes **no decimal places**: a figure reported in millions is not reported to the nearest hundred thousand, and in a right-aligned tabular column a trailing `.0` pushes the units digit left by its own width, so the digits a reader compares stop lining up — 6.5px adrift, measured. |
+| **One right edge** | Every figure in a column ends on that column header's right edge. The header and the cells carry the same right padding; nothing is nudged. |
+| **Zero is `0`** | A company that reported nil reported something. |
+| **Not reported is `—`** | An em dash, never a zero and never blank. The filing not saying something and the filing saying nothing are different facts (standing decision 3). |
+| **A negative carries `−`** | U+2212, never the hyphen-minus `toLocaleString` gives it. A hyphen is a narrower glyph than a digit even in a tabular font, so a column of negatives drifts — and it is not a minus sign. |
+
+A **value per share is not a figure in millions**: it is a price, and two
+decimals are its precision. The rule is per row, and that is a different row.
+A rate or a margin takes one decimal and a per-cent sign.
+
+The rules live in **`src/data/figureFormat.ts`** and both tables that print
+these figures — the Financials tab and the figures screen — read them from
+there rather than keeping a copy, because two copies of one rule is how a rule
+goes stale. `verify/scenarios.mts` holds every figure in the payload set to
+them and `verify/dashboard.mts` measures both edges in a browser, where the
+finding was made.
+
 ## Do's and Don'ts
 
 ### Do:
+- **Do** print a figure through `figureFormat.ts` — `inMillions`, `asCount`,
+  `asPerShare` or `asPercent` — rather than calling `toLocaleString` or
+  `toFixed` at the point of use.
 - **Do** take colour from the ramp by utility name (`text-ink`, `bg-panel`,
   `border-line`, `text-accent-text`), which resolves through `--m-*` to
   `src/design/tokens.ts`.

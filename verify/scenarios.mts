@@ -3296,6 +3296,163 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 // ---------------------------------------------------------------------------
+// ONE DECIMAL RULE PER ROW (`docs/VISUAL_SYSTEM.md` finding 1)
+// ---------------------------------------------------------------------------
+//
+// The finding, severity H: on the figures screen a single row of cost of sales
+// printed 9,439.0, then 11,618, then 16,621, because the decimals were chosen
+// from each figure’s own magnitude. In a right-aligned tabular column a
+// trailing ".0" pushes the integer part left by its own width, so the digits a
+// reader compares down the column stop lining up with each other and with the
+// column head — and the decimal claims a precision a figure reported in
+// millions has not got.
+//
+// Five rules are checked, all five over real payloads rather than over a
+// sample: one decimal rule per row, zero as 0, not reported as an em dash, a
+// real minus sign, and — the one that makes the rule a rule rather than a
+// coincidence — that both tables read it from the same definition.
+{
+  console.log('\n=== one decimal rule per row, on both tables that print figures ===');
+  const { financialsFor, formatValue } = await import(`file:///${REPO}/src/data/financials.ts`);
+  const FF: any = await import(`file:///${REPO}/src/data/figureFormat.ts`);
+  const faults: string[] = [];
+  const HYPHEN = String.fromCharCode(45);
+  const decimalsIn = (s: string) => {
+    const m = /\.(\d+)/.exec(s);
+    return m ? m[1].length : 0;
+  };
+
+  // ---- 1. THE DEFINITION ITSELF ----------------------------------------
+  //
+  // Checked first and on constructed figures, because the payload set cannot
+  // be relied on to contain a figure either side of every boundary the old
+  // magnitude rule had. These are the exact figures the finding quotes.
+  {
+    const row = [9439.04, 11618, 16621, 123.456, 7.5];
+    const dps = new Set(row.map((v) => decimalsIn(FF.inMillions(v))));
+    if (dps.size !== 1 || !dps.has(0)) {
+      faults.push(
+        `the figures the finding quotes still print with ${[...dps].join(" and ")} decimal places: ` +
+          row.map((v) => FF.inMillions(v)).join(", ")
+      );
+    }
+    if (FF.inMillions(0) !== "0") faults.push(`zero prints as "${FF.inMillions(0)}" rather than 0`);
+    if (FF.inMillions(null) !== "\u2014") faults.push("a figure nobody reported does not print as an em dash");
+    if (FF.inMillions(-0.04) !== "0") faults.push(`a figure that rounds to nought prints as "${FF.inMillions(-0.04)}"`);
+    if (!FF.inMillions(-9439).startsWith("\u2212")) faults.push("a negative does not carry a minus sign (U+2212)");
+    if (FF.inMillions(-9439).includes(HYPHEN)) faults.push("a negative carries a hyphen-minus");
+    // A value per share is a price and keeps its two decimals: the rule is per
+    // row, and that is a different row.
+    if (decimalsIn(FF.asPerShare(433.078)) !== 2) {
+      faults.push(`a value per share printed as ${FF.asPerShare(433.078)}, which is not a price`);
+    }
+  }
+
+  // ---- 2. THE SAME DEFINITION ON BOTH TABLES ---------------------------
+  //
+  // The trap this repository has already fallen into is two copies of one
+  // rule. Both screens must read it from `figureFormat.ts`, so a change to
+  // the rule cannot reach one table and miss the other.
+  for (const [file, want] of [
+    ['src/data/financials.ts', 'figureFormat'],
+    ['src/components/figuresEditor.tsx', 'figureFormat'],
+  ] as [string, string][]) {
+    const text = fs.readFileSync(path.join(REPO, file), 'utf8');
+    if (!new RegExp(`from .[^\n]*${want}`).test(text)) {
+      faults.push(`${file} does not read the decimal rule from ${want}.ts, so it keeps its own copy of it`);
+    }
+    if (/toFixed\(/.test(text.replace(/^\s*(\/\/|\*).*$/gm, ''))) {
+      faults.push(`${file} formats a figure with toFixed, outside the one definition of the rule`);
+    }
+  }
+
+  // ---- 3. EVERY ROW OF EVERY STATEMENT, OVER THE WHOLE SET -------------
+  let rows = 0;
+  let cells = 0;
+  let dashes = 0;
+  let nils = 0;
+  let negatives = 0;
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (payload?.error) continue;
+    const symbol = String(payload.currencySymbol || payload.currency || '');
+    for (const statement of ['income', 'balance', 'cashflow'] as const) {
+      for (const basis of ['annual', 'quarterly'] as const) {
+        let view: any;
+        try {
+          view = financialsFor(payload, { statement, basis } as any);
+        } catch {
+          continue;
+        }
+        for (const row of view?.rows ?? []) {
+          rows++;
+          const seen = new Set<number>();
+          for (const cell of row.cells) {
+            const s = formatValue(cell, row.kind, symbol);
+            cells++;
+            // RULE 4: not reported is an em dash, and nothing else is.
+            if (cell.value === null) {
+              dashes++;
+              if (s !== '\u2014') faults.push(`${file} ${row.key}: a figure nobody reported prints as "${s}"`);
+              continue;
+            }
+            if (s === '\u2014') faults.push(`${file} ${row.key}: a reported figure prints as an em dash`);
+            // RULE 3: zero is 0, and is not an em dash.
+            if (cell.state === 'reportedZero') {
+              nils++;
+              if (!/0/.test(s)) faults.push(`${file} ${row.key}: a reported nil prints as "${s}"`);
+            }
+            // RULE 5: a real minus sign, never a hyphen.
+            if (s.includes(HYPHEN)) {
+              faults.push(`${file} ${row.key}: "${s}" carries a hyphen-minus rather than U+2212`);
+            }
+            if (s.startsWith('\u2212')) negatives++;
+            // RULE 1: one decimal rule per row.
+            seen.add(decimalsIn(s));
+          }
+          if (seen.size > 1) {
+            faults.push(
+              `${file} ${statement}/${basis} ${row.key}: the same row prints ` +
+                `${[...seen].sort().join(' and ')} decimal places — ` +
+                row.cells.map((c: any) => formatValue(c, row.kind, symbol)).join(", ")
+            );
+          }
+          // And a row in millions prints none at all.
+          if (row.kind !== 'percent' && [...seen].some((d) => d !== 0)) {
+            faults.push(`${file} ${statement}/${basis} ${row.key}: a figure in millions printed with decimals`);
+          }
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in how figures are printed:`);
+    faults.slice(0, 12).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 12) console.log(`           ... and ${faults.length - 12} more`);
+  } else {
+    console.log(
+      `  ${cells} figures over ${rows} rows and ${files.length} companies: every row prints one number of ` +
+        'decimal places, and a row in millions prints none'
+    );
+    console.log(
+      `  ${dashes} figures nobody reported print as an em dash and ${nils} reported nils print as 0, so the ` +
+        'two cannot be confused; ' + `${negatives} negatives carry U+2212 and not one carries a hyphen`
+    );
+    console.log(
+      '  and both tables read the rule from figureFormat.ts rather than keeping a copy of it, so the ' +
+        'figures the finding quotes — 9,439.0, 11,618, 16,621 — now print as 9,439, 11,618, 16,621'
+    );
+  }
+}
+// ---------------------------------------------------------------------------
 // A SHARE COUNT IS A COUNT (`KI-30`)
 // ---------------------------------------------------------------------------
 //

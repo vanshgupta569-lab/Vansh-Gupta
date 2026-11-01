@@ -517,6 +517,132 @@ async function moveLineTo(page: Page, field: string, headLabel: RegExp): Promise
  * MOUSE, that a figure can be edited BY CLICKING IT, and that undoing it all
  * leaves the screen where it started.
  */
+/**
+ * ONE RIGHT EDGE, SHARED WITH THE COLUMN HEADER (`docs/VISUAL_SYSTEM.md`
+ * finding 1, severity H). The finding measured the figures screen off a
+ * screenshot: the rows printing a trailing ".0" ended about 6px from the
+ * others and from the column head. Only a browser can settle it, because it
+ * is a question about rendered glyphs and not about a format string — the
+ * decimals were the cause, and right alignment plus tabular figures is what
+ * makes the effect visible at all.
+ *
+ * Measured with a Range over each cell’s own text rather than the cell box,
+ * so what is compared is where the digits actually stop, which is what a
+ * reader sees. Every figure in a column, and that column’s header, must share
+ * one right edge to within a pixel.
+ */
+async function checkSharedRightEdge(page: Page, label: string, table: string, headCell: string, figure: string) {
+  const measured: any = await page.evaluate(`(() => {
+    const t = document.querySelector(${JSON.stringify(table)});
+    if (!t) return { error: 'no table' };
+    const edge = (el) => {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const b = r.getBoundingClientRect();
+      return b.width === 0 && b.height === 0 ? null : b.right;
+    };
+    // WHERE THE DIGITS STOP, which is not where the text stops. Right
+    // alignment puts every LAST GLYPH on one edge whatever it is, so
+    // a trailing ".0" still lines up — and pushes the units digit left by its
+    // own width. The units digit is what a reader compares down a column, and
+    // it is the 6px the finding measured. Taken by ending the range before
+    // the decimal point rather than at the end of the text.
+    const digitsEdge = (el) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let node = null;
+      while (walker.nextNode()) node = walker.currentNode;
+      if (!node) return null;
+      const t = node.textContent || "";
+      const dot = t.indexOf(".");
+      const r = document.createRange();
+      r.setStart(node, 0);
+      r.setEnd(node, dot >= 0 ? dot : t.length);
+      const b = r.getBoundingClientRect();
+      return b.width === 0 && b.height === 0 ? null : b.right;
+    };
+    const heads = Array.from(t.querySelectorAll(${JSON.stringify(headCell)}));
+    if (!heads.length) return { error: 'no column headers' };
+    // ONE DECIMAL RULE PER ROW, measured as one digits edge per row: every
+    // figure in a row must stop its digits the same distance from its own
+    // right edge, which it does only if every cell in the row carries the
+    // same number of decimal places.
+    const rows = [];
+    for (const row of Array.from(t.querySelectorAll("tbody tr"))) {
+      const figs = Array.from(row.querySelectorAll(${JSON.stringify(figure)}));
+      const offs = [];
+      for (const fig of figs) {
+        const text = (fig.textContent || "").trim();
+        if (!/\\d/.test(text)) continue;
+        const a = edge(fig);
+        const b = digitsEdge(fig);
+        if (a === null || b === null) continue;
+        offs.push({ off: a - b, text });
+      }
+      if (offs.length < 2) continue;
+      const lo = Math.min(...offs.map((o) => o.off));
+      const hi = Math.max(...offs.map((o) => o.off));
+      if (hi - lo > 1) {
+        const label = (row.querySelector("th") || {}).textContent || "";
+        rows.push({
+          label: label.replace(/\\s+/g, " ").trim().slice(0, 40),
+          spread: hi - lo,
+          printed: offs.map((o) => o.text).slice(0, 6),
+        });
+      }
+    }
+    const cols = [];
+    for (let c = 0; c < heads.length; c++) {
+      const head = edge(heads[c]);
+      const cells = [];
+      for (const row of Array.from(t.querySelectorAll("tbody tr"))) {
+        const figs = Array.from(row.querySelectorAll(${JSON.stringify(figure)}));
+        if (!figs[c]) continue;
+        const e = edge(figs[c]);
+        if (e !== null) cells.push({ e, text: (figs[c].textContent || '').trim() });
+      }
+      if (head === null || !cells.length) continue;
+      const all = [head, ...cells.map((x) => x.e)];
+      const lo = Math.min(...all);
+      const hi = Math.max(...all);
+      const worst = cells.reduce((a, b) => (Math.abs(b.e - head) > Math.abs(a.e - head) ? b : a), cells[0]);
+      cols.push({ c, spread: hi - lo, cells: cells.length, worstText: worst.text, worstBy: worst.e - head });
+    }
+    return { cols, rows };
+  })()`);
+  if (!measured || measured.error) {
+    fail(`${label}: one right edge`, 'a table with headers and figures', String(measured?.error || 'nothing measured'));
+    return;
+  }
+  const mixed = (measured.rows ?? []) as any[];
+  if (mixed.length) {
+    fail(
+      `${label}: one decimal rule per row`,
+      'every figure in a row stopping its digits on one edge',
+      mixed
+        .slice(0, 3)
+        .map((r: any) => `“${r.label}” spreads ${r.spread.toFixed(1)}px across ${r.printed.join(", ")}`)
+        .join('; ')
+    );
+  }
+  const adrift = measured.cols.filter((c: any) => c.spread > 1);
+  if (adrift.length) {
+    fail(
+      `${label}: every figure shares its column header’s right edge`,
+      'a spread of at most 1px',
+      adrift
+        .slice(0, 3)
+        .map((c: any) => `column ${c.c} spreads ${c.spread.toFixed(1)}px (“${c.worstText}” is ${c.worstBy.toFixed(1)}px off the head)`)
+        .join('; ')
+    );
+  } else {
+    const cells = measured.cols.reduce((n: number, c: any) => n + c.cells, 0);
+    const worst = Math.max(0, ...measured.cols.map((c: any) => c.spread));
+    ok(
+      `${label}: ${cells} figures over ${measured.cols.length} columns each end on their column header’s ` +
+        `right edge, worst spread ${worst.toFixed(2)}px, and every row stops its digits on one edge`
+    );
+  }
+}
 async function checkHeadsOnScreen(page: Page) {
   console.log(`\n=== the figures screen: the lines under their heads ===`);
   const title = page.getByRole('heading', { name: /^reported figures/i });
@@ -525,6 +651,10 @@ async function checkHeadsOnScreen(page: Page) {
     return;
   }
   ok('the figures table is on the screen, before the model');
+
+  // ONE DECIMAL RULE PER ROW shows up here as one right edge: this is the
+  // table the finding was measured on.
+  await checkSharedRightEdge(page, 'the figures screen', '.mg-table', 'thead th.mg-fig', 'td.mg-fig');
 
   // THE SCREEN IS SHORT. The whole profit and loss is meant to fit a laptop
   // screen without scrolling, and "meant to" is not a measurement: the table's
@@ -1817,13 +1947,31 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   const { MYTH_FACT_CARDS } = await import(`file:///${REPO}/src/data/mythFactCards.ts`);
   const cards: any[] = MYTH_FACT_CARDS as any[];
 
-  // Held for longer than the myth's own beat so the second half is certain,
-  // then released; the route is put back afterwards so nothing later inherits
-  // a slow fetch.
-  const HOLD_MS = 17_000;
+  // HELD UNTIL THIS CHECK SAYS SO, not for a fixed number of seconds.
+  //
+  // It used to sleep 17 seconds while the check watched for 15 of them and
+  // then read the screen, which left under a second a half of margin — and a
+  // change that made the figures screen a few hundred milliseconds slower to
+  // render was enough to spend it. The build then finished BEFORE the last two
+  // assertions, so `getByRole(’status’)` matched a live region still holding
+  // its last announcement rather than the overlay, and the body read behind it
+  // picked up the cost-of-capital card on the company page — reporting a
+  // “this company” on the loading screen that was never on the loading screen.
+  // That is the body-wide text search `CLAUDE.md` warns about, decided by a
+  // race.
+  //
+  // So the fetch now waits on a promise this check resolves when it has
+  // finished looking, and the overlay cannot close underneath an assertion
+  // about it. `WATCH_MS` is only how long the card is watched for, which is
+  // the app’s own timing and nothing to do with the fetch.
+  const WATCH_MS = 17_000;
+  let release = () => {};
+  const held = new Promise<void>((r) => {
+    release = () => r();
+  });
   await context.unroute('**/api/company*');
   await context.route('**/api/company*', async (route) => {
-    await new Promise((r) => setTimeout(r, HOLD_MS));
+    await held;
     const url = new URL(route.request().url());
     const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
     // Swallowed for the same reason as the three-second handler above: a
@@ -1918,14 +2066,13 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   // ---- 2. AND THEN THE FACT, AND THE CARD CHANGES AT LEAST ONCE ----
   const states: string[] = [];
   let sawFact: any = null;
-  for (let waited = 0; waited < HOLD_MS - 2000; waited += 900) {
+  for (let waited = 0; waited < WATCH_MS - 2000; waited += 900) {
     const now = await read();
     const state = `${now.myth?.id ?? '-'}/${now.fact?.id ?? '-'}`;
     if (states[states.length - 1] !== state) states.push(state);
     if (now.fact && !sawFact) sawFact = now.fact;
     await page.waitForTimeout(900);
   }
-  await started.catch(() => {});
 
   if (!sawFact) {
     fail('the fact following the myth', "the card's own correction", 'the myth held the screen alone');
@@ -1935,11 +2082,11 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   if (states.length < 2) {
     fail(
       'the loading screen changing during a slow build',
-      `at least two states across ${Math.round(HOLD_MS / 1000)} seconds`,
+      `at least two states across ${Math.round(WATCH_MS / 1000)} seconds`,
       `one: ${states[0] ?? '(nothing)'} held the whole wait`
     );
   } else {
-    ok(`${states.length} states over ${Math.round(HOLD_MS / 1000)} seconds (${states.join(' then ')}), so nothing holds the screen for the whole wait`);
+    ok(`${states.length} states over ${Math.round(WATCH_MS / 1000)} seconds (${states.join(' then ')}), so nothing holds the screen for the whole wait`);
   }
 
   // ---- 2b. LABELLED A COMMON MYTH, AND NOT ABOUT THE COMPANY ----
@@ -1954,6 +2101,23 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     ok('the card is labelled a common myth, so the belief is not read as a finding');
   }
   // ---- 3. THE WHY IS BEHIND THE ⓘ, AND REACHABLE BY KEYBOARD ----
+  //
+  // THAT THIS IS THE LOADING SCREEN IS ASSERTED, NOT ASSUMED. Everything
+  // below reads the whole body on purpose (the Hint renders its text in a
+  // portal), and a body read is only about the loading screen while the
+  // loading screen is what is on it. `getByRole('status')` will happily match
+  // a live region holding a stale announcement, so the overlay is required to
+  // still be showing a card of its own first.
+  const stillBuilding =
+    (await overlay.isVisible().catch(() => false)) &&
+    (await overlay.locator('[data-myth-card]').count()) > 0;
+  if (!stillBuilding) {
+    fail(
+      'the loading screen, still on screen to be read',
+      'the overlay and its card, with the build still held',
+      'the build finished first, so what follows would be read off the company page behind it'
+    );
+  }
   const body = (await page.textContent('body')) || '';
   const openWhy = cards.find((c) => body.includes(c.why));
   if (openWhy) {
@@ -2002,6 +2166,12 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     }
     await page.keyboard.press('Escape').catch(() => {});
   }
+
+  // THE BUILD IS LET GO ONLY NOW, with every assertion about the loading
+  // screen already made, and then waited for so nothing later starts while a
+  // model is still being built.
+  release();
+  await started.catch(() => {});
 
   // Put the instant fixture back for anything that runs after this.
   await context.unroute('**/api/company*');
@@ -3042,6 +3212,7 @@ try {
   await more.evaluate((el: any) => el.click());
   await page.waitForTimeout(300);
   await readContrast(page, 'the company page, the statements');
+  await checkSharedRightEdge(page, 'the Financials tab', '[data-financials]', 'thead th[scope="col"]:not(:first-child)', 'td [data-cell]');
   await page.locator(`[data-cell]`).first().evaluate((el: any) => el.click());
   await page.waitForTimeout(300);
   await readContrast(page, 'the evidence behind a figure');
