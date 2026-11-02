@@ -23,6 +23,7 @@ import type { HeadAssignment } from './data/heads';
 import type { CorrectionReasons } from './data/corrections';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
+import { ScreenerScreen } from './components/screenerScreen';
 
 // Scroll Progress Bar Component
 const ScrollProgressBar: React.FC = () => {
@@ -428,6 +429,20 @@ export default function App() {
         {/* THE COMPANY PAGE WINS WHEN THE PATH NAMES ONE. Checked before the
             screen values so that a deep link renders the company rather than
             the landing page that `currentScreen` still says is open. */}
+        {/* THE SCREENER IS THE SECOND REAL ADDRESS ON THIS SITE. It needs one
+            for the same reason the company page does and one more besides: its
+            filters live in the query string, so the link in the bar IS the
+            screen and can be sent to somebody (`docs/SCREENER_SPEC.md` rule
+            22). Checked before the company page only because the two paths
+            cannot both match. */}
+        {!route && nav.path === '/screener' && (
+          <ScreenerScreen
+            search={nav.search}
+            onScreenChange={(next) => nav.replace(next ? `/screener?${next}` : '/screener')}
+            onOpenCompany={(ticker) => nav.go(companyPath(ticker))}
+            onBack={() => nav.go('/')}
+          />
+        )}
         {route && (
           <CompanyPage
             ticker={route.ticker}
@@ -446,7 +461,7 @@ export default function App() {
           />
         )}
         {/* SCREEN 1: BASIC INTRO & PHILOSOPHY */}
-        {!route && currentScreen === 'HOME' && (
+        {!route && nav.path !== '/screener' && currentScreen === 'HOME' && (
           <LandingPage
             onOpenCompany={() => handleNavigateToScreen('DIRECTORY')}
             onScrollTo={scrollToSection}
@@ -460,7 +475,7 @@ export default function App() {
         {/* THE MARGIN NOTES.
             A reading screen rather than an instrument one, which is why it is
             paper rather than the dark ground the model screens use. */}
-        {!route && currentScreen === 'NOTES' && (
+        {!route && nav.path !== '/screener' && currentScreen === 'NOTES' && (
           <MarginNotesScreen
             initialKey={noteKey}
             onBack={() => handleNavigateToScreen('HOME')}
@@ -468,7 +483,7 @@ export default function App() {
         )}
 
         {/* SCREEN 2: COMPANY SEARCH DIRECTORY */}
-        {!route && currentScreen === 'DIRECTORY' && (
+        {!route && nav.path !== '/screener' && currentScreen === 'DIRECTORY' && (
           <DirectoryScreen
             companies={allCompanies}
             selectedTicker={selectedTicker}
@@ -484,7 +499,7 @@ export default function App() {
             is on screen it becomes an anchor, and a reader who has seen a
             number is far less likely to go back and question the figures it
             came from. */}
-        {!route && currentScreen === 'FIGURES' && payload && (
+        {!route && nav.path !== '/screener' && currentScreen === 'FIGURES' && payload && (
           <FiguresEditor
             ticker={payload.ticker || selectedTicker}
             name={payload.name || selectedTicker}
@@ -510,7 +525,7 @@ export default function App() {
         {/* SCREEN 2b: WHAT THE FILINGS CANNOT SAY — asked before the value
             appears, because a number on screen becomes an anchor and every
             judgement made afterwards bends towards it. */}
-        {!route && currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
+        {!route && nav.path !== '/screener' && currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
           <QualitativeIntro
             company={allCompanies[selectedTicker]}
             onContinue={(verdicts) => goToAnalysis(verdicts)}
@@ -520,7 +535,7 @@ export default function App() {
         )}
 
         {/* SCREEN 3: FINANCIAL ANALYSIS & DYNAMIC DCF TERMINAL */}
-        {!route && currentScreen === 'ANALYSIS' && (
+        {!route && nav.path !== '/screener' && currentScreen === 'ANALYSIS' && (
           <TerminalDashboard
             companies={allCompanies}
             selectedTicker={selectedTicker}

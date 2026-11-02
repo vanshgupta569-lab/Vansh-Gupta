@@ -28,8 +28,24 @@ export function currentPath(): string {
   return window.location.pathname || '/';
 }
 
+/**
+ * The query string, with its leading `?`, or an empty string.
+ *
+ * THE SCREENER'S FILTERS LIVE HERE (`docs/SCREENER_SPEC.md` rule 22: screens
+ * shareable by web address). That makes the query part of where the reader IS
+ * rather than a detail of how a screen was reached, so it has to be tracked
+ * and restored on Back the same way the path is — a screen that forgot its
+ * filters on Back would be a link that only works once.
+ */
+export function currentSearch(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.search || '';
+}
+
 export interface Navigation {
   path: string;
+  /** The query string, with its leading `?`, or empty. */
+  search: string;
   /** Push a new entry, so Back returns to where the reader was. */
   go: (path: string) => void;
   /** Replace the current entry — for correcting a path, not for moving. */
@@ -46,29 +62,42 @@ export interface Navigation {
  */
 export function useNavigation(): Navigation {
   const [path, setPath] = useState<string>(() => currentPath());
+  const [search, setSearch] = useState<string>(() => currentSearch());
 
   useEffect(() => {
-    const onPop = () => setPath(currentPath());
+    const onPop = () => {
+      setPath(currentPath());
+      setSearch(currentSearch());
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  // `next` may carry a query. The comparison has to include it, or a change of
+  // filters at the same path would be seen as no change at all and the address
+  // bar would stop matching the screen.
+  const here = () => `${currentPath()}${currentSearch()}`;
+  const split = (next: string) => {
+    const at = next.indexOf('?');
+    return at < 0 ? { path: next, search: '' } : { path: next.slice(0, at), search: next.slice(at) };
+  };
+
   const go = useCallback((next: string) => {
-    if (next === currentPath()) return;
+    if (next === here()) return;
+    const parts = split(next);
     window.history.pushState({}, '', next);
-    setPath(next);
+    setPath(parts.path);
+    setSearch(parts.search);
   }, []);
 
   const replace = useCallback((next: string) => {
-    if (next === currentPath()) {
-      setPath(next);
-      return;
-    }
-    window.history.replaceState({}, '', next);
-    setPath(next);
+    const parts = split(next);
+    if (next !== here()) window.history.replaceState({}, '', next);
+    setPath(parts.path);
+    setSearch(parts.search);
   }, []);
 
-  return { path, go, replace };
+  return { path, search, go, replace };
 }
 
-export default { useNavigation, currentPath };
+export default { useNavigation, currentPath, currentSearch };

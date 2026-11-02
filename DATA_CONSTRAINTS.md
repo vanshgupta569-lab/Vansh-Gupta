@@ -871,6 +871,40 @@ check already refuses a listing whose shares outstanding and filed count differ
 by more than 1.5× either way, which catches a factor of a thousand wherever the
 feed reports both.
 
+### Nothing says which listing of a company is its primary one
+
+**Source:** both. **Affects:** 27 of the 178 companies in the set — 24 whose
+second listing is hidden and 3 where it cannot be.
+
+`docs/SCREENER_SPEC.md` rule 1 asks for primary listings by default, so that
+one company does not fill a screen twice. **Neither source publishes which
+listing is primary.** There is no field for it, no flag, and no register this
+site can read that says Royal Bank of Canada is a Toronto company with a New
+York line rather than the other way round.
+
+**What the data does support is a weaker rule, and the screener uses that one
+under its own name.** Each listing says which currency it is quoted in and
+each company says which currency it reports in, and the listing quoted in its
+own reporting currency is the home line: `RELIANCE.NS` in rupees, `RY.TO` in
+Canadian dollars, `HDFCBANK.NS` in rupees, `VALE3.SA` in reais. The flag is
+called `homeListing` rather than `primaryListing` because that is all it
+establishes.
+
+**Bound: a company shown under the wrong one of its own listings.** For a
+company that reports in US dollars and is listed elsewhere the rule picks the
+US line — **HSBC** reports in dollars, so New York beats London, and the same
+happens to `BP`, `SHEL`, `BHP`, `AZN`, `TTE` and `NVS`. The figures are right
+on either line and the price is in its own currency, so nothing is wrong; what
+is wrong is the choice of which line a reader is shown first.
+
+**What limits it:** where the rule cannot choose, nothing is hidden. Three
+groups — Alibaba, Rio Tinto and Unilever — have no listing quoted in their
+reporting currency or have several, and every listing of each is kept with a
+sentence saying why. `npm run verify` fails if any company has all of its
+listings hidden, because a company a reader cannot find is worse than a
+company shown twice. The universe picker states the rule and its HSBC
+exception on the screen.
+
 ### No ten-year yield this site may use for eight currencies
 
 **Source:** the publishers themselves. **Affects:** 26 payloads, which get no

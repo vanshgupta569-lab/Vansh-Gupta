@@ -2535,6 +2535,417 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 // by waiting for it to have a bad day.
 {
 // ---------------------------------------------------------------------------
+// THE SCREENER (`docs/SCREENER_SPEC.md`, build step 4)
+// ---------------------------------------------------------------------------
+//
+// Every rule in the spec that is a rule about DATA is checked here, over the
+// whole table, rather than in a browser over one screen of it. The browser
+// checks what only a browser can: that the number on the screen is the number
+// this produced.
+{
+  console.log('\n=== the screener: the universe, the filters and what they set aside ===');
+  const S: any = await import(`file:///${REPO}/src/data/screener.ts`);
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+
+  // THE TABLE, built the way the screen gets it.
+  const built: any[] = [];
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const row = S.screenerRow(payload);
+    if (row) built.push(row);
+  }
+  const rows = S.markHomeListings(built);
+  const metrics = S.SCREENER_METRICS;
+
+  // ---- 1. EVERY COLUMN PUBLISHES ITS FORMULA, SOURCE AND PERIOD ------
+  //
+  // Rule 2. A screener whose columns are unexplained is a set of numbers to
+  // be taken on trust, which is the thing this site exists not to be.
+  for (const m of metrics) {
+    for (const field of ['label', 'formula', 'source', 'unit', 'group']) {
+      if (!m[field]) faults.push(`the ${m.key} column has no ${field}`);
+    }
+    if (String(m.formula).trim().split(/\s+/).length < 3) {
+      faults.push(`the ${m.key} column’s formula is "${m.formula}", which does not say how it is worked out`);
+    }
+  }
+  // AND EVERY FIGURE SAYS WHICH PERIOD IT COVERS (rule 3).
+  let withPeriod = 0;
+  let values = 0;
+  for (const row of rows) {
+    for (const m of metrics) {
+      const cell = row.cells[m.key];
+      if (!cell || cell.state !== 'value') continue;
+      values++;
+      if (cell.period) withPeriod++;
+      else faults.push(`${row.ticker} ${m.key}: a figure with no period against it`);
+    }
+  }
+
+  // ---- 2. A MISSING FIGURE NEVER PASSES OR FAILS SILENTLY ------------
+  //
+  // Rule 4, and the one the whole screener turns on. A company with no
+  // operating margin is not a company with a bad one. It is set aside, it is
+  // counted, and the count is named.
+  {
+    for (const m of metrics) {
+      const screen = { ...S.EMPTY_SCREEN, oneListingPerCompany: false, filters: [{ metric: m.key, op: 'gt', value: -1e12 }] };
+      const out = S.runScreen(rows, screen);
+      // A filter that nothing can fail: every company with a figure must
+      // match, and every company without one must be excluded rather than
+      // quietly dropped.
+      const haveValue = rows.filter((r: any) => r.cells[m.key]?.state === 'value').length;
+      const haveNone = rows.filter((r: any) => r.cells[m.key]?.state !== 'value').length;
+      if (out.matched !== haveValue) {
+        faults.push(
+          `${m.key}: a filter nothing can fail matched ${out.matched} of the ${haveValue} companies that ` +
+            'have the figure'
+        );
+      }
+      if (out.excludedTotal !== haveNone) {
+        faults.push(
+          `${m.key}: ${haveNone} companies have no figure and ${out.excludedTotal} were set aside, so ` +
+            `${haveNone - out.excludedTotal} were dropped without being counted`
+        );
+      }
+      // THE TOTAL ADDS UP. Nobody is in two places and nobody is nowhere.
+      if (out.matched + out.rejected + out.excludedTotal !== out.universe) {
+        faults.push(
+          `${m.key}: ${out.matched} matched + ${out.rejected} rejected + ${out.excludedTotal} excluded is not ` +
+            `the ${out.universe} in the universe`
+        );
+      }
+      // AND THE SENTENCE EXISTS WHENEVER ANYONE WAS SET ASIDE.
+      const sentence = S.exclusionSentence(out);
+      if (out.excludedTotal > 0 && !sentence) {
+        faults.push(`${m.key}: ${out.excludedTotal} companies were set aside and nothing says so`);
+      }
+      if (sentence && !new RegExp(`^${out.excludedTotal} compan`).test(sentence)) {
+        faults.push(`${m.key}: the sentence does not open with the number set aside: "${sentence}"`);
+      }
+    }
+  }
+
+  // ---- 3. A BANK IS NOT ASKED WHAT A BANK CANNOT ANSWER --------------
+  //
+  // Rule 5 names EV/EBITDA, Debt/Equity, the current ratio, free cash flow
+  // and margins. Every one of them must be `n.m.` for every financial company
+  // in the set — not missing, which would read as a gap in the filing, and
+  // certainly not computed.
+  {
+    const financials = rows.filter((r: any) => r.financial);
+    if (financials.length < 10) {
+      faults.push(`only ${financials.length} companies are on the bank template, so rule 5 is barely tested`);
+    }
+    for (const m of metrics.filter((x: any) => x.notMeaningfulForFinancials)) {
+      for (const row of financials) {
+        const cell = row.cells[m.key];
+        if (cell?.state !== 'nm') {
+          faults.push(
+            `${row.ticker} is on the bank template and its ${m.key} is "${cell?.state}" rather than n.m.` +
+              (cell?.state === 'value' ? ` (${cell.value})` : '')
+          );
+        }
+        if (!cell?.reason) faults.push(`${row.ticker} ${m.key}: n.m. with no reason given`);
+      }
+    }
+    // AND A NON-FINANCIAL IS STILL ASKED. A rule that marked everything n.m.
+    // would pass the test above and empty the screener.
+    const ordinary = rows.filter((r: any) => !r.financial);
+    const asked = ordinary.filter((r: any) => r.cells.operatingMargin?.state === 'value').length;
+    if (asked < ordinary.length * 0.5) {
+      faults.push(
+        `only ${asked} of ${ordinary.length} companies outside the bank template have an operating margin, ` +
+          'so the not-meaningful rule has reached past the banks'
+      );
+    }
+  }
+
+  // ---- 4. NO BANNED WORD ANYWHERE IN THE SCREENER --------------------
+  //
+  // Rule 12, checked against everything this screener can put on a screen:
+  // every column label, formula and source, every preset name, every reason a
+  // figure is absent, every operator word, and the exclusion sentence itself.
+  // The list is the spec’s, and `src/components/screenerScreen.tsx` is read
+  // as text as well, because a sentence typed into the component is as
+  // visible as one computed here.
+  {
+    const strings: [string, string][] = [];
+    for (const m of metrics) {
+      strings.push([`${m.key} label`, m.label], [`${m.key} formula`, m.formula], [`${m.key} source`, m.source]);
+    }
+    for (const op of Object.keys(S.OP_WORDS)) strings.push([`operator ${op}`, S.OP_WORDS[op]]);
+    for (const cset of S.COLUMN_SETS) strings.push([`column set`, String(cset.name)]);
+    for (const row of rows) {
+      for (const m of metrics) {
+        const cell = row.cells[m.key];
+        if (cell?.reason) strings.push([`${row.ticker} ${m.key} reason`, cell.reason]);
+      }
+      if (row.listingNote) strings.push([`${row.ticker} listing note`, row.listingNote]);
+    }
+    for (const [what, text] of strings) {
+      const found = S.bannedWordsIn(text);
+      if (found.length) faults.push(`${what} uses ${found.join(', ')}: "${String(text).slice(0, 70)}"`);
+    }
+    // THE COMPONENT’S OWN WORDS, and the preset names it carries.
+    const component = fs.readFileSync(path.join(REPO, 'src/components/screenerScreen.tsx'), 'utf8');
+    // Only what a reader sees: the quoted strings and the text between tags,
+    // not the code. `data-screener-...` attributes and import paths are not
+    // prose and would make this a check about variable names.
+    // WHAT A READER SEES, and nothing else. The first pass at this flagged
+    // `target` and `strong`, and both were right about the letters and wrong
+    // about the question: `e.target.value` is the DOM and `<strong>` is markup.
+    // Neither is ever rendered as a word. So JSX expressions go (every handler
+    // lives in one), then tag names, then the imports and the comments.
+    let prose = component
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/from '[^']*'/g, '');
+    for (let pass = 0; pass < 8; pass++) prose = prose.replace(/\{[^{}]*\}/g, ' ');
+    prose = prose
+      .replace(/<\/?[A-Za-z][A-Za-z0-9]*/g, ' ')
+      .replace(/(?:className|data-[a-z-]+|aria-[a-z-]+|type|href|id|key|scope|rows|placeholder)=/g, ' ');
+    const inProse = S.bannedWordsIn(prose);
+    if (inProse.length) {
+      faults.push(`the screener component’s own words use ${inProse.join(', ')}`);
+    }
+  }
+
+  // ---- 5. THE MATCH COUNT IS THE NUMBER OF ROWS ----------------------
+  //
+  // Rule 16. The count and the list come from one call, and this is what
+  // makes that worth relying on: over a hundred screens, drawn from the
+  // metrics themselves rather than chosen, the two never differ.
+  {
+    let screensTried = 0;
+    for (const m of metrics.filter((x: any) => !x.notMeaningfulForFinancials).slice(0, 8)) {
+      for (const cut of [0, 1, 5, 15, 50]) {
+        for (const op of ['gt', 'lt'] as const) {
+          for (const financials of ['include', 'exclude', 'only'] as const) {
+            const screen = {
+              ...S.EMPTY_SCREEN,
+              financials,
+              filters: [{ metric: m.key, op, value: cut }],
+            };
+            const out = S.runScreen(rows, screen);
+            screensTried++;
+            if (out.matched !== out.rows.length) {
+              faults.push(`${m.key} ${op} ${cut}: the count says ${out.matched} and the list holds ${out.rows.length}`);
+            }
+            if (out.sorted.length !== out.matched) {
+              faults.push(`${m.key} ${op} ${cut}: ${out.matched} matched and ${out.sorted.length} were sorted`);
+            }
+            // AND SORTING MOVES NOBODY IN OR OUT.
+            const before = new Set(out.rows.map((r: any) => r.ticker));
+            for (const r of out.sorted) {
+              if (!before.has(r.ticker)) faults.push(`${m.key}: sorting introduced ${r.ticker}`);
+            }
+          }
+        }
+      }
+    }
+    if (screensTried < 100) faults.push(`only ${screensTried} screens were tried, which is too few to mean much`);
+  }
+
+  // ---- 6. A SCREEN SURVIVES ITS OWN WEB ADDRESS (rule 22) ------------
+  {
+    const screens: any[] = [
+      { ...S.EMPTY_SCREEN, filters: [{ metric: 'roe', op: 'gt', value: 15 }, { metric: 'pe', op: 'lt', value: 20 }] },
+      { ...S.EMPTY_SCREEN, filters: [{ metric: 'pe', op: 'between', value: 5, value2: 25 }], financials: 'only' },
+      {
+        ...S.EMPTY_SCREEN,
+        oneListingPerCompany: false,
+        columns: 'Valuation',
+        sort: 'pb',
+        descending: false,
+        countries: ['United States', 'India'],
+        ratios: [{ key: 'own_x', label: 'Earnings yield', formula: '100 / pe', unit: 'ratio' }],
+        filters: [{ metric: 'own_x', op: 'gt', value: 4 }],
+      },
+    ];
+    for (const screen of screens) {
+      const back = S.screenFromSearch(S.screenToSearch(screen));
+      for (const field of ['oneListingPerCompany', 'financials', 'columns', 'sort', 'descending']) {
+        if (JSON.stringify(back[field]) !== JSON.stringify(screen[field])) {
+          faults.push(`a screen lost its ${field} in its own web address`);
+        }
+      }
+      if (JSON.stringify(back.filters) !== JSON.stringify(screen.filters)) {
+        faults.push(`a screen lost a filter in its own web address: ${S.screenToSearch(screen)}`);
+      }
+      // FIELD BY FIELD. `JSON.stringify` compares the order the keys were
+      // written in as well as their values, and a screen read back out of a
+      // web address is built in whatever order its reader happens to use.
+      if (back.ratios.length !== screen.ratios.length) {
+        faults.push(`a screen carried ${screen.ratios.length} ratios and ${back.ratios.length} came back`);
+      }
+      for (const [i, want] of screen.ratios.entries()) {
+        const got = back.ratios[i];
+        for (const field of ['key', 'label', 'formula', 'unit'] as const) {
+          if (got?.[field] !== want[field]) {
+            faults.push(`a ratio lost its ${field} in its web address: "${want[field]}" became "${got?.[field]}"`);
+          }
+        }
+      }
+      // AND THE SAME ADDRESS GIVES THE SAME ANSWER.
+      const a = S.runScreen(rows, screen);
+      const b = S.runScreen(rows, back);
+      if (a.matched !== b.matched) {
+        faults.push(`a screen matched ${a.matched} and ${b.matched} after a trip through its web address`);
+      }
+    }
+  }
+
+  // ---- 7. THE TEXT VIEW AND THE CHIPS ARE ONE SET OF FILTERS (rule 9) 
+  {
+    const written = S.writeQuery([{ metric: 'roe', op: 'gt', value: 15 }, { metric: 'debtToEquity', op: 'lt', value: 0.5 }]);
+    const read = S.parseQuery(written);
+    if (read.problems.length || read.filters.length !== 2) {
+      faults.push(`the chips wrote "${written}" and reading it back gave ${read.filters.length} filters`);
+    }
+    if (read.filters[0]?.metric !== 'roe' || read.filters[1]?.metric !== 'debtToEquity') {
+      faults.push('a round trip through the text view changed which metrics were filtered');
+    }
+    // A CLAUSE THAT IS NOT A COMPARISON IS REFUSED, NOT GUESSED AT. Rule 9
+    // forbids a box that turns words into picks, and the safe version of that
+    // is a box that says what it cannot read.
+    for (const nonsense of ['good companies', 'roe is quite high', 'nosuchmetric > 5']) {
+      const out = S.parseQuery(nonsense);
+      if (!out.problems.length) faults.push(`"${nonsense}" was read as a filter rather than refused`);
+      if (out.filters.length) faults.push(`"${nonsense}" produced ${out.filters.length} filters`);
+    }
+  }
+
+  // ---- 8. A RATIO OF THE READER’S OWN IS ARITHMETIC AND NOTHING ELSE 
+  //
+  // Rule 8, and a safety rule besides: a formula arrives in a web address a
+  // reader can be sent, so it is untrusted input. The evaluator can add,
+  // subtract, multiply, divide and bracket. It cannot reach anything else.
+  {
+    const lookup = (key: string) => ({ pe: 20, roe: 15 } as any)[key] ?? null;
+    const good: [string, number][] = [['100 / pe', 5], ['roe - pe', -5], ['(roe + pe) * 2', 70], ['-pe', -20]];
+    for (const [formula, want] of good) {
+      const got = S.evaluateFormula(formula, lookup);
+      if (!isNum(got.value) || Math.abs(got.value - want) > 1e-9) {
+        faults.push(`"${formula}" gave ${got.value} rather than ${want} (${got.problem ?? 'no reason'})`);
+      }
+    }
+    const refused = [
+      'process.exit(1)',
+      'globalThis',
+      'pe.constructor',
+      'fetch("http://example.com")',
+      '100 / 0',
+      'nosuchmetric + 1',
+      '1 +',
+    ];
+    for (const formula of refused) {
+      const got = S.evaluateFormula(formula, lookup);
+      if (isNum(got.value)) faults.push(`"${formula}" was worked out as ${got.value} rather than refused`);
+      if (!got.problem) faults.push(`"${formula}" was refused with no reason given`);
+    }
+    // AND A COMPANY THAT CANNOT ANSWER IT IS SET ASIDE, NOT SCORED NOUGHT.
+    const ratio = { key: 'own_ey', label: 'Earnings yield', formula: '100 / pe', unit: 'ratio' };
+    const withRatio = S.withCustomRatios(rows, [ratio]);
+    const noPe = withRatio.filter((r: any) => r.cells.pe?.state !== 'value');
+    for (const row of noPe) {
+      if (row.cells.own_ey?.state === 'value') {
+        faults.push(`${row.ticker} has no price/earnings and a custom ratio built on it was worked out anyway`);
+      }
+    }
+  }
+
+  // ---- 9. ONE LISTING PER COMPANY HIDES NOBODY IT CANNOT PLACE -------
+  {
+    // GROUPED THE WAY `markHomeListings` GROUPS, which is lowercased and
+    // trimmed. Grouping on the raw name instead reported Shopify as a company
+    // with every listing hidden: the SEC spells it "SHOPIFY INC." and the
+    // vendor "Shopify Inc.", so the two lines looked like two companies to the
+    // check and like one to the code under test.
+    const names = new Map<string, any[]>();
+    for (const row of rows) {
+      const key = String(row.name).trim().toLowerCase();
+      names.set(key, [...(names.get(key) ?? []), row]);
+    }
+    for (const [name, group] of names) {
+      const home = group.filter((r: any) => r.homeListing);
+      if (!home.length) faults.push(`every listing of ${name} is hidden, so the company cannot be found`);
+      if (group.length > 1 && home.length > 1) {
+        // Allowed, but only where the rule genuinely could not choose, and
+        // then every listing says so.
+        for (const r of home) {
+          if (!r.listingNote) faults.push(`${r.ticker} is one of ${home.length} kept listings and says nothing about why`);
+        }
+      }
+    }
+    const one = S.universeOf(rows, { ...S.EMPTY_SCREEN, oneListingPerCompany: true });
+    const all = S.universeOf(rows, { ...S.EMPTY_SCREEN, oneListingPerCompany: false });
+    if (!(one.length < all.length)) {
+      faults.push(`one listing per company kept ${one.length} of ${all.length}, so it hid nothing at all`);
+    }
+  }
+
+  // ---- 10. NOTHING IS SORTED BY A SCORE, BECAUSE THERE IS NONE -------
+  //
+  // Rule 13. The default sort is a size, and a figure that is not a figure
+  // sorts last whichever way the column runs — a null read as nought would put
+  // every company with no margin at the top of a worst-margin sort, which
+  // reads as a finding about them.
+  {
+    if (S.DEFAULT_SORT !== 'marketCap') {
+      faults.push(`the default sort is ${S.DEFAULT_SORT}, which is not the neutral one rule 13 asks for`);
+    }
+    for (const key of ['pe', 'operatingMargin']) {
+      for (const descending of [true, false]) {
+        const sorted = S.sortRows(rows, key, descending);
+        const firstGap = sorted.findIndex((r: any) => r.cells[key]?.state !== 'value');
+        if (firstGap >= 0) {
+          const after = sorted.slice(firstGap).filter((r: any) => r.cells[key]?.state === 'value');
+          if (after.length) {
+            faults.push(`sorting by ${key} put ${after.length} figures after a company that has none`);
+          }
+        }
+        if (sorted.length !== rows.length) faults.push(`sorting by ${key} changed how many rows there are`);
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the screener:`);
+    faults.slice(0, 15).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 15) console.log(`           ... and ${faults.length - 15} more`);
+  } else {
+    const financials = rows.filter((r: any) => r.financial).length;
+    const nmRules = metrics.filter((m: any) => m.notMeaningfulForFinancials).length;
+    console.log(
+      `  ${rows.length} companies and ${metrics.length} metrics, every column publishing its formula, its ` +
+        `source and the period each of its ${values} figures covers`
+    );
+    console.log(
+      '  a filter nothing can fail matches exactly the companies that have the figure, and every company that has not got it is set aside and counted: matched plus rejected plus excluded is the universe, on every one of the 16 metrics'
+    );
+    console.log(
+      `  ${financials} companies on the bank template answer n.m. with a reason on all ${nmRules} metrics ` +
+        'rule 5 names, and the companies outside it are still asked'
+    );
+    console.log(
+      '  no banned word in any column label, formula, source, operator, column set, absence reason or listing note, nor in the screen’s own prose'
+    );
+    console.log(
+      '  the count equals the rows on 240 screens; a screen survives its own web address unchanged, ratios and all; the text view and the chips are one set of filters and nonsense is refused rather than guessed at; a reader’s formula is arithmetic and nothing else, and seven attempts to make it more than that are refused'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // NO RATE IS READ FROM A PUBLISHER WHOSE TERMS ARE NOT RECORDED
 // ---------------------------------------------------------------------------
 //

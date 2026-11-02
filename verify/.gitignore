@@ -8,3 +8,8 @@ payloads/
 snapshots/
 out/
 *.xlsx
+# The screener's precomputed table (SCREENER_SPEC rule 10), built by
+# `npm run screener:table` from the payloads above. Kept out for the same
+# reason they are: 93 of its 178 rows carry vendor-sourced figures, and
+# precomputing them into one file does not make them ours to publish.
+screener-table.json

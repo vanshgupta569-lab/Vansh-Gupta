@@ -687,6 +687,283 @@ async function checkSharedRightEdge(page: Page, label: string, table: string, he
  * so is the company that is NOT stale — a warning that is always on screen is
  * not a warning.
  */
+/**
+ * THE SCREENER, ON THE SCREEN (`docs/SCREENER_SPEC.md`, build step 4).
+ *
+ * `verify/scenarios.mts` holds the screener’s rules against all 178 companies
+ * without a browser. This checks the one thing only a browser can: that the
+ * number on the screen is the number the data layer produced, and that the
+ * things the spec says must be ON the screen are on it.
+ *
+ * The table is intercepted rather than fetched. `/api/screener` reads a file
+ * built from the payload set, and a check that depended on that file existing
+ * would pass or fail on whether somebody had run a script.
+ */
+async function checkScreenerOnScreen(page: Page, context: BrowserContext) {
+  console.log('\n=== the screener: the count, the headers and what was set aside ===');
+  const S: any = await import(`file:///${REPO}/src/data/screener.ts`);
+
+  // A TABLE WRITTEN HERE, so what the screen shows can be predicted exactly.
+  // Four companies: two ordinary, one bank, and one with a hole in it.
+  const cell = (value: number | null, state = 'value', reason: string | null = null) => ({
+    value,
+    state,
+    reason,
+    period: state === 'value' ? 'FY2025' : null,
+    asOf: '2025-12-31',
+  });
+  const row = (over: any) => ({
+    ticker: 'X',
+    name: 'X',
+    exchange: 'Testing Exchange',
+    country: 'Narnia',
+    currency: 'USD',
+    currencySymbol: '$',
+    dataSource: 'SEC EDGAR',
+    financial: false,
+    priceCurrency: 'USD',
+    homeListing: true,
+    listingNote: null,
+    cells: Object.fromEntries(S.SCREENER_METRICS.map((m: any) => [m.key, cell(10)])),
+    ...over,
+  });
+  const table = {
+    built: '2026-11-02T00:00:00.000Z',
+    rows: [
+      row({ ticker: 'HIGH', name: 'Highmargin Mills', cells: { ...row({}).cells, roe: cell(30), operatingMargin: cell(40) } }),
+      row({ ticker: 'LOW', name: 'Lowmargin Mills', cells: { ...row({}).cells, roe: cell(3), operatingMargin: cell(2) } }),
+      row({
+        ticker: 'BANKY',
+        name: 'Banky Bank',
+        financial: true,
+        cells: {
+          ...row({}).cells,
+          evToEbitda: cell(null, 'nm', 'EV / EBITDA is not meaningful for a bank or insurer'),
+          operatingMargin: cell(null, 'nm', 'Operating margin is not meaningful for a bank or insurer'),
+          debtToEquity: cell(null, 'nm', 'Debt / equity is not meaningful for a bank or insurer'),
+          currentRatio: cell(null, 'nm', 'Current ratio is not meaningful for a bank or insurer'),
+        },
+      }),
+      row({
+        ticker: 'HOLEY',
+        name: 'Holey Holdings',
+        cells: {
+          ...row({}).cells,
+          roe: cell(null, 'unavailable', 'No year reports both a profit and shareholders\u2019 equity'),
+        },
+      }),
+    ],
+  };
+
+  await context.unroute('**/api/screener*').catch(() => {});
+  await context.route('**/api/screener*', async (route) => {
+    try {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(table) });
+    } catch {
+      /* the check has moved on and something else answered */
+    }
+  });
+
+  // ---- 1. THE COUNT IS THE ROWS -------------------------------------
+  //
+  // Rule 16. Driven through a filter rather than on an empty screen, because
+  // a count that matched when nothing was filtered would prove nothing.
+  await page.goto(`${BASE}/screener?f=roe:gt:5`, { waitUntil: `domcontentloaded` });
+  const countLine = page.locator(`[data-screener-count]`).first();
+  try {
+    await countLine.waitFor({ state: `visible`, timeout: 30_000 });
+  } catch {
+    fail('the screener', 'a screen with a match count on it', 'nothing rendered at /screener');
+    await context.unroute('**/api/screener*').catch(() => {});
+    return;
+  }
+  const said = ((await countLine.textContent()) || '').replace(/\s+/g, ' ').trim();
+  const claimed = Number((said.match(/(\d+)/) || [])[1]);
+  const shown = await page.locator(`[data-screener-row]`).count();
+  // And what the data layer says, from the same table.
+  const expected = S.runScreen(table.rows, S.screenFromSearch('?f=roe:gt:5'));
+  if (claimed !== shown) {
+    fail('the screener’s match count', `${shown} rows on the screen`, `the screen says ${claimed}`);
+  } else if (claimed !== expected.matched) {
+    fail('the screener’s match count', `${expected.matched} from the data layer`, `the screen says ${claimed}`);
+  } else {
+    ok(`${claimed} companies match, ${shown} rows are on the screen, and the data layer agrees`);
+  }
+  if (!/compan(y|ies) match/.test(said) || !/sorted by/.test(said)) {
+    fail('the result line', 'the words rule 16 asks for', `"${said.slice(0, 80)}"`);
+  } else {
+    ok(`the result line reads "${said.slice(0, 64)}…"`);
+  }
+
+  // ---- 2. A MISSING FIGURE IS NAMED, NOT DROPPED --------------------
+  //
+  // Rule 4. `HOLEY` has no return on equity, so a filter on it must set that
+  // company aside AND say so where a reader will see it.
+  const excluded = page.locator(`[data-screener-excluded]`).first();
+  if (!(await excluded.count())) {
+    fail(
+      'a company set aside for a figure it has not got',
+      'a sentence on the screen saying how many and why',
+      'nothing said'
+    );
+  } else {
+    const sentence = ((await excluded.textContent()) || '').replace(/\s+/g, ' ').trim();
+    const holeyShown = await page.locator(`[data-screener-row="HOLEY"]`).count();
+    if (holeyShown) {
+      fail('a company with no figure for a filtered metric', 'set aside', 'listed as a match');
+    } else if (!/^1 company excluded/.test(sentence)) {
+      fail('the exclusion sentence', 'it opens with the number set aside', `"${sentence}"`);
+    } else {
+      ok(`the company with no return on equity is set aside and named: "${sentence}"`);
+    }
+  }
+
+  // ---- 3. A BANK SHOWS n.m., AND SAYS WHY ---------------------------
+  //
+  // Rule 5, on the screen rather than in the data: the cell must read n.m.
+  // and carry its reason, not be blank or be a number.
+  await page.goto(`${BASE}/screener?columns=Valuation`, { waitUntil: `domcontentloaded` });
+  await page.locator(`[data-screener-table]`).first().waitFor({ timeout: 30_000 });
+  {
+    const banky = page.locator(`[data-screener-cell="BANKY:evToEbitda"]`).first();
+    if (!(await banky.count())) {
+      fail('the bank’s EV / EBITDA cell', 'on the screen', 'not rendered');
+    } else {
+      const text = ((await banky.textContent()) || '').trim();
+      const state = await banky.getAttribute('data-state');
+      const reason = (await banky.getAttribute('title')) || '';
+      if (text !== 'n.m.') {
+        fail(`the bank’s EV / EBITDA cell`, 'it reads "n.m."', `it reads "${text}"`);
+      } else if (state !== 'nm') {
+        fail(`the bank’s EV / EBITDA cell`, 'it is marked as not meaningful', `it is marked "${state}"`);
+      } else if (!/not meaningful/i.test(reason)) {
+        fail(`the bank’s EV / EBITDA cell`, 'it says why', `"${reason.slice(0, 60)}"`);
+      } else {
+        ok('a bank’s EV / EBITDA reads n.m. on the screen and says why when asked');
+      }
+    }
+    // AND AN ORDINARY COMPANY IN THE SAME COLUMN STILL SHOWS A FIGURE.
+    const ordinary = page.locator(`[data-screener-cell="HIGH:evToEbitda"]`).first();
+    const ordinaryState = await ordinary.getAttribute('data-state').catch(() => null);
+    if (ordinaryState !== 'value') {
+      fail(
+        'an ordinary company’s EV / EBITDA',
+        'a figure, so the n.m. rule has not reached past the banks',
+        `marked "${ordinaryState}"`
+      );
+    } else {
+      ok('a company outside the bank template still shows a figure in the same column');
+    }
+  }
+
+  // ---- 4. EVERY COLUMN HEADER PUBLISHES ITS FORMULA AND SOURCE ------
+  //
+  // Rule 2. Behind the ⓘ the rest of this site uses, and reachable by
+  // keyboard rather than hover alone.
+  {
+    const header = page.locator(`[data-screener-column="pe"]`).first();
+    const hint = header.locator(`button[data-hint]`).first();
+    if (!(await hint.count())) {
+      fail('the Price / earnings column header', 'an ⓘ with its formula behind it', 'no such control');
+    } else {
+      await hint.focus();
+      await page.waitForTimeout(250);
+      const opened = ((await page.textContent('body')) || '').replace(/\s+/g, ' ');
+      const metric = S.METRICS_BY_KEY.pe;
+      const wantFormula = metric.formula.replace(/\s+/g, ' ');
+      if (!opened.includes(wantFormula)) {
+        fail('the column header’s ⓘ', `the formula "${wantFormula}"`, 'the formula is not on the screen');
+      } else if (!opened.includes(metric.source)) {
+        fail('the column header’s ⓘ', `the source "${metric.source}"`, 'the source is not on the screen');
+      } else {
+        ok(`the Price / earnings header publishes its formula and its source on keyboard focus`);
+      }
+      await page.keyboard.press('Escape').catch(() => {});
+    }
+    // AND THE PERIOD IS UNDER THE FIGURE, because companies do not share a
+    // financial year (rule 3).
+    const periods = await page.locator(`[data-screener-row] .font-figure + div`).count();
+    if (!periods) {
+      fail('the period each figure covers', 'under the figure in the table', 'nowhere on the screen');
+    } else {
+      ok(`${periods} figures carry the period they cover under them`);
+    }
+  }
+
+  // ---- 5. THE SCREEN IS ITS OWN WEB ADDRESS (rule 22) ---------------
+  {
+    await page.goto(`${BASE}/screener`, { waitUntil: `domcontentloaded` });
+    await page.locator(`[data-screener-table]`).first().waitFor({ timeout: 30_000 });
+    await page.locator(`[data-screener-metric]`).first().selectOption(`roe`);
+    await page.locator(`[data-screener-op]`).first().selectOption(`gt`);
+    await page.locator(`[data-screener-value]`).first().fill(`20`);
+    await page.locator(`[data-screener-add]`).first().click();
+    await page.waitForTimeout(300);
+    const url = new URL(page.url());
+    if (!url.search.includes('roe')) {
+      fail(
+        'a filter added on the screen',
+        'it is in the web address, so the link is the screen',
+        `the address is "${url.pathname}${url.search}"`
+      );
+    } else {
+      // AND THE ADDRESS ALONE REBUILDS IT. Loaded fresh, with no clicking.
+      const rowsAfterClick = await page.locator(`[data-screener-row]`).count();
+      await page.goto(`${BASE}/screener${url.search}`, { waitUntil: `domcontentloaded` });
+      await page.locator(`[data-screener-table]`).first().waitFor({ timeout: 30_000 });
+      const rowsFromLink = await page.locator(`[data-screener-row]`).count();
+      const chips = await page.locator(`[data-screener-chip="roe"]`).count();
+      if (rowsFromLink !== rowsAfterClick || !chips) {
+        fail(
+          'the screen rebuilt from its own address',
+          `${rowsAfterClick} rows and the filter as a chip`,
+          `${rowsFromLink} rows and ${chips} chips`
+        );
+      } else {
+        ok(`a filter added by hand lands in the address, and the address alone rebuilds the screen`);
+      }
+    }
+  }
+
+  // ---- 6. NO BANNED WORD ANYWHERE IN THE SCREENER -------------------
+  //
+  // Rule 12, read off the RENDERED page rather than the source: a word can
+  // reach a reader through a label, a preset, a placeholder or a sentence, and
+  // the rendered text is where all four end up.
+  //
+  // SCOPED TO THE SCREENER'S OWN REGION, and the exclusion is a decision
+  // rather than a convenience. Scanning the whole body reported `buy` and
+  // `sell` three times, and it was right about the letters: the site's footer
+  // carries the disclaimer that nothing here is a recommendation to buy or sell
+  // a security. That is the opposite of the thing rule 12 forbids — the rule
+  // bans telling a reader to buy, and the footer exists to say nobody is being
+  // told to. A check that made the disclaimer a fault would have had the
+  // disclaimer deleted, which is the worst outcome available.
+  {
+    for (const where of ['', '?columns=All', '?f=pe:lt:15&financials=only']) {
+      await page.goto(`${BASE}/screener${where}`, { waitUntil: `domcontentloaded` });
+      await page.locator(`[data-screener-table]`).first().waitFor({ timeout: 30_000 });
+      await page.locator(`[data-screener-universe-toggle]`).first().click();
+      await page.locator(`[data-screener-text-toggle]`).first().click();
+      await page.waitForTimeout(200);
+      const region = page.locator(`[data-screener]`).first();
+      const text = ((await region.textContent()) || '').replace(/\s+/g, ' ');
+      if (text.length < 400) {
+        fail(`the screener at /screener${where}`, 'a screen with words on it to check', `${text.length} characters`);
+        continue;
+      }
+      const found = S.bannedWordsIn(text);
+      if (found.length) {
+        fail(`the screener at /screener${where}`, 'none of the words rule 12 bans', `it uses ${found.join(', ')}`);
+      } else {
+        ok(`no banned word anywhere on the screener at /screener${where || ' (no filters)'}`);
+      }
+    }
+  }
+
+  await context.unroute('**/api/screener*').catch(() => {});
+}
+
 async function checkStaleFigures(page: Page) {
   console.log('\n=== how old the figures are, said on the screen ===');
   const { figuresAge, STALE_MONTHS } = await import(`file:///${REPO}/src/data/figuresAge.ts`);
@@ -3331,6 +3608,10 @@ try {
 
   // 4b. HOW OLD THE FIGURES ARE, on both screens that show them.
   await checkStaleFigures(page);
+
+  // 4c. THE SCREENER, which is a screen of its own at its own address.
+  await checkScreenerOnScreen(page, context);
+  await readContrast(page, 'the screener');
 
   // 5. The same company again, quoted in a currency its statements are not
   //    in: the one case where a value per share is shown twice.

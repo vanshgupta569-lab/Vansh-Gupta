@@ -235,6 +235,48 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### The screener: the universe, the filters and what they set aside
+
+Ten rules of `docs/SCREENER_SPEC.md` are rules about data, so they are checked
+over the whole table rather than over one screen of it. 178 companies, 16
+metrics, 2,848 figures.
+
+Every column publishes a formula of at least three words, a source and the
+period each of its figures covers (rules 2 and 3). **A filter nothing can
+fail matches exactly the companies that have the figure**, and every company
+that has not got it is set aside and counted, with matched plus rejected plus
+excluded equal to the universe on every one of the sixteen (rule 4). The 36
+companies on the bank template answer `n.m.` with a reason on all eight
+metrics rule 5 names, **and the companies outside it are still asked** — a
+rule that marked everything not meaningful would pass the first half and
+empty the screener. No banned word appears in any label, formula, source,
+operator, column set, absence reason or listing note, nor in the screen’s own
+prose (rule 12). **The count equals the rows on 240 screens** (rule 16). A
+screen survives its own web address unchanged, ratios and all (rule 22). The
+text view and the chips are one set of filters, and nonsense is refused
+rather than guessed at (rule 9). A reader’s own formula is arithmetic and
+nothing else: seven attempts to make it more than that — `process.exit(1)`,
+`globalThis`, `pe.constructor`, a `fetch` — are refused with a reason (rule
+8). Nothing sorts by a composite score because there is none, and a figure
+that is not a figure sorts last whichever way the column runs (rule 13).
+
+In `dashboard.mts`, against a table written in the check so the screen’s
+output can be predicted exactly: the count on the screen equals the rows on
+the screen and the data layer’s own answer; a company with no figure for a
+filtered metric is set aside and **named in a sentence that opens with the
+number**; a bank’s cell reads `n.m.` and says why when asked while an
+ordinary company in the same column still shows a figure; the Price /
+earnings header publishes its formula and source on **keyboard** focus; and a
+filter added by hand lands in the web address, with the address alone
+rebuilding the screen.
+
+Proved by breaking, four ways: a missing figure made to fail a filter quietly
+(13 faults — 57 companies dropped on EV/EBITDA alone without being counted);
+the not-meaningful rule removed so banks are asked what banks cannot answer
+(430, and the table’s `n.m.` count falls from 288 to 0); a banned word put in
+a column label; and the match count knocked off by one (513 between them, and
+both reported in the browser as well).
+
 ### Every rate names its publisher, and every publisher its terms
 
 Canada and Denmark were added because their own central banks publish the
