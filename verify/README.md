@@ -343,6 +343,39 @@ every filing address in a payload (**15**); and the line's first candidate
 printed instead of the figure's own, which is what recording the preference
 list's head would look like (**24,180**, and 1 in the browser).
 
+### The reporting currency is the main statements' own
+
+Until 2026-11-03 it was read off every monetary tag the facts carried, so one
+stray unit left it unestablished and refused the company. A US filer with a euro
+bond tags that bond in euros; a Canadian subsidiary's balances are tagged in
+Canadian dollars. Those are facts about the bond and the subsidiary, not the
+currency the statements are presented in. **Worse than the refusal**: the unit a
+figure was read in was whichever currency came first in the XBRL JSON, so where a
+stray unit came first the figure itself was read in it and divided into millions
+as though it were the reporting currency.
+
+It is now the currency of the **main statement totals** — revenue, total assets
+and net income — and every other figure is read in that currency and in no other.
+
+Five rules, applied by one function so that the fault put back on purpose is held
+to exactly the same ones. **One currency, and every figure taken in it**: the set
+of units a figure was actually taken in must be exactly the reporting currency,
+so a figure read in a second currency would show up as a second entry. **A stray
+currency in the filing changes nothing** — and the set must contain companies
+that exercise that, or the rule ships untested and this check cannot fail;
+3 of the 85 SEC filers do, including Enbridge in Canadian dollars beside euros and US dollars, PepsiCo in US dollars beside Canadian dollars and euros, and Welltower in US dollars beside Canadian dollars. **The three the brief
+named, against their own filings**: Enbridge presents in Canadian dollars,
+PepsiCo and Welltower in US dollars, written in the check from the filings so the
+expected answer does not come from the code that produces it. **A refusal names
+the disagreement**, line by line and year by year. And **nothing falls back to
+dollars**: what the payload shows must be the currency that was established, not
+a default standing in for one.
+
+85 of 85 SEC filers settle a currency this way and 0 have main totals
+that genuinely disagree. **One company regains a valuation: PepsiCo at 103.47 a share.** All three regain a cost of equity, and Enbridge and Welltower are then refused by refusals they had never reached — no cost of sales, and no filed operating income.
+
+Proved by breaking, five ways. The fetcher twice, asked directly and writing nothing — because a capture built by a deliberately broken fetcher would be kept for ever by the rule that keeps every fetch: the old rule put back, and all three lose their currency again; and `longTermDebt` added to the main totals, which takes Enbridge's currency away because its FY2023 long-term debt is tagged in euros, a euro bond doing exactly what this rule exists to ignore. Then the check three times, by mutating a payload on disk: a payload whose figures were taken in two currencies; one claiming a currency its own filing does not present in; and one that settled its currency on revenue alone. And the check carries the old rule's own output as a constructed case, because with nothing on disk left to find, the arms about a refusal and about falling back to dollars would otherwise ship untested.
+
 ### The screener: the universe, the filters and what they set aside
 
 Ten rules of `docs/SCREENER_SPEC.md` are rules about data, so they are checked

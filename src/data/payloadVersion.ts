@@ -64,13 +64,27 @@
 //      concepts and said which one the company used was not recorded, and an
 //      annual figure's Form line read "Annual report (10-K / 20-F), as tagged
 //      in XBRL" because no form was held either
+//  12  the REPORTING CURRENCY is the currency the MAIN STATEMENT TOTALS are
+//      filed in — revenue, total assets and net income — and every other
+//      monetary figure is read in that currency and in no other. It used to
+//      be read off every monetary tag the facts carried, so one stray unit
+//      left it unestablished and the company refused: a US filer with a euro
+//      bond, or a Canadian subsidiary's balances, tags those in their own
+//      currency, and that is a fact about the bond rather than about the
+//      statements. `currencyEvidence` now carries `mainTotals`,
+//      `mainTotalCurrencies`, `mainTotalsDisagree` where they do, and
+//      `otherCurrenciesInFiling` for what the filing holds and this payload
+//      does not use. Worse than the refusal was that the unit a figure was
+//      READ IN was whichever came first in the JSON, so a figure could be
+//      read in the stray currency and divided into millions as though it
+//      were the reporting one
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 11;
+export const PAYLOAD_VERSION = 12;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

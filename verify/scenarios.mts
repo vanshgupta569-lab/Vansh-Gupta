@@ -6218,6 +6218,256 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 
+// ---------------------------------------------------------------------------
+// THE REPORTING CURRENCY IS THE ONE THE MAIN STATEMENTS ARE PRESENTED IN
+// ---------------------------------------------------------------------------
+//
+// Until 2026-11-03 it was read off EVERY monetary tag the facts carried, and a
+// single stray unit left it unestablished and the company refused. A US filer
+// with a euro bond tags that bond in euros; a Canadian subsidiary's balances
+// are tagged in Canadian dollars. Those are facts in the filing and they are
+// not the currency the statements are presented in. PepsiCo (EUR beside USD),
+// Enbridge and Welltower (CAD beside USD) were refused a valuation by that.
+//
+// WORSE THAN THE REFUSAL: the unit a figure was READ IN was
+// `Object.keys(entry.units)[0]` — whichever currency came first in the JSON —
+// so where a stray unit came first the figure itself was read in it and divided
+// into millions as though it were the reporting currency.
+//
+// It is now the currency of the MAIN STATEMENT TOTALS: revenue, total assets
+// and net income. The income statement, the balance sheet, and the line that
+// ties them — the primary statements in miniature. Every other figure is then
+// read in that currency and in no other.
+//
+// Five rules, applied by one function so that the fault put back on purpose at
+// the end is held to exactly the same ones:
+//
+//   1. ONE CURRENCY, AND EVERY FIGURE TAKEN IN IT. `statementCurrencies` is the
+//      set of units a figure was actually taken in, and it must be exactly the
+//      reporting currency — if any figure were ever read in a second currency
+//      that set would hold two.
+//
+//   2. A STRAY CURRENCY IN THE FILING DOES NOT CHANGE THE ANSWER, and the set
+//      must actually contain companies that exercise it, or the rule ships
+//      untested and this check cannot fail.
+//
+//   3. THE THREE THE BRIEF NAMED, AGAINST THEIR OWN FILINGS. Enbridge presents
+//      in Canadian dollars; PepsiCo and Welltower in US dollars. Written here
+//      from the filings, so the expected answer does not come from the code
+//      that produces it.
+//
+//   4. A REFUSAL NAMES THE DISAGREEMENT. Where the main totals genuinely differ
+//      the currency is null AND the evidence says which line and which year
+//      said what, so the refusal can be read rather than guessed at.
+//
+//   5. NOTHING FALLS BACK TO DOLLARS. What the payload shows must be the
+//      currency that was established, not a default standing in for one.
+{
+  console.log('\n=== the reporting currency is the main statements’ own ===');
+
+  const faults: string[] = [];
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+
+  // READ FROM THE FILINGS, NOT FROM THE CODE.
+  const FROM_THE_FILING: Record<string, string> = { ENB: 'CAD', PEP: 'USD', WELL: 'USD' };
+
+  let secFilers = 0;
+  let established = 0;
+  let withStray = 0;
+  let unestablished = 0;
+  const strays: string[] = [];
+  const currencies: Record<string, number> = {};
+
+  /** The five rules, over one payload. Returns what is wrong with it. */
+  const inspect = (ticker: string, payload: any): string[] => {
+    const bad: string[] = [];
+    const ev = payload?.currencyEvidence || {};
+    const reporting = ev.reportingCurrency ?? null;
+    const taken: string[] = Array.isArray(ev.statementCurrencies) ? ev.statementCurrencies : [];
+    const main: string[] = Array.isArray(ev.mainTotalCurrencies) ? ev.mainTotalCurrencies : [];
+    const other: string[] = Array.isArray(ev.otherCurrenciesInFiling) ? ev.otherCurrenciesInFiling : [];
+
+    if (!Array.isArray(ev.mainTotals) || ev.mainTotals.join(',') !== 'revenue,totalAssets,netIncome') {
+      bad.push(
+        `${ticker}: the currency was settled on ${JSON.stringify(ev.mainTotals)} rather than on the ` +
+          'main statement totals'
+      );
+    }
+
+    if (reporting) {
+      if (main.length !== 1 || main[0] !== reporting) {
+        bad.push(
+          `${ticker}: reports in ${reporting} and its main totals are filed in ${
+            main.join(' and ') || 'nothing'
+          }`
+        );
+      }
+      if (taken.length !== 1 || taken[0] !== reporting) {
+        bad.push(
+          `${ticker}: reports in ${reporting} and its figures were taken in ${
+            taken.join(' and ') || 'nothing'
+          } -- a statement in two currencies is not a statement`
+        );
+      }
+      if (other.includes(reporting)) {
+        bad.push(`${ticker}: ${reporting} is listed both as the reporting currency and as another one`);
+      }
+    } else {
+      const said: string[] = Array.isArray(ev.mainTotalsDisagree) ? ev.mainTotalsDisagree : [];
+      if (main.length < 2) {
+        bad.push(
+          `${ticker}: no reporting currency, and its main totals are filed in ${
+            main.join(' and ') || 'nothing at all'
+          } -- which is not a disagreement`
+        );
+      }
+      if (!said.length) {
+        bad.push(
+          `${ticker}: no reporting currency and nothing saying which line and which year disagreed, so ` +
+            'the refusal cannot be read'
+        );
+      }
+    }
+
+    if (reporting && payload.currency !== reporting) {
+      bad.push(`${ticker}: shows its figures in ${payload.currency} and reports in ${reporting}`);
+    }
+    if (!reporting && payload.currency) {
+      bad.push(
+        `${ticker}: no reporting currency could be established and the payload shows ` +
+          `${payload.currency} anyway, which is a default standing in for an answer`
+      );
+    }
+
+    if (FROM_THE_FILING[ticker] && reporting !== FROM_THE_FILING[ticker]) {
+      bad.push(
+        `${ticker}: its 10-K is presented in ${FROM_THE_FILING[ticker]} and this payload says ` +
+          `${reporting ?? 'nothing'}`
+      );
+    }
+    return bad;
+  };
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const ticker = file.replace('.json', '');
+    if (!/sec/i.test(String(payload?.source || ''))) continue;
+    if (!Array.isArray(payload?.statements) || !payload.statements.length) continue;
+    secFilers++;
+    faults.push(...inspect(ticker, payload));
+
+    const ev = payload?.currencyEvidence || {};
+    const reporting = ev.reportingCurrency ?? null;
+    const other: string[] = Array.isArray(ev.otherCurrenciesInFiling) ? ev.otherCurrenciesInFiling : [];
+    if (reporting) {
+      established++;
+      currencies[reporting] = (currencies[reporting] || 0) + 1;
+      if (other.length) {
+        withStray++;
+        if (strays.length < 6) strays.push(`${ticker} ${reporting} beside ${other.join(' and ')}`);
+      }
+    } else {
+      unestablished++;
+    }
+  }
+
+  for (const ticker of Object.keys(FROM_THE_FILING)) {
+    if (!fs.existsSync(path.join(PAYLOADS, `${ticker}.json`))) {
+      faults.push(`${ticker}.json is not on disk, so the currency read at its filing was not checked`);
+    }
+  }
+
+  // ---- THE RULE MUST BE EXERCISED --------------------------------------
+  //
+  // A check that only ever saw filers with one currency in their facts would
+  // pass with the old rule still in place. The whole point is the filer whose
+  // facts carry two, so the set has to contain some and this says how many.
+  if (secFilers && withStray < 3) {
+    faults.push(
+      `only ${withStray} SEC filers in the set carry a currency their statements are not presented in, ` +
+        'so the rule that ignores one is barely exercised -- PepsiCo, Enbridge and Welltower are the ' +
+        'companies it was written for and at least those three should be here'
+    );
+  }
+
+  // ---- THE FAULT PUT BACK ON PURPOSE ----------------------------------
+  //
+  // CONSTRUCTED, because the fix leaves nothing on disk to find. PepsiCo's
+  // payload as the old rule left it — every monetary tag voting, so the euro
+  // bond and the Canadian balances outvoted nothing and simply left three
+  // currencies on the record, no reporting currency, and `currency` falling
+  // back to dollars. Rules 4 and 5 are otherwise unreachable on this set,
+  // which is exactly the kind of arm that ships untested.
+  {
+    const full = path.join(PAYLOADS, 'PEP.json');
+    if (!fs.existsSync(full)) {
+      faults.push('PEP.json is not on disk, so the old currency rule could not be put back');
+    } else {
+      const asWas = JSON.parse(fs.readFileSync(full, 'utf8'));
+      const other = asWas.currencyEvidence?.otherCurrenciesInFiling || [];
+      if (!other.length) {
+        faults.push(
+          'PepsiCo no longer files anything in a currency its statements are not presented in, so the ' +
+            'old rule could not be put back -- check what moved before trusting this'
+        );
+      } else {
+        asWas.currencyEvidence = {
+          reportingCurrency: null,
+          reportingCurrencySource: 'the units the SEC XBRL facts are filed in',
+          statementCurrencies: ['USD', ...other].sort(),
+          mainTotals: ['revenue', 'totalAssets', 'netIncome'],
+          mainTotalCurrencies: ['USD', ...other].sort(),
+        };
+        asWas.currency = 'USD';
+        // The REAL ticker, because one of the three arms looks the company up
+        // by name against the currency its own filing is presented in, and a
+        // decorated label would quietly skip it.
+        const reported = inspect('PEP', asWas);
+        const sawRefusal = reported.some((f) => /which line and which year disagreed/.test(f));
+        const sawFallback = reported.some((f) => /default standing in for an answer/.test(f));
+        const sawFiling = reported.some((f) => /presented in USD and this payload says nothing/.test(f));
+        if (!sawRefusal || !sawFallback || !sawFiling) {
+          faults.push(
+            `with the old rule put back, PepsiCo is reported ${reported.length} ways and the three that ` +
+              `matter are missing: unreadable refusal ${sawRefusal}, dollar fallback ${sawFallback}, ` +
+              `filing disagreement ${sawFiling}`
+          );
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the reporting currency:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  } else {
+    console.log(
+      `  ${established} of ${secFilers} SEC filers settle their reporting currency on revenue, total ` +
+        `assets and net income (${Object.entries(currencies)
+          .sort((a, b) => b[1] - a[1])
+          .map(([c, n]) => `${c} x${n}`)
+          .join(', ')}), and every figure in each was taken in that one currency`
+    );
+    console.log(
+      `  ${withStray} of them file something in a currency their statements are not presented in, and ` +
+        `it changes nothing: ${strays.join('; ')}`
+    );
+    console.log(
+      `  ${unestablished} have main totals that genuinely disagree; Enbridge reads CAD and PepsiCo and ` +
+        'Welltower USD, as their own filings present them, and PepsiCo under the old rule is reported ' +
+        'by the three arms this set does not otherwise reach'
+    );
+  }
+}
+
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {

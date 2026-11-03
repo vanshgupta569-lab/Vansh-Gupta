@@ -222,22 +222,36 @@ something only if all three describe the same security in the same currency.
 Three gates, in order. Any failure refuses **every** valuation, residual income
 included.
 
-1. **The reporting currency must be stated, and stated once.** Taken from the
-   filing's own statement of it — the SEC's XBRL units, or Yahoo's
-   `financialCurrency` cross-checked against the currency stamped on each
-   figure — never inferred. Figures stamped with a second currency refuse the
-   company.
+1. **The reporting currency is the one the MAIN STATEMENT TOTALS are presented
+   in** — revenue, total assets and net income. The income statement, the
+   balance sheet, and the line that ties them: the primary statements in
+   miniature. Taken from the filing's own units, never inferred, and every
+   other monetary figure is then read in that currency and in no other.
 
-   **Measured on 2026-11-01: this costs three of the 178 companies in the set
-   their whole valuation** — `ENB` and `WELL`, which tag facts in Canadian and
-   US dollars, and `PEP`, which tags them in euros and US dollars. In each case
-   the dominant currency is obvious to a reader and the rule does not guess at
-   it, because a figure stamped EUR inside a dollar filing is a real euro
-   amount and averaging the two would be inventing a company. Without a
-   reporting currency there is no ten-year yield to discount at and no price to
-   compare against, so the refusal is the whole model rather than one line of
-   it. Whether a dominant currency may be chosen where a handful of facts
-   disagree is a decision for Nihar, not a code change.
+   **It used to be read off every monetary tag the facts carried**, so a single
+   stray unit left it unestablished and refused the company. That is not what a
+   second currency in a filing means. A US filer with a euro bond tags that
+   bond in euros; a Canadian subsidiary's balances are tagged in Canadian
+   dollars. Those are facts about the bond and the subsidiary, and they are not
+   the currency the statements are presented in. **Worse than the refusal was
+   what it hid**: the unit a figure was read in was whichever currency came
+   first in the XBRL JSON, so where a stray unit came first the figure itself
+   was read in it and divided into millions as though it were the reporting
+   currency.
+
+   **Measured on 2026-11-03**: 85 of the 85 SEC filers in the set settle a
+   reporting currency this way, 3 of them while filing something in a
+   currency their statements are not presented in, and 0 have main totals
+   that genuinely disagree. **One company regains a valuation: PepsiCo, at 103.47 a share.** All three regain a cost of equity — PepsiCo 9.68%, Enbridge 9.82% and Welltower 9.29% — and Enbridge and Welltower are then refused by refusals they had never reached: Enbridge files no cost of sales for its last reported year and Welltower no operating income for FY2021 to FY2025, both of which this file already records. **Enbridge was also being shown in the wrong currency**: it presents in Canadian dollars and the payload said US dollars, because with no currency established the label fell back to a default.
+
+   **A refusal is still a refusal, and it names the disagreement.** Where the
+   main totals themselves differ — revenue presented in one currency and total
+   assets in another, or a presentation currency changed inside the years held —
+   the currency is left unestablished and the evidence says which line and which
+   year said what. Without a reporting currency there is no ten-year yield to
+   discount at and no price to compare against, so the refusal is the whole
+   model rather than one line of it. **What changed is which question is asked**:
+   not "does any fact in this filing disagree" but "do the statements disagree".
 2. **The share count must count the security the price is for.** An SEC filer's
    statements count the registered shares its ticker trades. For a Yahoo
    listing: London's international order book (`IOB`) is refused outright as a

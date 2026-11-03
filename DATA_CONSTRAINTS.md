@@ -92,7 +92,7 @@ that understates.
 | A reported year with no derivable totals | both | 4 named | **refuse** |
 | Borrowings missing in the last year, reported earlier | both | 1 (PANW) | **refuse** |
 | A depositary receipt whose ratio is unpublished | Yahoo | 38 listings | **refuse** |
-| A reporting currency not stated, or stated two ways | both | 3 named | **refuse** |
+| A reporting currency not stated, or stated two ways | both | 0 SEC filers, Vale and Petrobras on the vendor feed named | **refuse** |
 | A depreciation rate that cannot be measured | both | 3 named | **refuse** |
 | A claim on the group whose amount is not filed | both | 6 named | **refuse** |
 | The tax split between operating and non-operating income | both | 1 (ENB.TO) | **refuse** above 25% |
@@ -1280,7 +1280,7 @@ tested.
 | Any derivable totals for one reported year | `balanceSheetDoesNotBalance` | BlackRock, GE Vernova, Shopify, SanDisk |
 | Cash in the last reported year, or borrowings there when earlier years report some | `filingMissingValuationInput` | Palo Alto Networks |
 | The ratio of a depositary receipt to an ordinary share | `listingNotComparable` | 38 US and IOB listings of non-US companies; the home listing is valued instead |
-| A reporting currency stated once and consistently | `listingNotComparable` | Vale, Petrobras (figures stamped USD, currency said BRL); Enbridge's SEC filing mixes CAD and USD |
+| A reporting currency stated once and consistently | `listingNotComparable` | Vale, Petrobras (figures stamped USD, currency said BRL). **Enbridge, PepsiCo and Welltower were here until 2026-11-03**: each files a borrowing or a subsidiary's balances in a second currency, which the rule took as a disagreement. The reporting currency is now the main statement totals' own — revenue, total assets and net income — so a stray fact in another currency no longer refuses anybody, and a refusal names the line and the year that disagreed |
 | A depreciation rate that can be measured and forecast from | `implausibleDepreciationRate` | Sony's Tokyo listing, Palantir, ExxonMobil |
 | The amount of a minority interest or preferred claim the filing shows exists | `nonCommonClaimNotReported` | Boeing, Morgan Stanley, Santander; and for residual income, ICBC and American Express |
 

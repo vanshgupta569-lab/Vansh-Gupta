@@ -880,7 +880,16 @@ function applySplitAdjustment(data, splits) {
 // the figure and not of the line: one company's revenue is `Revenues` and the
 // next company's is `RevenueFromContractWithCustomerExcludingAssessedTax`, and
 // the same company can change concept between two years.
-function extractUSFact(facts, tagList, unitsSeen, provOut) {
+//
+// `unit`, where one is given, is the only unit read. Until 2026-11-03 this took
+// `Object.keys(entry.units)[0]` — whichever currency happened to come first in
+// the JSON — and ADDED IT TO THE SET THAT DECIDED THE REPORTING CURRENCY, even
+// for a tag no figure was taken from. Three companies were refused a valuation
+// by that: PepsiCo (EUR beside USD), Enbridge and Welltower (CAD beside USD),
+// each of which reports in dollars and files a borrowing in another currency.
+// Worse than the refusal, where the stray unit came first the FIGURE was read
+// in it and divided into millions as though it were the reporting currency.
+function extractUSFact(facts, tagList, unitsSeen, provOut, unit = null) {
   // Two different ideas of "which value wins" apply here, and they must not be
   // confused — mixing them up is how Apple's SG&A briefly came back as bare
   // G&A, missing the selling costs entirely:
@@ -896,7 +905,11 @@ function extractUSFact(facts, tagList, unitsSeen, provOut) {
     const entry = facts['us-gaap']?.[tag];
     if (!entry) continue;
 
-    const unitKey = Object.keys(entry.units || {})[0];
+    // THE UNIT THE CALLER ASKED FOR, or the tag's own where it asked for none
+    // (a share count, whose unit is `shares`). A tag that does not carry the
+    // reporting currency at all contributes nothing rather than contributing
+    // its own currency.
+    const unitKey = unit && entry.units?.[unit] ? unit : unit ? null : Object.keys(entry.units || {})[0];
     if (!unitKey) continue;
     // The unit a figure is filed in is the filing's own statement of its
     // currency (USD, EUR, CAD...). Recorded so the currency is read from the
@@ -938,6 +951,7 @@ function extractUSFact(facts, tagList, unitsSeen, provOut) {
         accn: point.accn || null,
         form: point.form || null,
         filed: point.filed || null,
+        unit: unitKey,
       };
     }
 
@@ -951,6 +965,94 @@ function extractUSFact(facts, tagList, unitsSeen, provOut) {
   }
 
   return merged;
+}
+
+/**
+ * THE REPORTING CURRENCY, READ OFF THE MAIN STATEMENT TOTALS.
+ *
+ * The three lines every set of statements has and no reader would call a
+ * detail: the top line, total assets and the bottom line. A company's
+ * reporting currency is the currency ITS OWN PRIMARY STATEMENTS are presented
+ * in, and those three are the primary statements in miniature — revenue from
+ * the income statement, total assets from the balance sheet, net income tying
+ * the two.
+ *
+ * WHAT IT DELIBERATELY DOES NOT LOOK AT is every other monetary fact in the
+ * filing. A US filer with a euro bond tags that bond in euros; a Canadian
+ * subsidiary's balances are tagged in Canadian dollars. Those are facts in the
+ * filing and they are not the currency the statements are presented in, and
+ * treating them as a vote is what refused PepsiCo, Enbridge and Welltower.
+ *
+ * It returns `{ currency, evidence }`. `currency` is null only where the main
+ * totals GENUINELY DISAGREE — a filer that presents revenue in one currency
+ * and total assets in another, or that changed presentation currency inside
+ * the years held — and the evidence says which line and which year said what,
+ * so a refusal can be read rather than guessed at.
+ */
+const MAIN_TOTAL_FIELDS = ['revenue', 'totalAssets', 'netIncome'];
+
+function reportingCurrencyOf(facts, tagsFor) {
+  const isCurrency = (u) => /^[A-Z]{3}$/.test(String(u || ''));
+  const byField = {};
+  const found = new Set();
+
+  for (const field of MAIN_TOTAL_FIELDS) {
+    const perYear = {};
+    for (const tag of tagsFor(field)) {
+      const entry = facts['us-gaap']?.[tag];
+      if (!entry) continue;
+      for (const [unitKey, points] of Object.entries(entry.units || {})) {
+        if (!isCurrency(unitKey)) continue;
+        for (const point of points || []) {
+          if (!point.form?.startsWith('10-K') || !point.end) continue;
+          if (point.start) {
+            const days = (new Date(point.end) - new Date(point.start)) / 86400000;
+            if (days < 300 || days > 400) continue;
+          }
+          const year = Number(point.end.slice(0, 4));
+          if (!year) continue;
+          // THE PREFERRED TAG'S ANSWER FOR THAT YEAR, which is the same order
+          // of preference the figures themselves are read in — so the currency
+          // belongs to the figure that will be shown.
+          const held = perYear[year];
+          if (held && held.tag !== tag) continue;
+          // AND WITHIN ONE TAG AND ONE YEAR, THE MOST RECENTLY FILED POINT.
+          // A main total can itself carry a point in a second currency, and
+          // collecting every unit a main-total tag mentions would be the same
+          // mistake one level down: one stray fact against revenue would
+          // refuse the company exactly as one against a bond used to. The
+          // currency is the currency of the FIGURE THAT WILL BE SHOWN, so it
+          // is settled per year, the way the figure is.
+          if (held && String(point.filed || '') < String(held.filed || '')) continue;
+          perYear[year] = { unit: unitKey, tag, filed: point.filed || null };
+        }
+      }
+    }
+    byField[field] = perYear;
+    for (const at of Object.values(perYear)) found.add(at.unit);
+  }
+
+  const currencies = [...found].sort();
+  const disagreements = [];
+  if (currencies.length > 1) {
+    for (const field of MAIN_TOTAL_FIELDS) {
+      for (const [year, at] of Object.entries(byField[field] || {})) {
+        disagreements.push(`${field} FY${year} in ${at.unit}`);
+      }
+    }
+  }
+
+  return {
+    currency: currencies.length === 1 ? currencies[0] : null,
+    evidence: {
+      mainTotals: MAIN_TOTAL_FIELDS,
+      mainTotalCurrencies: currencies,
+      // Only where there is something to explain, because a list of every
+      // year's currency on every company is noise that hides the one case
+      // that matters.
+      ...(currencies.length === 1 ? {} : { mainTotalsDisagree: disagreements.sort() }),
+    },
+  };
 }
 
 /**
@@ -1473,6 +1575,12 @@ async function fetchFromSEC(ticker) {
   const revenueDefinition = financial ? financialRevenueTag(facts) : null;
   const revenueTags = revenueDefinition ? [revenueDefinition.tag] : US_TAGS.revenue;
   const tagsFor = (field) => (field === 'revenue' ? revenueTags : US_TAGS[field]);
+
+  // THE REPORTING CURRENCY FIRST, FROM THE MAIN STATEMENT TOTALS, because
+  // every other monetary figure is then read in that currency and in no other.
+  const reportingRead = reportingCurrencyOf(facts, tagsFor);
+  const reportingCurrency = reportingRead.currency;
+
   for (const field of Object.keys(US_TAGS)) {
     const isCount = SEC_COUNT_FIELDS.has(field);
     annualProv[field] = {};
@@ -1480,8 +1588,23 @@ async function fetchFromSEC(ticker) {
       facts,
       tagsFor(field),
       isCount ? null : monetaryUnits,
-      annualProv[field]
+      annualProv[field],
+      isCount ? null : reportingCurrency
     );
+  }
+  // WHAT THE FILING HOLDS IN SOME OTHER CURRENCY, so the evidence can say so.
+  // Read separately and never used as a figure: a euro bond in a dollar
+  // filer's statements is a fact about the bond, not about the statements.
+  const otherCurrencies = new Set();
+  if (reportingCurrency) {
+    for (const field of Object.keys(US_TAGS)) {
+      if (SEC_COUNT_FIELDS.has(field)) continue;
+      for (const tag of tagsFor(field) || []) {
+        for (const unitKey of Object.keys(facts['us-gaap']?.[tag]?.units || {})) {
+          if (/^[A-Z]{3}$/.test(unitKey) && unitKey !== reportingCurrency) otherCurrencies.add(unitKey);
+        }
+      }
+    }
   }
   // `KI-31` reads this, and it used to be collected by a second pass of its
   // own. One source for it, so the date beside a share count is the date on
@@ -1493,14 +1616,11 @@ async function fetchFromSEC(ticker) {
       countFiledAt[field][year] = prov?.filed ?? null;
     }
   }
-  // The currency every monetary figure was filed in, from the XBRL units. A
-  // single ISO code is the reporting currency; anything else (no units, mixed
-  // currencies) leaves it unestablished, and the model refuses a valuation.
-  const filedCurrencies = [...monetaryUnits].filter((u) => /^[A-Z]{3}$/.test(u));
-  const reportingCurrency =
-    filedCurrencies.length === 1 && filedCurrencies.length === monetaryUnits.size
-      ? filedCurrencies[0]
-      : null;
+  // Every unit a figure was actually TAKEN in, which after the change above
+  // is the reporting currency and nothing else. Kept as a check on that: if a
+  // figure were ever read in a second currency this set would hold two, and
+  // `npm run verify` fails on it.
+  const takenCurrencies = [...monetaryUnits].filter((u) => /^[A-Z]{3}$/.test(u)).sort();
 
   // Which fiscal years do we actually have? Use revenue as the anchor, since a
   // company with no revenue figure is unusable anyway.
@@ -1598,8 +1718,18 @@ async function fetchFromSEC(ticker) {
     currencySymbol: currencySymbolFor(reportingCurrency || 'USD'),
     currencyEvidence: {
       reportingCurrency,
-      reportingCurrencySource: 'the units the SEC XBRL facts are filed in',
-      statementCurrencies: [...monetaryUnits].sort(),
+      reportingCurrencySource:
+        'the currency the main statement totals are filed in — revenue, total assets and net income',
+      // Every unit a figure was taken in. One, by construction, once the
+      // reporting currency is established.
+      statementCurrencies: takenCurrencies,
+      // WHICH LINES SETTLED IT, and where they disagree, which is the only
+      // case the currency is left unestablished in.
+      ...reportingRead.evidence,
+      // What the filing holds in some other currency and this payload does
+      // not use: a borrowing, a subsidiary's balances. Named so a reader can
+      // see the figures were not mixed rather than taking it on trust.
+      ...(otherCurrencies.size ? { otherCurrenciesInFiling: [...otherCurrencies].sort() } : {}),
     },
     // A 10-K filer's statements count the registered shares that trade under
     // its own ticker, so the share count and the price are for the same security.
@@ -3055,7 +3185,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 11;
+const FETCHER_VERSION = 12;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

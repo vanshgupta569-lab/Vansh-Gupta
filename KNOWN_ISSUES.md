@@ -29,8 +29,23 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-37`. **Next free: `KI-38`.** Retired, meaning
-  fixed and never to be reused: `KI-37` (the evidence sheet printed a
+- Taken so far: `KI-1` to `KI-38`. **Next free: `KI-39`.** Retired, meaning
+  fixed and never to be reused: `KI-38` (the unit a figure was read in was
+  whichever currency came FIRST in the XBRL JSON. `extractUSFact` took
+  `Object.keys(entry.units)[0]` and read every point from it, so a tag
+  carrying both USD and EUR points could have its figure read in euros and
+  divided into millions as though it were the reporting currency. **Latent on
+  the payload set**: 610 annual figures across Enbridge, PepsiCo and Welltower
+  — the only three filers with more than one currency in their facts — were
+  compared before and after, and not one moved, because for every tag whose
+  figure is used the reporting currency happened to come first. It is recorded
+  because the ordering of keys in a JSON object is not a property anything
+  should depend on, and a filing that listed them the other way round would
+  have put a euro figure in a dollar column with nothing to show it. Fixed
+  2026-11-03: the reporting currency is settled first, from the main statement
+  totals, and every monetary figure is then read in THAT unit and in no other,
+  so the first key no longer decides anything), `KI-37` (the evidence sheet
+  printed a
   provenance the payload did not hold. The concept line named the LIST of
   candidate tags the data layer reads with the sentence "which one this company
   used is not recorded in the data we hold"; the form line read "Annual report
