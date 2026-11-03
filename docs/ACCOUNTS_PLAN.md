@@ -1,7 +1,7 @@
 # Accounts and a server database — the plan (build step 7)
 
-**Status: a plan, written 3 November 2026. Nothing here is built, provisioned
-or paid for.** Every decision in §9 is Nihar's. No account with any provider
+**Status: a plan, written 3 November 2026; decisions 1–5 approved by Nihar on
+4 November 2026 (§9). Nothing here is built, provisioned or paid for. No account with any provider
 has been created, and no code in this repository talks to a server store.
 
 **How the sources were read.** This session's network policy refused direct
@@ -69,7 +69,7 @@ the engine's answer"), applied to a database.
 | `screens` | a saved screener screen | `id`, `user_id`, `name`, `search text`, `created_at` | The query string *is* the screen, as it is today. |
 | `watchlists`, `watchlist_items` | a named list; a ticker on it | `id`, `user_id`, `name`; `watchlist_id`, `ticker`, `added_at` | Plain. |
 | `notes` | a reader's note on a company | `id`, `user_id`, `ticker`, `body`, `model_version_id` (optional), `created_at`, `updated_at` | The store behind the "Your notes" tab. Linking a note to a version lets "why I chose 9%" sit beside the model that chose it. |
-| `alert_settings` | one thing a reader wants to hear about | `id`, `user_id`, `kind` (filing, result, ratio, thesis break), `ticker` or `theme`, `condition jsonb`, `channel` (`email`; `whatsapp` later), `enabled` | **Settings only.** Sending needs the scheduler that the data layer also needs (`docs/DATA_LAYER_PLAN.md` §6.2). Until that exists, the screen says the alerts are "saved, not sent yet" (standing decision 7). |
+| `alert_settings` | one thing a reader wants to hear about | `id`, `user_id`, `kind` (filing, result, ratio, thesis break), `ticker` or `theme`, `condition jsonb`, `channel` (`email`; `whatsapp` later), `enabled` | **Settings only.** Sending needs the scheduler that the data layer also needs (`docs/DATA_LAYER_PLAN.md` §6.2). Until that exists, the screen says the alerts are "saved, not sent yet" (standing decision 7 in `CLAUDE.md`). |
 | `consent_events` | one consent given or withdrawn | `user_id`, `notice_version`, `purpose`, `given_at`, `withdrawn_at` | DPDP needs proof of consent and its withdrawal (§5). An append-only log. |
 
 **Later, and not built in step 7:**
@@ -128,10 +128,9 @@ Marginalia's own domain. Then passkeys as an optional second factor and faster
 sign-in, then Google.** No passwords at any point, so there is no password store
 to protect and no reset flow to build.
 
-**Not decided, and it is a design question.** `docs/NAV_SEARCH_SPEC.md` §2.1
-lists everything the header may carry and ends "Nothing else", so it has no
-sign-in or account item. Where "Sign in" and the account menu go needs a
-decision before job A3 (§9, decision 6).
+**Decided 4 November 2026 (§9, decision 5):** "Sign in" is a small text link to
+the right of the search box in the header. This is an approved exception to
+`docs/NAV_SEARCH_SPEC.md` §2.1, whose item list otherwise ends "Nothing else".
 
 ---
 
@@ -239,7 +238,7 @@ the same figure.**
    with the same `id` and a different fingerprint (the same work, edited on two
    devices). Both are kept, and the browser's copy is named "… (from this
    browser, 3 Nov)". Choosing between two sets of judgements is the reader's
-   call (standing decision 2).
+   call (standing decision 2 in `CLAUDE.md`).
 7. **A second browser does the same, later.** Its records merge in under the
    same rules.
 8. **Signed out, the site still works exactly as today**, saving to the browser.
@@ -321,7 +320,7 @@ processors of what a visitor sends.
 - **Children.** Anyone under 18 needs verifiable consent from a parent (Act
   s.9). Students are an intended audience. **Recommendation: accounts for 18 and
   over only at first**, with a plain "I am 18 or older" confirmation recorded in
-  `profiles`. Build the parental flow only if under-18 demand is real (decision 5).
+  `profiles`. **Decided 4 November 2026: over-18s only at first** (§9, decision 4).
 - **Cross-border.** The Act allows transfers abroad except to countries the
   government restricts (s.16). No such list has been confirmed. Hosting in
   Mumbai avoids the question for Indian users. Supabase's own support staff and
@@ -350,8 +349,8 @@ processors of what a visitor sends.
   fit. **Not confirmed. Ask the same qualified person who answers the SEBI
   question** (`ROADMAP.md` §9).
 - **A second region for EU users is not recommended now.** One region keeps
-  row-level security, backups and deletion in one place. Revisit if EU demand
-  is real (decision 2).
+  row-level security, backups and deletion in one place. Decided 4 November 2026:
+  Mumbai only (§9, decision 1).
 
 ### 5.5 What is never collected
 
@@ -466,10 +465,10 @@ no real project: they run against a local Supabase.
 
 | Job | What | Its own check | Proved by breaking |
 |---|---|---|---|
-| **A0** | **Decisions and accounts (Nihar).** Open every "not confirmed" price page in a browser and correct §3. Create the Supabase project (Mumbai) and the Resend account and domain. Read Supabase's data processing agreement for sub-processors and SCCs. Take decisions 1–7. | — (no code) | — |
+| **A0** | **Decisions and accounts (Nihar).** Open every "not confirmed" price page in a browser and correct §3. Create the Supabase project (Mumbai) and the Resend account and domain. Read Supabase's data processing agreement for sub-processors and SCCs. Decisions 1–5 taken 4 Nov 2026 (§9); decision 6 still open. | — (no code) | — |
 | **A1** | **Schema as migrations** in `supabase/migrations/`, applied to a local database by the CLI in CI. **Measure** real `SavedModel` record sizes on the payload set and set the size limits from them. | Migrations apply cleanly from empty. Every table has RLS enabled (discovered from `pg_class`). | Add a table without RLS: the check names it. |
 | **A2** | **The two-user access check**, `verify/accounts.mts` (§6.1). | A and B on every table, every operation, plus the anonymous key | Disable RLS on one table, drop a policy, and widen a policy to `true`: each reported by name |
-| **A3** | **Email sign-in** (magic link plus code), the account entry in the header (per decision 6), and the session. CSP `connect-src` updated. | Signed out, every existing check passes unchanged. In a browser, sign in on local Supabase with a test mailbox (the CLI's local mail catcher), and sign out. | Break the redirect URL and watch the sign-in check fail |
+| **A3** | **Email sign-in** (magic link plus code), the "Sign in" text link to the right of the search box (decision 5), and the session. CSP `connect-src` updated. | Signed out, every existing check passes unchanged. In a browser, sign in on local Supabase with a test mailbox (the CLI's local mail catcher), and sign out. | Break the redirect URL and watch the sign-in check fail |
 | **A4** | **`SavedModelStore` goes async**, `localStore` is wrapped, and `serverStore` is written. Signed in, saving goes to the server. | `verify/savedModel.mts` runs **against `serverStore`** on local Supabase: every judgement round-trips, value per share and adjusted EBITDA within 0, computed the way the screen computes them | Drop the heads on the server write: the value goes 0.86% out, as §22f measured for the local store |
 | **A5** | **Versions.** Saving an existing model makes a child version, and `data_basis` is recorded (first confirming what today's fingerprint identifies, §1.2). The bridge reads any two versions. | A chain of three versions reopens each at its own figure. Bridge parts sum exactly to the total ("parts = total"), recomputed rather than read from storage. | Make a save overwrite instead of append: the first version's figure is lost and reported |
 | **A6** | **First-sign-in move** (§4). | Seed a browser with version-1, -2 and -3 records and 3 screens. Sign in and copy: every record is on the server, each reopens at the same figure as from the browser, the local copies are still present, and a second run adds no duplicates. | Drop one record from the upload: reported as "6 of 7", never "done" |
@@ -492,19 +491,26 @@ today, so this plan is ahead of it. It is not changed in this commit.
 
 ## 9. Decisions for Nihar
 
-1. **Provider.** Supabase (recommended), Neon, or Firebase.
-2. **Region.** Mumbai only (recommended), or Mumbai plus an EU project later.
-3. **Sign-in order.** Email (magic link plus code) → passkeys → Google
-   (recommended). WhatsApp with alerts.
-4. **When to pay.** Supabase Pro, Resend Pro and Vercel Pro all as **Paid ·
-   last** (recommended). The free tier's weekly pause is accepted on the private
-   site.
-5. **Age.** 18 and over only at first (recommended), or build parental consent
-   now.
-6. **Where sign-in sits.** NAV_SEARCH_SPEC allows nothing beyond the search
-   trigger at the header's right. Add a sign-in / account item there (one
-   extra 36px control), or put it in the menu sheet.
-7. **The legal questions to put to a qualified person**, alongside the SEBI
+**Taken on 4 November 2026 (approved by Nihar):**
+
+1. **Provider and region: Supabase, Mumbai (`ap-south-1`).** One project in
+   Mumbai. No EU project for now.
+2. **Sign-in order:** an email link with a 6-digit code in the same email
+   first, then passkeys, then Google. WhatsApp OTP comes later, with WhatsApp
+   alerts.
+3. **When to pay:** free tiers while the site is private, and pay only at
+   public launch (**Paid · last**). This covers Supabase Pro, Resend Pro and
+   Vercel Pro. The free tier's weekly pause is accepted on the private site.
+4. **Age: over-18s only at first.** An "I am 18 or older" confirmation is
+   recorded in `profiles`. No parental-consent flow is built.
+5. **Where sign-in sits:** "Sign in" is a small text link to the right of the
+   search box in the header. **This is an approved exception to
+   `docs/NAV_SEARCH_SPEC.md` §2.1**, whose item list otherwise ends "Nothing
+   else". Job A3 builds it there.
+
+**Still open:**
+
+6. **The legal questions to put to a qualified person**, alongside the SEBI
    question: whether an EU representative is needed; whether Supabase's terms
    cover EU→India transfers; and the final wording of the notice.
 
