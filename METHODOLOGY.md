@@ -4056,10 +4056,48 @@ in; 23,951 vendor figures reading "Not recorded" on the concept line and 26,482
 on each of the other three, every one of them either a vendor figure or this
 site's own arithmetic.
 
-**What this made visible is worth more than what it fixed.** The quarterly path
-filters facts by period and not by form, so a later document that tags the same
-period supersedes the 10-Q: 126 figures across 34 companies come from a proxy
-statement or an 8-K. That is `KI-36`, open and measured.
+**What this made visible is worth more than what it fixed.** Once every figure
+named the document it came from, the forms could be counted, and the count found
+`KI-36`: 126 figures across 34 companies read from a proxy statement or an 8-K.
+Fixed the next day, in §23c.
+
+---
+
+## 23c. Which forms a figure may be read from
+
+`api/company.js`, payload version 13.
+
+**An annual figure comes from a 10-K and a quarterly figure from the 10-Q it was
+reported in — or the 10-K, for the last quarter of a year.** Those two forms and
+their amendments are where a statement is filed, so those are the only forms
+either path reads.
+
+The annual path has always worked this way. The quarterly path filtered facts by
+PERIOD and not by form at all, and its rule that the most recently filed point
+wins — which exists so a restatement supersedes what it restated — then let any
+later document that happened to tag the same period supersede the 10-Q. A proxy
+statement does tag financial facts, and a proxy filed in April 2026 is more
+recent than every filing it reports on (`KI-36`, fixed 2026-11-04).
+
+**An amendment counts**, because a 10-K/A is a statement and a restatement filed
+in one has to be readable. **A fact whose form the SEC leaves blank does not**: a
+figure that cannot name the form it was filed on cannot be cited to one.
+
+**Measured on 2026-11-04**, over the whole set: 37,239 quarterly figures, every
+one of them citing a document, and the documents are 31,206 10-Qs, 6,015 10-Ks
+and 18 10-Q/As. The 126 figures that had been reading a proxy statement or an
+8-K all moved to the 10-K or 10-Q that reports them, and **not one figure was
+lost**: a fourth quarter is the year less the nine months, and both of those are
+in the statements.
+
+**On fifteen of them the figure moved as well as the citation**, and that is the
+part worth keeping. Every one is a fourth-quarter net income, and the cause is
+the same in each: the superseding document's figure for the YEAR was not the
+10-K's, and because the quarter is a subtraction the whole of the difference
+landed in it. JPMorgan's fourth quarter of 2023 read 9,355 against the 10-K's
+9,307 — the proxy's year was 49,600 where the 10-K files 49,552. The largest
+move in the fifteen is 0.51%, the smallest 0.001%, and no annual figure and no
+valuation was ever affected, because the annual path never read those documents.
 
 ---
 

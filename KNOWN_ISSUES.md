@@ -30,7 +30,24 @@ mistakes and would never be fixed:
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
 - Taken so far: `KI-1` to `KI-38`. **Next free: `KI-39`.** Retired, meaning
-  fixed and never to be reused: `KI-38` (the unit a figure was read in was
+  fixed and never to be reused: `KI-36` (a quarterly figure read from a proxy
+  statement or an 8-K. The annual path has taken 10-K facts and nothing else
+  since the beginning; the quarterly path filtered by PERIOD and not by form
+  at all, and its rule that the most recently filed point wins — which is
+  there so a restatement supersedes what it restated — then let any later
+  document that happened to tag the same period supersede the 10-Q the figure
+  was reported in. A proxy filed in April 2026 is more recent than every
+  filing it reports on. **126 figures across 34 companies**, 82 from a
+  `DEF 14A`, 41 from an `8-K` and 3 from a `DEF 14C`, 85 of them net income.
+  Fixed 2026-11-04 by payload version 13: a quarterly fact is read only from
+  a form a statement is filed on — `10-K`, `10-Q` and their amendments. All
+  126 now cite the 10-K or the 10-Q that reports them and none was lost. **15
+  of them changed value as well as document**, every one a fourth-quarter net
+  income, because a fourth quarter is the year less the nine months and the
+  superseding document's figure for the YEAR was not the 10-K's: JPMorgan's
+  2023 came out at 9,355 against the 10-K's 9,307, the whole 48 of the
+  difference landing in that one quarter. So it was not only a citation after
+  all, on those fifteen), `KI-38` (the unit a figure was read in was
   whichever currency came FIRST in the XBRL JSON. `extractUSFact` took
   `Object.keys(entry.units)[0]` and read every point from it, so a tag
   carrying both USD and EUR points could have its figure read in euros and
@@ -207,58 +224,15 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**One is open, as of 2026-11-03**, and it moves no valuation: it is a citation
-rather than a figure. `KI-31` to `KI-35` and `KI-37` were all fixed within three
-days of each other, and the ID ledger above says what each retired number was.
-
-### `KI-36` A quarterly figure read from a proxy statement or an 8-K
-
-**Where:** `collectPoints` and `quarterValue` in `api/company.js`.
-
-**What is wrong.** The annual path takes only facts tagged on a form beginning
-`10-K`. The quarterly path filters by PERIOD and not by form at all, and its
-rule that "within one key the most recently filed point wins" then lets any
-later document which happens to tag the same period supersede the 10-Q or the
-10-K. A proxy statement does tag financial facts, and a proxy filed in April
-2026 is more recent than every filing it reports on.
-
-**It was invisible until the figures started recording their own documents.**
-`KI-37`'s fix is what found it: once every figure named the accession number it
-came from, the forms could be counted.
-
-**Measured on 2026-11-03: 126 figures across 34 companies** come from a
-document that is not a primary statement — **82 from a `DEF 14A`, 41 from an
-`8-K`, 3 from a `DEF 14C`** — which the Financials tab shows in 142 cells,
-because a quarter's figure also reaches the trailing-twelve-month column. The
-companies are AMGN, AMZN, APH, BLK, CAT, CRM, CSCO, CVX, DELL, GOOGL, HD, JPM,
-KLAC, KO, LIN, LRCX, MCD, MELI, META, MRK, MRVL, MSFT, NFLX, NVDA, NXPI, ORCL,
-PANW, PEP, PLTR, SNDK, STX, TMO, TMUS and WMT. **85 of the 126 are net
-income.** The worst example is Amgen's quarter to 31 December 2023: net income
-of 767, read from `DEF 14A` 0001193125-26-145588, filed 2026-04-07.
-
-**How much it moves: no valuation at all.** The engine reads the annual
-statements, and those are already restricted to 10-K facts. The figures
-themselves are probably right, too — net income is one of the fields a quarter
-is reconciled against its own year, and a proxy figure that disagreed with the
-10-K by more than a tenth of a per cent would already have been dropped, so
-these survived that test. **What is wrong is the citation.** A reader who opens
-the evidence behind a quarterly net income is sent to a proxy statement to find
-it. And the twenty-odd BALANCE SHEET figures in the count — `totalAssets`,
-`equity`, `currentAssets`, `payables` and the rest — are reconciled against
-nothing, so for those the figure rests on a document nobody chose.
-
-**What the fix is.** Restrict the quarterly facts to the forms a statement is
-filed on — `10-K`, `10-Q` and their amendments — as the annual path already
-does, and measure what it costs: some quarters may be carried only by an `8-K`
-earnings release, and dropping those is the right answer under standing
-decision 3 but it is a column a reader loses. Not done in this job because it
-changes which quarters exist for 34 companies and wants its own measurement.
+**None is open, as of 2026-11-04.** `KI-31` to `KI-38` were all fixed within
+four days of each other, and the ID ledger above says what each retired number
+was.
 
 **What the list being short does not mean.** It is not a claim that the model is
 right about everything, only that **nothing else is known to be wrong and left
 standing**. What the sources do not publish is in `DATA_CONSTRAINTS.md`; what
 the engine does on purpose is in `METHODOLOGY.md`. The next defect found goes
-here as `KI-38`.
+here as `KI-39`.
 
 ## A defect found and fixed on 29 October 2026, with no number
 

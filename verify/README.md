@@ -343,6 +343,48 @@ every filing address in a payload (**15**); and the line's first candidate
 printed instead of the figure's own, which is what recording the preference
 list's head would look like (**24,180**, and 1 in the browser).
 
+### A quarterly figure comes from the statement it was reported in
+
+Three arms, because the obvious one cannot fail on its own. Once the data layer
+stops reading a proxy statement there is no proxy-sourced figure left on disk,
+so a check that only looked at the payloads would pass whether the filter were
+there or not — the trap `CLAUDE.md` lists five of.
+
+**The filter itself** is handed the shape of facts a proxy produces: a quarter in
+its own 10-Q and tagged again in a proxy filed two years later with a different
+figure; a half year only in the proxy; nine months only in an 8-K; a year filed
+in a 10-K and restated in a 10-K/A; and a fact whose form the SEC left blank. The
+period, the figure and the document each one has to come from are written out by
+hand rather than read back from the function under test, and anything else the
+filter lets through is a fault rather than a tolerance.
+
+**The invariant over the set**: every quarterly figure of every payload is cited
+to a 10-K, a 10-Q or an amendment, that document is in the payload's own
+dictionary, and it was filed on or after the period it reports — a statement
+cannot be filed before the period it covers. 37,239 figures, 31,206 from 10-Qs,
+6,015 from 10-Ks and 18 from 10-Q/As.
+
+**What the rule actually changed, from the capture archive.** Every fetch is
+kept, so the payloads built before this fix are still on disk and the comparison
+is against real data rather than a fixture: 126 figures across 34 companies now
+cite the statement that reports them instead of a `DEF 14A`, an `8-K` or a
+`DEF 14C`, 15 of them changing value with it, and none lost. If the archive holds
+captures from before the fix and NOT ONE figure moved, the rule changed nothing
+and the arm above is vacuous, which is itself the fault.
+
+Proved by breaking, five ways: the form filter taken out, which is the state
+before this job (**8 faults** — the proxy's figure in place of the 10-Q's, the
+proxy-only half year, the 8-K-only nine months and the fact with no form);
+the filter narrowed to reject an amendment (**2** — the 10-K/A's restatement
+lost); the 126 citations put back on disk exactly as the capture before the fix
+holds them (**127** — 126 figures cited to a document that is not a statement,
+and the archive arm's own guard reporting that nothing moved); one figure cited
+to a filing the payload does not hold (**1**); and one document dated before the
+period it is given as the source of (**27**, that one filing being behind 27
+figures). The two payload breaks copy the file to the scratchpad first and
+restore it afterwards, and nothing is refetched: a capture built from a payload
+broken on purpose would be kept for ever by the rule that keeps every fetch.
+
 ### The reporting currency is the main statements' own
 
 Until 2026-11-03 it was read off every monetary tag the facts carried, so one

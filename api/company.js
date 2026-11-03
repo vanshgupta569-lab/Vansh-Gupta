@@ -1196,8 +1196,27 @@ const filingRef = (cik, point) =>
  * Within one key the most recently FILED point wins, so a restatement
  * supersedes what it restated; across tags the earlier tag in the list wins,
  * which is the same order of preference the annual path uses.
+ *
+ * AND ONLY FROM A FORM A STATEMENT IS FILED ON (`KI-36`). The annual path has
+ * always taken 10-K facts and nothing else; this path filtered by PERIOD and
+ * not by form at all, and the "most recently filed point wins" rule then let
+ * any later document that happened to tag the same period supersede the 10-Q
+ * it was reported in. A proxy statement does tag financial facts, and a proxy
+ * filed in April 2026 is more recent than every filing it reports on, so 126
+ * quarterly figures across 34 companies were being cited to a `DEF 14A` or an
+ * `8-K`. A figure's own quarter is reported in a 10-Q, and the fourth in the
+ * 10-K; those two forms and their amendments are where a statement is, so
+ * those are the only forms a figure may be taken from.
  */
-function collectPoints(facts, tagList) {
+export const STATEMENT_FORM = /^10-[KQ]/;
+
+// Exported for `verify/scenarios.mts`, which feeds it the shape of facts a
+// proxy statement produces and checks that the 10-Q wins and the proxy is not
+// read at all. The alternative is asserting the rule over the payloads on
+// disk, and after the fix there is no proxy-sourced figure left on disk to
+// find: a check that can only pass is the trap this repository keeps falling
+// into, so the filter is exercised on facts written for it.
+export function collectPoints(facts, tagList) {
   const flows = new Map();
   const stocks = new Map();
   for (const tag of tagList) {
@@ -1207,6 +1226,10 @@ function collectPoints(facts, tagList) {
     if (!unitKey) continue;
     for (const point of entry.units[unitKey] || []) {
       if (!point?.end) continue;
+      // An unrecorded form is not a statement either. The annual path has read
+      // it this way since the beginning: a fact that cannot name the form it
+      // was filed on cannot be cited to one.
+      if (!STATEMENT_FORM.test(String(point.form || ''))) continue;
       const map = point.start ? flows : stocks;
       const key = point.start ? `${point.start}|${point.end}` : point.end;
       const held = map.get(key);
@@ -3185,7 +3208,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 12;
+const FETCHER_VERSION = 13;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

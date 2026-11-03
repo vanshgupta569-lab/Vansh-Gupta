@@ -78,13 +78,21 @@
 //      READ IN was whichever came first in the JSON, so a figure could be
 //      read in the stray currency and divided into millions as though it
 //      were the reporting one
+//  13  a QUARTERLY figure is taken only from a form a statement is filed on —
+//      `10-K`, `10-Q` and their amendments. The quarterly path filtered facts
+//      by period and not by form at all, so a later document that happened to
+//      tag the same period superseded the 10-Q it was reported in: 126 figures
+//      across 34 companies were cited to a `DEF 14A`, an `8-K` or a `DEF 14C`
+//      (`KI-36`). Nothing in the shape changes; what changes is which document
+//      a quarterly figure comes from, and for a few periods whether the figure
+//      exists at all
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 12;
+export const PAYLOAD_VERSION = 13;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

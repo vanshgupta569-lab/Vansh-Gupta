@@ -5870,9 +5870,11 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   const oneForm = (f: string) => FORM.test(f) && !/ \/ | \/|\/ /.test(f);
   const ACCN = /^\d{10}-\d{2}-\d{6}$/;
   // WHICH FORMS THE FIGURES ACTUALLY COME FROM, counted rather than assumed.
-  // `collectPoints` filters the quarterly facts by period and not by form, so
-  // a quarter can be read from a proxy statement or an 8-K that tags the same
-  // fact; `KI-36` records that and this is the measurement behind it.
+  // This is the count that found `KI-36`: the quarterly path filtered facts by
+  // period and not by form, so a quarter could be read from a proxy statement
+  // or an 8-K that tagged the same fact. Fixed on 2026-11-04, and the count is
+  // kept because a form that is not a statement is now a fault and a fault
+  // worth naming is worth counting.
   const interim: Record<string, number> = {};
 
   let secFigures = 0;
@@ -6073,10 +6075,19 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
                     'never a list of the forms this site reads'
                 );
               } else if (!/^10-[KQ]/.test(form)) {
-                // NOT A FAULT, A MEASUREMENT (`KI-36`). The form is recorded
-                // correctly; what is open is whether a figure should be read
-                // from a document that is not a primary statement at all.
-                interim[`${frequency} ${form}`] = (interim[`${frequency} ${form}`] || 0) + 1;
+                // `KI-36`, FIXED ON 2026-11-04 AND HELD HERE TOO. This was a
+                // measurement while the quarterly path filtered facts by
+                // period and not by form: 126 figures cited to a `DEF 14A`,
+                // an `8-K` or a `DEF 14C`. The data layer no longer reads
+                // those, and the block below exercises the filter itself; this
+                // is the same rule asserted where the READER meets it, on the
+                // evidence sheet, which is the only place the citation is
+                // actually shown.
+                faults.push(
+                  `${where}: cited to a "${form}" -- a figure is read from the statement it was ` +
+                    'reported in, which is a 10-K, a 10-Q or an amendment of one, and never from a ' +
+                    'proxy statement or an earnings release'
+                );
               }
               if (!/^\d{4}-\d{2}-\d{2}$/.test(filed)) {
                 faults.push(`${where}: a filing date of "${filed}" beside filing ${accn}`);
@@ -6200,12 +6211,8 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     console.log(
       `  ${
         Object.values(interim).reduce((t, n) => t + n, 0)
-      } figures come from a document that is not a 10-K or a 10-Q (${
-        Object.entries(interim)
-          .sort((a, b) => b[1] - a[1])
-          .map(([f, n]) => `${f} x${n}`)
-          .join(', ') || 'none'
-      }) -- recorded correctly, and open as \`KI-36\``
+      } figures come from a document that is not a 10-K or a 10-Q, which is now a fault rather ` +
+        'than a measurement (`KI-36`)'
     );
     console.log(
       `  ${varied.length} of the ${multi.length} lines with more than one candidate concept show more ` +
@@ -6214,6 +6221,286 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
           .map((k) => `${k} (${[...conceptsSeen[k]].join(', ')})`)
           .join('; ')}`
     );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// A QUARTERLY FIGURE COMES FROM THE STATEMENT IT WAS REPORTED IN (`KI-36`)
+// ---------------------------------------------------------------------------
+//
+// The annual path has taken 10-K facts and nothing else since the beginning.
+// The quarterly path filtered facts by PERIOD and not by form at all, and its
+// rule that "within one key the most recently filed point wins" — which is
+// there so a restatement supersedes what it restated — then let ANY later
+// document that happened to tag the same period supersede the 10-Q the figure
+// was reported in. A proxy statement does tag financial facts, and a proxy
+// filed in April 2026 is more recent than every filing it reports on.
+//
+// Measured on 2026-11-03, once `KI-37` had made every figure name its own
+// document: 126 quarterly figures across 34 companies were cited to a
+// `DEF 14A` (82), an `8-K` (41) or a `DEF 14C` (3), 85 of them net income. No
+// valuation moved, because the engine reads the annual statements. What was
+// wrong was the CITATION: a reader who opened the evidence behind a quarterly
+// net income was sent to a proxy statement to find it, and the twenty-odd
+// balance sheet figures in that count are reconciled against nothing, so those
+// rested on a document nobody chose.
+//
+// Three arms, because the obvious one cannot fail on its own.
+//
+//   1. THE FILTER ITSELF, on the shape of facts a proxy produces. Once the
+//      data layer stops reading those documents there is no proxy-sourced
+//      figure left on disk, so a check that only looked at the payloads would
+//      pass whether the filter were there or not — the trap this repository has
+//      fallen into five times. `collectPoints` is handed facts written for it,
+//      with the expected period, value and document written out by hand rather
+//      than read back from the function under test.
+//
+//   2. THE INVARIANT OVER THE SET: every quarterly figure of every payload is
+//      cited to a 10-K, a 10-Q or an amendment of one, that document is in the
+//      payload's own dictionary, and it was filed on or after the period it
+//      reports — a statement cannot be filed before the period it covers.
+//
+//   3. WHAT THE RULE ACTUALLY CHANGED, from the capture archive. Every fetch is
+//      kept, so the payloads built before this fix are still on disk and the
+//      comparison is against real data rather than a fixture: the same company,
+//      the same period, the same field, cited to a proxy then and to a
+//      statement now. If the archive holds captures from before the fix and NOT
+//      ONE figure moved, the rule changed nothing and arm 2 is vacuous, which
+//      is itself the fault.
+{
+  console.log('\n=== a quarterly figure comes from the statement it was reported in ===');
+  const { collectPoints } = await import(`file:///${REPO}/api/company.js`);
+  const faults: string[] = [];
+
+  // ---- 1. THE FILTER, ON FACTS A PROXY STATEMENT WOULD PRODUCE -----------
+  const proxyShapedFacts = {
+    'us-gaap': {
+      NetIncomeLoss: {
+        units: {
+          USD: [
+            // Q1 as its own quarter, in its own 10-Q — and tagged AGAIN in a
+            // proxy filed two years later, which is how the proxy used to win.
+            { start: '2024-01-01', end: '2024-03-31', val: 100, form: '10-Q', accn: 'ACCN-10Q', filed: '2024-04-20' },
+            { start: '2024-01-01', end: '2024-03-31', val: 111, form: 'DEF 14A', accn: 'ACCN-PROXY', filed: '2026-04-07' },
+            // A half year that exists ONLY in the proxy.
+            { start: '2024-01-01', end: '2024-06-30', val: 250, form: 'DEF 14A', accn: 'ACCN-PROXY', filed: '2026-04-07' },
+            // Nine months that exist only in an earnings release.
+            { start: '2024-01-01', end: '2024-09-30', val: 400, form: '8-K', accn: 'ACCN-8K', filed: '2024-10-28' },
+            // The year, filed in a 10-K and restated in an amendment of it. An
+            // amendment IS a statement and has to win on the filed date, so
+            // this holds the restatement rule the form filter runs beside.
+            { start: '2024-01-01', end: '2024-12-31', val: 590, form: '10-K', accn: 'ACCN-10K', filed: '2025-02-14' },
+            { start: '2024-01-01', end: '2024-12-31', val: 600, form: '10-K/A', accn: 'ACCN-10KA', filed: '2025-06-01' },
+            // And a fact whose form the SEC left blank, which cannot be cited
+            // to one.
+            { start: '2024-10-01', end: '2024-12-31', val: 199, accn: 'ACCN-NONE', filed: '2025-01-05' },
+          ],
+        },
+      },
+      Assets: {
+        units: {
+          USD: [
+            // A balance sheet moment in a 10-Q, restated in a proxy.
+            { end: '2024-03-31', val: 1000, form: '10-Q', accn: 'ACCN-10Q', filed: '2024-04-20' },
+            { end: '2024-03-31', val: 1001, form: 'DEF 14A', accn: 'ACCN-PROXY', filed: '2026-04-07' },
+            // And one that is only ever in the proxy.
+            { end: '2024-06-30', val: 1002, form: 'DEF 14A', accn: 'ACCN-PROXY', filed: '2026-04-07' },
+          ],
+        },
+      },
+    },
+  };
+
+  // WRITTEN OUT BY HAND: the period, the figure, and the document each one has
+  // to come from. Not read back from `collectPoints`, which is under test.
+  const wantFlows: [string, number, string][] = [
+    ['2024-01-01|2024-03-31', 100, 'ACCN-10Q'],
+    ['2024-01-01|2024-12-31', 600, 'ACCN-10KA'],
+  ];
+  const wantStocks: [string, number, string][] = [['2024-03-31', 1000, 'ACCN-10Q']];
+
+  const income = collectPoints(proxyShapedFacts, ['NetIncomeLoss']);
+  const assets = collectPoints(proxyShapedFacts, ['Assets']);
+
+  const heldAt = (label: string, map: Map<string, any>, want: [string, number, string][]) => {
+    for (const [key, val, accn] of want) {
+      const point = map.get(key);
+      if (!point) {
+        faults.push(`${label} ${key}: nothing at all, and a statement reports it`);
+        continue;
+      }
+      if (point.val !== val) {
+        faults.push(`${label} ${key}: ${point.val}, and the statement says ${val}`);
+      }
+      if (point.accn !== accn) {
+        faults.push(
+          `${label} ${key}: read from ${point.accn} (${point.form || 'no form'}), and the statement ` +
+            `that reports it is ${accn}`
+        );
+      }
+    }
+    for (const key of [...map.keys()].filter((k) => !want.some(([w]) => w === k))) {
+      faults.push(
+        `${label} ${key}: a period read from ${map.get(key).form || 'a fact with no form at all'}, ` +
+          'which is not a document a statement is filed on'
+      );
+    }
+  };
+  heldAt('a period ending', income.flows, wantFlows);
+  heldAt('a balance at', assets.stocks, wantStocks);
+  if (income.stocks.size || assets.flows.size) {
+    faults.push('a flow was collected as a balance, or a balance as a flow');
+  }
+  console.log(
+    `  the filter: of 7 income points and 3 balance points, ${income.flows.size} periods and ` +
+      `${assets.stocks.size} moments survive — the 10-Q over the proxy that restated it, the 10-K/A ` +
+      'over the 10-K it amends, and nothing for the periods only a proxy or an 8-K tagged'
+  );
+
+  // ---- 2. EVERY QUARTERLY FIGURE OF EVERY PAYLOAD -------------------------
+  const STATEMENT = /^10-[KQ]/;
+  let figures = 0;
+  let withDoc = 0;
+  const formTally: Record<string, number> = {};
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  const payloads: Record<string, any> = {};
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    payloads[file.replace('.json', '')] = payload;
+    if (!Array.isArray(payload.quarters)) continue;
+    const dictionary = payload.filings || {};
+    for (const quarter of payload.quarters) {
+      for (const [field, ev] of Object.entries(quarter.evidence || {}) as [string, any][]) {
+        figures++;
+        const where = `${payload.ticker} ${quarter.fiscalYear} ${quarter.fiscalPeriod} ${field}`;
+        if (!ev?.accn) continue;
+        withDoc++;
+        const doc = dictionary[ev.accn];
+        if (!doc) {
+          faults.push(`${where}: filing ${ev.accn}, which is not in the payload's own dictionary`);
+          continue;
+        }
+        formTally[doc.form] = (formTally[doc.form] || 0) + 1;
+        if (!STATEMENT.test(String(doc.form || ''))) {
+          faults.push(
+            `${where}: cited to ${ev.accn}, a "${doc.form}" — a quarterly figure comes from the 10-Q ` +
+              'it was reported in, or the 10-K for the last quarter of a year, and from nothing else'
+          );
+        }
+        // AND A STATEMENT CANNOT BE FILED BEFORE THE PERIOD IT REPORTS. The
+        // same fault from the other side: a document dated before the quarter
+        // it is cited for is not reporting that quarter.
+        if (doc.filed && doc.filed < quarter.periodEnd) {
+          faults.push(
+            `${where}: cited to ${ev.accn}, filed ${doc.filed}, which is before the period ending ` +
+              `${quarter.periodEnd} it is given as the source of`
+          );
+        }
+      }
+    }
+  }
+  console.log(
+    `  ${figures} quarterly figures across ${files.length} payloads, ${withDoc} of them citing a ` +
+      `document: ${
+        Object.entries(formTally)
+          .sort((a, b) => b[1] - a[1])
+          .map(([f, n]) => `${f} x${n}`)
+          .join(', ') || 'none'
+      }`
+  );
+
+  // ---- 3. WHAT IT CHANGED, AGAINST THE ARCHIVE ---------------------------
+  //
+  // Only (company, period, field) triples present in both are compared, and
+  // only where the OLD citation was not a statement, so a figure that moved
+  // because the data is two days newer is not credited to this rule.
+  let movedSource = 0;
+  let movedValue = 0;
+  let lost = 0;
+  const examples: string[] = [];
+  const archived: string[] = [];
+  for (const [ticker, now] of Object.entries(payloads)) {
+    const dir = path.join(PAYLOADS, 'versions', ticker);
+    if (!fs.existsSync(dir)) continue;
+    let old: any = null;
+    for (const capture of fs.readdirSync(dir).sort().reverse()) {
+      let held: any;
+      try {
+        held = JSON.parse(fs.readFileSync(path.join(dir, capture), 'utf8'));
+      } catch {
+        continue;
+      }
+      if (held?.error || !Array.isArray(held?.quarters) || !held?.filings) continue;
+      if ((held.fetcherVersion || 0) < 13) {
+        old = held;
+        break;
+      }
+    }
+    if (!old) continue;
+    archived.push(ticker);
+    const key = (q: any) => `${q.fiscalYear}|${q.fiscalPeriod}|${q.months}`;
+    const nowBy = new Map<string, any>((now.quarters || []).map((q: any) => [key(q), q]));
+    for (const wasQuarter of old.quarters) {
+      for (const [field, ev] of Object.entries(wasQuarter.evidence || {}) as [string, any][]) {
+        const wasDoc = ev?.accn ? old.filings?.[ev.accn] : null;
+        if (!wasDoc || STATEMENT.test(String(wasDoc.form || ''))) continue;
+        const isQuarter = nowBy.get(key(wasQuarter));
+        const isEv = isQuarter?.evidence?.[field];
+        const isDoc = isEv?.accn ? now.filings?.[isEv.accn] : null;
+        if (!isEv) {
+          lost++;
+          examples.push(
+            `${ticker} ${key(wasQuarter)} ${field}: ${wasQuarter.values[field]} from a ${wasDoc.form}, ` +
+              'and no statement reports it — the figure is gone rather than wrong'
+          );
+          continue;
+        }
+        // AND IT MOVED TO A STATEMENT. A figure still cited to a proxy has not
+        // moved anywhere; arm 2 reports that as the fault it is, and counting
+        // it here as a move would let this arm's own guard pass on it.
+        if (!isDoc || !STATEMENT.test(String(isDoc.form || ''))) continue;
+        movedSource++;
+        if (isQuarter.values[field] !== wasQuarter.values[field]) {
+          movedValue++;
+          examples.push(
+            `${ticker} ${key(wasQuarter)} ${field}: ${wasQuarter.values[field]} in a ${wasDoc.form} ` +
+              `and ${isQuarter.values[field]} in the ${isDoc?.form} that reports it`
+          );
+        } else if (examples.length < 6) {
+          examples.push(
+            `${ticker} ${key(wasQuarter)} ${field}: ${wasDoc.form} ${ev.accn} -> ${isDoc?.form} ` +
+              `${isEv.accn}, and the figure is ${wasQuarter.values[field]} either way`
+          );
+        }
+      }
+    }
+  }
+  if (archived.length && !movedSource && !lost) {
+    faults.push(
+      `${archived.length} payloads have a capture from before this fix and not one figure changed the ` +
+        'document it is cited to, so the arm above is asserting nothing'
+    );
+  }
+  console.log(
+    archived.length
+      ? `  against ${archived.length} captures from before the fix: ${movedSource} figures now cite ` +
+          `the statement instead of a proxy or an earnings release, ${movedValue} of them changing ` +
+          `value, and ${lost} figures that no statement reports at all`
+      : '  no captures from before the fix are on disk, so what it changed cannot be measured here'
+  );
+  for (const line of examples.slice(0, 6)) console.log(`    ${line}`);
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in where a quarterly figure comes from:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
   }
 }
 
