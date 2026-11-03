@@ -29,8 +29,21 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-34`. **Next free: `KI-35`.** Retired, meaning
-  fixed and never to be reused: `KI-34` (the risk-free rate was fetched once
+- Taken so far: `KI-1` to `KI-35`. **Next free: `KI-36`.** Retired, meaning
+  fixed and never to be reused: `KI-35` (the trailing-twelve-month column added
+  up whatever the four quarters held on every row that was not a balance sheet
+  line, which is right for money and meaningless for a RATIO: four quarterly
+  operating margins added gave NVIDIA 260.0% where the two figures printed
+  directly above it in the same column — operating income 197,579 and revenue
+  302,969 — divide to 65.2%. There was no wrong denominator; there was no
+  denominator at all. 109 of the 142 companies with a margin showed one roughly
+  four times their own, the worst being SanDisk at 262.4% against 72.5%. It
+  moved no valuation — the engine reads the statements, not this view — and it
+  was the first figure on the Financials tab a reader would check with a
+  calculator. Fixed 2026-11-03: a derived row's trailing twelve months is its
+  formula applied to the trailing twelve months of its INPUTS, which leaves
+  gross profit, EBITDA and free cash flow exactly where they were, because a
+  difference of sums is the sum of the differences), `KI-34` (the risk-free rate was fetched once
   per COMPANY with no retry and, for five of the six currencies, nothing
   behind the publisher, so one HTTP request that did not answer took a
   company's whole valuation away — 6 of 115 dollar payloads and 3 of 6 rupee

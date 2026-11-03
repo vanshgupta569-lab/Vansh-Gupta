@@ -127,6 +127,15 @@ export interface Row {
   note?: string;
   /** For a derived row, the formula in general terms. */
   formula?: string;
+  /**
+   * FOR A DERIVED ROW, THE ROWS IT IS DERIVED FROM, by key.
+   *
+   * Named rather than left inside the closure so that `npm run verify` can
+   * recompute every margin from the figures printed in its own column without
+   * keeping a second copy of which figures those are. A check with its own
+   * list of inputs stops checking the row the day the row changes.
+   */
+  inputs?: string[];
 }
 
 export interface FinancialsView {
@@ -650,7 +659,13 @@ const cellFor = (def: RowDef, source: SourceRow): Cell => {
  * money. Everything else follows `ttmMethod`, and with annual-only periods that
  * is the full year, unchanged.
  */
-const ttmCell = (def: RowDef, annual: SourceRow[], all: SourceRow[], method: TtmMethod): Cell => {
+const ttmCell = (
+  def: RowDef,
+  annual: SourceRow[],
+  all: SourceRow[],
+  method: TtmMethod,
+  defs: RowDef[]
+): Cell => {
 
   // RULE 6 LIVES HERE, and it comes before every other branch. A balance
   // sheet line is a moment, so its trailing-twelve-month value is the LATEST
@@ -687,6 +702,65 @@ const ttmCell = (def: RowDef, annual: SourceRow[], all: SourceRow[], method: Ttm
 
   if (method.method === 'none') {
     return { state: 'notReported', value: null, reason: method.reason };
+  }
+
+  // A DERIVED ROW'S TRAILING TWELVE MONTHS IS ITS FORMULA APPLIED TO THE
+  // TRAILING TWELVE MONTHS OF ITS INPUTS, never the row's own four quarters
+  // added up.
+  //
+  // KI-35 was exactly that addition. Operating margin is a ratio, and four
+  // quarterly ratios summed gave NVIDIA 260.0% where the two figures printed
+  // directly above it — operating income 197,579 and revenue 302,969 — divide
+  // to 65.2%. There is no denominator in a sum of ratios at all, which is why
+  // the figure was four times too big rather than merely wrong.
+  //
+  // It is also the right rule for the rows that were already correct, not just
+  // a special case for the ratio: a difference of sums is the sum of the
+  // differences, so gross profit, EBITDA and free cash flow come out
+  // unchanged, and the row's own note — "recomputed from the two figures on
+  // this column" — becomes true of the TTM column too instead of only of the
+  // annual ones.
+  if (def.derive) {
+    const inputs = def.derive.inputs.map((field) => {
+      // The input's OWN row definition where the template has one, so a
+      // balance-sheet input keeps rule 6 (carry the latest balance) rather
+      // than being summed because the row that uses it is a flow.
+      const own = defs.find((d) => d.field === field) || defs.find((d) => d.key === field);
+      const asRow: RowDef =
+        own && own.field === field
+          ? own
+          : { key: field, label: field, statement: def.statement, field };
+      return { field, cell: ttmCell(asRow, annual, all, method, defs) };
+    });
+    const absent = inputs.filter((i) => !num(i.cell.value)).map((i) => i.field);
+    if (absent.length) {
+      return {
+        state: 'notReported',
+        value: null,
+        reason:
+          `${def.derive.formula}, and the trailing twelve months of ` +
+          `${absent.join(' and ')} ${absent.length > 1 ? 'are' : 'is'} not available, ` +
+          'so there is nothing honest to divide or add.',
+        formula: def.derive.formula,
+      };
+    }
+    const row: Record<string, number> = {};
+    for (const i of inputs) row[i.field] = i.cell.value as number;
+    const v = def.derive.of(row);
+    if (!num(v)) {
+      return {
+        state: 'notReported',
+        value: null,
+        reason: `${def.derive.formula} cannot be worked out from the trailing twelve months of its inputs.`,
+        formula: def.derive.formula,
+      };
+    }
+    return {
+      state: 'derived',
+      value: v,
+      formula: def.derive.formula,
+      derivedFrom: inputs.flatMap((i) => i.cell.derivedFrom || (i.cell.filing ? [i.cell.filing] : [])),
+    };
   }
 
   const by = new Map(all.map((r) => [`${r.end}|${r.months}`, r]));
@@ -954,7 +1028,7 @@ function buildView(
   const rows: Row[] = defs.map((def) => {
     const cells = shownPeriods.map((r) => cellFor(def, r));
     if (opts.withTtm && shownPeriods.length && ttmEnd) {
-      cells.push(ttmCell(def, annual, everything, method));
+      cells.push(ttmCell(def, annual, everything, method, defs));
     }
     return {
       key: def.key,
@@ -966,6 +1040,7 @@ function buildView(
       cells,
       note: def.note,
       formula: def.derive?.formula,
+      inputs: def.derive?.inputs,
     };
   });
 

@@ -235,6 +235,55 @@ hyphen, and one table given back its own copy of the rule (8,990 between them);
 and the figure cells’ right padding cut from 12px to 4px, which the browser
 reported as 8.0px off the column head on every column.
 
+### A margin is a division, in every column
+
+Until 2026-11-03 the trailing-twelve-month column added up whatever the four
+quarters held on every row that was not a balance sheet line. That is right for
+money and meaningless for a **ratio**: four quarterly operating margins added
+gave NVIDIA **260.0%** where the two figures printed directly above it in the
+same column — operating income 197,579 and revenue 302,969 — divide to
+**65.2%**. There was no wrong denominator; there was no denominator at all.
+
+So this asserts the identity a reader can check with a calculator, on **every
+column of every statement of every company**: 1,953 margin cells across 2,260
+columns of 142 companies, each equal to the two figures printed in its own
+column, divided here rather than taken from the view.
+
+Three arms, because any one of them alone would have held while the column was
+wrong. **The division, done in the check** — the printed numerator over the
+printed denominator; this is the arm the fault failed, because a sum of ratios
+matches nothing. **The bound**: no margin outside −100% to 100% on positive
+revenue, which would catch a denominator wrong in the inputs rather than in the
+division. **The trailing twelve months really is the four quarters** — 2,346
+money figures re-added from the **quarterly** columns, built from the quarter
+rows rather than from the method that built the TTM column, because arm 1 proves
+only that the margin and the two figures beside it agree, not that any of them
+is right. The opposite fault is reported too: a margin withheld where both its
+figures are printed is as wrong as a wrong number and quieter.
+
+**Two quarters breach the bound and are read at their own 10-Q rather than
+waived.** On the upside the bound is an arithmetic impossibility — operating
+income above revenue means income that is not in the denominator — and nothing
+in the set does it. On the downside it is not: an impairment or an acquired
+in-process research charge is an operating cost with no ceiling. Gilead's
+quarter to 30 Jun 2026 is an operating loss of 10,394 on revenue of 7,803,
+taken as the difference between the two halves it tags in 10-Q
+0000882095-26-000031; Sandisk's quarter to 28 Mar 2025 is 1,881 on 1,695, of
+which 1,839 is an operating charge the income template carries no row for
+(`DATA_CONSTRAINTS.md`). The list is named and dated, and the check fails
+**both ways** — an unlisted breach is a fault, and a listed one that has
+stopped breaching is a fault too, so it cannot outlive what it accounts for.
+
+Proved by breaking, five ways: the TTM column put back to adding whatever the
+row holds (**155 faults**, every one a trailing margin, both arms reporting);
+the four-quarter sum put 1% out, which leaves every ratio unchanged and so is
+invisible to arm 1 (**2,344**, all from arm 3); the margin multiplied by four,
+the shape the fault was reported in (**2,719**); an accounted-for breach
+dropped from the list (**2** — the breach itself, and the note left pointing at
+nothing); and a note added for a margin that does not breach (**1**). NVIDIA's
+own summed margin is also reconstructed at the end of the check and both arms
+are required to report it, so neither alone is carrying the check.
+
 ### The screener: the universe, the filters and what they set aside
 
 Ten rules of `docs/SCREENER_SPEC.md` are rules about data, so they are checked

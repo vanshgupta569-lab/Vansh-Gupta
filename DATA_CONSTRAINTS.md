@@ -337,6 +337,44 @@ so.
 The workbook's statement totals read "not reported" cells through `N()`, which
 its notes state.
 
+### An operating charge with no row in the income template
+
+**Source:** both. **Affects:** 530 of the 1,417 industrial columns where
+revenue, cost of sales, selling and administrative costs and operating income
+are all reported — **64 companies**. Worst: Gilead's quarter to 30 Jun 2026, a
+charge of **188% of that quarter's revenue**; then Enbridge FY21 at −122%,
+Gilead Q1 FY24 at 121%, British American Tobacco FY23 at 109% and Sandisk's
+quarter to 28 Mar 2025 at 108%.
+
+The income statement template carries revenue, cost of sales, research, selling
+and administrative costs and operating income. **Nothing between them has a row
+of its own**: no impairment, no acquired in-process research charge, no
+restructuring, no gain or loss on disposal, no other operating income. Neither
+free source tags those lines in a shape that can be mapped to one row across
+180 companies, and the captions differ company by company (which is its own
+constraint, above).
+
+**Nothing is wrong with the figures.** Operating income is the company's own
+reported line, so the column ties to the filing and every margin struck on it is
+the company's own margin. What is missing is the **explanation**: a reader who
+subtracts the printed costs from the printed revenue gets a different number
+from the printed operating income, and the difference has no name on the screen.
+
+**Bound: none on any valuation.** The engine reads operating income, not the
+lines above it, so no value per share depends on the split. The bound is on
+what a reader can account for, which is why it is here and not in
+`KNOWN_ISSUES.md`.
+
+**Where it shows up hardest**, and the reason it is measured: an unnamed charge
+large enough to put an operating loss past revenue makes a margin breach the
+−100% bound that `npm run verify` holds every margin to. Two quarters in the set
+do it — Gilead and Sandisk, above — and both are listed in that check by name
+with the 10-Q they were read at, rather than the bound being widened.
+
+What would remove it: the income statement read from the primary filing with its
+own captions (section 1 of `ROADMAP.md`), which is also what the line-caption
+constraint needs.
+
 ### Depreciation and amortisation the filing does not report
 
 **Source:** both. **Affects:** 13 of 175 payloads — 11 report none in any year

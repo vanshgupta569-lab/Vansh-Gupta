@@ -5446,6 +5446,343 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   fs.rmSync(probeDir, { recursive: true, force: true });
 }
 
+// ---------------------------------------------------------------------------
+// A MARGIN IS A DIVISION, AND EVERY COLUMN HAS TO SURVIVE THE CALCULATOR (`KI-35`)
+// ---------------------------------------------------------------------------
+//
+// Until 2026-11-03 the trailing-twelve-month column added up whatever the four
+// quarters held, for every row that was not a balance. On a money row that is
+// right. On a RATIO it has no denominator at all: four quarterly operating
+// margins added gave NVIDIA 260.0% where the two figures printed directly above
+// it in the same column — operating income 197,579 and revenue 302,969 —
+// divide to 65.2%. 109 companies showed a margin roughly four times their own.
+//
+// So this asserts the identity a reader can check with a calculator: ON EVERY
+// COLUMN OF EVERY STATEMENT OF EVERY COMPANY, a margin equals the figures
+// printed in its own column. Three arms, because one of them alone would have
+// held while the column was wrong:
+//
+//   1. THE MARGIN IS ITS OWN COLUMN'S DIVISION. Read the printed numerator and
+//      the printed denominator out of the view and divide them here. This is
+//      the arm the fault failed: a sum of ratios matches nothing.
+//
+//   2. THE MARGIN IS WITHIN ±100% WHERE REVENUE IS POSITIVE. Independent of
+//      arm 1, and the symptom the fault was reported by, so it would catch a
+//      denominator that was wrong in the inputs rather than in the division.
+//
+//   3. THE TRAILING TWELVE MONTHS REALLY IS THE FOUR QUARTERS. Arm 1 compares
+//      the margin against the two figures beside it, which proves they agree
+//      and not that either is right, so the printed TTM revenue and operating
+//      income are re-added here from the QUARTERLY view — a different set of
+//      columns, built from the quarter rows rather than from the TTM method.
+//
+// And the fault is put back on purpose at the end: NVIDIA's margin recomputed
+// the way the old code computed it, with the check above asked to report it.
+{
+  console.log('\n=== a margin is a division, in every column ===');
+  const { financialsFor } = await import(`file:///${REPO}/src/data/financials.ts`);
+  const { MINUS } = await import(`file:///${REPO}/src/data/figureFormat.ts`);
+
+  const faults: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+
+  let columns = 0;
+  let divisions = 0;
+  let withheld = 0;
+  let ttmSums = 0;
+  let companies = 0;
+  let largest = { what: 'none', v: 0 };
+
+  // A PERCENT ROW IS THE FIRST OF ITS TWO INPUTS OVER THE SECOND. Written down
+  // here rather than assumed: a percent row that declares anything else fails
+  // this check and has to be looked at, which is the right outcome — the
+  // alternative is a check that silently stops covering the new row.
+  const ratioOf = (a: number, b: number) => a / b;
+
+  // TWO QUARTERS OUTSIDE THE BOUND, READ AT THE FILING RATHER THAN WAIVED.
+  //
+  // On the UPSIDE the bound is an arithmetic impossibility test: operating
+  // income above revenue means income that is not in the denominator, which is
+  // exactly how a wrong denominator shows itself, and nothing in this set does
+  // it. On the DOWNSIDE it is not an impossibility — an impairment or an
+  // acquired in-process research charge is an operating cost with no ceiling —
+  // so two quarters genuinely breach it, and both were read at the 10-Q they
+  // came from instead of the rule being widened to let them through:
+  //
+  //   GILEAD, quarter to 30 Jun 2026 (10-Q 0000882095-26-000031). The filing
+  //   tags its FIRST HALF and not its quarter: an operating loss of 7,808 on
+  //   costs and expenses of 22,571, against 9,038 a year earlier. The quarter
+  //   is the difference between the two halves, so it carries the whole of the
+  //   charge: −10,394 on revenue of 7,803.
+  //
+  //   SANDISK, quarter to 28 Mar 2025 (10-Q 0001628280-26-029401). Cost of
+  //   sales, research and selling come to 1,737 on revenue of 1,695, so 1,839
+  //   of the 1,881 loss is an operating charge the income template carries no
+  //   row for. `DATA_CONSTRAINTS.md` records that gap.
+  //
+  // Named, dated and finite, and the check fails BOTH ways: an unlisted breach
+  // is a fault, and a listed one that has stopped breaching is a fault too, so
+  // the list cannot outlive the figures it accounts for.
+  const FILED_LOSS_BIGGER_THAN_REVENUE: Record<string, string> = {
+    'GILD income/quarterly Q2 FY26':
+      'an operating loss of 10,394 on revenue of 7,803, as the difference between the two halves ' +
+      'Gilead tags in 10-Q 0000882095-26-000031',
+    'SNDK income/quarterly Q3 FY25':
+      'an operating loss of 1,881 on revenue of 1,695, of which 1,839 is an operating charge with no ' +
+      'row in the template, in 10-Q 0001628280-26-029401',
+  };
+  const boundSeen = new Set<string>();
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const ticker = file.replace('.json', '');
+    let sawOne = false;
+
+    for (const statement of ['income', 'balance', 'cash'] as const) {
+      for (const frequency of ['annual', 'quarterly', 'half'] as const) {
+        let view: any;
+        try {
+          view = financialsFor(payload, { statement, frequency, window: 'all', order: 'oldest' });
+        } catch (e: any) {
+          faults.push(`${ticker} ${statement}/${frequency}: the view threw -- ${e?.message || e}`);
+          continue;
+        }
+        if (!view.periods.length) continue;
+        const byKey = new Map<string, any>(view.rows.map((r: any) => [r.key, r]));
+
+        for (const row of view.rows) {
+          if (row.kind !== 'percent') continue;
+          if (!Array.isArray(row.inputs) || row.inputs.length !== 2) {
+            faults.push(
+              `${ticker} ${statement}/${frequency}: "${row.label}" is a percentage and declares ` +
+                `${Array.isArray(row.inputs) ? row.inputs.length : 'no'} inputs, so no reader and no ` +
+                'check can recompute it from the column it sits in'
+            );
+            continue;
+          }
+          const over = byKey.get(row.inputs[0]);
+          const under = byKey.get(row.inputs[1]);
+          if (!over || !under) {
+            faults.push(
+              `${ticker} ${statement}/${frequency}: "${row.label}" divides ${row.inputs.join(' by ')} ` +
+                'and at least one of them is not a row on this statement, so its own column does not ' +
+                'show the figures it was struck from'
+            );
+            continue;
+          }
+          const revenue = byKey.get('revenue');
+
+          view.periods.forEach((period: any, i: number) => {
+            columns++;
+            sawOne = true;
+            const cell = row.cells[i];
+            const a = over.cells[i]?.value;
+            const b = under.cells[i]?.value;
+            const where = `${ticker} ${statement}/${frequency} ${period.label}${
+              period.kind === 'ttm' ? ' (TTM)' : ''
+            }`;
+
+            // ---- ARM 1: THE DIVISION, DONE HERE --------------------------
+            if (isNum(cell?.value)) {
+              if (!isNum(a) || !isNum(b) || b === 0) {
+                faults.push(
+                  `${where}: "${row.label}" shows ${(cell.value * 100).toFixed(1)}% while ` +
+                    `${row.inputs[0]} is ${a === null ? 'not reported' : a} and ${row.inputs[1]} is ` +
+                    `${b === null ? 'not reported' : b} in the same column -- a percentage with ` +
+                    'nothing behind it'
+                );
+              } else {
+                divisions++;
+                const right = ratioOf(a, b);
+                if (Math.abs(cell.value - right) > 1e-9 * Math.max(1, Math.abs(right))) {
+                  faults.push(
+                    `${where}: "${row.label}" shows ${(cell.value * 100).toFixed(1)}% and the figures ` +
+                      `printed in the same column -- ${Math.round(a).toLocaleString('en-US')} over ` +
+                      `${Math.round(b).toLocaleString('en-US')} -- divide to ${(right * 100).toFixed(1)}%`
+                  );
+                }
+              }
+            } else if (isNum(a) && isNum(b) && b !== 0) {
+              // THE OPPOSITE FAULT: a margin withheld where both its figures
+              // are printed. A dash where a division is possible is as wrong
+              // as a wrong number, and quieter.
+              withheld++;
+              faults.push(
+                `${where}: "${row.label}" shows nothing while ${Math.round(a).toLocaleString('en-US')} ` +
+                  `and ${Math.round(b).toLocaleString('en-US')} are both printed in the same column`
+              );
+            }
+
+            // ---- ARM 2: THE BOUND, ON POSITIVE REVENUE -------------------
+            const rev = revenue?.cells[i]?.value;
+            if (isNum(cell?.value) && isNum(rev) && rev > 0) {
+              if (Math.abs(cell.value) > 1) {
+                const accounted = FILED_LOSS_BIGGER_THAN_REVENUE[where];
+                if (accounted) {
+                  boundSeen.add(where);
+                } else {
+                  faults.push(
+                    `${where}: "${row.label}" is ${(cell.value * 100).toFixed(1)}% on revenue of ` +
+                      `${Math.round(rev).toLocaleString('en-US')} -- outside ${MINUS}100% to 100%, ` +
+                      'which no margin struck on positive revenue is unless the filing itself says so'
+                  );
+                }
+              } else if (Math.abs(cell.value) > Math.abs(largest.v)) {
+                largest = {
+                  what: `${ticker} ${row.label.toLowerCase()} ${period.kind === 'ttm' ? 'TTM' : period.label}`,
+                  v: cell.value,
+                };
+              }
+            }
+          });
+        }
+
+        // ---- ARM 3: THE TTM COLUMN REALLY IS THE FOUR QUARTERS -----------
+        //
+        // Read out of the QUARTERLY view, which builds its columns from the
+        // quarter rows directly. Arm 1 only proves the margin agrees with the
+        // two figures beside it; if those two were themselves wrong it would
+        // pass. This is the arm that holds the 302,969.
+        if (frequency === 'annual' && view.ttm?.method === 'four-quarters') {
+          let quarters: any = null;
+          try {
+            quarters = financialsFor(payload, {
+              statement,
+              frequency: 'quarterly',
+              window: 'all',
+              order: 'oldest',
+            });
+          } catch {
+            quarters = null;
+          }
+          const ti = view.periods.findIndex((pr: any) => pr.kind === 'ttm');
+          if (quarters && !quarters.empty && ti >= 0) {
+            const wanted: string[] = view.periods[ti].uses || [];
+            const atEnd = new Map<string, number>(
+              quarters.periods.map((pr: any, j: number) => [pr.endDate, j])
+            );
+            const haveAll = wanted.length === 4 && wanted.every((end) => atEnd.has(end));
+            if (haveAll) {
+              for (const row of view.rows) {
+                if (row.pointInTime || row.kind === 'percent') continue;
+                const qrow = quarters.rows.find((r: any) => r.key === row.key);
+                if (!qrow) continue;
+                const parts = wanted.map((end) => qrow.cells[atEnd.get(end) as number]?.value);
+                if (!parts.every(isNum)) continue;
+                const summed = (parts as number[]).reduce((t, v) => t + v, 0);
+                const shown = row.cells[ti]?.value;
+                if (!isNum(shown)) continue;
+                ttmSums++;
+                if (Math.abs(shown - summed) > 1e-6 * Math.max(1, Math.abs(summed))) {
+                  faults.push(
+                    `${ticker} ${statement} TTM: "${row.label}" shows ` +
+                      `${Math.round(shown).toLocaleString('en-US')} and the four quarters it names add ` +
+                      `to ${Math.round(summed).toLocaleString('en-US')}`
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if (sawOne) companies++;
+  }
+
+  // ---- THE LIST CANNOT OUTLIVE WHAT IT ACCOUNTS FOR --------------------
+  for (const where of Object.keys(FILED_LOSS_BIGGER_THAN_REVENUE)) {
+    if (!boundSeen.has(where)) {
+      faults.push(
+        `${where} is written down as ${FILED_LOSS_BIGGER_THAN_REVENUE[where]}, and its margin is now ` +
+          'inside the bound -- the figures have moved, so the note has to be read again rather than kept'
+      );
+    }
+  }
+
+  // ---- THE FAULT, PUT BACK ON PURPOSE ---------------------------------
+  //
+  // CONSTRUCTED, because the fix leaves nothing on disk to find. NVIDIA's TTM
+  // margin computed the way the column was computed until this commit — the
+  // four quarterly margins added — must be reported by arm 1 AND by arm 2, so
+  // that neither alone is carrying the check.
+  {
+    const file = 'NVDA.json';
+    const full = path.join(PAYLOADS, file);
+    if (!fs.existsSync(full)) {
+      faults.push('NVDA.json is not on disk, so the summed-ratio fault could not be put back');
+    } else {
+      const payload = JSON.parse(fs.readFileSync(full, 'utf8'));
+      const annual: any = financialsFor(payload, {
+        statement: 'income',
+        frequency: 'annual',
+        window: 'all',
+        order: 'oldest',
+      });
+      const quarters: any = financialsFor(payload, {
+        statement: 'income',
+        frequency: 'quarterly',
+        window: 'all',
+        order: 'oldest',
+      });
+      const ti = annual.periods.findIndex((pr: any) => pr.kind === 'ttm');
+      const margin = annual.rows.find((r: any) => r.key === 'operatingMargin');
+      const qmargin = quarters.rows?.find((r: any) => r.key === 'operatingMargin');
+      const uses: string[] = ti >= 0 ? annual.periods[ti].uses || [] : [];
+      const atEnd = new Map<string, number>(
+        (quarters.periods || []).map((pr: any, j: number) => [pr.endDate, j])
+      );
+      const parts = uses.map((end) => qmargin?.cells[atEnd.get(end) as number]?.value);
+      if (!margin || ti < 0 || uses.length !== 4 || !parts.every(isNum)) {
+        faults.push(
+          'NVDA no longer has a four-quarter trailing margin to break, so the fault could not be put back'
+        );
+      } else {
+        const asSummed = (parts as number[]).reduce((t, v) => t + v, 0);
+        const right = margin.cells[ti].value as number;
+        const rev = annual.rows.find((r: any) => r.key === 'revenue')?.cells[ti]?.value;
+        const armOne = Math.abs(asSummed - right) > 1e-9;
+        const armTwo = Math.abs(asSummed) > 1 && isNum(rev) && rev > 0;
+        if (!armOne || !armTwo) {
+          faults.push(
+            `with the ratios summed NVDA's trailing margin is ${(asSummed * 100).toFixed(1)}% against ` +
+              `${(right * 100).toFixed(1)}% from its own column, which arm 1 ` +
+              `${armOne ? 'reports' : 'MISSES'} and arm 2 ${armTwo ? 'reports' : 'MISSES'}`
+          );
+        }
+      }
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the margins:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  } else {
+    console.log(
+      `  ${divisions} margin cells across ${columns} columns of ${companies} companies each equal the ` +
+        'two figures printed in their own column, divided -- the trailing twelve months included'
+    );
+    console.log(
+      `  none is outside ${MINUS}100% to 100% on positive revenue but the ${boundSeen.size} quarters ` +
+        `read at their own 10-Q (${[...boundSeen].join('; ')}); the largest inside the bound is ` +
+        `${largest.what} at ${(largest.v * 100).toFixed(1)}%, and ${withheld} are withheld where the ` +
+        'division was possible'
+    );
+    console.log(
+      `  ${ttmSums} trailing-twelve-month figures re-add to the four quarters they name, read from the ` +
+        'quarterly columns rather than from the method that built them'
+    );
+  }
+}
+
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {
