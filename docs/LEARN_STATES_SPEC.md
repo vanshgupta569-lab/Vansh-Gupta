@@ -166,7 +166,7 @@ padding, index column 280px, `gap-20` (80px), article `max-w-[68ch]`.
 | h1 | `Read any company's accounts`, Title (CHANGE: today 34/46/60px; 60px is outside the remap list in `index.css`, so it renders at **60px** — the one size on this screen that escapes the four steps). |
 | Standfirst | Body 15/24 paper-read, max 600 (CHANGE: today 17/19px, remapped to 15). |
 | Grid | `grid-template-columns: 280px minmax(0, 640px); column-gap: 96px`. |
-| Index | Sticky at `top: 88px` (64 header + 24), max-height `calc(100svh - 112px)` with its own scroll. Group label Label 13/18 paper-quiet with 1px paper-line under it, 12px below; note rows Body 15/22, height 40, paper-read at rest, paper-ink + weight 600 when current with a 2px paper-accent-text bar at the left edge (the system's one "current" marker on Paper; replaces today's 3×3px red dot). Explainers group last, each with a 16px ↗-free "opens a page" right arrow in paper-quiet. |
+| Index | Sticky at `top: 88px` (64 header + 24), max-height `calc(100svh - 112px)` with its own scroll. Group label Label 13/18 paper-quiet with 1px paper-line under it, 12px below; note rows Body 15/22, height 40, paper-read at rest, and when current the system's one selected state (VISUAL_SYSTEM §3.1: raised ground — `#FAF9F5` on Paper — 1px paper-accent-text border, paper-ink, weight 600; replaces today's 3×3px red dot). Explainers group last, each with a 16px ↗-free "opens a page" right arrow in paper-quiet. |
 | Article | Note title in Section 20/26 Newsreader 600 paper-ink, not the Title step, which would compete with the page's h1 (CHANGE: today 28/34/40px). Then the note's "one line" Body 15/24 paper-ink, 1px rule under it; paragraphs Body 15/24 paper-read. |
 | Buffett lens | Left rule 2px paper-accent-text (KEEP — one oxblood element), label `The Buffett lens` Label paper-quiet (CHANGE: today accent-text uppercase), body Body 15/24. The credit paragraph at the foot is Small paper-quiet and stays (load-bearing: see the file's header comment). |
 | Previous / next | ADD. Under the article, 48px, two links `← {previous note}` and `{next note} →`, Body 15, in the index order, so a reader walks the statements in order without returning to the index. |
@@ -348,7 +348,8 @@ for the Learn area and the states.
   destination is hidden (NAV_SEARCH decision 4). Row label Body 15 ink, chevron
   12px on the left rotating 0→90°.
 - Link rows 48px, Body 15 read, indented 24. Current page: ink, weight 600,
-  2px accent bar at the left edge (the selected state, one oxblood border).
+  the selected state (overlay-raised ground, 1px accent border; one oxblood
+  border).
 - Learn opens to: `All of Learn` (`/learn/`), `Margin notes` (`/learn/notes/`),
   then the eight explainers by title. In-build items appear as text with a
   `being built` word and no link (NAV_SEARCH checklist 9).
@@ -364,7 +365,7 @@ for the Learn area and the states.
 |---|---|---|---|
 | Page transition | main region, Learn and notes routes | opacity; translateY 8px→0 | out 120ms `--m-ease-exit` · in `--m-dur-slow` 280ms `--m-ease-enter` |
 | Note switch inside the notes screen | article only | opacity cross-fade, no travel | `--m-dur-fast` 110ms `--m-ease-standard` |
-| Index current marker | the 2px bar | none — instant | 0 |
+| Index current marker | the selected state | none — instant | 0 |
 | Hover on links and rows | colour only | color | `--m-dur-fast` 110ms `--m-ease-standard` |
 | Disclose (phone note index, phone Learn groups, menu accordion) | height, opacity; chevron 0→90° | `--m-dur-base` 200ms `--m-ease-enter` / 140ms exit |
 | Menu sheet | translateY(100%→0); scrim opacity | `--m-dur-slow` 280ms in `--m-ease-enter` / `--m-dur-base` 200ms out `--m-ease-exit`; scrim `--m-dur-mod` 240ms |
@@ -439,7 +440,7 @@ Learn
 2. Every `/learn/` page has the global header with Learn current, and `lang="en-IN"`.
 3. Computed font sizes on every `/learn/` page are only 13, 15, 20 and the Title clamp; no `text-transform: uppercase`; no letter-spacing above 0.005em on body text; headings weight 600; no weight 300.
 4. Article column ≤ 640px; tables scroll inside their own container at 390 with a sticky first column.
-5. Margin notes index is sticky at 88px at ≥ 1024px and a closed Disclose at < 640px; current note has the 2px accent bar; previous/next links follow the index order.
+5. Margin notes index is sticky at 88px at ≥ 1024px and a closed Disclose at < 640px; current note has the selected state; previous/next links follow the index order.
 6. Every link from the landing band, the explainers and the menu to a note lands on that note.
 
 States

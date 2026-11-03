@@ -358,7 +358,7 @@ Rule); contrasts below are computed against white (WCAG relative luminance).
 | paper-ink | #16150F | 18.29 | Name, headings, every figure |
 | paper-read | #3A382F | 11.75 | Body text, row labels |
 | paper-quiet | #6B6759 | 5.66 | Source lines, units, foot, axis labels |
-| paper-accent-text | #A23A34 | 6.58 | The red square mark and the current-price line only (two uses per page; VISUAL_SYSTEM §3.1 budget) |
+| paper-accent-text | #A23A34 | 6.58 | The red square mark only (one use per page). The current-price line is paper-ink: in VISUAL_SYSTEM §3.2 the price is the subject series, S1, in ink (`docs/VISUAL_BUILD_PLAN.md` contradiction C9) |
 | light line-control | #85816F | 3.91 | Bar outlines, the axis, the 1px rule above each block |
 | paper-line | #DAD6CC | 1.45 | Table row dividers only — decorative; the page still reads if a printer drops them |
 

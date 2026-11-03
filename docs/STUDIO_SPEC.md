@@ -87,8 +87,10 @@ place. Back moves one step.
 KEEP COMPANY_OVERVIEW §1.1: container 1440 with 48px gutters (content 1344),
 24px under 1024 (content 342 at 390). Panels: panel ground, 1px line, radius
 0, padding 24 (16 phone), gap 24 (16). Type: the four DESIGN.md steps plus
-the tile figure 24/28 and the hero figure 40/44 defined in COMPANY_OVERVIEW
-§1.3. Content starts at y = 64 + 48 + 24 = 136.
+the tile figure 24/28. COMPANY_OVERVIEW §1.3's 40/44 hero figure is mapped by
+its decision D1 onto the nearest DESIGN.md step, so a hero figure here is
+Source Sans 3 600 tabular at the Title size, `clamp(28px, 2.8vw, 36px)`
+(`docs/VISUAL_BUILD_PLAN.md` contradiction C5). Content starts at y = 64 + 48 + 24 = 136.
 
 ## 2. Step 1 — Figures
 
@@ -185,7 +187,8 @@ reader's reason when given.
   drivers`, `Comparables`, `Asset recoveries`.
 - Row: 56 min-height; columns at 1440: Judgement 360 · Default 200 · Source of
   the default 320 · Used 200 · Reason (rest). Changed rows: `Used` in ink
-  weight 600 with a 2px accent bar at the row's left edge; unchanged rows
+  weight 600 and the word `changed` in Small quiet beside it (no accent: a
+  long list of changed rows would exceed the accent budget); unchanged rows
   `Used` reads `default` in quiet.
 - The qualitative question row: question Body 15 ink, then the three answers
   as a segmented control (32 high), then the drivers it would move and by how
@@ -232,7 +235,7 @@ formulas.
   implied values, with low–high under it), `Asset · {measures}`
   (low–high; point only where one measure survives), and `Price`. Banks:
   `Income · residual income`, `Asset · book`, `Price`.
-- Each value cell: eyebrow Label 13 muted, figure in the hero step 40/44 for
+- Each value cell: eyebrow Label 13 muted, figure in the hero step (Title size, see §1.4) for
   the first cell and the tile step 24/28 for the others (one hero per
   screen), and one line Small read: `Price {12.3}% above` / `below`. **No
   pill colour carries the sign** (CHANGE: today premium is a red "negative"
@@ -269,9 +272,11 @@ formulas.
   the engine's point; the reference row as a 1px line-control outline with a
   dashed edge and no fill. **No approach is oxblood** (CHANGE: today the
   income bars are oxblood, the market bar pale, the asset bar dashed — colour
-  doing the labelling and oxblood spent on two bars). Oxblood is reserved for
-  the current-price line, 1px accent-text, labelled with the price and date
-  at the top of the axis.
+  doing the labelling and oxblood spent on two bars). The current-price line is
+  the chart's subject series, 1px **ink** (VISUAL_SYSTEM §3.2: S1, the
+  subject, is ink; the only categorical oxblood is the this-model forecast
+  line), labelled with the price and date at the top of the axis. Nothing in
+  the chart is oxblood.
 - A refused approach is a row with its refusal sentence across the bar track
   (CHANGE: today an unavailable market or asset approach simply has no row).
 - If no two approach ranges overlap: one Small read line `The ranges do not
@@ -446,7 +451,7 @@ Valuation
 9. No composite score anywhere on the screen (`grep -ri "health score\|/100"` in components returns nothing user-facing).
 10. One price: every premium, the reverse DCF, the sensitivity shading and P/B use the struck price; the latest quote, if different, is printed as a fact.
 11. Every sensitivity cell recomputes to its printed row and column inputs (check in `verify/dashboard.mts`, expected value computed independently).
-12. Football field: caption present; refused approach shows its refusal in its row; non-overlap sentence when, and only when, ranges do not overlap; no oxblood bar.
+12. Football field: caption present; refused approach shows its refusal in its row; non-overlap sentence when, and only when, ranges do not overlap; no oxblood anywhere in the chart; price line ink.
 13. No displayed ratio is `0` where its input is missing.
 14. Bridge: parts sum exactly to the total (largest-remainder rounding), reconciliation line shown; zero-change drivers show 0.
 15. No number tweens or flashes; the changed figure turns accent-text instantly.
@@ -479,7 +484,8 @@ Motion and accessibility
 - **S5. PROPOSED — needs Nihar.** One statement at a time on the Figures
   step with a segmented control, rather than all three stacked.
 - **S6. PROPOSED — needs Nihar.** Football-field bars in `read` for every
-  approach, oxblood only for the price line; approaches told apart by label.
+  approach and an ink price line; nothing in the chart oxblood; approaches
+  told apart by label.
 - **S7. PROPOSED — needs Nihar.** The chart draw-in on the studio's charts
   uses COMPANY_OVERVIEW D7's 400 + 200ms rather than VISUAL_SYSTEM's 640ms.
 - **S8. PROPOSED — needs Nihar.** A right-edge fade as the sideways-scroll
