@@ -1,6 +1,22 @@
+# TEARSHEET_SPEC — decisions (Nihar, 4 November 2026)
+- D1: Confirmed — the brief stands: the three approaches side by side on the
+  one-pager, ownership on the two-pager.
+- D2: Accepted — one layout in the shared 680 × 943 px box for A4 and US Letter.
+- D3: Rupee (INR) companies in crore. All other currencies in million or
+  billion by the rule in §2.3. The rule is added to `src/data/figureFormat.ts`
+  in the build (job 2a).
+- D4: Allow-list the fixed phrases "exit multiple" and "exit-multiple" against
+  the banned-word list. The method keeps its name everywhere.
+- D5: A top banner on every page plus the foot line. No diagonal stamp.
+- D6: Ship the browser "Print / save as PDF" button first (job 5), the server
+  download after (job 8).
+- D7: Both lines in §3.4 approved as worded, pending counsel before public
+  launch.
+
 # TEARSHEET_SPEC — the one-pager and the two-pager (build step 6)
 
-Marginalia · per-company tearsheet · v0.1 (plan, no code) · 3 November 2026 ·
+Marginalia · per-company tearsheet · v0.2 (plan, no code) · 3 November 2026,
+decisions recorded 4 November 2026 ·
 sits beneath `CLAUDE.md`, `DESIGN.md`, `docs/VISUAL_SYSTEM.md` (with its 30
 October decisions), `docs/COMPANY_OVERVIEW_SPEC.md` (with its 1 November
 decisions) and `docs/VALUATION_SIDE_BY_SIDE_SPEC.md`.
@@ -10,8 +26,8 @@ and US Letter layouts, the print palette, the on-screen view, the rules every
 page obeys, how the file is made, five reference tearsheets, and the build in
 small jobs. PowerPoint is planned for later (job 12) and only sketched here.
 
-Markers. **DECIDE** = needs Nihar's sign-off before the job that uses it (all
-listed in section 9). **UNCONFIRMED** = a fact about another product or a price
+Markers. **DECIDE** = needed Nihar's sign-off; all seven were settled on 4
+November 2026 (top of file and section 9). **UNCONFIRMED** = a fact about another product or a price
 I could not open and check. **GAP** = something the repository does not yet
 hold, with the job or build step that brings it.
 
@@ -75,8 +91,8 @@ Read from the code on 3 November 2026, not from the roadmap.
   on the **two-pager**, and "ownership changes" on the one-pager. This brief
   puts the three approaches on the **one-pager** and ownership on the
   two-pager. This spec follows the brief, which is newer. `docs/VISION.md`
-  §5c and §6 and `ROADMAP.md` §14 should be updated to match once Nihar
-  confirms (D1).
+  §5c and §6 and `ROADMAP.md` §14 should be updated to match: D1 confirmed
+  the brief on 4 November 2026 (another session owns those files).
 - `ROADMAP.md` §4 still lists "Tearsheet, the one-pager" as QUEUED, while §14
   and `docs/VISION.md` say Now. The `docs/` files are the plan; the roadmap
   row is behind.
@@ -135,7 +151,7 @@ In order, top to bottom:
    · Net income · Diluted EPS · Cash from operations · Capital expenditure ·
    Free cash flow · Net debt (net cash shown negative) · ROE %. Bank template:
    the bank rows of `TEMPLATES` in `financials.ts`, fixed in job 2. Unit
-   stated once in the table head (D3).
+   stated once in the table head (D3, §2.3).
 5. **Valuation: three approaches side by side** (the centrepiece):
    - One row each, on one shared per-share axis in the statement currency:
      **Income — perpetuity growth**, **Income — exit multiple** (two rows,
@@ -167,7 +183,8 @@ In order, top to bottom:
    statements, risk-free rate, premiums, beta, peers) with their as-at dates.
 7. **Foot** (in the bottom margin): page number `1 / 1`, the generated
    timestamp in UTC, the facts-only line (rule 3.4), the permanent link, and
-   the development-only stamp where it applies.
+   the development-only line where it applies (the banner sits in the top
+   margin, §3.5).
 
 ### 1.3 The two-pager
 
@@ -256,7 +273,7 @@ reliably — UNCONFIRMED for the version pinned, checked in job 3).
 
 | Block | Columns | Height | Contents |
 |---|---|---|---|
-| Header | 1–12 | 84 | eyebrow 18 · 4 · title 34 · 4 · meta 18 · 6; stamp right-aligned in cols 9–12 |
+| Header | 1–12 | 84 | eyebrow 18 · 4 · title 34 · 4 · meta 18 · 6; date stamp right-aligned in cols 9–12 |
 | Rule + gap | | 12 | |
 | Key figures strip | 6 tiles × 2 cols | 80 | label 18 · 4 · figure 28 · 4 · source 18, padding 4 top and bottom; 1px rules between tiles |
 | Gap | | 20 | |
@@ -276,8 +293,22 @@ never drops below the 13 px floor to make room.
 
 Key financials columns: label 132 px, then up to 11 value columns of
 (680 − 132) ÷ 11 = 49.8 px. At 13 px tabular Source Sans 3 a digit is about
-6.5 px, so a column holds 7 characters (`391,035`, `−12,345`). See D3 for
-companies whose largest figure is longer.
+6.5 px, so a column holds 7 characters (`391,035`, `−12,345`).
+
+**Units (D3, decided 4 November 2026).** One unit per table, printed in the
+table head, never per cell:
+
+- **INR companies: crore** (₹ 1 crore = 10 million), Indian grouping, no
+  decimals — the unit Indian filings and readers use. Reliance's revenue,
+  `96,46,930` in rupees million, prints as `9,64,693` (₹ crore), seven
+  characters. A company too large even for crore in seven characters takes
+  `lakh crore` with two decimals — not expected in the current set; job 2a
+  measures it across every INR company and reports the largest.
+- **Every other currency: million, or billion** where the largest figure in
+  the table would exceed seven characters in millions. Millions take no
+  decimals (DESIGN.md, "How a figure is printed"); billions take one.
+- The rule lives in `figureFormat.ts` beside `inMillions`, so the screen and
+  the paper share it; it is added in the build, not in this plan.
 
 ### 2.4 Two-pager page 2 (680 × 943)
 
@@ -361,8 +392,8 @@ Rules:
   too (paper-quiet 4.97, light line-control 3.43). Above the sheet: a
   segmented control `One page | Two pages`, another `A4 | Letter`, and the
   screen's one primary action, **Download PDF** (VISUAL_SYSTEM: one primary
-  per screen). The development-only stamp shows on the preview exactly as it
-  will print.
+  per screen). The development-only banner shows on the preview exactly as
+  it will print.
 - **Tablet and phone (< 1024 px):** a scaled sheet at 390 px would set 13 px
   type at about 7 px, under the floor. So the same block components reflow
   into one column (key-figure tiles 2 across, the financials table scrolling
@@ -422,23 +453,24 @@ the valuation block, in paper-read, with the bound it states.
   SCREENER_SPEC rule 12 defines: buy, sell, hold, accumulate, target,
   stop-loss, entry, exit, top pick, undervalued, overvalued, cheap, strong,
   weak, signal, opportunity, multibagger). One list, imported, never copied.
-- **Conflict to settle (D4):** "exit multiple" is the standard name of the
-  second terminal value and appears on the company page; the list bans
-  "exit". Proposed: a short, written allow-list of fixed method phrases
-  (`exit multiple`, `exit-multiple`) checked as whole phrases, with the
-  exemption recorded the way the screener recorded its footer exemption —
-  rather than renaming the method on paper only, which would give one thing
-  two names. Similarly the weak-beta-fit wording must print as `low R²` or
-  `wide standard error`, not "weak".
+- **Allow-list (D4, decided 4 November 2026):** "exit multiple" is the
+  standard name of the second terminal value and the list bans "exit". The
+  fixed phrases `exit multiple` and `exit-multiple` are allowed, matched as
+  whole phrases and removed before the scan, so "exit" on its own anywhere
+  else still fails. The exemption is written down beside the list, the way the
+  screener recorded its footer exemption. The method keeps one name on screen,
+  in the workbook and on paper. The weak-beta-fit wording still prints as
+  `low R²` or `wide standard error`, not "weak" — no allow-list for that.
 - Premium and discount are stated as arithmetic (`Price 12.3% above the
   perpetuity value`), never characterised.
 - The facts-only line in the foot, worded without a banned word: `This page
   sets out figures from company filings and the result of a model under the
   assumptions shown. It is not an opinion on, or advice about, any security.`
-  The legal wording is for counsel before public launch (Paid · last, as
-  SCREENER_SPEC rule 18).
+  Approved by Nihar on 4 November 2026 (D7); counsel reviews the wording
+  before public launch (Paid · last, as SCREENER_SPEC rule 18).
 - AI disclosure (ROADMAP §14, designed in now): `No text on this page was
-  written by AI.` When AI-extracted text arrives (risk factors, guidance),
+  written by AI.` Approved with the foot line (D7). When AI-extracted text
+  arrives (risk factors, guidance),
   this line names what was extracted and that each item is quoted with its
   page.
 
@@ -447,12 +479,15 @@ the valuation block, in paper-read, with the bound it states.
 - Every block knows its source; a block is **vendor** when any figure in it
   comes from the vendor feed (`payload.source !== 'SEC EDGAR'` for
   statements; always, today, for price, 52-week range, description, peers).
-- A tearsheet with any vendor block carries, on every page: a diagonal
-  `Development only — contains vendor data not licensed for redistribution`
-  stamp in paper-quiet at 12% (the only tint permitted, and it is a mark, not
-  a fill), the words repeated in the foot, and each vendor block's source
-  line ending `· vendor feed, development only` (the wording the screener
-  already uses).
+- A tearsheet with any vendor block carries, on every page (D5, decided 4
+  November 2026): a **top banner**, one line of Small (13/18) in paper-read,
+  `Development only — contains vendor data not licensed for redistribution`,
+  with a 1px light line-control rule under it, drawn in the top margin above
+  the content box (the 14 mm margin is 53 px; the banner takes 19 px plus 4 px
+  clearance), so the 680 × 943 layout does not move; the same words in the
+  foot; and each vendor block's source line ending `· vendor feed,
+  development only` (the wording the screener already uses). No diagonal
+  stamp and no tint.
 - **The public switch is off and enforced on the server.** A configuration
   flag (`PUBLIC_DOWNLOADS`, off) gates the download endpoint; with it on, the
   endpoint refuses any tearsheet with a vendor block and says which blocks.
@@ -511,7 +546,7 @@ that the browser did not compute in the same code.
 
 File name: `Marginalia_{TICKER}_{one-page|two-page}_{A4|Letter}_{YYYY-MM-DD}.pdf`.
 PDF metadata: title (company and page type), author `Marginalia`, creation
-date, and a keyword `development-only` while the stamp applies.
+date, and a keyword `development-only` while the banner applies.
 
 ### 4.3 PowerPoint, later (job 12)
 
@@ -595,17 +630,18 @@ watching it fail (CLAUDE.md, "a check that cannot fail").
 
 | # | Job | Check (and how it is proved to fail) |
 |---|---|---|
-| 0 | Nihar settles D1–D7 (section 9). Documentation only. | None needed; no verification reads `docs/`. |
+| 0 | ~~Nihar settles D1–D7~~ — done 4 November 2026 (top of file). | — |
 | 1 | **Lift the valuation summary out of the component.** Move `valuationBands`, `terminalMethods`, `premiumAgainst` and `fieldBands` from `TerminalDashboard.tsx` into one pure `src/data/valuationSummary.ts`; the dashboard reads it. No behaviour change. | Across the payload set, every band, point and premium equals what the dashboard printed before the move (captured from the rendered page by `verify/dashboard.mts`, not from the new function — "comparing a figure against itself"). Break: flip the premium sign in the new function; both the scenario and the browser check fail. |
+| 2a | **The table unit rule (D3)** in `figureFormat.ts`: crore for INR, million or billion otherwise, by the seven-character rule. | Over every company, the largest key-financials figure prints in at most seven characters; every INR table is in crore; no table mixes units. Report the largest figure found per currency. Break: format one INR company in millions — the check names it. |
 | 2 | **The tearsheet contract.** `src/data/tearsheet.ts`, `tearsheetFor(payload, savedRecord?)`: every block, every figure as `{ value, state, sourceKey, asOf, reason? }`, the sources list, the vendor flag per block, the refusals. No arithmetic; formatting via `figureFormat.ts`. | In `verify/scenarios.mts`, over every company: every printed figure equals its origin function's figure; every figure has a source key that resolves to a sources row; every null has a reason; every string passes `bannedWordsIn`; the vendor flag is true wherever the price is vendor (all companies today). Report counts: companies, refused, banks, vendor. Break each: drop a source key, blank a reason, insert "cheap" into a label. |
 | 3 | **The A4 one-pager route.** Block components, the grid, print CSS, self-hosted fonts. | In `verify/dashboard.mts`: `page.pdf({ format: 'A4' })` is exactly 1 page for a fixture set (an SEC industrial, a bank, a vendor-path company, a refused company, a converted-currency company); no element's box leaves the 680 × 943 area; no computed font size under 13 px; only Newsreader and Source Sans 3 in use; each figure's text on the page equals the contract (scoped to the page region — strict-mode trap). Break: add a twelfth financials row — the one-page check fails. |
 | 4 | **US Letter.** The `paper` parameter. | The same checks on Letter; every block's position and size identical to A4 (to the pixel, inside the common box). Break: give Letter its own margin for one block. |
 | 5 | **On-screen preview and print button.** The Research tab sheet, segmented controls, phone reflow, "Print / save as PDF". | 1440 px: sheet on Paper, one primary button, accent budget held. 390 px: no horizontal page scroll, financials scroll inside their own container, no type under 13 px. Break: let the table overflow its container. |
 | 6 | **The two-pager.** Page 2 blocks; the judgements and not-as-filed lists from the saved record; ownership and guidance as labelled "not yet held". | Exactly 2 pages on both papers; page 1 identical to the one-pager; the sources-in-full table lists exactly the accession numbers referenced by the financials cells (computed independently from the cells); a saved model with three changed judgements lists those three. Break: drop one accession; change a judgement without listing it. |
-| 7 | **Vendor gating and the stamp.** Stamp, foot line, source suffixes, `PUBLIC_DOWNLOADS` flag. | Every page of every vendor-flagged tearsheet carries the stamp and the foot words; with the flag on, the endpoint (or its stand-in until job 8) refuses every vendor tearsheet and names the blocks. Break: remove the price block's vendor flag — the check fails on every company. |
+| 7 | **Vendor gating and the banner.** Top banner, foot line, source suffixes, `PUBLIC_DOWNLOADS` flag. | Every page of every vendor-flagged tearsheet carries the banner (inside the top margin, never overlapping the content box) and the foot words; with the flag on, the endpoint (or its stand-in until job 8) refuses every vendor tearsheet and names the blocks. Break: remove the price block's vendor flag — the check fails on every company. |
 | 8 | **Server download.** `api/tearsheet.js` opening the route in headless Chromium; the saved record and price passed in; file name and metadata. | For the fixture set, the downloaded PDF's extracted text equals the preview's figures; a saved model's PDF shows the value the saved list shows; cold start and warm render times measured and reported, against the function limits. Break: let the function fetch a fresh price instead of the record's. |
 | 9 | **Print safety.** Greyscale and contrast. | Contrast of every print token on white and on Paper added to `npm run verify`; each fixture page rendered in greyscale reads the same (no information carried by hue alone — every bar and line has a label). Break: colour the premium words green and red without the words. |
-| 10 | **Docs and roadmap.** `METHODOLOGY.md` section on the tearsheet (what it reads, never computes), `ROADMAP.md` status to Built with the shipped log, `docs/VISION.md` §5c/§6 aligned with D1. | Documentation only; the follow-up "point the shipped log" commit. |
+| 10 | **Docs and roadmap.** `METHODOLOGY.md` section on the tearsheet (what it reads, never computes), `ROADMAP.md` status to Built with the shipped log, `docs/VISION.md` §5c/§6 aligned with D1 (by whichever session owns those files). | Documentation only; the follow-up "point the shipped log" commit. |
 | 11 | **Ownership and guidance blocks**, each when its data lands (GAP). | Each figure dated and linked to its disclosure; no verdict words; page 2 re-measured to stay at 2 pages. |
 | 12 | **PowerPoint slide** from the same contract (Next). | The slide's figures equal the contract's; banned-word scan on every text frame. |
 | 13 | **Marginalia-authored mode slot**, built and switched off (launch principle 1). | With the switch off, no rating or target string can reach any output; proved by switching it on in the test only. |
@@ -630,29 +666,16 @@ forward estimates (Paid · last), a price chart (it adds a block the
 one-pager has no height for; the 52-week range row carries the fact), and
 Word export (the research pack, Next).
 
-## 9. Decisions I need from you
+## 9. Decisions (settled by Nihar, 4 November 2026)
 
-- **D1.** The brief puts the three approaches on the one-pager and ownership
-  on the two-pager; `docs/VISION.md` §6 has it the other way. Confirm the
-  brief, and the docs are updated in job 10.
-- **D2.** One layout in the common 680 × 943 px box for both papers, leaving
-  about 17 mm unused at the foot of A4. Accept, or ask for a taller A4 variant
-  (two layouts, two sets of checks).
-- **D3.** Units in the financials table. A seven-character column fits
-  `391,035` but not Reliance's revenue in rupees million (`96,46,930`, nine
-  characters). Proposed: one unit per table, the smallest of million or
-  billion at which the largest
-  figure has at most seven characters; billions take one decimal; the unit is
-  printed in the table head. For rupee companies, say whether you want crore
-  instead of million / billion. Either way this adds a rule to
-  `figureFormat.ts`.
-- **D4.** "exit" is on the banned list and "exit multiple" is the method's
-  name. Proposed: a written allow-list of fixed method phrases. Alternative:
-  rename the method everywhere (screen, workbook, tearsheet) to "terminal
-  multiple".
-- **D5.** The development-only stamp as a diagonal 12% mark on every page,
-  or a top banner only.
-- **D6.** Ship the browser "Print / save as PDF" button in job 5 ahead of the
-  server download in job 8, or hold the feature until job 8.
-- **D7.** The facts-only foot line and the AI line as worded in 3.4, pending
-  counsel before public launch.
+| # | Question | Decision |
+|---|---|---|
+| D1 | Three approaches on the one-pager and ownership on the two-pager (the brief), or the order in `docs/VISION.md` §6? | **The brief.** `docs/VISION.md` and `ROADMAP.md` to be aligned by the session that owns them. |
+| D2 | One layout in the shared 680 × 943 px box, about 17 mm unused at the foot of A4? | **Accepted.** |
+| D3 | Units in the financials table? | **INR in crore; every other currency in million or billion** by the seven-character rule (§2.3). Added to `figureFormat.ts` in job 2a. |
+| D4 | "exit" is banned and "exit multiple" is the method's name. | **Allow-list the fixed phrases** `exit multiple` and `exit-multiple` (§3.4). No rename. |
+| D5 | Diagonal stamp or top banner? | **Top banner on every page plus the foot line** (§3.5). No diagonal stamp. |
+| D6 | Print button before the server download? | **Yes — the browser print button ships first** (job 5); the server download follows (job 8). |
+| D7 | The facts-only foot line and the AI line? | **Both approved as worded**, pending counsel before public launch. |
+
+No decision is open in this document.
