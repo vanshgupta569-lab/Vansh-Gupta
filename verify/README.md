@@ -284,6 +284,65 @@ nothing); and a note added for a margin that does not breach (**1**). NVIDIA's
 own summed margin is also reconstructed at the end of the check and both arms
 are required to report it, so neither alone is carrying the check.
 
+### Every SEC figure names its concept and its own document
+
+The Financials tab's claim is that a number can be traced to its filing. Three
+of the four lines that made that claim were guesses or blanks until 2026-11-03,
+and the link was wrong: it read "Open the filing" and opened an EDGAR search
+page (`KI-37`). What is checked here is the four lines and the link, over every
+column of every statement of every company.
+
+**48,089 figures from SEC filings**: 43,581 name the XBRL concept they were read
+from and 48,063 name the accession number of the one document they are in. A
+concept must be an XBRL element name AND one of the concepts the data layer
+actually reads for that line — or, for a financial company's top line, the tag
+settled for that company (`KI-32`). A form must be **one form as filed** in the
+SEC's own spelling, which the thing it replaced was not. The address of every
+document is rebuilt here from the accession number and the CIK rather than
+compared against the string the fetcher wrote, because "a plausible URL" and
+"this filing's URL" are the same length and only one of them opens the filing.
+
+**The arm that catches the quietest way this could go wrong**: every candidate
+list is in order of preference, so a fetcher that recorded the first candidate
+instead of the tag that matched would pass everything above — the concept would
+be a real element name, in the list, and the same on every company. So at least
+one line with more than one candidate must show more than one concept across the
+set, and 20 of the 32 do.
+
+**It also holds the evidence sheet's mirror of `US_TAGS` against `US_TAGS`.**
+`src/data/financials.ts` cannot import from `api/company.js` — each file in
+`api/` is packaged on its own by the host and a shared import there has taken
+the route down — so the sheet keeps a copy of the tag lists, and this copy had
+gone stale: one concept for stock compensation where the fetcher reads two, one
+for depreciation where it reads three. 20,556 figures named a list that did not
+contain the concept behind them, which is what the check reported the first time
+it ran.
+
+**"Not recorded" is counted and explained rather than tolerated.** 23,951
+figures say it on the concept line and 26,482 on each of the form, filing date
+and filing ID lines, and every one is either a vendor figure (the feed records
+none of the four) or this site's own arithmetic (which has no concept of its
+own). A figure read from a filing with neither is a FAULT, not a count. A vendor
+figure must not claim a provenance it has not got, and must be offered no link
+to a filing it has not got.
+
+In `dashboard.mts`, in a real browser on the fixture: FY2023 revenue and FY2025
+revenue, which the fixture deliberately tags under two different concepts, must
+show two different concepts — a sheet printing the line's concept would pass on
+one year and fail on the other. Each names its form (`10-K`), its date and its
+accession number, and its link's address contains that accession number. And
+interest expense, which the fixture gives a concept and no accession number,
+must read **Not recorded** for the form and the filing and offer **"Find this
+filing on EDGAR"**.
+
+Proved by breaking, five ways: the figure's own provenance ignored, which is the
+state before this job (**47,680 faults**); the form line restored to "Annual
+report (10-K / 20-F), as tagged in XBRL" (**26**); the link labelled "Open the
+filing" where it is a search (**26**, and 1 in the browser); one digit cut from
+every filing address in a payload (**15**); and the line's first candidate
+printed instead of the figure's own, which is what recording the preference
+list's head would look like (**24,180**, and 1 in the browser).
+
 ### The screener: the universe, the filters and what they set aside
 
 Ten rules of `docs/SCREENER_SPEC.md` are rules about data, so they are checked

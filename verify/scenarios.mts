@@ -5783,6 +5783,441 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 
+// ---------------------------------------------------------------------------
+// EVERY SEC FIGURE NAMES ITS CONCEPT AND ITS OWN DOCUMENT
+// ---------------------------------------------------------------------------
+//
+// The Financials tab's whole claim is that a number can be traced to the filing
+// it came from, and until 2026-11-03 three of the four lines that make that
+// claim were guesses or blanks:
+//
+//   CONCEPT: the sheet printed the LIST of candidate tags the data layer reads
+//   and the sentence "which one this company used is not recorded in the data
+//   we hold", which was true of the payload. It is a property of the figure,
+//   not of the line: one company's revenue is `Revenues` and the next's is
+//   `RevenueFromContractWithCustomerExcludingAssessedTax`, and the same company
+//   can change concept between two years.
+//
+//   FORM: an annual figure read "Annual report (10-K / 20-F), as tagged in
+//   XBRL" — a statement about which forms this site reads, dressed up as a
+//   statement about where that figure came from.
+//
+//   FILING DATE and FILING ID: "not recorded by the feed", for every annual
+//   figure of every SEC filer, because no annual figure carried a document.
+//
+//   AND THE LINK SAID "Open the filing" and opened an EDGAR SEARCH PAGE.
+//
+// Payload version 11 records, per figure, the concept it was read from and the
+// accession number of the one document it is in, with `filings` holding each
+// document once. What this checks is the four lines and the link, over every
+// figure of every payload, and it COUNTS what still says "Not recorded".
+{
+  console.log('\n=== every SEC figure names its concept and its own document ===');
+  const { financialsFor, evidenceFor, CANDIDATE_CONCEPTS } = await import(
+    `file:///${REPO}/src/data/financials.ts`
+  );
+
+  const faults: string[] = [];
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+
+  // ---- THE SHEET'S MIRROR OF `US_TAGS` IS STILL `US_TAGS` ---------------
+  //
+  // `src/data/financials.ts` cannot import from `api/company.js` — each file
+  // in `api/` is packaged on its own by the host, and a shared import there
+  // has taken the route down — so the evidence sheet keeps a copy of the tag
+  // lists, and a copy nobody checks goes stale. This one had: the sheet named
+  // `ShareBasedCompensation` alone where `US_TAGS` also reads
+  // `AllocatedShareBasedCompensationExpense`, and `DepreciationDepletionAnd-
+  // Amortization` and one sibling where `US_TAGS` reads three. Apple's stock
+  // compensation and AbbVie's depreciation are read from the tags the mirror
+  // had not got, which the figures-name-their-concept arm below reported on
+  // 20,556 figures the first time it ran.
+  {
+    const { US_TAGS } = await import(`file:///${REPO}/api/company.js`);
+    const mine = Object.keys(CANDIDATE_CONCEPTS).sort();
+    const theirs = Object.keys(US_TAGS).sort();
+    for (const field of theirs) {
+      if (!CANDIDATE_CONCEPTS[field]) {
+        faults.push(`the evidence sheet has no concepts for \`${field}\`, which the fetcher reads`);
+      } else if (CANDIDATE_CONCEPTS[field].join('|') !== US_TAGS[field].join('|')) {
+        faults.push(
+          `\`${field}\`: the evidence sheet names ${CANDIDATE_CONCEPTS[field].join(', ')} and the ` +
+            `fetcher reads ${US_TAGS[field].join(', ')}`
+        );
+      }
+    }
+    for (const field of mine) {
+      if (!US_TAGS[field]) {
+        faults.push(`the evidence sheet names concepts for \`${field}\`, which the fetcher does not read`);
+      }
+    }
+    if (!faults.length) {
+      console.log(
+        `  the evidence sheet's ${mine.length} lines of candidate concepts are the fetcher's own, tag ` +
+          'for tag and in the same order of preference'
+      );
+    }
+  }
+
+  // ONE FORM AS FILED, in the SEC's own spelling — `10-K`, `10-Q`, `10-K/A`,
+  // `8-K`, `DEF 14A`. Upper case, digits, slashes, hyphens and single spaces,
+  // which is what an EDGAR form type is and what the thing this replaces was
+  // not: "Annual report (10-K / 20-F), as tagged in XBRL" was a sentence about
+  // which forms this site reads, printed where a reader was owed the form the
+  // figure came from. Its ` / ` is refused explicitly, because a form that is
+  // two forms with a slash between them is the fault itself.
+  const FORM = /^[0-9A-Z][0-9A-Z/-]*( [0-9A-Z][0-9A-Z/-]*)*$/;
+  const oneForm = (f: string) => FORM.test(f) && !/ \/ | \/|\/ /.test(f);
+  const ACCN = /^\d{10}-\d{2}-\d{6}$/;
+  // WHICH FORMS THE FIGURES ACTUALLY COME FROM, counted rather than assumed.
+  // `collectPoints` filters the quarterly facts by period and not by form, so
+  // a quarter can be read from a proxy statement or an 8-K that tags the same
+  // fact; `KI-36` records that and this is the measurement behind it.
+  const interim: Record<string, number> = {};
+
+  let secFigures = 0;
+  let vendorFigures = 0;
+  let withConcept = 0;
+  let withDocument = 0;
+  let exactLinks = 0;
+  let searchLinks = 0;
+  let noLink = 0;
+  const notRecorded: Record<string, number> = {};
+  // AND WHY, because "30,015 say Not recorded" is a number nobody can act on.
+  // Three reasons, and only one of them is something to fix: our own
+  // arithmetic has no concept and no document of its own by design; a vendor
+  // feed records neither; and an SEC figure with neither is a payload built
+  // before version 11, which the payload survey reports in its own line.
+  const whyNot: Record<string, Record<string, number>> = {};
+  // And the two sentences the Concept line gives where there is no one
+  // concept, which are answers rather than absences.
+  const saidInstead: Record<string, number> = {};
+  const conceptsSeen: Record<string, Set<string>> = {};
+  const formsSeen: Record<string, number> = {};
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const ticker = file.replace('.json', '');
+    const traceable = /sec/i.test(String(payload?.source || ''));
+    const filings: Record<string, any> = payload?.filings || {};
+
+    // ---- THE DICTIONARY IS COMPLETE AND EACH ENTRY IS A DOCUMENT -------
+    for (const [accn, filing] of Object.entries(filings)) {
+      if (!ACCN.test(accn)) {
+        faults.push(`${ticker}: "${accn}" is a key in the filings dictionary and is not an accession number`);
+        continue;
+      }
+      if (filing?.accn !== accn) {
+        faults.push(`${ticker}: the filing under ${accn} says its accession number is ${filing?.accn}`);
+      }
+      if (!filing?.form || !oneForm(filing.form)) {
+        faults.push(`${ticker} ${accn}: a form of "${filing?.form}", which is not one form as filed`);
+      } else {
+        formsSeen[filing.form] = (formsSeen[filing.form] || 0) + 1;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(filing?.filed || ''))) {
+        faults.push(`${ticker} ${accn}: a filing date of "${filing?.filed}"`);
+      }
+      // THE ADDRESS REALLY IS THAT DOCUMENT'S. Built here from the accession
+      // number and the CIK rather than compared against the string the
+      // fetcher wrote, because "a plausible URL" and "this filing's URL" are
+      // the same length and only one of them opens the filing.
+      const want = `https://www.sec.gov/Archives/edgar/data/${Number(payload?.cik)}/${accn.replace(/-/g, '')}/`;
+      if (filing?.url !== want) {
+        faults.push(`${ticker} ${accn}: the address is ${filing?.url} and this filing is at ${want}`);
+      }
+    }
+
+    for (const statement of ['income', 'balance', 'cash'] as const) {
+      for (const frequency of ['annual', 'quarterly'] as const) {
+        let view: any;
+        try {
+          view = financialsFor(payload, { statement, frequency, window: 'all', order: 'oldest' });
+        } catch {
+          continue;
+        }
+        if (!view.periods.length) continue;
+
+        for (const row of view.rows) {
+          // A DERIVED ROW IS OURS, NOT THE FILING'S. Gross profit, EBITDA,
+          // free cash flow and the margin are this site's arithmetic over
+          // figures that each have their own concept, so they carry none and
+          // the sheet shows the formula instead.
+          if (!row.inputs) {
+            // the rows the template reads straight from a field
+          }
+          view.periods.forEach((period: any, i: number) => {
+            const cell = row.cells[i];
+            if (cell.value === null && cell.state !== 'reportedZero') return;
+            const where = `${ticker} ${statement}/${frequency} ${row.key} ${period.label}`;
+            const ev = evidenceFor(payload, view, row, i);
+            const lineOf = (label: string) =>
+              ev.lines.find((l: any) => l.label === label)?.value ?? '<<missing>>';
+
+            for (const label of ['Concept', 'Form', 'Filing date', 'Filing ID']) {
+              const value = lineOf(label);
+              if (value === '<<missing>>') {
+                faults.push(`${where}: the evidence sheet has no "${label}" line at all`);
+                continue;
+              }
+              if (value === 'Not recorded') {
+                notRecorded[label] = (notRecorded[label] || 0) + 1;
+                const why = row.inputs
+                  ? 'this site’s own arithmetic, which has no concept of its own'
+                  : !traceable
+                    ? 'a vendor feed, which records neither'
+                    : (payload?.fetcherVersion || 0) < 11
+                      ? 'a payload built before version 11'
+                      : 'an SEC figure that should have one';
+                (whyNot[label] = whyNot[label] || {})[why] =
+                  (whyNot[label]?.[why] || 0) + 1;
+              } else if (label === 'Concept' && !/^[A-Za-z][A-Za-z0-9]*$/.test(value)) {
+                // ONE OF THE TWO SENTENCES THE CONCEPT LINE GIVES where there
+                // is no one concept: our own arithmetic, or a trailing figure
+                // whose periods were tagged under more than one. Answers, not
+                // absences, and counted so that the "Not recorded" figure
+                // means what it says.
+                const kind = row.inputs ? 'worked out here' : 'more than one across its periods';
+                saidInstead[kind] = (saidInstead[kind] || 0) + 1;
+                if (!/^(Not one concept|More than one)/.test(value)) {
+                  faults.push(`${where}: a Concept line reading "${value}"`);
+                }
+              }
+            }
+
+            const concept = lineOf('Concept');
+            const form = lineOf('Form');
+            const filed = lineOf('Filing date');
+            const accn = lineOf('Filing ID');
+
+            if (!traceable) {
+              vendorFigures++;
+              // A VENDOR FIGURE HAS NO FILING, AND MUST NOT CLAIM ONE.
+              for (const [label, value] of [
+                // A derived row's Concept line says "worked out here" on every
+                // payload, vendor or not, because that is what it is. The
+                // other two lines have nothing behind them either way.
+                ...(row.inputs ? [] : [['Concept', concept]]),
+                ['Form', form],
+                ['Filing ID', accn],
+              ] as [string, string][]) {
+                if (value !== 'Not recorded') {
+                  faults.push(
+                    `${where}: a vendor payload, and its "${label}" line reads "${value}" -- the feed ` +
+                      'does not say which filing a figure came from, so nothing may be printed as if it did'
+                  );
+                }
+              }
+              if (ev.openLink) {
+                faults.push(
+                  `${where}: a vendor payload offering a link labelled "${ev.openLink.label}" -- there is ` +
+                    'no filing behind the figure to open or to find'
+                );
+              }
+              return;
+            }
+
+            secFigures++;
+            // A FIGURE READ FROM A FILING HAS BOTH, AND THAT IS A FAULT AND
+            // NOT A COUNT. Only two kinds of figure may be without them: one
+            // this site worked out (`row.inputs`), and one from a payload
+            // built before version 11 recorded them. Everything else is a
+            // number on the Financials tab that cannot be traced, which is
+            // the one thing this tab exists not to be.
+            const shouldHaveBoth = !row.inputs && (payload?.fetcherVersion || 0) >= 11;
+            if (shouldHaveBoth && concept === 'Not recorded') {
+              faults.push(
+                `${where}: a figure read from a filing with no XBRL concept recorded against it`
+              );
+            }
+            if (shouldHaveBoth && accn === 'Not recorded') {
+              faults.push(
+                `${where}: a figure read from a filing with no accession number, so there is no one ` +
+                  'document a reader can open'
+              );
+            }
+            if (/^[A-Za-z][A-Za-z0-9]*$/.test(concept)) {
+              withConcept++;
+              // A FINANCIAL COMPANY'S TOP LINE IS A CHOSEN TAG, NOT A LIST
+              // (`KI-32`). American Express reports
+              // `RevenuesNetOfInterestExpense`, which is deliberately outside
+              // `US_TAGS.revenue`: the tag is settled per company and recorded
+              // on the payload, so the payload's own choice is what the
+              // concept has to match.
+              const candidates =
+                row.key === 'revenue' && payload?.revenueDefinition?.tag
+                  ? [payload.revenueDefinition.tag]
+                  : CANDIDATE_CONCEPTS[row.key];
+              if (candidates && !candidates.includes(concept)) {
+                faults.push(
+                  `${where}: read from "${concept}", which is not one of the concepts the data layer ` +
+                    `reads for this line (${candidates.join(', ')})`
+                );
+              }
+              (conceptsSeen[row.key] = conceptsSeen[row.key] || new Set()).add(concept);
+            }
+
+            if (accn !== 'Not recorded') {
+              withDocument++;
+              if (!ACCN.test(accn)) {
+                faults.push(`${where}: a filing ID of "${accn}"`);
+              }
+              if (!oneForm(form)) {
+                faults.push(
+                  `${where}: a form of "${form}" -- the form a figure came from is one form as filed, ` +
+                    'never a list of the forms this site reads'
+                );
+              } else if (!/^10-[KQ]/.test(form)) {
+                // NOT A FAULT, A MEASUREMENT (`KI-36`). The form is recorded
+                // correctly; what is open is whether a figure should be read
+                // from a document that is not a primary statement at all.
+                interim[`${frequency} ${form}`] = (interim[`${frequency} ${form}`] || 0) + 1;
+              }
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(filed)) {
+                faults.push(`${where}: a filing date of "${filed}" beside filing ${accn}`);
+              }
+              // ONLY WHERE THERE IS A DICTIONARY TO BE IN. A payload built
+              // before version 11 carries its quarterly filings inline and no
+              // dictionary at all; that it is stale is reported by the payload
+              // survey, in one line, rather than by twelve thousand faults
+              // here.
+              if (Object.keys(filings).length && !filings[accn]) {
+                faults.push(`${where}: filing ${accn}, which is not in the payload's filings dictionary`);
+              }
+            } else if (form !== 'Not recorded' || filed !== 'Not recorded') {
+              faults.push(
+                `${where}: no filing ID, and yet a form of "${form}" filed on "${filed}" -- a form and a ` +
+                  'date with no document behind them is a provenance nobody can check'
+              );
+            }
+
+            // ---- THE LINK SAYS WHAT IT OPENS ------------------------------
+            if (ev.filings.length > 1) {
+              // A SUBTRACTION, which the sheet lists both documents of rather
+              // than offering one link. Rule 4's own case, and the browser
+              // asserts both links open different documents.
+              exactLinks++;
+              if (new Set(ev.filings.map((f: any) => f.accn)).size < 2) {
+                faults.push(`${where}: two filings listed and both are ${ev.filings[0].accn}`);
+              }
+              return;
+            }
+            if (!ev.openLink) {
+              noLink++;
+              faults.push(`${where}: an SEC filer's figure with no way to reach EDGAR at all`);
+              return;
+            }
+            if (accn !== 'Not recorded') {
+              exactLinks++;
+              if (ev.openLink.label !== 'Open the filing' || !ev.openLink.exact) {
+                faults.push(
+                  `${where}: filing ${accn} is held and the link reads "${ev.openLink.label}"`
+                );
+              }
+              const want = filings[accn]?.url;
+              if (want && ev.openLink.url !== want) {
+                faults.push(
+                  `${where}: the link goes to ${ev.openLink.url} and filing ${accn} is at ${want}`
+                );
+              }
+            } else {
+              searchLinks++;
+              if (ev.openLink.label !== 'Find this filing on EDGAR' || ev.openLink.exact) {
+                faults.push(
+                  `${where}: no accession number, and the link reads "${ev.openLink.label}" -- a link ` +
+                    'labelled "open the filing" that lands on a search page is a small lie told on every ' +
+                    'figure whose document is not held'
+                );
+              }
+              if (!/sec\.gov/.test(ev.openLink.url)) {
+                faults.push(`${where}: a search link that does not go to the SEC (${ev.openLink.url})`);
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+
+  // ---- THE CONCEPT IS THE WINNER, NOT THE LIST'S FIRST ENTRY -----------
+  //
+  // The arm that catches the quietest way this could be wrong. Every candidate
+  // list is in order of preference, so a fetcher that recorded `tagList[0]`
+  // instead of the tag that actually matched would pass every check above:
+  // the concept would be a real element name, in the list, the same for every
+  // company. What it would NOT be is the concept a particular company used.
+  // So at least one line with more than one candidate must show more than one
+  // concept across the set.
+  const multi = Object.keys(CANDIDATE_CONCEPTS).filter((k) => CANDIDATE_CONCEPTS[k].length > 1);
+  const varied = multi.filter((k) => (conceptsSeen[k]?.size || 0) > 1);
+  if (secFigures && !varied.length) {
+    faults.push(
+      `every one of the ${multi.length} lines with more than one candidate concept shows the same ` +
+        'concept on every company, which is what recording the first candidate rather than the one that ' +
+        'matched would look like'
+    );
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the provenance:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  } else {
+    console.log(
+      `  ${secFigures} figures from SEC filings: ${withConcept} name the XBRL concept they were read ` +
+        `from and ${withDocument} name the accession number of the one document they are in`
+    );
+    for (const label of ['Concept', 'Form', 'Filing date', 'Filing ID']) {
+      const n = notRecorded[label] || 0;
+      const why = Object.entries(whyNot[label] || {})
+        .sort((a, b) => b[1] - a[1])
+        .map(([reason, count]) => `${count} ${reason}`)
+        .join('; ');
+      console.log(`  "Not recorded" on ${n} "${label}" lines: ${why || 'none'}`);
+    }
+    console.log(
+      `  the Concept line names something other than a concept on ${Object.entries(saidInstead)
+        .map(([k, n]) => `${n} (${k})`)
+        .join(' and ') || 'nothing'}`
+    );
+    console.log(
+      `  ${vendorFigures} vendor figures, every one of which says so on the lines with nothing behind ` +
+        'them and is offered no link to a filing it has not got'
+    );
+    console.log(
+      `  ${exactLinks} figures link to their own filing and ${searchLinks} to a search labelled "Find ` +
+        `this filing on EDGAR"; the forms are ${Object.entries(formsSeen)
+          .sort((a, b) => b[1] - a[1])
+          .map(([f, n]) => `${f} x${n}`)
+          .join(', ')}`
+    );
+    console.log(
+      `  ${
+        Object.values(interim).reduce((t, n) => t + n, 0)
+      } figures come from a document that is not a 10-K or a 10-Q (${
+        Object.entries(interim)
+          .sort((a, b) => b[1] - a[1])
+          .map(([f, n]) => `${f} x${n}`)
+          .join(', ') || 'none'
+      }) -- recorded correctly, and open as \`KI-36\``
+    );
+    console.log(
+      `  ${varied.length} of the ${multi.length} lines with more than one candidate concept show more ` +
+        `than one across the set, so the concept is the one that matched: ${varied
+          .slice(0, 3)
+          .map((k) => `${k} (${[...conceptsSeen[k]].join(', ')})`)
+          .join('; ')}`
+    );
+  }
+}
+
+
 console.log(`\nTOTAL PROBLEMS ACROSS SCENARIOS AND SWEEP: ${totalProblems}`);
 
 if (compareTag) {

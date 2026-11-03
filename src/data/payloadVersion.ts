@@ -54,13 +54,23 @@
 //      one. `shareCountFiledAt` carries the filing date each annual count
 //      came from. An event that did not change the issuer's share count, such
 //      as an ADR ratio change, is recorded and not applied (`KI-31`)
+//  11  `statements[].evidence` and `quarters[].evidence`: for every figure an
+//      SEC filer's payload carries, the XBRL CONCEPT it was read from and the
+//      ACCESSION NUMBER of the one document it is in, with `filings` holding
+//      each of those documents once — its form as filed (`10-K`, `10-Q`,
+//      `10-K/A`), its filing date and the address it can be opened at — and
+//      `cik` so a search link can be built where there is no accession
+//      number. Until this the evidence sheet named a LIST of candidate
+//      concepts and said which one the company used was not recorded, and an
+//      annual figure's Form line read "Annual report (10-K / 20-F), as tagged
+//      in XBRL" because no form was held either
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 10;
+export const PAYLOAD_VERSION = 11;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

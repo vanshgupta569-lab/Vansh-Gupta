@@ -381,15 +381,21 @@ const EvidenceSheet: React.FC<{ evidence: Evidence; onClose: () => void }> = ({ 
         ))}
       </dl>
 
-      {/* THE DOCUMENTS, AND BOTH OF THEM WHERE A QUARTER IS A SUBTRACTION.
+      {/* BOTH DOCUMENTS WHERE A QUARTER IS A SUBTRACTION.
           A quarter the company never filed on its own is this year-to-date
           less the last one, which is a claim about two filings; showing one
           would be half the provenance, and a reader who wants to check the
-          subtraction needs to be able to open both. */}
-      {evidence.filings.length > 0 && (
+          subtraction needs to be able to open both.
+
+          ONE FILING NEEDS NO LIST. Its form, its date and its accession
+          number are already three lines of the sheet above, so a list of one
+          printed all three again and left the link reading "10-K · 2026-02-10"
+          where a reader was looking for the way in. A single document is the
+          "Open the filing" link below instead. */}
+      {evidence.filings.length > 1 && (
         <div className="mt-4 border-t border-line pt-3">
           <div className={`${EYEBROW} text-quiet mb-1.5`}>
-            {evidence.filings.length > 1 ? 'The two filings it is the difference of' : 'The filing'}
+            The two filings it is the difference of
           </div>
           <ul className="space-y-1.5">
             {evidence.filings.map((f) => (
@@ -414,21 +420,37 @@ const EvidenceSheet: React.FC<{ evidence: Evidence; onClose: () => void }> = ({ 
       <div className="mt-4 border-t border-line pt-3">
         <div className={`${EYEBROW} text-quiet mb-1.5`}>Where it came from</div>
         <p className={`${UI} ${evidence.traceable ? 'text-read' : 'text-accent-text'}`}>{evidence.source}</p>
-        {evidence.concepts && (
+        {/* THE CONCEPT THIS FIGURE WAS READ FROM, where the payload records it
+            (version 11), and the candidate list only where it does not. Both
+            at once would leave a reader working out which answer is the
+            figure's. */}
+        {evidence.concept && (
+          <p className={`${UI} text-quiet mt-2`} data-evidence-concept={evidence.concept}>
+            Read from the XBRL concept{' '}
+            <span className="font-figure text-read">{evidence.concept}</span>, which is the one this
+            company tagged this figure under.
+          </p>
+        )}
+        {!evidence.concept && evidence.concepts && (
           <p className={`${UI} text-quiet mt-2`}>
             Read from the first of these XBRL concepts the filing carries:{' '}
             <span className="font-figure text-read">{evidence.concepts.join(', ')}</span>. Which one this
-            company used is not recorded in the data we hold.
+            company used is not recorded for this figure.
           </p>
         )}
-        {evidence.url && !evidence.filings.length && (
+        {/* ONE LINK, SAYING WHAT IT ACTUALLY OPENS. "Open the filing" only
+            where the figure carries an accession number; otherwise the label
+            is the search it is. */}
+        {evidence.openLink && evidence.filings.length < 2 && (
           <a
-            href={evidence.url}
+            href={evidence.openLink.url}
+            data-filing={evidence.filings[0]?.accn || undefined}
             target="_blank"
             rel="noopener noreferrer"
+            data-evidence-link={evidence.openLink.exact ? 'filing' : 'search'}
             className={`${UI} text-accent-text hover:text-ink transition-colors inline-flex items-center gap-1.5 mt-3`}
           >
-            Open the filing
+            {evidence.openLink.label}
             <ExternalLink className="w-3 h-3" />
           </a>
         )}

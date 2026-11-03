@@ -262,6 +262,18 @@ What it covers today:
 - **Every statement for every Indian company**, and for every other company
   outside the SEC's reach. The United States is already on primary filings;
   India is not, and `docs/DATA_LAYER_PLAN.md` is the plan that moves it.
+- **And no provenance for any of it.** The feed does not say which filing a
+  figure came from, what concept it was tagged under, what form that document
+  was, or when it was filed. Measured on 2026-11-03 over the Financials tab:
+  **23,951 figures read "Not recorded" on the concept line and 26,482 on each
+  of the form, filing date and filing ID lines**, and every one of the 23,951
+  is a vendor figure. Against them, 48,089 figures from SEC filings name the
+  concept they were read from or say in words why there is not one, and 48,063
+  open the single document they are in. Those four lines are the difference
+  between a figure a reader can check and a figure they have to take on trust,
+  and no amount of work on this site produces them from this source. A vendor
+  figure is offered no link either — not even a search — because there is no
+  filing behind it to find.
 
 **It cannot move a value by itself** — the figures are the vendor's extraction
 of the same filings, and where that extraction has been wrong the defect was

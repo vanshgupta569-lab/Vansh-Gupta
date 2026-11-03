@@ -3209,6 +3209,163 @@ async function checkCompanyTabsOnScreen(page: Page) {
       }
       await page.keyboard.press('Escape');
 
+      // ---- THE CONCEPT, THE FORM, THE DATE AND THE LINK -------------------
+      //
+      // Four lines of the evidence sheet that were guesses or blanks until
+      // 2026-11-03, and the link that said "Open the filing" and opened a
+      // search page. All four are read HERE, in the browser, on named cells of
+      // the fixture, because the data layer's own answer is checked over the
+      // whole set in `npm run verify` and what a reader is shown is a
+      // different question.
+      //
+      // The fixture is built for this: FY2023's revenue is tagged `Revenues`
+      // where every other year is tagged
+      // `RevenueFromContractWithCustomerExcludingAssessedTax`, so a sheet that
+      // printed a constant would pass on one year and fail on the other; and
+      // interest expense carries a concept and NO accession number, which is
+      // the only path to the search link.
+      {
+        const sheet = page.locator('[data-evidence-sheet]');
+        const lineOf = async (label: string) => {
+          const dt = sheet.locator('dt', { hasText: new RegExp(`^${label}$`) }).first();
+          if (!(await dt.count())) return '<<missing>>';
+          return ((await dt.locator('xpath=following-sibling::dd[1]').textContent()) || '').trim();
+        };
+        const openCell = async (key: string) => {
+          const cell = table.locator(`[data-cell="${key}"]`).first();
+          if (!(await cell.count())) return false;
+          await cell.evaluate((el: any) => el.click());
+          await page.waitForTimeout(200);
+          return await sheet.isVisible().catch(() => false);
+        };
+
+        // 1. A YEAR'S FIGURE NAMES ITS OWN CONCEPT, and two years of one row
+        //    do not have to name the same one.
+        const concepts: Record<string, string> = {};
+        for (const fy of ['FY2023', 'FY2025']) {
+          if (!(await openCell(`revenue:${fy}`))) {
+            fail('the evidence for a year', `a revenue cell for ${fy}`, 'no such cell on the screen');
+            continue;
+          }
+          concepts[fy] = await lineOf('Concept');
+          const form = await lineOf('Form');
+          const filed = await lineOf('Filing date');
+          const accn = await lineOf('Filing ID');
+          if (form !== '10-K') {
+            fail(
+              `the form behind ${fy} revenue`,
+              'the one form the figure was filed on, 10-K',
+              `"${form}"`
+            );
+          } else if (!/^\d{4}-\d{2}-\d{2}$/.test(filed)) {
+            fail(`the filing date behind ${fy} revenue`, 'a date', `"${filed}"`);
+          } else if (!/^\d{10}-\d{2}-\d{6}$/.test(accn)) {
+            fail(`the filing behind ${fy} revenue`, 'an accession number', `"${accn}"`);
+          } else {
+            const link = sheet.locator('[data-evidence-link="filing"]').first();
+            const href = (await link.count()) ? await link.getAttribute('href') : null;
+            const label = ((await link.count()) ? await link.textContent() : '') || '';
+            if (!href) {
+              fail(`the link behind ${fy} revenue`, 'a link to that filing', 'no exact-filing link');
+            } else if (!href.includes(accn.replace(/-/g, ''))) {
+              fail(
+                `the link behind ${fy} revenue`,
+                `an address containing ${accn.replace(/-/g, '')}, which is filing ${accn}`,
+                href
+              );
+            } else if (!/Open the filing/.test(label)) {
+              fail(`the link behind ${fy} revenue`, '"Open the filing"', `"${label.trim()}"`);
+            } else {
+              ok(
+                `${fy} revenue names its concept (${concepts[fy]}), its form (${form}), its date ` +
+                  `(${filed}) and opens filing ${accn} itself`
+              );
+            }
+          }
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(120);
+        }
+        if (concepts.FY2023 && concepts.FY2025 && concepts.FY2023 === concepts.FY2025) {
+          fail(
+            'the concept behind a figure',
+            'the concept THAT figure was tagged under -- the fixture tags FY2023 revenue as `Revenues` ' +
+              'and FY2025 as `RevenueFromContractWithCustomerExcludingAssessedTax`',
+            `both years show ${concepts.FY2023}, so the sheet is printing the line's concept and not ` +
+              "the figure's"
+          );
+        } else if (concepts.FY2023 && concepts.FY2025) {
+          ok(
+            `two years of one row name two different concepts (${concepts.FY2023} and ` +
+              `${concepts.FY2025}), so the sheet names the figure's own`
+          );
+        }
+
+        // 2. AND WHERE THERE IS NO ACCESSION NUMBER, THE LINK SAYS SO.
+        //    Interest expense is a detail row, so the detail rows come out
+        //    first. A link labelled "open the filing" that lands on a search
+        //    page is a small lie told on every figure whose document is not
+        //    held, which is what this used to be.
+        const moreLines = page.getByRole('button', { name: /more lines/i });
+        if (await moreLines.count()) {
+          await moreLines.evaluate((el: any) => el.click());
+          await page.waitForTimeout(200);
+        }
+        if (!(await openCell('interestExpense:FY2025'))) {
+          fail(
+            'the evidence for a figure with no document',
+            'the interest expense cell the fixture gives no accession number',
+            'no such cell on the screen'
+          );
+        } else {
+          const accn = await lineOf('Filing ID');
+          const form = await lineOf('Form');
+          const concept = await lineOf('Concept');
+          const search = sheet.locator('[data-evidence-link="search"]').first();
+          const exact = sheet.locator('[data-evidence-link="filing"]').first();
+          const label = ((await search.count()) ? await search.textContent() : '') || '';
+          const href = (await search.count()) ? await search.getAttribute('href') : null;
+          if (accn !== 'Not recorded' || form !== 'Not recorded') {
+            fail(
+              'a figure whose document is not held',
+              'Not recorded on the Form and Filing ID lines',
+              `form "${form}", filing ID "${accn}"`
+            );
+          } else if (concept === 'Not recorded') {
+            fail(
+              'a figure whose document is not held',
+              'its concept, which is recorded even where the document is not',
+              'Not recorded'
+            );
+          } else if (await exact.count()) {
+            fail(
+              'the link for a figure with no accession number',
+              'a search link',
+              'a link offered as that exact filing'
+            );
+          } else if (!/Find this filing on EDGAR/.test(label)) {
+            fail(
+              'the link for a figure with no accession number',
+              '"Find this filing on EDGAR"',
+              `"${label.trim()}"`
+            );
+          } else if (!href || !/sec\.gov/.test(href)) {
+            fail('the search link', 'an address at the SEC', String(href));
+          } else {
+            ok(
+              `a figure with no accession number names its concept (${concept}), reads "Not recorded" ` +
+                'for the form and the filing, and offers "Find this filing on EDGAR"'
+            );
+          }
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(120);
+        }
+        const fewer = page.getByRole('button', { name: /Fewer lines/i });
+        if (await fewer.count()) {
+          await fewer.evaluate((el: any) => el.click());
+          await page.waitForTimeout(150);
+        }
+      }
+
       // ---- A GAP IS AN EM DASH ON THE SCREEN TOO ----
       //
       // On the BALANCE SHEET with its detail rows open, because that is where

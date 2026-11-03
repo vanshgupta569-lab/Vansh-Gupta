@@ -81,6 +81,18 @@ export interface Cell {
   /** The filing this figure was read from, where there is one. */
   filing?: Filing | null;
   /**
+   * THE XBRL CONCEPT THIS FIGURE WAS READ FROM, for an SEC filer.
+   *
+   * The concept belongs to the FIGURE and not to the line: one company's
+   * revenue is `Revenues` and the next company's is
+   * `RevenueFromContractWithCustomerExcludingAssessedTax`, and the same
+   * company can change concept between two years. Until 2026-11-03 the
+   * evidence sheet printed the candidate LIST and said which one the company
+   * used was not recorded, which was true of the payload and is what payload
+   * version 11 records.
+   */
+  concept?: string | null;
+  /**
    * THE TWO FILINGS A DERIVED QUARTER IS THE DIFFERENCE OF.
    *
    * A quarter worked out as this year-to-date less the last one is a claim
@@ -311,9 +323,40 @@ interface SourceRow {
   states: Record<string, string>;
   filing: Filing | null;
   derivedFrom: Record<string, Filing[]>;
+  /**
+   * PER FIGURE: the concept it was read from and the one document it is in,
+   * resolved here against the payload's `filings` dictionary so that nothing
+   * below has to know the payload's shape. Empty for a vendor payload, which
+   * records neither.
+   */
+  evidence: Record<string, { concept: string | null; filing: Filing | null }>;
 }
 
-const annualRow = (r: any, months: number): SourceRow => ({
+/**
+ * The payload's documents, keyed by accession number, as the fetcher wrote
+ * them (payload version 11). A payload built before that has none, and every
+ * figure in it says so rather than naming a document it cannot open.
+ */
+const filingsOf = (payload: any): Record<string, Filing> =>
+  payload && typeof payload.filings === 'object' && payload.filings ? payload.filings : {};
+
+const resolveEvidence = (
+  raw: any,
+  filings: Record<string, Filing>
+): Record<string, { concept: string | null; filing: Filing | null }> => {
+  const out: Record<string, { concept: string | null; filing: Filing | null }> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [field, prov] of Object.entries(raw as Record<string, any>)) {
+    if (!prov || typeof prov !== 'object') continue;
+    out[field] = {
+      concept: typeof prov.concept === 'string' && prov.concept ? prov.concept : null,
+      filing: prov.accn && filings[prov.accn] ? filings[prov.accn] : null,
+    };
+  }
+  return out;
+};
+
+const annualRow = (r: any, months: number, filings: Record<string, Filing>): SourceRow => ({
   kind: 'annual',
   end: r.periodEnd,
   start: null,
@@ -325,9 +368,10 @@ const annualRow = (r: any, months: number): SourceRow => ({
   states: {},
   filing: null,
   derivedFrom: {},
+  evidence: resolveEvidence(r?.evidence, filings),
 });
 
-const quarterRow = (q: any): SourceRow => ({
+const quarterRow = (q: any, filings: Record<string, Filing>): SourceRow => ({
   kind: q.months === 6 ? 'half' : 'quarter',
   end: q.periodEnd,
   start: q.periodStart ?? null,
@@ -339,6 +383,7 @@ const quarterRow = (q: any): SourceRow => ({
   states: q.states || {},
   filing: q.filing ?? null,
   derivedFrom: q.derivedFrom || {},
+  evidence: resolveEvidence(q?.evidence, filings),
 });
 
 /** Every input present, or nothing: a derived figure with a hole in it is a lie. */
@@ -614,7 +659,16 @@ const cellFor = (def: RowDef, source: SourceRow): Cell => {
         formula: def.derive.formula,
       };
     }
-    return { state: 'derived', value: v, formula: def.derive.formula, filing: source.filing };
+    // A DERIVED ROW IS OUR ARITHMETIC OVER THE FILING'S FIGURES, so it has no
+    // concept of its own — the sheet shows the formula instead. It does have a
+    // DOCUMENT, where every input it was struck from came from the same one:
+    // gross profit is revenue less cost of sales and both of those are in the
+    // year's 10-K, so "Not recorded" would be a worse answer than the 10-K.
+    // Where the inputs disagree there is no single document and it says so.
+    const docs = def.derive.inputs.map((f) => source.evidence[f]?.filing ?? null);
+    const oneDoc =
+      docs.length && docs.every((d) => d && d.accn === docs[0]?.accn) ? docs[0] : source.filing;
+    return { state: 'derived', value: v, formula: def.derive.formula, filing: oneDoc };
   }
   const raw = def.field ? row?.[def.field] : undefined;
   if (!num(raw)) {
@@ -624,12 +678,20 @@ const cellFor = (def: RowDef, source: SourceRow): Cell => {
       reason: 'The source does not report this line for this period. It is not a nil.',
     };
   }
+  // THE FIGURE'S OWN DOCUMENT, not the period's. One 10-K is behind most of a
+  // year's lines and one 10-Q behind most of a quarter's, but a line restated
+  // in a later filing is read from that later filing. The period's filing is
+  // the fallback for a payload built before version 11 recorded either.
+  const prov = def.field ? source.evidence[def.field] : undefined;
+  const concept = prov?.concept ?? null;
+  const filing = prov?.filing ?? source.filing;
   if (raw === 0) {
     return {
       state: 'reportedZero',
       value: 0,
       reason: 'Reported as nil, which is a figure the company filed rather than a gap.',
-      filing: source.filing,
+      filing,
+      concept,
     };
   }
   // A QUARTER THE COMPANY DID NOT FILE, WORKED OUT FROM TWO THAT IT DID.
@@ -643,11 +705,18 @@ const cellFor = (def: RowDef, source: SourceRow): Cell => {
         source.months === 3
           ? 'This year to date, less the year to date at the end of the previous quarter'
           : 'Worked out from two filed periods',
-      filing: source.filing,
+      filing,
+      concept,
       derivedFrom: source.derivedFrom[def.field] || [],
     };
   }
-  return { state: 'reported', value: raw, filing: source.filing };
+  return { state: 'reported', value: raw, filing, concept };
+};
+
+/** One concept, or none, across the periods a trailing figure is built from. */
+const oneConcept = (cells: Cell[]): string | null => {
+  const named = cells.map((c) => c.concept || null);
+  return named.length && named.every((c) => c && c === named[0]) ? (named[0] as string) : null;
 };
 
 /**
@@ -789,6 +858,11 @@ const ttmCell = (
       state: 'derived',
       value: cells.reduce((t, c) => t + (c.value || 0), 0),
       formula: `The four quarters to ${dateLabel(method.uses[0])}, added`,
+      // ONE CONCEPT ONLY WHERE ALL FOUR AGREE. A company that tags three
+      // quarters one way and the fourth another has a sum of two concepts,
+      // and naming either of them would be a claim about the whole year that
+      // is true of nine months of it.
+      concept: oneConcept(cells),
       derivedFrom: cells.flatMap((c) => (c.filing ? [c.filing] : [])),
     };
   }
@@ -812,6 +886,7 @@ const ttmCell = (
       state: 'derived',
       value: (cells[0].value || 0) + (cells[1].value || 0) - (cells[2].value || 0),
       formula: `The year to ${dateLabel(yearEnd)}, plus the half to ${dateLabel(thisHalf)}, less the half to ${dateLabel(priorHalf)}`,
+      concept: oneConcept(cells),
       derivedFrom: cells.flatMap((c) => (c.filing ? [c.filing] : [])),
     };
   }
@@ -844,13 +919,14 @@ export function financialsFor(payload: any, opts: ViewOptions): FinancialsView {
   const annualRaw = [...statements]
     .filter((r) => r && typeof r.periodEnd === 'string')
     .sort((a, b) => (a.periodEnd < b.periodEnd ? -1 : 1));
+  const filings = filingsOf(payload);
   const annual: SourceRow[] = annualRaw.map((r, i) =>
-    annualRow(r, i === 0 ? 12 : monthsBetween(annualRaw[i - 1].periodEnd, r.periodEnd) ?? 12)
+    annualRow(r, i === 0 ? 12 : monthsBetween(annualRaw[i - 1].periodEnd, r.periodEnd) ?? 12, filings)
   );
 
   const quarterly: SourceRow[] = (Array.isArray(payload?.quarters) ? payload.quarters : [])
     .filter((q: any) => q && typeof q.periodEnd === 'string' && q.values)
-    .map(quarterRow)
+    .map((q: any) => quarterRow(q, filings))
     .sort((a: SourceRow, b: SourceRow) => (a.end < b.end ? -1 : a.end > b.end ? 1 : a.months - b.months));
 
   const everything = [...annual, ...quarterly];
@@ -1098,7 +1174,24 @@ export interface Evidence {
   source: string;
   traceable: boolean;
   url: string | null;
-  /** The XBRL concepts the data layer reads for this line, where it reads any. */
+  /**
+   * THE ONE LINK THE SHEET OFFERS, and what it is honest enough to call itself.
+   *
+   * `exact` where the figure carries an accession number, in which case the
+   * address is that document and the link says "Open the filing". Where it does
+   * not, the link says **"Find this filing on EDGAR"** and goes to this
+   * company's own list of that form — because a link labelled "open the filing"
+   * that lands on a search page is a small lie told on every figure that has
+   * no accession number, and until 2026-11-03 that was what it did.
+   */
+  openLink: { label: string; url: string; exact: boolean } | null;
+  /** The XBRL concept THIS figure was read from, where the payload records it. */
+  concept: string | null;
+  /**
+   * The candidate list, and only where the figure's own concept is not
+   * recorded — a payload built before version 11, or a vendor feed. It is the
+   * weaker answer and it says so on the screen.
+   */
   concepts: string[] | null;
   note?: string;
   /**
@@ -1114,46 +1207,200 @@ export interface Evidence {
  *
  * Mirrored from `US_TAGS` in `api/company.js`, which is not importable here —
  * that file is packaged on its own by the host and a shared import there has
- * taken the route down before (its own comment says so). What this CANNOT say
- * is which of the candidates a given company used in a given year, because the
- * payload does not record it: the evidence sheet says that in those words
- * rather than naming one and hoping. Recording the winning tag is a payload
- * change, and so a stage B job.
+ * taken the route down before (its own comment says so). **`npm run verify`
+ * holds the two lists against each other**, because this copy had already gone
+ * stale: it named one concept for stock compensation where `US_TAGS` has two
+ * and one for depreciation where it has three, so a figure read from the
+ * second tag was reported as read from a list that did not contain it. It is
+ * generated from `US_TAGS` rather than typed.
+ *
+ * SINCE PAYLOAD VERSION 11 THIS IS THE FALLBACK, NOT THE ANSWER. The figure's
+ * own concept is recorded beside it and the sheet prints that; this list is
+ * shown only where no concept is held — a payload built before version 11, or
+ * a vendor feed — and the sentence beside it says which of the candidates was
+ * used is not known for that figure.
  */
-const CONCEPTS: Record<string, string[]> = {
-  revenue: ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'SalesRevenueNet'],
+const NOT_RECORDED = 'Not recorded';
+
+/**
+ * WHAT TO PUT ON THE CONCEPT LINE, which is three different answers and not
+ * one answer with two failures.
+ *
+ * A FIGURE READ FROM A FILING has a concept, and it is named. A FIGURE WORKED
+ * OUT HERE — gross profit, EBITDA, free cash flow, the operating margin — has
+ * none, because it is this site's arithmetic over figures that each have their
+ * own, and the formula is already on the sheet. A FIGURE BUILT FROM SEVERAL
+ * PERIODS can have several: a company that tags its stock compensation
+ * `ShareBasedCompensation` in three quarters and
+ * `AllocatedShareBasedCompensationExpense` in the fourth has a trailing twelve
+ * months with two concepts in it, and naming either would be a claim about the
+ * year that is true of nine months of it. 23 trailing figures across the set
+ * are that case.
+ *
+ * None of the three is "Not recorded", which is reserved for what it says: a
+ * vendor feed that does not record which filing a figure came from. A VENDOR
+ * PAYLOAD HAS NO CONCEPTS AT ALL, so "more than one across its periods" is not
+ * available to it — only the arithmetic sentence is, because that one is about
+ * what this site did and not about what the source recorded.
+ */
+const conceptLine = (cell: Cell, row: Row, traceable: boolean): string => {
+  if (cell.concept) return cell.concept;
+  if (row.inputs) return 'Not one concept — worked out here, from the formula above';
+  if (traceable && cell.formula) return 'More than one, across the periods this figure is built from';
+  return NOT_RECORDED;
+};
+
+export const CANDIDATE_CONCEPTS: Record<string, string[]> = {
+  revenue: [
+    'RevenueFromContractWithCustomerExcludingAssessedTax',
+    'RevenueFromContractWithCustomerIncludingAssessedTax',
+    'Revenues',
+    'SalesRevenueNet',
+  ],
   cogs: ['CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfServices'],
   rnd: ['ResearchAndDevelopmentExpense'],
   sga: ['SellingGeneralAndAdministrativeExpense', 'GeneralAndAdministrativeExpense'],
   operatingIncome: ['OperatingIncomeLoss'],
-  pretaxIncome: ['IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'],
+  pretaxIncome: [
+    'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+    'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
+  ],
   taxExpense: ['IncomeTaxExpenseBenefit'],
   netIncome: ['NetIncomeLoss', 'ProfitLoss'],
-  interestExpense: ['InterestExpense', 'InterestExpenseNonoperating', 'InterestExpenseDebt'],
-  cash: ['CashAndCashEquivalentsAtCarryingValue'],
-  shortTermInvestments: ['ShortTermInvestments', 'MarketableSecuritiesCurrent'],
-  receivables: ['AccountsReceivableNetCurrent'],
+  interestExpense: [
+    'InterestExpense',
+    'InterestExpenseNonoperating',
+    'InterestExpenseDebt',
+    'InterestAndDebtExpense',
+  ],
+  cash: [
+    'CashAndCashEquivalentsAtCarryingValue',
+    'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
+  ],
+  shortTermInvestments: [
+    'ShortTermInvestments',
+    'MarketableSecuritiesCurrent',
+    'AvailableForSaleSecuritiesDebtSecuritiesCurrent',
+    'AvailableForSaleSecuritiesCurrent',
+    'OtherShortTermInvestments',
+    'HeldToMaturitySecuritiesCurrent',
+  ],
+  longTermInvestments: [
+    'LongTermInvestments',
+    'MarketableSecuritiesNoncurrent',
+    'AvailableForSaleSecuritiesDebtSecuritiesNoncurrent',
+    'AvailableForSaleSecuritiesNoncurrent',
+    'HeldToMaturitySecuritiesNoncurrent',
+    'OtherLongTermInvestments',
+  ],
+  securitiesNotSplit: [
+    'MarketableSecurities',
+    'AvailableForSaleSecuritiesDebtSecurities',
+    'AvailableForSaleSecurities',
+    'Investments',
+  ],
+  receivables: ['AccountsReceivableNetCurrent', 'ReceivablesNetCurrent'],
   inventory: ['InventoryNet'],
   currentAssets: ['AssetsCurrent'],
-  ppeNet: ['PropertyPlantAndEquipmentNet'],
-  goodwill: ['Goodwill'],
-  intangibles: ['FiniteLivedIntangibleAssetsNet', 'IntangibleAssetsNetExcludingGoodwill'],
+  ppeNet: [
+    'PropertyPlantAndEquipmentNet',
+    'PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization',
+  ],
   totalAssets: ['Assets'],
   payables: ['AccountsPayableCurrent'],
   currentLiabilities: ['LiabilitiesCurrent'],
-  longTermDebt: ['LongTermDebtNoncurrent', 'LongTermDebt'],
+  longTermDebt: ['LongTermDebtNoncurrent', 'LongTermDebt', 'LongTermNotesPayable'],
+  longTermDebtTotal: ['LongTermDebt'],
+  longTermDebtNoncurrent: ['LongTermDebtNoncurrent'],
+  longTermDebtAndLeaseNoncurrent: ['LongTermDebtAndCapitalLeaseObligations'],
+  debtCurrent: ['DebtCurrent'],
+  longTermDebtCurrent: ['LongTermDebtCurrent'],
+  debtAndLeaseCurrent: ['LongTermDebtAndCapitalLeaseObligationsCurrent'],
+  shortTermBorrowings: [
+    'ShortTermBorrowings',
+    'CommercialPaper',
+    'OtherShortTermBorrowings',
+    'LinesOfCreditCurrent',
+    'ShortTermBankLoansAndNotesPayable',
+    'NotesPayableCurrent',
+  ],
+  financeLeaseCurrent: ['FinanceLeaseLiabilityCurrent', 'CapitalLeaseObligationsCurrent'],
+  financeLeaseNoncurrent: ['FinanceLeaseLiabilityNoncurrent', 'CapitalLeaseObligationsNoncurrent'],
+  financeLeaseTotal: ['FinanceLeaseLiability'],
+  operatingLeaseCurrent: ['OperatingLeaseLiabilityCurrent'],
+  operatingLeaseNoncurrent: ['OperatingLeaseLiabilityNoncurrent'],
+  operatingLeaseTotal: ['OperatingLeaseLiability'],
+  financeLeaseRightOfUseAsset: ['FinanceLeaseRightOfUseAsset', 'CapitalLeasedAssetsGross'],
+  operatingLeaseRightOfUseAsset: ['OperatingLeaseRightOfUseAsset'],
   totalLiabilities: ['Liabilities'],
-  equity: ['StockholdersEquity'],
+  goodwill: ['Goodwill'],
+  intangibles: ['IntangibleAssetsNetExcludingGoodwill', 'FiniteLivedIntangibleAssetsNet'],
+  equity: [
+    'StockholdersEquity',
+    'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+  ],
+  depreciation: [
+    'DepreciationDepletionAndAmortization',
+    'DepreciationAmortizationAndAccretionNet',
+    'Depreciation',
+  ],
+  depreciationOfPpe: ['Depreciation'],
   minorityInterest: ['MinorityInterest'],
-  operatingCashFlow: ['NetCashProvidedByUsedInOperatingActivities'],
-  capex: ['PaymentsToAcquirePropertyPlantAndEquipment'],
-  investingCashFlow: ['NetCashProvidedByUsedInInvestingActivities'],
-  financingCashFlow: ['NetCashProvidedByUsedInFinancingActivities'],
-  depreciation: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization'],
-  stockComp: ['ShareBasedCompensation'],
-  dividendsPaid: ['PaymentsOfDividends', 'PaymentsOfDividendsCommonStock'],
+  redeemableMinorityInterest: [
+    'RedeemableNoncontrollingInterestEquityCarryingAmount',
+    'RedeemableNoncontrollingInterestEquityFairValue',
+  ],
+  preferredStock: [
+    'PreferredStockValue',
+    'PreferredStockIncludingAdditionalPaidInCapital',
+    'PreferredStockIncludingAdditionalPaidInCapitalNetOfDiscount',
+    'PreferredStockValueOutstanding',
+    'PreferredStockLiquidationPreferenceValue',
+  ],
+  preferredConversionShares: ['IncrementalCommonSharesAttributableToConversionOfPreferredStock'],
+  preferredDividends: [
+    'DividendsPreferredStock',
+    'PreferredStockDividendsIncomeStatementImpact',
+    'DividendsPreferredStockCash',
+  ],
+  netIncomeToMinority: [
+    'NetIncomeLossAttributableToNoncontrollingInterest',
+    'MinorityInterestInNetIncomeLossOfConsolidatedEntities',
+  ],
+  equityIncludingMinority: [
+    'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+  ],
+  amortisationOfIntangibles: [
+    'AmortizationOfIntangibleAssets',
+    'AmortizationOfIntangibleAssetsExcludingGoodwill',
+    'FiniteLivedIntangibleAssetsAmortizationExpense',
+  ],
+  capex: ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets'],
+  operatingCashFlow: [
+    'NetCashProvidedByUsedInOperatingActivities',
+    'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
+  ],
+  investingCashFlow: [
+    'NetCashProvidedByUsedInInvestingActivities',
+    'NetCashProvidedByUsedInInvestingActivitiesContinuingOperations',
+  ],
+  financingCashFlow: [
+    'NetCashProvidedByUsedInFinancingActivities',
+    'NetCashProvidedByUsedInFinancingActivitiesContinuingOperations',
+  ],
+  stockComp: ['ShareBasedCompensation', 'AllocatedShareBasedCompensationExpense'],
+  dividendsPaid: [
+    'PaymentsOfDividendsCommonStock',
+    'PaymentsOfDividends',
+    'PaymentsOfDistributionsToAffiliates',
+    'PaymentsOfOrdinaryDividends',
+  ],
+  commonDividendsPaid: ['PaymentsOfDividendsCommonStock'],
   buybacks: ['PaymentsForRepurchaseOfCommonStock'],
-  dilutedShares: ['WeightedAverageNumberOfDilutedSharesOutstanding'],
+  dilutedShares: [
+    'WeightedAverageNumberOfDilutedSharesOutstanding',
+    'WeightedAverageNumberOfSharesOutstandingBasic',
+  ],
 };
 
 const STATE_LABELS: Record<ValueState, string> = {
@@ -1208,18 +1455,37 @@ export function evidenceFor(payload: any, view: FinancialsView, row: Row, index:
     ['Unit', row.kind === 'money' ? `${symbol}, millions` : row.kind === 'shares' ? 'whole shares' : 'per cent'],
     ['Currency', view.currency || 'not stated'],
     ['State', STATE_LABELS[cell.state]],
-    [
-      'Form',
-      filings[0]?.form
-        ? filings[0].form
-        : source.traceable
-          ? 'Annual report (10-K / 20-F), as tagged in XBRL'
-          : 'not recorded by the feed',
-    ],
-    ['Filing date', filings[0]?.filed || 'not recorded by the feed'],
-    ['Filing ID', filings[0]?.accn || 'not recorded by the feed'],
+    // THE CONCEPT, THE FORM, THE DATE AND THE ACCESSION NUMBER OF THIS FIGURE.
+    //
+    // Four lines that used to be two guesses and two blanks. The form is the
+    // one the document was filed under — `10-K`, `10-Q`, `10-K/A` — and never
+    // "10-K / 20-F", which was a statement about which forms this site reads
+    // dressed up as a statement about where the figure came from. Anything
+    // genuinely not held reads **Not recorded**, in those words, and
+    // `npm run verify` counts them.
+    ['Concept', conceptLine(cell, row, source.traceable)],
+    ['Form', filings[0]?.form || NOT_RECORDED],
+    ['Filing date', filings[0]?.filed || NOT_RECORDED],
+    ['Filing ID', filings[0]?.accn || NOT_RECORDED],
     ['Restated', 'not known — one capture held, so no earlier version to compare'],
   ].map(([label, value]) => ({ label, value }));
+
+  // WHERE NO ACCESSION NUMBER EXISTS, THE LINK SAYS SO. An SEC filer whose
+  // figure carries no document — a derived row, or a payload built before
+  // version 11 — gets this company's own list of that form on EDGAR, labelled
+  // as the search it is. A vendor payload gets no link at all, because there
+  // is no filing behind the figure to find; the source line above says that in
+  // full.
+  const searchUrl = payload?.cik
+    ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${encodeURIComponent(
+        String(payload.cik)
+      )}&type=${encodeURIComponent(period.kind === 'annual' || period.kind === 'ttm' ? '10-K' : '10-Q')}&dateb=&owner=include&count=40`
+    : source.url;
+  const openLink = filings[0]?.url
+    ? { label: 'Open the filing', url: filings[0].url, exact: true }
+    : source.traceable && searchUrl
+      ? { label: 'Find this filing on EDGAR', url: searchUrl, exact: false }
+      : null;
 
   return {
     title: `${row.label} · ${period.label}`,
@@ -1230,7 +1496,12 @@ export function evidenceFor(payload: any, view: FinancialsView, row: Row, index:
     source: source.line,
     traceable: source.traceable,
     url: filings[0]?.url || source.url,
-    concepts: source.traceable && !row.formula ? CONCEPTS[row.key] ?? null : null,
+    openLink,
+    concept: cell.concept || null,
+    // ONLY WHERE THE FIGURE'S OWN CONCEPT IS NOT HELD. Showing both would
+    // leave a reader to work out which of the two answers the figure's.
+    concepts:
+      !cell.concept && source.traceable && !row.formula ? CANDIDATE_CONCEPTS[row.key] ?? null : null,
     note: cell.formula ? `${cell.formula}.` : cell.reason,
     filings,
   };

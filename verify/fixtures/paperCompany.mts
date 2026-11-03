@@ -266,6 +266,96 @@ export const PAPER_NAME = 'Fenwick Paper Mills Inc.';
  * of — because the thing most worth checking on screen is the one a reader
  * cannot see is derived unless we say so.
  */
+/**
+ * THE 10-K BEHIND EACH YEAR, and the XBRL concept each line was tagged under
+ * (payload version 11).
+ *
+ * TWO THINGS ARE DELIBERATE HERE and the browser check reads both.
+ *
+ *   FY2023's revenue is tagged `Revenues` where every other year is tagged
+ *   `RevenueFromContractWithCustomerExcludingAssessedTax`. A fixture where one
+ *   concept covers every figure would pass a check that printed a constant.
+ *
+ *   `interestExpense` carries a CONCEPT AND NO ACCESSION NUMBER, which is the
+ *   shape of a figure whose document is not held. It is the only path to the
+ *   "Find this filing on EDGAR" link, and without it that branch would ship
+ *   untested.
+ */
+const ANNUAL_FILINGS = YEARS.map((year, i) => {
+  // A SERIES OF ITS OWN, so no year's 10-K shares an accession number with a
+  // quarter's 10-Q. Two documents under one number would collapse into one in
+  // the payload's dictionary, and the form a reader was shown would be
+  // whichever was written last.
+  const accn = `0000111111-${String(year + 1).slice(-2)}-10000${i + 1}`;
+  return {
+    accn,
+    form: '10-K',
+    filed: `${year + 1}-02-10`,
+    url: `https://www.sec.gov/Archives/edgar/data/111111/${accn.replace(/-/g, '')}/`,
+  };
+});
+
+const ANNUAL_CONCEPTS: Record<string, string> = {
+  revenue: 'RevenueFromContractWithCustomerExcludingAssessedTax',
+  cogs: 'CostOfGoodsAndServicesSold',
+  rnd: 'ResearchAndDevelopmentExpense',
+  sga: 'SellingGeneralAndAdministrativeExpense',
+  operatingIncome: 'OperatingIncomeLoss',
+  pretaxIncome:
+    'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+  taxExpense: 'IncomeTaxExpenseBenefit',
+  netIncome: 'NetIncomeLoss',
+  interestExpense: 'InterestExpense',
+  cash: 'CashAndCashEquivalentsAtCarryingValue',
+  shortTermInvestments: 'ShortTermInvestments',
+  receivables: 'AccountsReceivableNetCurrent',
+  inventory: 'InventoryNet',
+  currentAssets: 'AssetsCurrent',
+  ppeNet: 'PropertyPlantAndEquipmentNet',
+  totalAssets: 'Assets',
+  payables: 'AccountsPayableCurrent',
+  currentLiabilities: 'LiabilitiesCurrent',
+  longTermDebt: 'LongTermDebtNoncurrent',
+  totalLiabilities: 'Liabilities',
+  equity: 'StockholdersEquity',
+  operatingCashFlow: 'NetCashProvidedByUsedInOperatingActivities',
+  capex: 'PaymentsToAcquirePropertyPlantAndEquipment',
+  investingCashFlow: 'NetCashProvidedByUsedInInvestingActivities',
+  financingCashFlow: 'NetCashProvidedByUsedInFinancingActivities',
+  depreciation: 'DepreciationDepletionAndAmortization',
+  stockComp: 'ShareBasedCompensation',
+  dividendsPaid: 'PaymentsOfDividends',
+  buybacks: 'PaymentsForRepurchaseOfCommonStock',
+  dilutedShares: 'WeightedAverageNumberOfDilutedSharesOutstanding',
+};
+
+const annualEvidence = (row: any, i: number) => {
+  const out: Record<string, { concept: string | null; accn: string | null }> = {};
+  for (const [field, concept] of Object.entries(ANNUAL_CONCEPTS)) {
+    if (typeof row[field] !== 'number') continue;
+    out[field] = {
+      concept: field === 'revenue' && YEARS[i] === 2023 ? 'Revenues' : concept,
+      // The one figure with no document, on purpose: see above.
+      accn: field === 'interestExpense' ? null : ANNUAL_FILINGS[i].accn,
+    };
+  }
+  return out;
+};
+
+const QUARTER_CONCEPTS: Record<string, string> = {
+  revenue: 'RevenueFromContractWithCustomerExcludingAssessedTax',
+  cogs: 'CostOfGoodsAndServicesSold',
+  operatingIncome: 'OperatingIncomeLoss',
+  pretaxIncome:
+    'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+  netIncome: 'NetIncomeLoss',
+  totalAssets: 'Assets',
+  cash: 'CashAndCashEquivalentsAtCarryingValue',
+  equity: 'StockholdersEquity',
+  operatingCashFlow: 'NetCashProvidedByUsedInOperatingActivities',
+  capex: 'PaymentsToAcquirePropertyPlantAndEquipment',
+};
+
 const QUARTER_FILINGS = {
   q4: {
     accn: '0000111111-26-000004',
@@ -326,6 +416,12 @@ const quarter = (
     capex: Math.round(revenue * 0.07),
   },
   filing,
+  evidence: Object.fromEntries(
+    Object.keys(QUARTER_CONCEPTS).map((field) => [
+      field,
+      { concept: QUARTER_CONCEPTS[field], accn: filing.accn },
+    ])
+  ),
   ...extra,
 });
 
@@ -363,6 +459,7 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
     // The refusal: a filer that reports no operating income. The engine cannot
     // read a margin it was never given, and says so rather than estimating one.
     if (variant === 'refused') row.operatingIncome = null;
+    row.evidence = annualEvidence(row, i);
     return row;
   });
 
@@ -381,6 +478,13 @@ export function paperPayload(variant: 'valued' | 'refused' | 'converted' = 'valu
       statementCurrencies: ['USD'],
     },
     listing: { shareBasis: 'registeredShares' },
+    // EVERY DOCUMENT ANY FIGURE POINTS AT, once, keyed by accession number —
+    // the payload's own dictionary (version 11), so the evidence sheet reads
+    // each figure's form and filing date from one place.
+    cik: '0000111111',
+    filings: Object.fromEntries(
+      [...ANNUAL_FILINGS, ...Object.values(QUARTER_FILINGS)].map((f) => [f.accn, f])
+    ),
     sicCode: '2621',
     sicDescription: 'Paper Mills',
     statements,

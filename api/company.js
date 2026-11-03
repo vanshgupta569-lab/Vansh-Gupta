@@ -254,7 +254,15 @@ function financialRevenueTag(facts) {
   };
 }
 
-const US_TAGS = {
+// EXPORTED so that `npm run verify` can hold the evidence sheet's own copy of
+// this list against it. `src/data/financials.ts` cannot import from here —
+// each file in `api/` is packaged on its own by the host and a shared import
+// there has taken the route down — so the sheet keeps a mirror, and a mirror
+// nobody checks goes stale. It had: the sheet named one concept for stock
+// compensation where this list has two, one for depreciation where this has
+// three, and so on, so a figure read from the second tag was reported as read
+// from a list that did not contain it.
+export const US_TAGS = {
   revenue: [
     'RevenueFromContractWithCustomerExcludingAssessedTax',
     'RevenueFromContractWithCustomerIncludingAssessedTax',
@@ -862,7 +870,17 @@ function applySplitAdjustment(data, splits) {
 
 // Pull one line item out of the giant XBRL blob, for the annual periods only.
 // Returns an object like { 2023: 383285000000, 2024: 391035000000 }
-function extractUSFact(facts, tagList, unitsSeen, filedOut) {
+//
+// `provOut`, where one is passed, is filled with the PROVENANCE OF EACH YEAR'S
+// FIGURE: `{ concept, accn, form, filed }`, straight off the fact that won.
+// Until 2026-11-03 the only thing recorded was the filed date of a share
+// count, and the evidence sheet named a LIST of candidate concepts with the
+// sentence "which one this company used is not recorded in the data we hold" —
+// which was true, and is the thing this removes. The concept is a property of
+// the figure and not of the line: one company's revenue is `Revenues` and the
+// next company's is `RevenueFromContractWithCustomerExcludingAssessedTax`, and
+// the same company can change concept between two years.
+function extractUSFact(facts, tagList, unitsSeen, provOut) {
   // Two different ideas of "which value wins" apply here, and they must not be
   // confused — mixing them up is how Apple's SG&A briefly came back as bare
   // G&A, missing the selling costs entirely:
@@ -887,11 +905,13 @@ function extractUSFact(facts, tagList, unitsSeen, filedOut) {
 
     // Collect this tag's figures on their own first.
     const thisTag = {};
-    // WHEN EACH FIGURE WAS FILED, recorded alongside it and never used to
+    // WHERE EACH FIGURE CAME FROM, recorded alongside it and never used to
     // choose between figures — the order of preference above is unchanged.
-    // `KI-31` needs it because a share count is on the basis of whatever was
-    // true when it was filed, so a split after that date is not in it yet.
-    const thisTagFiled = {};
+    // `KI-31` needs the filed date, because a share count is on the basis of
+    // whatever was true when it was filed, so a split after that date is not
+    // in it yet. The accession number, the form and the concept are what the
+    // evidence sheet needs to open the one document the figure is in.
+    const thisTagProv = {};
 
     for (const point of entry.units[unitKey]) {
       if (!point.form?.startsWith('10-K') || !point.end) continue;
@@ -913,14 +933,19 @@ function extractUSFact(facts, tagList, unitsSeen, filedOut) {
 
       // Later entries come from more recent filings, so let them overwrite.
       thisTag[year] = point.val;
-      thisTagFiled[year] = point.filed || null;
+      thisTagProv[year] = {
+        concept: tag,
+        accn: point.accn || null,
+        form: point.form || null,
+        filed: point.filed || null,
+      };
     }
 
     // Now fold into the result, never displacing a preferred tag's figure.
     for (const [year, value] of Object.entries(thisTag)) {
       if (merged[year] === undefined) {
         merged[year] = value;
-        if (filedOut) filedOut[year] = thisTagFiled[year] ?? null;
+        if (provOut) provOut[year] = thisTagProv[year] ?? null;
       }
     }
   }
@@ -1179,7 +1204,7 @@ function quarterValue(field, period, points, cik, wantMonths) {
   if (stocks.size && !flows.size) {
     const at = stocks.get(period.end);
     if (!at) return null;
-    return { value: at.val, state: 'reported', filing: filingRef(cik, at) };
+    return { value: at.val, state: 'reported', concept: at.tag, filing: filingRef(cik, at) };
   }
 
   const wantDays = wantMonths * 30.4;
@@ -1189,7 +1214,7 @@ function quarterValue(field, period, points, cik, wantMonths) {
   for (const point of flows.values()) {
     if (point.end !== period.end) continue;
     if (!near(daySpan(point.start, point.end), wantDays, slack)) continue;
-    return { value: point.val, state: 'reported', filing: filingRef(cik, point) };
+    return { value: point.val, state: 'reported', concept: point.tag, filing: filingRef(cik, point) };
   }
 
   // 2. THE DIFFERENCE OF TWO CUMULATIVE FIGURES, which is rule 4 in one line:
@@ -1209,6 +1234,9 @@ function quarterValue(field, period, points, cik, wantMonths) {
       return {
         value: now.val - before.val,
         state: 'derived',
+        // BOTH ENDS ARE THE SAME CONCEPT, checked two lines above, so the
+        // subtraction has one concept rather than a pair of them.
+        concept: now.tag,
         derivedFrom: [filingRef(cik, now), filingRef(cik, before)],
         from: [now.end, before.end],
       };
@@ -1280,6 +1308,21 @@ function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1
       const values = {};
       const states = {};
       const derivedFrom = {};
+      // PER FIGURE, NOT PER PERIOD. One 10-Q is the document behind most of a
+      // quarter's lines, but not all of them: a line restated in a later
+      // filing is read from that later filing, and a derived quarter is the
+      // difference of two. The row-level `filing` below is kept for the code
+      // that already reads it, and this is what the evidence sheet uses.
+      const evidence = {};
+      // EVERY DOCUMENT ANY OF THIS PERIOD'S FIGURES WAS READ FROM, so the
+      // payload's `filings` dictionary can be complete. `filing` below is only
+      // the FIRST field's document, and a line restated in a later filing is
+      // read from that later one, so a dictionary built from `filing` alone
+      // would be missing the document some figures point at.
+      const docs = [];
+      const noteDoc = (ref) => {
+        if (ref?.accn && !docs.some((d) => d.accn === ref.accn)) docs.push(ref);
+      };
       let filing = null;
       for (const field of QUARTER_FIELDS) {
         const points = byField[field];
@@ -1289,6 +1332,16 @@ function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1
         values[field] = countFields.has(field) ? got.value * shareScale : got.value / 1e6;
         if (got.state !== 'reported') states[field] = got.state;
         if (got.derivedFrom) derivedFrom[field] = got.derivedFrom.filter(Boolean);
+        // `{ concept, accn }`, the same shape the annual rows use. The form
+        // and the filing date live once in `filings`, keyed by this accession
+        // number, rather than four times beside four figures of one filing —
+        // two copies of one fact is how the two come to disagree.
+        const refs = got.filing ? [got.filing] : (got.derivedFrom || []).filter(Boolean);
+        for (const ref of refs) noteDoc(ref);
+        evidence[field] = {
+          concept: got.concept || null,
+          accn: refs[0]?.accn || null,
+        };
         if (!filing && got.filing) filing = got.filing;
       }
       if (!Object.keys(values).length) continue;
@@ -1306,6 +1359,8 @@ function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1
         values,
         ...(Object.keys(states).length ? { states } : {}),
         ...(Object.keys(derivedFrom).length ? { derivedFrom } : {}),
+        ...(Object.keys(evidence).length ? { evidence } : {}),
+        ...(docs.length ? { docs } : {}),
         ...(filing ? { filing } : {}),
       });
     }
@@ -1339,6 +1394,7 @@ function extractQuarterlySEC(facts, cik, countFields, annualRows, shareScale = 1
           delete r.values[field];
           if (r.states) delete r.states[field];
           if (r.derivedFrom) delete r.derivedFrom[field];
+          if (r.evidence) delete r.evidence[field];
         }
         dropped.push(`${year.fiscalYear}:${field}`);
       }
@@ -1405,10 +1461,11 @@ async function fetchFromSEC(ticker) {
   const SEC_COUNT_FIELDS = new Set(['dilutedShares', 'preferredConversionShares']);
   const extracted = {};
   const monetaryUnits = new Set();
-  // The filing date of each share count, kept for `KI-31`: a split after it is
-  // not in that count yet. Only the counts need it, because only a count moves
-  // on a split.
-  const countFiledAt = {};
+  // WHERE EVERY ANNUAL FIGURE CAME FROM: the concept it was read from, and the
+  // accession number, form and filed date of the one document it is in. Every
+  // field, not only the share counts — the share counts' filed dates
+  // (`KI-31`) are now read out of this rather than collected separately.
+  const annualProv = {};
   // WHICH REVENUE TAG THIS COMPANY'S TOP LINE IS READ FROM (`KI-32`). For a
   // financial company it is chosen rather than taken in order, and the choice
   // is recorded, because the tag decides which fiscal years exist at all.
@@ -1418,13 +1475,23 @@ async function fetchFromSEC(ticker) {
   const tagsFor = (field) => (field === 'revenue' ? revenueTags : US_TAGS[field]);
   for (const field of Object.keys(US_TAGS)) {
     const isCount = SEC_COUNT_FIELDS.has(field);
-    if (isCount) countFiledAt[field] = {};
+    annualProv[field] = {};
     extracted[field] = extractUSFact(
       facts,
       tagsFor(field),
       isCount ? null : monetaryUnits,
-      isCount ? countFiledAt[field] : null
+      annualProv[field]
     );
+  }
+  // `KI-31` reads this, and it used to be collected by a second pass of its
+  // own. One source for it, so the date beside a share count is the date on
+  // the document the count was read from and cannot drift from it.
+  const countFiledAt = {};
+  for (const field of SEC_COUNT_FIELDS) {
+    countFiledAt[field] = {};
+    for (const [year, prov] of Object.entries(annualProv[field] || {})) {
+      countFiledAt[field][year] = prov?.filed ?? null;
+    }
   }
   // The currency every monetary figure was filed in, from the XBRL units. A
   // single ISO code is the reporting currency; anything else (no units, mixed
@@ -1459,13 +1526,39 @@ async function fetchFromSEC(ticker) {
   // The date each of those years ended, from the same tags that anchored them.
   const periodEnds = extractPeriodEnds(facts, revenueTags);
 
+  // EVERY DOCUMENT ANY FIGURE POINTS AT, once, keyed by its accession number.
+  //
+  // The quarters are noted after they are built, below, because the
+  // reconciliation that drops a field it cannot tie to the year runs inside
+  // `extractQuarterlySEC` and a document noted before it would be a document
+  // nothing points at.
+  // A dictionary rather than a copy beside every figure: one 10-K is the
+  // document behind thirty-odd lines of one year, and thirty copies of the
+  // same four strings is thirty chances for them to disagree.
+  const filings = {};
+  const noteFiling = (prov) => {
+    if (!prov?.accn || filings[prov.accn]) return;
+    filings[prov.accn] = {
+      accn: prov.accn,
+      form: prov.form || null,
+      filed: prov.filed || null,
+      url: `https://www.sec.gov/Archives/edgar/data/${Number(match.cik)}/${String(prov.accn).replace(/-/g, '')}/`,
+    };
+  };
+
   const statements = years.map((year) => {
     const row = { fiscalYear: year, periodEnd: periodEnds[year] ?? null };
+    const evidence = {};
     for (const field of Object.keys(US_TAGS)) {
       const value = extracted[field][year];
       // Convert to millions — the engine and the Excel model both work in
       // millions, and raw XBRL is in whole currency units.
       row[field] = typeof value === 'number' ? value / 1e6 : null;
+      const prov = annualProv[field]?.[year];
+      if (typeof value === 'number' && prov) {
+        evidence[field] = { concept: prov.concept || null, accn: prov.accn || null };
+        noteFiling(prov);
+      }
     }
     // Share counts must NOT be divided; they are counts, not currency — but they
     // must be in the scale the filer tagged them in, which is what `shareScale`
@@ -1474,6 +1567,7 @@ async function fetchFromSEC(ticker) {
       const count = extracted[field][year];
       row[field] = typeof count === 'number' ? count * shareScale : null;
     }
+    row.evidence = evidence;
     return row;
   });
 
@@ -1481,6 +1575,20 @@ async function fetchFromSEC(ticker) {
   quarterlyDropped.length = 0;
   const quarters = extractQuarterlySEC(facts, match.cik, SEC_COUNT_FIELDS, statements, shareScale, revenueTags);
   const quartersDropped = quarterlyDropped.length;
+
+  // The quarters' documents, into the same dictionary. A quarter carries its
+  // filings inline as well — `filing` and `derivedFrom` — and both shapes
+  // agree because both are built from `filingRef`.
+  for (const quarter of quarters) {
+    for (const doc of quarter.docs || []) noteFiling(doc);
+    if (quarter.filing) noteFiling(quarter.filing);
+    for (const list of Object.values(quarter.derivedFrom || {})) {
+      for (const one of list || []) noteFiling(one);
+    }
+    // `docs` has done its job; the dictionary is the one place the forms and
+    // the filing dates live from here on.
+    delete quarter.docs;
+  }
 
   return {
     source: 'SEC EDGAR',
@@ -1505,6 +1613,11 @@ async function fetchFromSEC(ticker) {
     // the handler, after the price request has reported the split events, and
     // this is what tells it which counts already carry them.
     shareCountFiledAt: countFiledAt,
+    // EVERY SEC DOCUMENT THIS PAYLOAD'S FIGURES POINT AT, keyed by accession
+    // number. `statements[].evidence` and `quarters[].evidence` carry
+    // `{ concept, accn }` per figure and read the rest from here.
+    filings,
+    cik: match.cik,
     // WHICH LINE THE TOP LINE IS, and how that was decided (`KI-32`). Recorded
     // for a financial company, where it is a choice; null everywhere else,
     // where the ordinary order of preference applies unchanged.
@@ -2942,7 +3055,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 10;
+const FETCHER_VERSION = 11;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

@@ -3978,6 +3978,77 @@ payload contains.**
 
 ---
 
+## 23b. What each figure records about where it came from
+
+`api/company.js`, `src/data/financials.ts`, payload version 11.
+
+The Financials tab's whole claim is that a number can be traced to the filing it
+came from — the spec it was built from says that of the five sites it studied,
+none links a number to its filing. Until 2026-11-03 three of the four lines
+making that claim were guesses or blanks, and the link was wrong: it read "Open
+the filing" and opened an EDGAR search page (`KI-37`).
+
+**Four things are now recorded per FIGURE, not per line and not per period.**
+
+- **The XBRL concept it was read from.** It belongs to the figure: one company's
+  revenue is `Revenues` and the next's is
+  `RevenueFromContractWithCustomerExcludingAssessedTax`, and the same company
+  can change concept between two years. 20 of the 32 lines that have more than
+  one candidate concept show more than one across the set, which is how the
+  check proves the recorded concept is the one that matched rather than the
+  preference list's first entry.
+- **The accession number of the one document it is in.** Per figure, because a
+  line restated in a later filing is read from that later filing; the period's
+  own filing is not always the figure's.
+- **The form that document was filed on**, in the SEC's own spelling — `10-K`,
+  `10-Q`, `10-K/A`. Never "10-K / 20-F", which was a statement about which
+  forms this site reads printed where a reader was owed the form the figure came
+  from.
+- **The date it was filed.**
+
+The documents live once in a payload-level `filings` dictionary keyed by
+accession number, and each figure carries `{ concept, accn }`. Two copies of one
+filing's form and date is how the two come to disagree.
+
+**Three answers on the concept line, not one answer with two failures.** A
+figure read from a filing names its concept. A figure WORKED OUT HERE — gross
+profit, EBITDA, free cash flow, the operating margin — says so and shows the
+formula, because it is this site's arithmetic over figures that each have their
+own concept. A figure built from SEVERAL PERIODS can have several: a company
+that tags its stock compensation `ShareBasedCompensation` in three quarters and
+`AllocatedShareBasedCompensationExpense` in the fourth has a trailing twelve
+months with two concepts in it, and naming either would be a claim about the
+year that is true of nine months of it. 24 trailing figures across the set are
+that case. **"Not recorded" means what it says** and is left for the vendor
+feed, which records none of the four.
+
+**A derived figure still names a document where its inputs agree on one.** Gross
+profit is revenue less cost of sales and both are in the year's 10-K, so "Not
+recorded" would be a worse answer than the 10-K. Where the inputs come from
+different documents there is no single one and it says so.
+
+**The link says what it opens.** "Open the filing", with the address of that
+document, where the figure carries an accession number; **"Find this filing on
+EDGAR"**, with that company's own list of that form, where it does not. A link
+labelled "open the filing" that lands on a search page is a small lie told on
+every figure whose document is not held, and 26 figures in the set are that
+case. A vendor figure is offered no link at all, because there is no filing
+behind it to find.
+
+**Measured on 2026-11-03**, over every column of every statement of every
+company: 48,089 figures from SEC filings, 43,581 naming the concept they were
+read from and 48,063 naming the accession number of the one document they are
+in; 23,951 vendor figures reading "Not recorded" on the concept line and 26,482
+on each of the other three, every one of them either a vendor figure or this
+site's own arithmetic.
+
+**What this made visible is worth more than what it fixed.** The quarterly path
+filters facts by period and not by form, so a later document that tags the same
+period supersedes the 10-Q: 126 figures across 34 companies come from a proxy
+statement or an 8-K. That is `KI-36`, open and measured.
+
+---
+
 ## 24. What is verified, and what is not
 
 `verify/`, six commands, runnable from a fresh checkout.

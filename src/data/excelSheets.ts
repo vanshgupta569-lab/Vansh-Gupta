@@ -1719,11 +1719,21 @@ function buildSourcesSheet(ctx: SupportingSheetsContext) {
 
   // The set of every line the filing carried, in the order it first appears.
   // Not renamed: the label is the raw field name exactly as fetched.
+  //
+  // A FIGURE OR A DATE, NEVER A STRUCTURE. Since payload version 11 a statement
+  // row also carries `evidence` — the concept and the accession number behind
+  // each of its figures — which is a map and not a line of the statement.
+  // Listing it here put a row labelled "evidence" on the sources sheet with an
+  // object in every year's cell, so a key whose value is a structure is not a
+  // line and is skipped. The provenance has its own place: the evidence sheet
+  // on the Financials tab.
   const keys: string[] = [];
   const seen = new Set<string>();
+  const isLine = (v: any) => v === null || v === undefined || typeof v !== 'object';
   for (const row of rows) {
     for (const k of Object.keys(row || {})) {
       if (k === 'fiscalYear' || seen.has(k)) continue;
+      if (rows.some((r: any) => !isLine(r?.[k]))) continue;
       seen.add(k);
       keys.push(k);
     }

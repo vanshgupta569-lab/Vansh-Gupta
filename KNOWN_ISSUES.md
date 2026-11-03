@@ -29,8 +29,26 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-35`. **Next free: `KI-36`.** Retired, meaning
-  fixed and never to be reused: `KI-35` (the trailing-twelve-month column added
+- Taken so far: `KI-1` to `KI-37`. **Next free: `KI-38`.** Retired, meaning
+  fixed and never to be reused: `KI-37` (the evidence sheet printed a
+  provenance the payload did not hold. The concept line named the LIST of
+  candidate tags the data layer reads with the sentence "which one this company
+  used is not recorded in the data we hold"; the form line read "Annual report
+  (10-K / 20-F), as tagged in XBRL", which is a statement about which forms
+  this site reads dressed up as a statement about where a figure came from; the
+  filing date and the filing ID read "not recorded by the feed" on every annual
+  figure of every SEC filer; and the link read "Open the filing" and opened an
+  EDGAR SEARCH PAGE. Fixed 2026-11-03 by payload version 11, which records the
+  concept and the accession number of every figure. A SECOND DEFECT WAS FOUND
+  WITH IT, and is the reason the first was invisible: the candidate list in
+  `src/data/financials.ts` is a mirror of `US_TAGS` in `api/company.js`, which
+  cannot be imported there, and it had gone stale — one concept for stock
+  compensation where the fetcher reads two, one for depreciation where it reads
+  three — so Apple's stock compensation and AbbVie's depreciation were read
+  from tags the sheet's own list did not contain, and 20,556 figures named a
+  list that did not include the concept behind them. The list is now generated
+  from `US_TAGS` and `npm run verify` holds the two against each other),
+  `KI-35` (the trailing-twelve-month column added
   up whatever the four quarters held on every row that was not a balance sheet
   line, which is right for money and meaningless for a RATIO: four quarterly
   operating margins added gave NVIDIA 260.0% where the two figures printed
@@ -174,19 +192,58 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**There are none open, as of 2026-11-01.** `KI-31` to `KI-34` were the last
-four and all were fixed within two days of each other: a share count filed
-before a split, a financial company read off the wrong revenue tag, a
-quarterly share count worked out by subtracting two averages, and a yield
-that cost a company its whole valuation when one HTTP request did not answer.
-The ID ledger above says what each retired number was.
+**One is open, as of 2026-11-03**, and it moves no valuation: it is a citation
+rather than a figure. `KI-31` to `KI-35` and `KI-37` were all fixed within three
+days of each other, and the ID ledger above says what each retired number was.
 
-An empty list is not a claim that the model is right about everything. It is a
-claim that **nothing is known to be wrong and left standing**, which is the
-only thing this file can honestly assert. What the sources do not publish is
-in `DATA_CONSTRAINTS.md`; what the engine does on purpose is in
-`METHODOLOGY.md`. The next defect found goes here with a measured number, as
-`KI-35`.
+### `KI-36` A quarterly figure read from a proxy statement or an 8-K
+
+**Where:** `collectPoints` and `quarterValue` in `api/company.js`.
+
+**What is wrong.** The annual path takes only facts tagged on a form beginning
+`10-K`. The quarterly path filters by PERIOD and not by form at all, and its
+rule that "within one key the most recently filed point wins" then lets any
+later document which happens to tag the same period supersede the 10-Q or the
+10-K. A proxy statement does tag financial facts, and a proxy filed in April
+2026 is more recent than every filing it reports on.
+
+**It was invisible until the figures started recording their own documents.**
+`KI-37`'s fix is what found it: once every figure named the accession number it
+came from, the forms could be counted.
+
+**Measured on 2026-11-03: 126 figures across 34 companies** come from a
+document that is not a primary statement — **82 from a `DEF 14A`, 41 from an
+`8-K`, 3 from a `DEF 14C`** — which the Financials tab shows in 142 cells,
+because a quarter's figure also reaches the trailing-twelve-month column. The
+companies are AMGN, AMZN, APH, BLK, CAT, CRM, CSCO, CVX, DELL, GOOGL, HD, JPM,
+KLAC, KO, LIN, LRCX, MCD, MELI, META, MRK, MRVL, MSFT, NFLX, NVDA, NXPI, ORCL,
+PANW, PEP, PLTR, SNDK, STX, TMO, TMUS and WMT. **85 of the 126 are net
+income.** The worst example is Amgen's quarter to 31 December 2023: net income
+of 767, read from `DEF 14A` 0001193125-26-145588, filed 2026-04-07.
+
+**How much it moves: no valuation at all.** The engine reads the annual
+statements, and those are already restricted to 10-K facts. The figures
+themselves are probably right, too — net income is one of the fields a quarter
+is reconciled against its own year, and a proxy figure that disagreed with the
+10-K by more than a tenth of a per cent would already have been dropped, so
+these survived that test. **What is wrong is the citation.** A reader who opens
+the evidence behind a quarterly net income is sent to a proxy statement to find
+it. And the twenty-odd BALANCE SHEET figures in the count — `totalAssets`,
+`equity`, `currentAssets`, `payables` and the rest — are reconciled against
+nothing, so for those the figure rests on a document nobody chose.
+
+**What the fix is.** Restrict the quarterly facts to the forms a statement is
+filed on — `10-K`, `10-Q` and their amendments — as the annual path already
+does, and measure what it costs: some quarters may be carried only by an `8-K`
+earnings release, and dropping those is the right answer under standing
+decision 3 but it is a column a reader loses. Not done in this job because it
+changes which quarters exist for 34 companies and wants its own measurement.
+
+**What the list being short does not mean.** It is not a claim that the model is
+right about everything, only that **nothing else is known to be wrong and left
+standing**. What the sources do not publish is in `DATA_CONSTRAINTS.md`; what
+the engine does on purpose is in `METHODOLOGY.md`. The next defect found goes
+here as `KI-38`.
 
 ## A defect found and fixed on 29 October 2026, with no number
 
