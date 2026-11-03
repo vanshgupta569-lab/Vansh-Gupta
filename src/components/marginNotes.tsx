@@ -80,7 +80,7 @@ export const MarginNotesScreen: React.FC<Props> = ({ initialKey, onBack }) => {
   if (!active) return null;
 
   return (
-    <div className="w-full min-h-screen" style={{ background: PAPER }}>
+    <div data-ground="paper" className="w-full min-h-screen" style={{ background: PAPER }}>
       <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-16 lg:py-24">
         <button
           type="button"

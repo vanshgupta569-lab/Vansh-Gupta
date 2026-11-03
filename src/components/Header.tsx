@@ -2,32 +2,44 @@
 //
 // The header.
 //
-// Two rules, both learned from the version this replaces.
+// Two rules, both learned from earlier versions.
 //
 //  1. The bar is full width; the CONTENT inside it is what is capped and
 //     centred. Putting the cap on the fixed bar itself and asking it to
 //     centre with auto margins is what let the last link run off the right
 //     edge on a wide screen.
-//  2. The section links only exist on the home page, so they are only shown
-//     on the home page. On the search screen and inside a company they were
-//     pointing at anchors that were not on the screen — six buttons that
-//     either did nothing or threw the reader back to a page they had
-//     deliberately left.
+//  2. One header on every screen (NAV_SEARCH_SPEC 2.1). There used to be
+//     three — four oxblood links and a red Search on the landing page, Home
+//     alone on the search screen, four buttons on a company — so the bar
+//     changed under the reader each time they moved. The section links are
+//     now on every screen, and the ones that are sections of the home page
+//     go home first.
 
-import React, { useState, useEffect } from 'react';
-import { Home, Building2, Search, PencilLine, Table2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Search, PencilLine, Table2 } from 'lucide-react';
 import { ScreenType } from '../types';
 import { Mark } from '../design/Mark';
 
 /* Four links, not six. A header with six choices is a header nobody reads,
    and the page below is built to be found by scrolling. These are the four
-   places somebody actually arrives looking for. */
+   places somebody actually arrives looking for.
+
+   NAV_SEARCH_SPEC 2.1 asks for seven section triggers (Companies, Research,
+   Markets, Invest, Tools, Learn, Deals), each opening a panel. Those panels
+   are build step 9 and their contents still carry [CONFIRM] marks, so the
+   four links that have a real destination today stay until then. */
 const SECTIONS = [
   { id: 'routes', label: 'What you can do' },
   { id: 'filings', label: 'How it works' },
   { id: 'numbers', label: 'Coverage' },
   { id: 'margin-notes', label: 'Margin notes' },
 ];
+
+/* The key hint names the shortcut the reader's own keyboard has. */
+const isApple = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+};
 
 interface HeaderProps {
   currentScreen: ScreenType;
@@ -58,32 +70,32 @@ export const Header: React.FC<HeaderProps> = ({
   reclassified,
   onReviewFigures,
 }) => {
-  const [utcTimeStr, setUtcTimeStr] = useState<string>('');
-  const [istTimeStr, setIstTimeStr] = useState<string>('');
+  const [apple] = useState(isApple);
 
+  /* ⌘K or Ctrl K, and / as the fallback where the browser or the OS has
+     taken Ctrl K (NAV_SEARCH_SPEC 4.1). Never while the reader is typing in a
+     field the page owns. The palette is not built yet, so the shortcut goes to
+     the search screen; on the search screen it puts the caret in the field,
+     because there is never a second search on screen. */
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-
-      const utcHours = String(now.getUTCHours()).padStart(2, '0');
-      const utcsMins = String(now.getUTCMinutes()).padStart(2, '0');
-      const utcSecs = String(now.getUTCSeconds()).padStart(2, '0');
-      setUtcTimeStr(`${utcHours}:${utcsMins}:${utcSecs} UTC`);
-
-      const istFormatter = new Intl.DateTimeFormat('en-GB', {
-        timeZone: 'Asia/Kolkata',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
-      setIstTimeStr(`${istFormatter.format(now)} IST`);
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing =
+        !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+      const cmdK =
+        (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k';
+      const slash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (typing || !(cmdK || slash)) return;
+      e.preventDefault();
+      if (currentScreen === 'DIRECTORY') {
+        document.querySelector<HTMLInputElement>('main input[type="text"]')?.focus();
+      } else {
+        onNavigateToScreen('DIRECTORY');
+      }
     };
-
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [currentScreen, onNavigateToScreen]);
 
   const goHomeAnd = (id: string) => {
     if (currentScreen !== 'HOME') {
@@ -94,126 +106,128 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const figuresTitle = [
+    corrected
+      ? `Built on ${corrected.count} figure${corrected.count === 1 ? '' : 's'} you supplied: ${corrected.fields.join(', ')}.`
+      : '',
+    reclassified
+      ? `${reclassified.count} line${reclassified.count === 1 ? '' : 's'} put under another head by you: ` +
+        `${reclassified.lines.join(', ')}` +
+        (reclassified.excluded.length
+          ? `, of which ${reclassified.excluded.join(' and ')} set aside as one-offs and so nil in every forecast year.`
+          : '.')
+      : '',
+    corrected || reclassified
+      ? 'Click to change them or put them back.'
+      : 'See the reported figures this model was built from, correct any of them, and move a line to another head',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  /* The one control a header carries that is not navigation, so it shares
+     the ghost shape of the search trigger beside it. */
+  const GHOST =
+    'h-9 border px-3 text-[13px] flex items-center gap-2 whitespace-nowrap cursor-pointer transition-colors duration-[110ms]';
+
   return (
-    <header className="fixed top-0 inset-x-0 z-50 bg-[#111114]/95 backdrop-blur-md hairline-border-b">
-      {/* THE BAR CANNOT OVERLAP ITSELF.
+    /* ONE HEADER, EVERY SCREEN (NAV_SEARCH_SPEC 2.1). 64px, the page colour
+       at 95% under an 8px blur, a hairline at the foot. Wordmark, the section
+       links, flexible space, search. No clock and no live dot: a ticking
+       seconds display is motion with nothing to explain (VISUAL_SYSTEM 5), and
+       no Home or All companies, because the wordmark and search already go
+       there. */
+    <header
+      className="fixed top-0 inset-x-0 z-50 h-16 border-b border-line"
+      style={{
+        background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
+    >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 lg:focus:left-12 focus:top-[14px] focus:z-10 focus:h-9 focus:px-3 focus:flex focus:items-center focus:bg-page focus:border focus:border-line focus:text-ink text-[13px]"
+      >
+        Skip to content
+      </a>
 
-          The wordmark was fixed at 26px and `shrink-0`; so was the block of
-          controls opposite it. On a 390px screen the two together need more
-          width than there is, and because neither could give, they were drawn
-          one over the other -- the mark ran under "Check the figures".
+      {/* THE BAR CANNOT OVERLAP ITSELF. The wordmark steps down on a phone
+          and the controls opposite are icon-only there, so the two never need
+          more width than the bar has. Measured at 320px. */}
+      <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-12 flex items-center gap-3 sm:gap-5 lg:gap-10">
+        <button
+          onClick={() => {
+            onNavigateToScreen('HOME');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          aria-label="Marginalia home"
+          className="text-[20px] sm:text-[26px] lg:text-[28px] leading-none text-ink hover:text-accent-text transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
+        >
+          {/* The mark, not a label: lowercase Newsreader with the red square
+              standing in for the full stop, as the hero draws it. */}
+          <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
+            marginalia
+          </span>
+          <Mark />
+        </button>
 
-          Three things fix it and all three are needed: the gutter and the gap
-          shrink on a phone, the mark steps down to 20px below `sm` and is
-          allowed to truncate rather than insisting on its full width, and the
-          controls keep `shrink-0` because they are already icon-only there.
-          Measured at 320px, the narrowest screen worth supporting. */}
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-4 flex items-center justify-between gap-3 sm:gap-5 lg:gap-8">
-        {/* Left: the wordmark, and the clocks when there is room for them */}
-        <div className="flex items-center gap-6 min-w-0 shrink-0">
-          <button
-            onClick={() => {
-              onNavigateToScreen('HOME');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className="text-[20px] sm:text-[26px] lg:text-[30px] text-[#F2F0EA] hover:text-[#ffb3ad] transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
-          >
-            {/* THE MARK, NOT A LABEL.
-                The hero draws the wordmark in particles: lowercase, Playfair,
-                with the red square standing in for the full stop after it. The
-                header was setting the same brand as tracked-out uppercase sans
-                with the square in FRONT — a different mark in a different voice
-                on the same page. It now matches the thing it is the mark for. */}
-            <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
-              marginalia
-            </span>
-            {/* This copy of the mark had drifted: a 0.09em left margin instead
-                of 0.08em, and no negative right margin at all, so unlike every
-                other one on the site it took real width and pushed the bar
-                along. It is the shared component now. */}
-            <Mark className="group-hover:scale-125 transition-transform" />
-          </button>
-
-          {/* The clocks are the first thing to go when the bar gets tight.
-              They are pleasant, not load-bearing. */}
-          <div className="hidden 2xl:flex items-center gap-3 font-figure text-[11px] text-[#8A8A8F] border-l hairline-border-l pl-6 whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[#F2F0EA] font-medium">{istTimeStr}</span>
-            <span className="text-[#52525B]">|</span>
-            <span className="text-[#8A8A8F] font-medium">{utcTimeStr}</span>
-          </div>
-        </div>
-
-        {/* Middle: the section links, and only where those sections exist */}
-        {currentScreen === 'HOME' && (
-          <nav className="hidden lg:flex gap-6 xl:gap-8 items-center shrink-0">
-            {SECTIONS.map((item) => (
+        {/* Nav links at rest are muted, never oxblood (VISUAL_SYSTEM 3.1); ink
+            on hover; the current one takes the system's one selected state. */}
+        <nav aria-label="Main" className="hidden lg:flex items-center gap-1 shrink-0">
+          {SECTIONS.map((item) => {
+            const current =
+              item.id === 'margin-notes'
+                ? currentScreen === 'NOTES'
+                : currentScreen === 'HOME' && activeSection === item.id;
+            return (
               <button
                 key={item.id}
+                aria-current={current ? 'true' : undefined}
                 onClick={() =>
                   /* The margin notes are a screen now, not an anchor. The
-                     other three links are still sections of this page. */
+                     other three links are sections of the home page, so from
+                     any other screen they go home first. */
                   item.id === 'margin-notes'
                     ? onNavigateToScreen('NOTES')
                     : goHomeAnd(item.id)
                 }
-                className={`font-figure text-[11px] tracking-wider uppercase transition-colors relative py-1 cursor-pointer whitespace-nowrap ${
-                  activeSection === item.id
-                    ? 'text-[#8B1E1E] font-semibold border-b-2 border-[#8B1E1E]'
-                    : 'text-[#dfbfbc] hover:text-[#F2F0EA]'
+                className={`h-10 px-3 border text-[13px] whitespace-nowrap cursor-pointer transition-colors duration-[110ms] ${
+                  current
+                    ? 'bg-panel border-accent text-ink font-semibold'
+                    : 'border-transparent text-muted hover:text-ink font-medium'
                 }`}
               >
                 {item.label}
               </button>
-            ))}
-          </nav>
-        )}
+            );
+          })}
+        </nav>
 
-        {/* Right: where you can go from here */}
-        <div className="flex min-w-0 items-center gap-2 overflow-hidden sm:gap-3">
+        <div className="flex-1 min-w-0" />
+
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* ONE CONTROL, TWO STATES, ALWAYS THERE.
               Quiet when every figure is as filed, oxblood when some are not,
               and in both cases the way back to the figures. Shown even with
               nothing corrected on purpose: the reader who most needs this
               screen is the one looking at a valuation that seems wrong and
-              wondering where the numbers came from, and that reader has
-              corrected nothing at all. A badge that only appears after a
-              correction is invisible to exactly the person it is for. */}
+              wondering where the numbers came from. It stays in the header
+              because a corrected figure must never pass as a filed one on any
+              screen (standing decision 5). */}
           {onReviewFigures && (currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS') && (
             <button
               onClick={onReviewFigures}
-              title={
-                [
-                  corrected
-                    ? `Built on ${corrected.count} figure${
-                        corrected.count === 1 ? '' : 's'
-                      } you supplied: ${corrected.fields.join(', ')}.`
-                    : '',
-                  reclassified
-                    ? `${reclassified.count} line${reclassified.count === 1 ? '' : 's'} put under another head by you: ` +
-                      `${reclassified.lines.join(', ')}` +
-                      (reclassified.excluded.length
-                        ? `, of which ${reclassified.excluded.join(' and ')} set aside as one-offs and so nil in every forecast year.`
-                        : '.')
-                    : '',
-                  corrected || reclassified
-                    ? 'Click to change them or put them back.'
-                    : 'See the reported figures this model was built from, correct any of them, and move a line to another head',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-              }
-              className="border font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap cursor-pointer"
-              style={
+              title={figuresTitle}
+              className={`${GHOST} ${
                 corrected || reclassified
-                  ? { borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.20)', color: '#F2F0EA' }
-                  : { borderColor: '#262521', background: 'transparent', color: '#dfbfbc' }
-              }
+                  ? 'border-accent bg-accent/20 text-ink'
+                  : 'border-line text-muted hover:text-ink hover:border-accent'
+              }`}
             >
               {corrected || reclassified ? (
-                <PencilLine className="w-3.5 h-3.5" style={{ color: '#C0453E' }} />
+                <PencilLine className="w-4 h-4 text-accent-text" strokeWidth={1.5} />
               ) : (
-                <Table2 className="w-3.5 h-3.5" style={{ color: '#8A8A8F' }} />
+                <Table2 className="w-4 h-4" strokeWidth={1.5} />
               )}
               <span className="hidden md:inline">
                 {/* BOTH JUDGEMENTS, NAMED SEPARATELY. A combined count would read
@@ -225,49 +239,32 @@ export const Header: React.FC<HeaderProps> = ({
                   .filter(Boolean)
                   .join(' · ') || 'Check the figures'}
               </span>
-              {/* On a phone this is the count, or nothing at all: the icon
-                  already says what the control is, and the words are what
-                  pushed the wordmark off the bar. */}
               {(corrected || reclassified) && (
                 <span className="md:hidden">
                   {(corrected?.count ?? 0) + (reclassified?.count ?? 0)}
                 </span>
               )}
-              <span className="hidden sm:inline md:hidden">Figures</span>
             </button>
           )}
 
+          {/* SEARCH IS A GHOST (NAV_SEARCH_SPEC 2.1). The oxblood wash is kept
+              for the one action a screen exists for; search is in every
+              header, so it cannot be that. Hidden on the search screen, which
+              has its own field: never two searches on screen. */}
           {currentScreen !== 'DIRECTORY' && (
             <button
               onClick={() => onNavigateToScreen('DIRECTORY')}
-              className="border text-[#F2F0EA] font-figure text-[11px] px-4 py-2.5 uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
-              style={{ borderColor: '#8B1E1E', background: 'rgba(139,30,30,0.22)' }}
+              aria-label="Search companies"
+              aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}
+              className="group h-9 w-9 sm:w-[240px] xl:w-[320px] border border-line hover:border-accent flex items-center justify-center sm:justify-start gap-2 sm:pl-3 sm:pr-2 cursor-pointer transition-colors duration-[110ms] pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-coarse:w-[240px]"
             >
-              <Search className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Search a company</span>
-            </button>
-          )}
-
-          {currentScreen !== 'HOME' && (
-            <button
-              onClick={() => onNavigateToScreen('HOME')}
-              className="bg-transparent border hairline-border text-[#F2F0EA] font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap"
-            >
-              <Home className="w-3.5 h-3.5 text-[#8A8A8F]" />
-              <span className="hidden sm:inline">Home</span>
-            </button>
-          )}
-
-          {/* Dropped on a phone: the search control two along goes to the same
-              screen, and two ways to one place is what a 320px bar cannot
-              afford. */}
-          {currentScreen === 'ANALYSIS' && (
-            <button
-              onClick={() => onNavigateToScreen('DIRECTORY')}
-              className="hidden sm:flex bg-transparent border hairline-border text-[#F2F0EA] font-figure text-[11px] px-3.5 py-2.5 uppercase tracking-wider hover:bg-[#222228] transition-colors items-center gap-2 cursor-pointer whitespace-nowrap"
-            >
-              <Building2 className="w-3.5 h-3.5 text-[#8A8A8F]" />
-              <span className="hidden sm:inline">All companies</span>
+              <Search className="w-4 h-4 text-muted shrink-0" strokeWidth={1.5} />
+              <span className="hidden sm:inline flex-1 text-left text-[13px] text-muted group-hover:text-ink transition-colors duration-[110ms] whitespace-nowrap">
+                Search companies…
+              </span>
+              <kbd className="hidden sm:flex pointer-coarse:hidden h-5 min-w-7 px-1 items-center justify-center border border-line text-[13px] leading-none text-quiet font-sans whitespace-nowrap">
+                {apple ? '⌘K' : 'Ctrl K'}
+              </kbd>
             </button>
           )}
         </div>

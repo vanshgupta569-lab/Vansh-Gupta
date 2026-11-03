@@ -216,7 +216,7 @@ one amber permitted as colour.
   is never text.
 - **Read Oxblood** (`colors.accent-text`): the same red lifted to carry words —
   eyebrows, the ticker lockup, section numbers, links, a computed figure — and
-  also the caret and the keyboard focus outline. 5.08:1 on the page and 4.87:1 on
+  also the caret. 5.08:1 on the page and 4.87:1 on
   a panel. The lift holds hue at 3° and moves lightness, taking saturation from
   51% to 56% (nearer the mark's own 64%), because lightening a red at fixed
   saturation is what turns oxblood into dusty pink.
@@ -474,7 +474,7 @@ one.
   horizontal / 8px vertical padding, a 14px inline SVG icon at an 8px gap. Used
   for the one action a screen exists for — downloading the workbook.
 - **Hover / Focus:** the wash deepens to 35%; colour transitions only, no lift and
-  no shadow. Keyboard focus is a 1px read-oxblood outline at 2px offset, and only
+  no shadow. Keyboard focus is a 2px ink outline at 2px offset, and only
   for the keyboard. Disabled drops to 40% opacity, with the label swapped for its
   progress phrasing ("Building the workbook…").
 - **Ghost:** hairline border, muted label; on hover the border goes oxblood and the
@@ -572,8 +572,9 @@ the bar passes throughout the defect — that is luck, not clearance.
 
 ### Inputs / Fields
 - **Style:** square, hairline border on the panel ground, placeholder in quiet.
-- **Focus:** a 1px read-oxblood `:focus-visible` outline at 2px offset; the caret
-  is read oxblood in every input, textarea and editable cell.
+- **Focus:** a 2px ink `:focus-visible` outline at 2px offset (paper ink on the
+  paper ground, VISUAL_SYSTEM 7); the caret is read oxblood in every input,
+  textarea and editable cell.
 
 **A panel of assumptions is not a form.** Where a screen shows a list of inputs
 the reader may change — the nine on the risk and cost-of-capital card — they are
@@ -601,8 +602,10 @@ and asserts the cost of equity and the value per share move with it, and
 `npm run verify:dashboard` does it again through the keyboard in a browser.
 
 ### Navigation
-- **Style:** a fixed top bar of uppercase mono chrome labels at 12px / 0.08em,
-  never allowed to wrap. Once the full header scrolls out, a condensed bar slides
+- **Style:** one fixed 64px header on every screen (NAV_SEARCH_SPEC 2.1):
+  wordmark, the section links in muted at 13px (ink on hover, never oxblood at
+  rest), flexible space, and a ghost Search trigger with a ⌘K / Ctrl K hint. No
+  clock and no live dot. Never allowed to wrap. Once the full header scrolls out, a condensed bar slides
   down from -60px over 280ms `easeOut` on the page colour at 95% with a backdrop
   blur and a hairline bottom border, carrying the ticker in read oxblood, the
   company name in muted, and price and implied value as small mono figures.
