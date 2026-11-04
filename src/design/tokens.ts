@@ -264,6 +264,8 @@ export const DURATION_MS = {
   pageOut: 120,
   base: 200,
   mod: 240,
+  /** A modal's exit, 70% of `mod`: the loading screen's close (NAV_SEARCH §5.2). */
+  modExit: 168,
   slow: 280,
   reveal: 400,
   chart: 400,

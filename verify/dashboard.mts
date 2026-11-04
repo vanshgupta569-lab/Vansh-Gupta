@@ -5822,6 +5822,93 @@ async function checkCondensedHeader(browser: Browser) {
   if (!issues.length) ok(`past 80px the header goes up and the 48px bar comes down, by transform alone, with nothing on the page moving; 60px keeps it (dead band), 30px restores it; its Menu opens the sheet at y 48, its Search the palette; the progress rule follows`);
 }
 
+// ---- the loading screen's error and its close (job 9.3b, NAV_SEARCH §5.2, §5.4)
+//
+// A build that fails keeps the loading screen up and says so in the card's
+// place: "The model could not be built for {company}." on the Title step, a
+// reason in plain words (never the browser's or the parser's own text), and
+// Try again and Back, with no Cancel; Try again builds again, Back closes it
+// with focus on the search field. A build that succeeds after the modal has
+// opened fades it out over 168ms on the exit curve before it goes.
+async function checkLoadingErrorAndClose(browser: Browser) {
+  console.log("\n=== the loading screen: its error, and its close ===");
+  const issues: string[] = [];
+  let answer: 'missing' | 'garbage' | 'ok' = 'missing';
+  let holdMs = 0;
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await installFixtureRoutes(ctx);
+  await ctx.unroute('**/api/company*');
+  await ctx.route('**/api/company*', async (r) => {
+    if (holdMs) await new Promise((x) => setTimeout(x, holdMs));
+    try {
+      if (answer === 'missing') await r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: `No filings were found for ${PAPER_TICKER}.` }) });
+      else if (answer === 'garbage') await r.fulfill({ status: 200, contentType: 'text/html', body: '<html>Gateway timeout</html>' });
+      else await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtureFor(PAPER_TICKER)) });
+    } catch { /* moved on */ }
+  });
+  const p = await ctx.newPage();
+  const readError = () =>
+    p.evaluate(`(() => {
+      const e = document.querySelector('[data-build-error]');
+      return e ? { role: e.getAttribute('role'), text: e.textContent, title: e.querySelector('p')?.textContent, retry: !!e.querySelector('[data-build-retry]'), back: !!e.querySelector('[data-build-back]'), cancel: !!document.querySelector('[data-build-cancel]'), card: !!document.querySelector('[data-myth-card]') } : null;
+    })()`) as Promise<any>;
+
+  // A failure the server explains.
+  await search(p, PAPER_TICKER).catch(() => {});
+  await p.waitForSelector('[data-build-error]', { timeout: 15_000 }).catch(() => {});
+  const e1 = await readError();
+  if (!e1) issues.push('a failed build shows no error on the loading screen');
+  else {
+    if (e1.role !== 'alert') issues.push(`the error is role ${e1.role}, not alert`);
+    if (e1.title !== `The model could not be built for ${PAPER_TICKER}.`) issues.push(`the error's title reads "${e1.title}"`);
+    if (!e1.text.includes(`No filings were found for ${PAPER_TICKER}.`)) issues.push(`the server's own reason is not shown: "${e1.text.slice(0, 90)}"`);
+    if (!e1.retry || !e1.back || e1.cancel || e1.card) issues.push(`controls on the error: ${JSON.stringify({ retry: e1.retry, back: e1.back, cancel: e1.cancel, card: e1.card })}`);
+  }
+  // Back.
+  await p.click('[data-build-back]').catch(() => {});
+  await p.waitForTimeout(400);
+  const afterBack: any = await p.evaluate(`({ modal: !!document.querySelector('[data-build-modal]:not([data-leaving])'), field: document.activeElement?.tagName === 'INPUT' })`);
+  if (afterBack.modal) issues.push('Back leaves the loading screen up');
+  if (!afterBack.field) issues.push('after Back focus is not on the search field');
+  // A failure the browser explains, in its own words: not shown.
+  answer = 'garbage';
+  await search(p, PAPER_TICKER).catch(() => {});
+  await p.waitForSelector('[data-build-error]', { timeout: 15_000 }).catch(() => {});
+  const e2 = await readError();
+  if (!e2) issues.push('an answer that is not JSON shows no error');
+  else if (/unexpected token|json|syntaxerror|<html/i.test(e2.text)) issues.push(`the parser's own words reach the reader: "${e2.text.slice(0, 100)}"`);
+  // Try again, now succeeding, with the modal up long enough to fade.
+  answer = 'ok';
+  holdMs = 1600;
+  await p.evaluate(`(() => {
+    window.__close = null;
+    const look = () => {
+      const m = document.querySelector('[data-build-modal][data-leaving]');
+      if (m && !window.__close) { const cs = getComputedStyle(m); window.__close = { at: performance.now(), duration: cs.transitionDuration, timing: cs.transitionTimingFunction, property: cs.transitionProperty }; }
+      if (window.__close && !window.__close.gone && !document.querySelector('[data-build-modal]')) window.__close.gone = performance.now();
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  })()`);
+  await p.click('[data-build-retry]').catch(() => {});
+  const arrived = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/`), { timeout: 30_000 }).then(() => true).catch(() => false);
+  if (!arrived) issues.push('Try again does not build the company once the source answers');
+  await p.waitForTimeout(500);
+  const close: any = await p.evaluate('window.__close');
+  if (!close) issues.push('the loading screen closes without fading');
+  else {
+    const ms = close.gone ? Math.round(close.gone - close.at) : null;
+    if (close.duration !== '0.168s' || !/cubic-bezier\(0\.2, 0, 1, 0\.9\)/.test(close.timing) || close.property !== 'opacity') issues.push(`the close fades ${close.property} over ${close.duration} on ${close.timing}, not opacity over 168ms on the exit curve`);
+    if (ms === null || ms < 140 || ms > 400) issues.push(`the faded screen is gone after ${ms}ms, not about 168`);
+  }
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`a failed build keeps the screen up with "The model could not be built for ${PAPER_TICKER}.", the server's reason, Try again and Back; the parser's own words never shown; Back returns to the field; Try again builds; the close fades opacity over 168ms on the exit curve`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5912,6 +5999,7 @@ try {
     palette: () => checkSearchPalette(browser as Browser),
     menu: () => checkMenuCompanyLinks(browser as Browser),
     condensed: () => checkCondensedHeader(browser as Browser),
+    loadingerror: () => checkLoadingErrorAndClose(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -6048,6 +6136,7 @@ try {
   await checkSearchPalette(browser);
   await checkMenuCompanyLinks(browser);
   await checkCondensedHeader(browser);
+  await checkLoadingErrorAndClose(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

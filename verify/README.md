@@ -1071,9 +1071,16 @@ band) and 30px restores the header; the bar holds the mark, Search and Menu at
 36×36; its Menu opens the sheet at y 48 and its Search the palette; the
 progress rule sits under whichever bar shows.
 
+**A twenty-first is the loading screen's error and close** (job 9.3b,
+NAV_SEARCH §5.2, §5.4): a failed build keeps the screen up with "The model
+could not be built for {company}.", the source's reason, Try again and Back
+and no Cancel; an HTML answer never shows the parser's words; Back returns
+focus to the field; Try again builds; a successful close fades opacity over
+168ms on the exit curve before the screen goes.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu, condensed) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu, condensed, loadingerror) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

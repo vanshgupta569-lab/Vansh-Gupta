@@ -187,22 +187,39 @@ export const BuildPipeline: React.FC<{
   startedAt?: number;
   doneAt?: number;
   onCancel?: () => void;
-}> = ({ active, payload, startedAt, doneAt, onCancel }) => {
+  /** The build failed (§5.4): the screen stays up and says so. */
+  failure?: { company: string; reason: string } | null;
+  onRetry?: () => void;
+}> = ({ active, payload, startedAt, doneAt, onCancel, failure, onRetry }) => {
+  // On screen while the build runs, and after it fails until the reader
+  // chooses Try again or Back.
+  const live = active || !!failure;
   const [seed, setSeed] = useState(0);
   const [modal, setModal] = useState(false);
+  // THE CLOSE IS A FADE (§5.2): 168ms on the exit curve, then gone.
+  const [leaving, setLeaving] = useState(false);
+  const modalRef = useRef(false);
+  modalRef.current = modal;
   const [beliefOnly, setBeliefOnly] = useState(true);
   const [slow, setSlow] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   // ONE SCHEDULE PER BUILD, from when it started.
   useEffect(() => {
-    if (!active) {
-      setSeed(0);
-      setModal(false);
-      setBeliefOnly(true);
-      setSlow(false);
-      return;
+    if (!live) {
+      const reset = () => {
+        setSeed(0);
+        setModal(false);
+        setBeliefOnly(true);
+        setSlow(false);
+        setLeaving(false);
+      };
+      if (!modalRef.current) { reset(); return; }
+      setLeaving(true);
+      const gone = window.setTimeout(reset, LOADING.closeMs);
+      return () => window.clearTimeout(gone);
     }
+    setLeaving(false);
     const t0 = startedAt ?? Date.now();
     const at = (ms: number) => Math.max(0, t0 + ms - Date.now());
     setSeed(t0);
@@ -214,7 +231,12 @@ export const BuildPipeline: React.FC<{
       window.clearTimeout(fact);
       window.clearTimeout(late);
     };
-  }, [active, startedAt]);
+  }, [live, startedAt]);
+
+  // A failure is shown at once, whether or not the first second has passed.
+  useEffect(() => {
+    if (failure) setModal(true);
+  }, [failure]);
 
   // The filings arrived before the correction was due: show it now.
   useEffect(() => {
@@ -223,7 +245,7 @@ export const BuildPipeline: React.FC<{
 
   // Esc cancels, from the first millisecond.
   useEffect(() => {
-    if (!active || !onCancel) return;
+    if (!live || !onCancel) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -232,7 +254,7 @@ export const BuildPipeline: React.FC<{
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, onCancel]);
+  }, [live, onCancel]);
 
   const hasFigures = Boolean(payload?.statements?.length);
   const [choice, setChoice] = useState<MythFactChoice | null>(null);
@@ -249,7 +271,7 @@ export const BuildPipeline: React.FC<{
     }
   }, [active, seed, beliefOnly, hasFigures, payload]);
 
-  if (!active) return null;
+  if (!live && !leaving) return null;
 
   const completed = doneAt ? 1 : 0;
   const step = Math.min(completed + 1, STAGES.length);
@@ -284,8 +306,13 @@ export const BuildPipeline: React.FC<{
   return (
     <div
       data-build-modal
+      data-leaving={leaving ? 'true' : undefined}
       className="fixed inset-0 z-50 flex items-center justify-center bg-scrim px-6"
-      style={{ animation: 'm-fade-in var(--m-dur-base) var(--m-ease-enter)' }}
+      style={
+        leaving
+          ? { opacity: 0, transition: 'opacity var(--m-dur-mod-exit) var(--m-ease-exit)', pointerEvents: 'none' }
+          : { animation: 'm-fade-in var(--m-dur-base) var(--m-ease-enter)' }
+      }
     >
       <div
         role="dialog"
@@ -306,14 +333,48 @@ export const BuildPipeline: React.FC<{
             <Rule track="bg-line" fillClass="bg-ink" height="h-[2px]" />
           </div>
           <div className="mt-3 text-[13px] text-muted" data-build-stage>
-            {STAGES[step - 1]}
+            {failure ? 'Stopped' : STAGES[step - 1]}
           </div>
         </div>
 
         {/* THE CARD AREA IS A FIXED HEIGHT, so nothing moves when the
             correction arrives (§5.1: 232px, 264px on a phone). */}
         <div data-build-card-area className="mt-5 h-[264px] sm:h-[232px] overflow-hidden" aria-live="off">
-          {card && (
+          {failure && (
+            /* THE ERROR REPLACES THE CARD (§5.4), in the same fixed area. */
+            <div data-build-error role="alert">
+              <p
+                className="font-display font-semibold leading-[1.08] text-ink"
+                style={{ fontSize: 'var(--m-size-title)' }}
+              >
+                The model could not be built for {failure.company}.
+              </p>
+              <p className="mt-3 text-[15px] leading-[24px] text-read">{failure.reason}</p>
+              <div className="mt-5 flex gap-3">
+                {onRetry && (
+                  <button
+                    type="button"
+                    data-build-retry
+                    onClick={onRetry}
+                    className="h-11 sm:h-9 px-4 border border-line-control text-[13px] text-ink hover:border-ink cursor-pointer"
+                  >
+                    Try again
+                  </button>
+                )}
+                {onCancel && (
+                  <button
+                    type="button"
+                    data-build-back
+                    onClick={onCancel}
+                    className="h-11 sm:h-9 px-4 border border-line-control text-[13px] text-ink hover:border-ink cursor-pointer"
+                  >
+                    Back
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {!failure && card && (
             <div data-myth-card={card.id}>
               {/* "Common myth", never "this company": a card is general
                   education, not a finding about whoever is being looked at
@@ -345,9 +406,9 @@ export const BuildPipeline: React.FC<{
 
         <div className="mt-6 border-t border-line pt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
           <div className="text-[13px] text-quiet leading-relaxed">
-            {slow ? 'Taking longer than usual.' : 'Reading the filings, running the same engine used for every company'}
+            {failure ? 'Nothing was built, and nothing was saved.' : slow ? 'Taking longer than usual.' : 'Reading the filings, running the same engine used for every company'}
           </div>
-          {onCancel && (
+          {onCancel && !failure && (
             <button
               ref={cancelRef}
               type="button"

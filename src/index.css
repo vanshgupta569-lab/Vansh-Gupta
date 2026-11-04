@@ -520,6 +520,9 @@ html {
   --m-dur-page-out: 120ms;
   --m-dur-base: 200ms;
   --m-dur-mod: 240ms;
+  /* A modal's exit: 70% of its 240ms entry (VISUAL_SYSTEM §4); the loading
+     screen's close (NAV_SEARCH §5.2). */
+  --m-dur-mod-exit: 168ms;
   --m-dur-slow: 280ms;
   --m-dur-reveal: 400ms;
   --m-dur-chart: 400ms;

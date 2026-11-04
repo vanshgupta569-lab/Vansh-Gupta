@@ -25,7 +25,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { CompanyData } from '../types';
-import { BuildPipeline } from './motionPrimitives';
 import { Search, ArrowRight, FileSpreadsheet } from 'lucide-react';
 import { DARK, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
@@ -65,7 +64,9 @@ interface DirectoryScreenProps {
   onSelectCompany: (ticker: string) => void;
   onBackToHome: () => void;
   onLookupTicker: (ticker: string) => void;
-  lookupState: { loading: boolean; error: string | null; payload?: any; startedAt?: number; doneAt?: number };
+  lookupState: { loading: boolean; error: string | null; payload?: any; startedAt?: number; doneAt?: number; failure?: { company: string; reason: string } | null };
+  /** Try the failed build again (the loading screen's error, §5.4). */
+  onRetryLookup?: () => void;
   /** Cancel the build in flight (Cancel and Esc on the loading screen). */
   onCancelLookup?: () => void;
 }
@@ -78,6 +79,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
   onLookupTicker,
   lookupState,
   onCancelLookup,
+  onRetryLookup,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<
@@ -283,21 +285,9 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             discounted cash flow, because it does not apply to them.
           </p>
 
-          {/* While a model is being built, name the stages instead of spinning */}
-          <BuildPipeline
-            active={lookupState.loading}
-            payload={lookupState.payload}
-            startedAt={lookupState.startedAt}
-            doneAt={lookupState.doneAt}
-            onCancel={
-              onCancelLookup &&
-              (() => {
-                onCancelLookup();
-                // Focus goes back to the field the build was asked for from.
-                window.setTimeout(() => document.querySelector<HTMLInputElement>('main input[type="text"]')?.focus(), 0);
-              })
-            }
-          />
+          {/* The loading screen is drawn by App.tsx, above every screen, so it
+              can fade out after the company page has replaced this one
+              (job 9.3b). */}
 
           {/* Grey, not oxblood. This is a missed step, not a failure, and a
               red box would tell the user the site is broken when it is not. */}

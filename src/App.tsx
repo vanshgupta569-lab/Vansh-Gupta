@@ -19,6 +19,21 @@ const QualitativeIntro = lazy(() => import('./components/qualitativeIntro').then
 // for: on the trigger's focus or the pointer's approach, and after two idle
 // seconds (NAV_SEARCH §4.6), so ⌘K paints at once.
 const loadPalette = () => import('./components/searchPalette');
+
+/**
+ * THE REASON LINE ON A FAILED BUILD. The fetch's own message where it is a
+ * sentence for a reader; a plain one where it is the browser's or the
+ * parser's (LEARN_STATES conflict 4: raw exception text must not reach the
+ * reader). PROPOSED — needs Nihar: a stop-gap until `src/data/errorText.ts`
+ * (L8, job 9.4) owns this wording for every screen.
+ */
+export function lookupReason(message: unknown): string {
+  const m = String(message || '').trim();
+  if (!m) return 'The filings could not be read. Try again in a moment.';
+  if (/unexpected token|json|syntaxerror/i.test(m)) return 'The source answered with something other than filings. Try again in a moment.';
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return 'The connection failed before the filings arrived. Check the connection and try again.';
+  return /[.!?]$/.test(m) ? m : `${m}.`;
+}
 const SearchPalette = lazy(() => loadPalette().then((m) => ({ default: m.SearchPalette })));
 const NotFound = lazy(() => import('./components/notFound').then((m) => ({ default: m.NotFound })));
 const MarginNotesScreen = lazy(() => import('./components/marginNotes').then((m) => ({ default: m.MarginNotesScreen })));
@@ -27,6 +42,7 @@ import { useNavigation } from './data/router';
 import { parseCompanyPath, companyPath, DEFAULT_TAB } from './data/companyRoute';
 import { parseNotesPath, notePath, NOTES_PATH } from './data/notesRoute';
 import { LOADING, holdFor } from './data/loadingTimeline';
+import { BuildPipeline } from './components/motionPrimitives';
 import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
@@ -155,6 +171,8 @@ export default function App() {
     /** When the build started and when its filings arrived (job 9.3). */
     startedAt?: number;
     doneAt?: number;
+    /** A build that failed, held on the loading screen until Try again or Back. */
+    failure?: { company: string; reason: string } | null;
   }>({
     loading: false,
     error: null,
@@ -343,15 +361,21 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       if (cancelled()) return;
-      await settle();
-      if (cancelled()) return;
-      setLookupState({ loading: false, error: error.message || 'Could not build a model for that ticker.' });
+      // THE LOADING SCREEN SAYS IT (NAV_SEARCH §5.4): the error replaces the
+      // card, with Try again and Back, rather than the screen closing on a
+      // line under the search box.
+      setLookupState({ loading: false, error: null, startedAt, failure: { company: ticker, reason: lookupReason(error?.message) } });
     }
   };
 
   // CANCEL, AND ESC, FROM THE FIRST MILLISECOND (§5.4). The fetch cannot be
   // recalled, so its answer is ignored instead: the token moves on and the
   // lookup above returns without touching the screen.
+  const retryLookup = () => {
+    const company = lookupState.failure?.company;
+    if (company) handleLookupTicker(company);
+  };
+
   const cancelLookup = () => {
     lookupToken.current++;
     setLookupState({ loading: false, error: null });
@@ -582,6 +606,24 @@ export default function App() {
       {/* Scroll Progress Indicator Line */}
       <ScrollProgressBar />
 
+      {/* THE LOADING SCREEN, above every screen (job 9.3b): a build that
+          succeeds replaces the search screen with the company page, and the
+          screen it was waited on fades out over that page instead of
+          vanishing with the screen that started it. */}
+      <BuildPipeline
+        active={lookupState.loading}
+        payload={lookupState.payload}
+        startedAt={lookupState.startedAt}
+        doneAt={lookupState.doneAt}
+        failure={lookupState.failure}
+        onRetry={retryLookup}
+        onCancel={() => {
+          cancelLookup();
+          // Focus goes back to the field the build was asked for from.
+          window.setTimeout(() => document.querySelector<HTMLInputElement>('main input[type="text"]')?.focus(), 0);
+        }}
+      />
+
       {paletteOpen && (
         <Suspense fallback={null}>
           <SearchPalette
@@ -679,6 +721,7 @@ export default function App() {
             onLookupTicker={handleLookupTicker}
             lookupState={lookupState}
             onCancelLookup={cancelLookup}
+            onRetryLookup={retryLookup}
           />
         )}
 
