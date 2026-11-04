@@ -1127,6 +1127,26 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
    */
   const admissible = admissibleInputs;
 
+  /**
+   * ONE OF THE THREE DISPLAYED RATIOS, as the screen prints it.
+   *
+   * A figure where there is one; an em dash with the reason behind it where the
+   * filing cannot support it. It never prints nought: `?? 0` on these three is
+   * what made a return on equity nobody could compute read `0.0%`, which is a
+   * claim the company reported nil (conflict 6, standing decision 3).
+   */
+  const ratioTile = (field: 'roePct' | 'roaPct' | 'opMarginPct') => {
+    const value = company[field];
+    if (!isNum(value)) {
+      return (
+        <span data-ratio-missing={field} title={company.ratiosNotShown?.[field]}>
+          {NOT_REPORTED}
+        </span>
+      );
+    }
+    return <span data-ratio={field}>{`${value.toFixed(1)}%`}</span>;
+  };
+
   const [hoveredMatrixCell, setHoveredMatrixCell] = useState<{ wacc: number; g: number; val: number } | null>(null);
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
 
@@ -1632,12 +1652,17 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           another on every arrival, which is a page performing its own loading
           to a reader who came to read a number. A product loads into a task.
           The tiles are simply there. */}
+      {/* A RATIO THE FILING CANNOT SUPPORT IS AN EM DASH WITH THE REASON
+          BEHIND IT (`docs/STUDIO_SPEC.md` conflict 6, severity H). These three
+          were computed with `?? 0`, so a return on equity nobody could compute
+          printed `0.0%` — a claim the company reported nil, which is the one
+          thing standing decision 3 forbids. */}
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {(bankModel
           ? [
               { label: 'Market cap', value: company.marketCapStr },
-              { label: 'ROE (LTM)', value: <TweenNumber value={company.roePct} decimals={1} suffix="%" /> },
-              { label: 'ROA (LTM)', value: <TweenNumber value={company.roaPct} decimals={1} suffix="%" /> },
+              { label: 'ROE (LTM)', value: ratioTile('roePct') },
+              { label: 'ROA (LTM)', value: ratioTile('roaPct') },
               {
                 label: 'Price / book',
                 value:
@@ -1655,9 +1680,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             ]
           : [
               { label: 'Market cap', value: company.marketCapStr },
-              { label: 'ROE (LTM)', value: <TweenNumber value={company.roePct} decimals={1} suffix="%" /> },
-              { label: 'ROA (LTM)', value: <TweenNumber value={company.roaPct} decimals={1} suffix="%" /> },
-              { label: 'Op margin', value: <TweenNumber value={company.opMarginPct} decimals={1} suffix="%" /> },
+              { label: 'ROE (LTM)', value: ratioTile('roePct') },
+              { label: 'ROA (LTM)', value: ratioTile('roaPct') },
+              { label: 'Op margin', value: ratioTile('opMarginPct') },
               { label: 'Net debt / EBITDA', value: company.netDebtEbitda },
             ]
         ).map((tile) => (

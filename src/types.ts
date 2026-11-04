@@ -134,9 +134,20 @@ export interface CompanyData {
   fiftyTwoWeekHigh?: number | null;
   fiftyTwoWeekLow?: number | null;
   marketCapStr: string;
-  roePct: number;
-  roaPct: number;
-  opMarginPct: number;
+  /**
+   * THE THREE DISPLAYED RATIOS, AND WHY NULL IS ONE OF THEIR VALUES.
+   *
+   * They were `number` and computed with `?? 0`, so a return on equity the
+   * filing cannot support printed `0.0%` — a claim the company reported nil
+   * (`docs/STUDIO_SPEC.md` conflict 6, severity H; standing decision 3: missing
+   * data is never treated as zero). A figure that is not there is `null`, the
+   * screen prints an em dash, and `ratiosNotShown` says why.
+   */
+  roePct: number | null;
+  roaPct: number | null;
+  opMarginPct: number | null;
+  /** Why a ratio above is null, keyed by its own field. */
+  ratiosNotShown?: Record<string, string>;
   netDebtEbitda: string;
   sector: string;
   exchange: string;

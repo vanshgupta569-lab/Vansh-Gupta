@@ -6518,6 +6518,191 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// NO DISPLAYED RATIO FALLS BACK TO NOUGHT
+// ---------------------------------------------------------------------------
+//
+// `roePct`, `roaPct` and `opMarginPct` were computed with `?? 0`, so a return
+// on equity the filing cannot support printed **0.0%** — a claim the company
+// reported nil, which is the one thing standing decision 3 forbids
+// (`docs/STUDIO_SPEC.md` conflict 6, severity H). Each is null now, with a
+// reason, and the screen prints an em dash.
+//
+// THE HARD PART IS TELLING THE TWO NOUGHTS APART. A company can genuinely have
+// an operating margin of nought, and that figure must still print. So the check
+// does not look for zeroes — it rebuilds each ratio from the model's own series
+// and requires the record to hold a figure exactly where the inputs are there
+// and null exactly where they are not.
+{
+  console.log('\n=== no displayed ratio falls back to nought ===');
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor, buildFullModel } = await import(`file:///${REPO}/src/data/companies.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let records = 0;
+  let shown = 0;
+  let absent = 0;
+  let genuineNought = 0;
+  let drivenAbsent = '';
+
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+    let M: any;
+    try {
+      M = buildFullModel(rec.modelData, drivers).model;
+    } catch {
+      continue;
+    }
+    const last = M.nH - 1;
+    records++;
+    const ticker = payload.ticker || file;
+
+    // The inputs each ratio needs, read from the model the record was built
+    // from — so "there is a figure" is decided by the same series the screen's
+    // own arithmetic would use, not by whether the record happens to hold one.
+    const WANT: [string, number | null][] = [
+      ['roePct', isNum(M.ratios?.roe?.[last]) ? M.ratios.roe[last] * 100 : null],
+      ['roaPct', isNum(M.ratios?.roa?.[last]) ? M.ratios.roa[last] * 100 : null],
+      [
+        'opMarginPct',
+        isNum(M.ebit?.[last]) && isNum(M.revenue?.[last]) && M.revenue[last] !== 0
+          ? (M.ebit[last] / M.revenue[last]) * 100
+          : null,
+      ],
+    ];
+
+    for (const [field, expected] of WANT) {
+      const held = rec[field];
+      if (expected === null) {
+        absent++;
+        if (held !== null && held !== undefined) {
+          faults.push(
+            `${ticker} ${field}: the record holds ${held} and the model has no figure to compute it from` +
+              (held === 0 ? ' — a nought standing in for a gap, which is the defect' : '')
+          );
+        } else if (!rec.ratiosNotShown?.[field]) {
+          faults.push(`${ticker} ${field}: absent and with no reason recorded for the reader`);
+        }
+      } else {
+        shown++;
+        if (!isNum(held)) {
+          faults.push(
+            `${ticker} ${field}: the record holds nothing and the model gives ${expected.toFixed(2)}`
+          );
+          continue;
+        }
+        // Rounded to one decimal by the record, so the comparison is too.
+        if (Math.abs(held - Number(expected.toFixed(1))) > 0.051) {
+          faults.push(
+            `${ticker} ${field}: the record holds ${held} and the model gives ${expected.toFixed(2)}`
+          );
+        }
+        // AND A GENUINE NOUGHT STILL PRINTS. A company whose operating margin
+        // really is nought must show it; counted so that the rule above cannot
+        // be satisfied by dropping every zero.
+        if (Math.abs(held) < 0.05) genuineNought++;
+      }
+    }
+  }
+
+  // ---- THE ABSENT CASE, DRIVEN, BECAUSE NO COMPANY ON DISK REACHES IT ---
+  //
+  // Every record in the set computes all three ratios, so the branch that holds
+  // null and prints an em dash would ship untested — and so would the defect:
+  // `?? 0` was LATENT on this set, which is worth saying plainly rather than
+  // claiming a figure moved. It is reached by taking a real payload and
+  // removing a line the ratio needs.
+  //
+  // Only revenue does it. The engine PLUGS the balance sheet from the filed
+  // totals, so a payload with its equity or its total assets removed still has
+  // both — which is why those two are measured here and not asserted.
+  {
+    let base: any = null;
+    try {
+      base = readPayload('AAPL.json');
+    } catch {
+      base = null;
+    }
+    if (!base) {
+      faults.push('no payload to drive the absent-ratio case with');
+    } else {
+      const stripped = JSON.parse(JSON.stringify(base));
+      for (const row of stripped.statements || []) delete row.revenue;
+      let rec: any = null;
+      try {
+        rec = buildCompanyFrom(stripped);
+      } catch (e: any) {
+        faults.push(`a payload with no revenue threw rather than reporting an absent ratio: ${e?.message}`);
+      }
+      if (rec) {
+        if (rec.opMarginPct !== null) {
+          faults.push(
+            `with no revenue filed the operating margin reads ${rec.opMarginPct} — it has nothing to be a ` +
+              'margin OF, so it is absent, and a nought here is the defect itself'
+          );
+        } else if (!rec.ratiosNotShown?.opMarginPct) {
+          faults.push('an absent operating margin carries no reason for the reader');
+        } else if (!/revenue/i.test(String(rec.ratiosNotShown.opMarginPct))) {
+          faults.push(
+            `the reason given is "${rec.ratiosNotShown.opMarginPct}" and the missing line is revenue`
+          );
+        } else {
+          drivenAbsent = String(rec.ratiosNotShown.opMarginPct);
+        }
+      }
+    }
+  }
+
+  // ---- AND NO FALLBACK SURVIVES IN THE SOURCE -------------------------
+  //
+  // The arms above hold the records this set produces. This holds the line
+  // itself, because the defect was one operator in one expression and it would
+  // come back the same way.
+  for (const file of ['src/data/autoCompany.ts', 'src/data/companies.ts']) {
+    const text = fs.readFileSync(path.join(REPO, file), 'utf8');
+    for (const field of ['roePct', 'roaPct', 'opMarginPct']) {
+      const line = text.split(/\r?\n/).find((l) => new RegExp(`^\\s*${field}:`).test(l)) || '';
+      if (/\?\?\s*0\b/.test(line)) {
+        faults.push(`${file}: ${field} still falls back to nought — ${line.trim().slice(0, 80)}`);
+      }
+    }
+  }
+
+  console.log(
+    `  ${records} records, ${shown} ratios the model can compute and ${absent} it cannot: every one of ` +
+      'the first holds the figure and every one of the second holds null with a reason'
+  );
+  console.log(
+    `  ${genuineNought} of the shown ratios round to nought and still print, which is the figure a company ` +
+      'that reported it is owed — the rule is not "drop the zeroes"'
+  );
+  console.log(
+    `  the absent case is driven on a payload with its revenue removed, since no company on disk reaches ` +
+      `one: "${drivenAbsent || 'NOT DRIVEN'}"`
+  );
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the displayed ratios:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // EVERY SENSITIVITY CELL IS COMPUTED AT THE INPUTS ITS ROW AND COLUMN PRINT
 // ---------------------------------------------------------------------------
 //

@@ -13,6 +13,9 @@ import { buildModel, buildDCF, filedBalanceSheetRefusal, listingRefusal } from '
 import { computeHealthScore, toRadarMetrics } from './healthScore.js';
 import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
 import { financialsFromStatements, defaultDriversFor, buildFullModel } from './companies';
+
+/** A figure, or not a figure. A ratio the filing cannot support is not nought. */
+const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 import {
   applyCorrections,
   correctionCount,
@@ -261,9 +264,31 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
         : marketCap >= 1000
         ? r(marketCap / 1000, 1) + 'B'
         : r(marketCap, 0) + 'M',
-    roePct: r((M.ratios.roe[last] ?? 0) * 100, 1),
-    roaPct: r((M.ratios.roa[last] ?? 0) * 100, 1),
-    opMarginPct: r(((M.ebit[last] ?? 0) / revLast) * 100, 1),
+    // A RATIO THE FILING CANNOT SUPPORT IS ABSENT, NOT NOUGHT (conflict 6).
+    // `?? 0` here printed `0.0%` for a return on equity nobody could compute,
+    // which is a claim the company reported nil. Each is now null with its
+    // reason beside it, and the screen prints an em dash.
+    roePct: isNum(M.ratios.roe[last]) ? r(M.ratios.roe[last] * 100, 1) : null,
+    roaPct: isNum(M.ratios.roa[last]) ? r(M.ratios.roa[last] * 100, 1) : null,
+    opMarginPct:
+      isNum(M.ebit[last]) && isNum(M.revenue[last]) && M.revenue[last] !== 0
+        ? r((M.ebit[last] / M.revenue[last]) * 100, 1)
+        : null,
+    ratiosNotShown: {
+      ...(isNum(M.ratios.roe[last])
+        ? {}
+        : { roePct: 'The filing does not give both the profit and the equity this needs for the last reported year.' }),
+      ...(isNum(M.ratios.roa[last])
+        ? {}
+        : { roaPct: 'The filing does not give both the profit and the total assets this needs for the last reported year.' }),
+      ...(isNum(M.ebit[last]) && isNum(M.revenue[last]) && M.revenue[last] !== 0
+        ? {}
+        : {
+            opMarginPct: isNum(M.revenue[last])
+              ? 'The filing reports no operating profit for the last reported year.'
+              : 'The filing reports no revenue for the last reported year, so there is nothing to take a margin of.',
+          }),
+    },
     netDebtEbitda:
       netDebtM / ebitdaLast < 0
         ? r(Math.abs(netDebtM / ebitdaLast), 2) + 'x net cash'

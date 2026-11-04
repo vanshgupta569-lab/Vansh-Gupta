@@ -4193,6 +4193,38 @@ the engine's own figures, and the engine's figures did not change.
 
 ---
 
+## 23a3. No displayed ratio falls back to nought
+
+`src/data/autoCompany.ts`, `src/data/companies.ts`, `src/types.ts`, 2026-11-04.
+
+`roePct`, `roaPct` and `opMarginPct` were computed with `?? 0`. A return on
+equity the filing cannot support printed **0.0%** — a claim the company reported
+nil, which is the one thing standing decision 3 forbids
+(`docs/STUDIO_SPEC.md` conflict 6, severity H).
+
+Each is now `number | null`, with `ratiosNotShown` carrying the reason beside
+it, and every screen that prints one — the valuation tiles, both directory
+screens — prints an **em dash with that reason behind it** rather than a figure
+or, worse, a bare per-cent sign with nothing in front of it.
+
+**The hard part is telling the two noughts apart.** A company can genuinely have
+an operating margin of nought, and that figure must still print. So the check
+does not look for zeroes: it rebuilds each ratio from the model's own series and
+requires the record to hold a figure exactly where the inputs are there and null
+exactly where they are not. **522 of 522 ratios across 174 records hold the
+figure the model gives; 2 of them round to nought and print it.**
+
+**It was latent on this payload set, and that is worth saying rather than
+claiming a figure moved.** Not one of the 174 records reaches the fallback: the
+engine plugs the balance sheet from the filed totals, so even a payload with its
+equity or its total assets removed still has both. The case is reached by
+removing REVENUE, and that is how the check drives it — the operating margin
+then has nothing to be a margin of, holds null, and says so. No valuation moves
+and no figure on any screen changes today; what changes is that the next company
+whose filing cannot support a ratio will show an em dash instead of a nought.
+
+---
+
 ## 23b. What each figure records about where it came from
 
 `api/company.js`, `src/data/financials.ts`, payload version 11.

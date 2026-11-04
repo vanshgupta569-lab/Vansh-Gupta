@@ -435,6 +435,29 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### No displayed ratio falls back to nought
+
+`roePct`, `roaPct` and `opMarginPct` used `?? 0`, so a ratio the filing cannot
+support printed `0.0%` — a claim the company reported nil. **The check does not
+look for zeroes**, because a company can genuinely have an operating margin of
+nought and that figure must still print: it rebuilds each ratio from the model's
+own series and requires the record to hold a figure exactly where the inputs are
+there and null exactly where they are not, with a reason recorded for every
+absence. 522 ratios across 174 records, 2 of them a genuine nought that prints.
+A scan over the two files holds the `?? 0` itself out of the three lines.
+
+**The absent case is driven, because no company on disk reaches it.** The
+fallback was latent on this set — the engine plugs the balance sheet from the
+filed totals, so a payload with its equity or total assets removed still has
+both. Removing REVENUE does it: the operating margin then has nothing to be a
+margin of.
+
+Proved by breaking, four ways: the fallback put back on the operating margin,
+which is the defect itself (**2 faults**, and only the driven case catches it);
+put back on the return on equity, caught by the scan (**1**); the reason for an
+absent ratio dropped, leaving the reader an em dash and nothing else (**1**);
+and a ratio read off the wrong year (**161**).
+
 ### Every sensitivity cell is computed at the inputs it prints
 
 Five arms. **Every cell, recomputed from the axis it prints** — rebuilt in the

@@ -742,9 +742,19 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
     price:           AAPL_DATA.dcf.sharePrice,
     priceChangePct:  -1.23,   // placeholder — will come from fetcher
     marketCapStr:    r(AAPL_DATA.dcf.sharePrice * AAPL_DATA.dcf.dilutedSharesCount / 1e6, 2) + 'T',
-    roePct:          r((_M.ratios.roe[_lastH] ?? 0) * 100, 1),
-    roaPct:          r((_M.ratios.roa[_lastH] ?? 0) * 100, 1),
-    opMarginPct:     r((_ebit26 / _rev26) * 100, 1),
+    // The curated record's three ratios, under the same rule as every other
+    // company's: a ratio the filing cannot support is absent rather than nought
+    // (`docs/STUDIO_SPEC.md` conflict 6). Apple's filing supports all three, so
+    // nothing here is null today — the guard is the rule, not a fix.
+    roePct:
+      typeof _M.ratios.roe[_lastH] === 'number' && isFinite(_M.ratios.roe[_lastH])
+        ? r(_M.ratios.roe[_lastH] * 100, 1)
+        : null,
+    roaPct:
+      typeof _M.ratios.roa[_lastH] === 'number' && isFinite(_M.ratios.roa[_lastH])
+        ? r(_M.ratios.roa[_lastH] * 100, 1)
+        : null,
+    opMarginPct: _rev26 ? r((_ebit26 / _rev26) * 100, 1) : null,
     netDebtEbitda:   (_netDebtM / _ebitdaLast) < 0
       ? r(Math.abs(_netDebtM / _ebitdaLast), 2) + 'x net cash'
       : r(_netDebtM / _ebitdaLast, 2) + 'x',

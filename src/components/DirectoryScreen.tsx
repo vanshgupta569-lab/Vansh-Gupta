@@ -392,13 +392,23 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                         Cap&nbsp;&nbsp;<span style={{ color: INK }}>{comp.marketCapStr}</span>
                       </div>
                       <div>
-                        ROE&nbsp;&nbsp;<span style={{ color: INK }}>{comp.roePct}%</span>
+                        {/* A RATIO THE FILING CANNOT SUPPORT IS AN EM DASH, not
+                            `0.0%` and not a bare per-cent sign with nothing in
+                            front of it, which is what a null printed here
+                            before (conflict 6). */}
+                        ROE&nbsp;&nbsp;
+                        <span style={{ color: INK }} title={comp.ratiosNotShown?.roePct}>
+                          {typeof comp.roePct === 'number' ? `${comp.roePct}%` : '—'}
+                        </span>
                       </div>
                       <div>
                         Sector&nbsp;&nbsp;<span style={{ color: INK }}>{comp.sector}</span>
                       </div>
                       <div>
-                        Op margin&nbsp;&nbsp;<span style={{ color: INK }}>{comp.opMarginPct}%</span>
+                        Op margin&nbsp;&nbsp;
+                        <span style={{ color: INK }} title={comp.ratiosNotShown?.opMarginPct}>
+                          {typeof comp.opMarginPct === 'number' ? `${comp.opMarginPct}%` : '—'}
+                        </span>
                       </div>
                     </div>
                   </div>
