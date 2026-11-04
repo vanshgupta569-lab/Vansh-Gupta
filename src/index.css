@@ -208,12 +208,18 @@ textarea,
   caret-color: var(--m-accent-text);
 }
 
-/* Keyboard focus, from the palette and only for the keyboard. A disclosure row
-   is a real button, so it was getting the default ring; a mouse user never saw
-   it and a keyboard user saw the wrong colour. */
+/* Keyboard focus, from the palette and only for the keyboard (VISUAL_SYSTEM 7).
+   2px of ink at a 2px offset: ink is 17.26:1 on the page and 8.0:1 on the
+   oxblood, so one ring works on every surface, where the old 1px read-oxblood
+   ring was thin and vanished on controls that were already oxblood. Never
+   animated, and never restyled per component. */
 :focus-visible {
-  outline: 1px solid var(--m-accent-text);
+  outline: 2px solid var(--m-ink);
   outline-offset: 2px;
+}
+/* On the paper ground the ink ring would be ink on ink, so it takes paper ink. */
+[data-ground="paper"] :focus-visible {
+  outline-color: var(--m-paper-ink);
 }
 
 /* Marquee animation */

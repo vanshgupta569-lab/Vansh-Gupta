@@ -425,7 +425,7 @@ export default function App() {
       <ScrollProgressBar />
 
       {/* Screen Views */}
-      <main className="flex-grow">
+      <main id="main-content" tabIndex={-1} className="flex-grow focus:outline-none">
         {/* THE COMPANY PAGE WINS WHEN THE PATH NAMES ONE. Checked before the
             screen values so that a deep link renders the company rather than
             the landing page that `currentScreen` still says is open. */}
