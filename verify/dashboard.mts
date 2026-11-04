@@ -5693,6 +5693,65 @@ async function checkSearchPalette(browser: Browser) {
   if (!issues.length) ok(`${notes.join('; ')}; layout 640 at y 108 with 56/44/32/40 rows; Try, ranking, bold, keyboard, focus trap, Esc back to the trigger; no stale overwrite (at most ${mode.maxInFlight} in flight); slow, no match, failure and Try again; Enter builds and the company becomes Recent; the phone sheet`);
 }
 
+// ---- the menu's company destinations (job 9.2, NAV_SEARCH §3) -------------
+//
+// A section shows only with a shipped destination: every company-tab link in
+// `src/data/menu.ts` must name a tab `companyRoute.ts` marks built, and a
+// section whose destinations are all unbuilt tabs (Research, Deals) must be
+// absent from the header. With no company open, a company link opens the
+// palette as "Choose a company for …" and the company chosen opens at that
+// tab; with a company open, the link goes straight to its tab.
+async function checkMenuCompanyLinks(browser: Browser) {
+  console.log('\n=== the menu: company destinations ===');
+  const MENU_M: any = await import(`file:///${REPO}/src/data/menu.ts`);
+  const ROUTE_M: any = await import(`file:///${REPO}/src/data/companyRoute.ts`);
+  const issues: string[] = [];
+  const built = new Set(ROUTE_M.COMPANY_TABS.filter((t: any) => t.built).map((t: any) => t.slug));
+  for (const sec of MENU_M.MENU)
+    for (const d of sec.links)
+      if (d.kind === 'company' && !built.has(d.tab)) issues.push(`${sec.name} links to the ${d.tab} tab, which is not built`);
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  await ctx.unroute('**/api/search*');
+  await ctx.route('**/api/search*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results: [{ ticker: PAPER_TICKER, name: 'Fenwick Paper Mills Inc.', exchange: 'NYSE' }] }) })
+  );
+  const p = await ctx.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  const shown: string[] = await p.evaluate(`Array.from(document.querySelectorAll('header [data-menu-trigger]')).map((e) => e.getAttribute('data-menu-trigger'))`);
+  for (const name of shown) {
+    const sec = MENU_M.MENU.find((m: any) => m.name === name);
+    if (!sec || !sec.links.length) issues.push(`${name} is in the header with no shipped destination`);
+  }
+  // No company open: Choose a company for Financials.
+  await p.click('header [data-menu-trigger="Companies"]');
+  await p.click('[data-menu-panel="Companies"] [data-menu-link]:has-text("Financials")');
+  const title = await p.waitForSelector('[data-search-palette]', { timeout: 5000 }).then(() => p.textContent('[data-search-palette]')).catch(() => null);
+  if (!title || !title.includes('Choose a company for Financials')) issues.push(`with no company open, Financials opens ${title === null ? 'no palette' : `a palette without its purpose ("${title.slice(0, 40)}")`}`);
+  else {
+    await p.fill('[data-search-palette] input', PAPER_TICKER.toLowerCase());
+    await p.waitForSelector(`[data-search-row="company"][data-ticker="${PAPER_TICKER}"]`, { timeout: 5000 }).catch(() => {});
+    await p.press('[data-search-palette] input', 'Enter');
+    const there = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/financials$`), { timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!there) issues.push(`choosing ${PAPER_TICKER} for Financials lands on ${new URL(p.url()).pathname}`);
+  }
+  // A company open: Tools goes straight to its Model tab.
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  if (shown.includes('Tools')) {
+    await p.click('header [data-menu-trigger="Tools"]');
+    await p.click('[data-menu-panel="Tools"] [data-menu-link]');
+    const direct = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/model$`), { timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!direct) issues.push(`with ${PAPER_TICKER} open, Tools goes to ${new URL(p.url()).pathname}, not its Model tab`);
+    if (await p.locator('[data-search-palette]').count()) issues.push('with a company open, Tools still asks which company');
+  } else issues.push('Tools is not in the header, though its destination is built');
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`sections shown: ${shown.join(' · ')}; every company link names a built tab; with none open, "Choose a company for Financials" lands on its tab; with ${PAPER_TICKER} open, Tools goes straight to its Model tab`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5781,6 +5840,7 @@ try {
     loading: () => checkLoadingScreen(browser as Browser),
     company: () => checkCompanyHeader(browser as Browser),
     palette: () => checkSearchPalette(browser as Browser),
+    menu: () => checkMenuCompanyLinks(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5915,6 +5975,7 @@ try {
   await checkLoadingScreen(browser);
   await checkCompanyHeader(browser);
   await checkSearchPalette(browser);
+  await checkMenuCompanyLinks(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

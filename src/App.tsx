@@ -484,14 +484,17 @@ export default function App() {
 
   // ---- the search palette (NAV_SEARCH §4; job 9.2) ----------------------
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // "Choose a company for …" (NAV_SEARCH §3): the tab a chosen company opens.
+  const [paletteTarget, setPaletteTarget] = useState<{ tab: string; title: string } | null>(null);
   const paletteOpener = useRef<HTMLElement | null>(null);
   const prefetchPalette = () => { loadPalette().catch(() => {}); };
   useEffect(() => {
     const t = window.setTimeout(prefetchPalette, 2000);
     return () => window.clearTimeout(t);
   }, []);
-  const openPalette = () => {
+  const openPalette = (target?: { tab: string; title: string }) => {
     paletteOpener.current = document.activeElement as HTMLElement | null;
+    setPaletteTarget(target ?? null);
     setPaletteOpen(true);
   };
   const closePalette = (returnFocus = true) => {
@@ -502,13 +505,18 @@ export default function App() {
   // opens one: its build starts, on the search screen's loading screen.
   const openFromPalette = (ticker: string) => {
     closePalette(false);
+    if (paletteTarget) {
+      nav.go(companyPath(ticker, paletteTarget.tab));
+      window.scrollTo({ top: 0 });
+      return;
+    }
     if (route || notesRoute || unknownPath || nav.path === '/screener') nav.go('/');
     setCurrentScreen('DIRECTORY');
     handleLookupTicker(ticker);
   };
   const goFromPalette = (d: import('./data/menu').Destination) => {
     closePalette(false);
-    if (d.kind === 'screen') return;
+    if (d.kind === 'screen' || d.kind === 'company') return;
     if (d.kind === 'section') { scrollToSection(d.section); return; }
     if (d.href === '/learn/') window.location.assign(d.href);
     else { nav.go(d.href); window.scrollTo({ top: 0 }); }
@@ -576,6 +584,7 @@ export default function App() {
             onSelect={(l) => openFromPalette(l.ticker)}
             onGo={goFromPalette}
             onAskToAdd={askToAdd}
+            title={paletteTarget?.title}
           />
         </Suspense>
       )}

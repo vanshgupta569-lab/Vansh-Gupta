@@ -52,7 +52,8 @@ function goTo(query: string): { label: string; dest: Destination }[] {
   const out: { label: string; dest: Destination }[] = [];
   for (const section of MENU) {
     for (const d of section.links) {
-      if (d.kind === 'screen') continue;
+      // A company's tab needs a company first; the palette is how one is chosen.
+      if (d.kind === 'screen' || d.kind === 'company') continue;
       const names = [d.label.toLowerCase(), section.name.toLowerCase()];
       if (names.some((n) => n === q || (q.length >= 3 && n.startsWith(q)))) {
         if (!out.some((o) => o.label === d.label)) out.push({ label: d.label, dest: d });

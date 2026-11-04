@@ -1058,9 +1058,15 @@ Enter opening the company and it becoming Recent, Delete removing it; the
 phone sheet with Cancel 44×44 and 56px rows. The ranking itself is checked in
 `npm run verify` ("the search palette: matching and ranking").
 
+**A nineteenth is the menu's company destinations** (job 9.2): every
+company-tab link in `src/data/menu.ts` names a built tab, every section shown
+has a shipped destination, a company link with nothing open asks "Choose a
+company for …" and lands on that tab, and with a company open it goes
+straight there.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

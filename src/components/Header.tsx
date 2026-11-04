@@ -57,8 +57,9 @@ interface HeaderProps {
   path?: string;
   /** Move to an address inside the app. */
   onGo?: (path: string) => void;
-  /** Open the search palette (job 9.2); without it, search is the search screen. */
-  onOpenSearch?: () => void;
+  /** Open the search palette (job 9.2); without it, search is the search screen.
+      With a purpose, a company chosen opens that tab of it. */
+  onOpenSearch?: (target?: { tab: string; title: string }) => void;
   /** Start loading the palette's code before it is asked for. */
   onPrefetchSearch?: () => void;
 }
@@ -77,6 +78,8 @@ export const Header: React.FC<HeaderProps> = ({
   onPrefetchSearch,
 }) => {
   const openSearch = () => (onOpenSearch ? onOpenSearch() : onNavigateToScreen('DIRECTORY'));
+  /** The company in context: the one whose page is open. */
+  const inContext = /^\/company\/([^/]+)/.exec(path)?.[1] ?? null;
   const [apple] = useState(isApple);
   const [openPanel, setOpenPanel] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -181,6 +184,13 @@ export const Header: React.FC<HeaderProps> = ({
     setOpenPanel(null);
     setSheetOpen(false);
     if (d.kind === 'screen') openSearch();
+    else if (d.kind === 'company') {
+      if (inContext && onGo) {
+        onGo(`/company/${inContext}/${d.tab}`);
+        window.scrollTo({ top: 0 });
+      } else if (onOpenSearch) onOpenSearch({ tab: d.tab, title: `Choose a company for ${d.purpose}` });
+      else onNavigateToScreen('DIRECTORY');
+    }
     else if (d.kind === 'section') goHomeAnd(d.section);
     else if (d.href === '/learn/' || !onGo) window.location.assign(d.href);
     else {
