@@ -14,7 +14,8 @@
 //      most 2.5s, CLS at most 0.1, and Total Blocking Time at most 200ms.
 //      INP needs a real interaction and a navigation run has none, so TBT —
 //      the main-thread time that would have delayed one — stands in for it
-//      (PROPOSED — needs Nihar). The LCP element must be the poster.
+//      (APPROVED, Nihar, 4 Nov 2026). The LCP element must be the poster or
+//      the hero headline (APPROVED, the same day).
 //
 // Nothing leaves the machine: the preview serves dist/, and the page's calls
 // to /api/* fail as they would offline, which the landing page tolerates (the
@@ -63,7 +64,10 @@ const entryScripts = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/g)].map((m
 const preloads = [...html.matchAll(/<link[^>]+rel="modulepreload"[^>]+href="([^"]+\.js)"/g)].map((m) => m[1]);
 const assets = path.join(DIST, 'assets');
 const chunks = fs.readdirSync(assets).filter((f) => f.endsWith('.js'));
-const holdsThree = (file: string) => /WebGLRenderer|THREE\.WebGLRenderer|WebGL2RenderingContext/.test(fs.readFileSync(path.join(assets, file), 'utf8'));
+// three.js's own name for its renderer, in its warnings. Not the bare
+// `WebGL2RenderingContext`, which the entry script names on purpose: the
+// low-end test asks the browser whether it has one (VISUAL_BUILD_PLAN V7).
+const holdsThree = (file: string) => /THREE\.WebGLRenderer/.test(fs.readFileSync(path.join(assets, file), 'utf8'));
 const threeChunks = chunks.filter(holdsThree);
 const firstLoaded = [...entryScripts, ...preloads].map((src) => path.basename(src));
 if (!threeChunks.length) fail('no chunk holds the WebGL renderer: the particle field is missing from the build');
@@ -111,27 +115,41 @@ try {
   const { chromium } = await import('playwright');
   const chrome = await launch({ chromePath: chromium.executablePath(), chromeFlags: ['--headless=new', '--no-sandbox'] });
   try {
-    const result = await lighthouse(
-      `http://127.0.0.1:${PORT}/`,
-      { port: chrome.port, output: 'json', logLevel: 'error', onlyCategories: ['performance'] },
-      (await import('lighthouse/core/config/desktop-config.js')).default
-    );
-    const audits = result.lhr.audits;
-    const lcp = audits['largest-contentful-paint'].numericValue;
-    const cls = audits['cumulative-layout-shift'].numericValue;
-    const tbt = audits['total-blocking-time'].numericValue;
+    // THE MEDIAN OF THREE RUNS. On this machine one run's TBT ranged from
+    // 379ms to 1,653ms on the same build (4 November 2026, second run), so a
+    // single run cannot hold a ratchet; Lighthouse's own guidance is to take
+    // the median of several.
+    const RUNS = 3;
+    const runs: any[] = [];
+    for (let i = 0; i < RUNS; i++) {
+      const r = await lighthouse(
+        `http://127.0.0.1:${PORT}/`,
+        { port: chrome.port, output: 'json', logLevel: 'error', onlyCategories: ['performance'] },
+        (await import('lighthouse/core/config/desktop-config.js')).default
+      );
+      runs.push(r.lhr.audits);
+    }
+    const median = (key: string) => {
+      const v = runs.map((a) => a[key].numericValue as number).sort((x, y) => x - y);
+      return v[Math.floor(v.length / 2)];
+    };
+    const tbtRuns = runs.map((a) => Math.round(a['total-blocking-time'].numericValue)).join(', ');
+    const audits = runs[Math.floor(RUNS / 2)];
+    const lcp = median('largest-contentful-paint');
+    const cls = median('cumulative-layout-shift');
+    const tbt = median('total-blocking-time');
     // Lighthouse 13 names the element in the LCP breakdown insight.
     const lcpElement = JSON.stringify(
       audits['lcp-breakdown-insight']?.details ?? audits['largest-contentful-paint-element']?.details ?? ''
     );
-    const line = `LCP ${Math.round(lcp)}ms (≤ ${BUDGET.lcpMs}), CLS ${cls.toFixed(3)} (≤ ${BUDGET.cls}), TBT ${Math.round(tbt)}ms (budget ${BUDGET.tbtMs}, ratchet ${BUDGET.tbtCeilingMs}; standing in for INP)`;
+    const line = `median of ${RUNS}: LCP ${Math.round(lcp)}ms (≤ ${BUDGET.lcpMs}), CLS ${cls.toFixed(3)} (≤ ${BUDGET.cls}), TBT ${Math.round(tbt)}ms (runs ${tbtRuns}; budget ${BUDGET.tbtMs}, ratchet ${BUDGET.tbtCeilingMs}; standing in for INP)`;
     if (lcp > BUDGET.lcpMs) fail(`LCP ${Math.round(lcp)}ms is over ${BUDGET.lcpMs}ms`);
     if (cls > BUDGET.cls) fail(`CLS ${cls.toFixed(3)} is over ${BUDGET.cls}`);
     if (tbt > BUDGET.tbtCeilingMs) fail(`TBT ${Math.round(tbt)}ms is over the ${BUDGET.tbtCeilingMs}ms ratchet (budget ${BUDGET.tbtMs}ms, KI-40)`);
     else if (tbt > BUDGET.tbtMs) say(`NOTE: TBT ${Math.round(tbt)}ms is over the ${BUDGET.tbtMs}ms budget and inside the ${BUDGET.tbtCeilingMs}ms ratchet (KI-40)`);
     // The largest paint must be one the page has without the 3D chunk: the
     // poster, or — because Chrome leaves a full-viewport image out of LCP as
-    // background — the hero headline (PROPOSED — needs Nihar). Never the canvas.
+    // background — the hero headline (APPROVED, Nihar, 4 Nov 2026). Never the canvas.
     if (/canvas/i.test(lcpElement) || !/hero-poster|h1\.text-display|section#hero/.test(lcpElement))
       fail(`the largest contentful paint is not the poster or the hero headline: ${lcpElement.slice(0, 200)}`);
     else say(`the largest contentful paint is ${/hero-poster/.test(lcpElement) ? 'the poster' : 'the hero headline'}, painted without the 3D chunk`);

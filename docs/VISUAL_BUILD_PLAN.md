@@ -211,3 +211,9 @@ Documentation-only jobs (this file, the specs) run anywhere and need no suite.
 - **V6. APPROVED** (Nihar, 4 November 2026). DESIGN.md to be updated for C4, C14–C19 by
   the session that owns it; until then the approved VISUAL_SYSTEM CHANGE items
   are treated as law (rule 5).
+- **V7. CHANGE, APPROVED** (Nihar, 4 November 2026). The poster replaces the
+  WebGL field only on a low-end device: 2 or fewer cores, 2GB or less of
+  memory, Data Saver, a 2g or 3g connection, no WebGL2, or a measured frame
+  average above 24ms — not on 4 cores or 4GB, which VISUAL_SYSTEM §8 had
+  said. The phone rule (under 640px wide, LANDING §3.2's poster-only hero)
+  is not part of this change and stays.

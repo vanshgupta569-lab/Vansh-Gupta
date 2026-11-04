@@ -495,3 +495,8 @@ existing docs; the build proceeds on them.
   words them.
 - **L8. APPROVED** (Nihar, 4 November 2026). One error-wording module
   (`src/data/errorText.ts`) owning the 3.5 table, so no screen writes its own.
+- **L9. APPROVED** (Nihar, 4 November 2026). The static `/learn/` header
+  carries the wordmark, Screener, Learn (current) and a Search link to the
+  app, until it can carry the app's menu.
+- **L10. APPROVED** (Nihar, 4 November 2026). On the static `404.html`,
+  "Search a company" goes to `/`, since a static page cannot open the palette.

@@ -4537,7 +4537,7 @@ async function checkHeroField(browser: Browser) {
   const counters = `(() => { window.__raf = 0; const raf = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; })()`;
   // A sixth and a bit: frames up to ~130ms real read as under 20ms, so the
   // field neither halves nor freezes here; five settling seconds become ~33.
-  const slow = `(() => { const real = performance.now.bind(performance); performance.now = () => real() * 0.15; })()`;
+  const slow = `(() => { const real = performance.now.bind(performance); performance.now = () => real() * 0.1; })()`;
   const state = (p: Page) => p.evaluate(`document.querySelector('canvas')?.dataset.state || null`) as Promise<string | null>;
 
   // 1. A 2x screen, the clock slowed: budgets, the pause control, settling.
@@ -4572,11 +4572,11 @@ async function checkHeroField(browser: Browser) {
     // Leave it alone: within five (slowed) seconds of the last input it must
     // stop drawing altogether.
     let settled = false;
-    for (let i = 0; i < 60 && !settled; i++) {
+    for (let i = 0; i < 90 && !settled; i++) {
       await p.waitForTimeout(1000);
       settled = (await state(p)) === 'settled';
     }
-    if (!settled) issues.push(`left alone for 60 seconds the field is still ${await state(p)}, not settled`);
+    if (!settled) issues.push(`left alone for 90 seconds the field is still ${await state(p)}, not settled`);
     else {
       const before = (await p.evaluate('window.__raf')) as number;
       await p.waitForTimeout(2000);
@@ -4604,7 +4604,7 @@ async function checkHeroField(browser: Browser) {
     await p.waitForTimeout(12_000);
     const r: any = await p.evaluate(`(() => { const c = document.querySelector('canvas'); const poster = document.querySelector('[data-hero-poster]'); return { canvas: !!c, live: c ? c.dataset.live || null : null, particles: c ? c.dataset.particles : null, poster: poster ? getComputedStyle(poster).opacity : null }; })()`);
     if (!r.canvas && r.poster !== '1') issues.push(`the field froze and the poster is not showing (opacity ${r.poster})`);
-    ok(r.canvas ? `on this browser's own clock the field is still drawing (${r.live ?? r.particles} points live)` : `on this browser's software GPU the field froze after halving, and the poster is back (opacity ${r.poster})`);
+    ok(r.canvas ? `on this browser's own clock the field is still drawing (${r.live ?? r.particles} points live)` : `on this browser's software GPU the field's first second averaged over 24ms a frame and the poster is back (opacity ${r.poster})`);
     await ctx.close();
   }
 
@@ -4785,10 +4785,18 @@ async function checkPhoneAndLowEnd(browser: Browser) {
   console.log('\n=== phone and low-end: the poster, no WebGL ===');
   const issues: string[] = [];
   const seen: string[] = [];
-  const cases: { name: string; width: number; height: number; tweak: string; wantField: boolean; reason?: string }[] = [
+  // VISUAL_BUILD_PLAN V7 (Nihar, 4 November 2026): 4 cores and 4GB are not
+  // low-end and get the field; 2 cores, 2GB, no WebGL2 and a first second
+  // averaging over 24ms a frame get the poster.
+  const SLOW_FRAMES = `(() => { const raf = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => raf((t) => { const end = performance.now() + 32; while (performance.now() < end) {} cb(t); }); })();`;
+  const cases: { name: string; width: number; height: number; tweak: string; wantField: boolean; reason?: string; drawsFirst?: boolean }[] = [
     { name: 'a capable desktop', width: 1440, height: 900, tweak: '', wantField: true },
-    { name: '4 cores', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });`, wantField: false, reason: 'few-cores' },
-    { name: '4GB of memory', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'deviceMemory', { get: () => 4 });`, wantField: false, reason: 'low-memory' },
+    { name: '4 cores', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });`, wantField: true },
+    { name: '4GB of memory', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'deviceMemory', { get: () => 4 });`, wantField: true },
+    { name: '2 cores', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 });`, wantField: false, reason: 'few-cores' },
+    { name: '2GB of memory', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'deviceMemory', { get: () => 2 });`, wantField: false, reason: 'low-memory' },
+    { name: 'no WebGL2', width: 1440, height: 900, tweak: `delete window.WebGL2RenderingContext;`, wantField: false, reason: 'no-webgl2' },
+    { name: 'frames over 24ms', width: 1440, height: 900, tweak: SLOW_FRAMES, wantField: false, reason: 'slow-frames', drawsFirst: true },
     { name: 'Data Saver', width: 1440, height: 900, tweak: `window.__device.saveData = true;`, wantField: false, reason: 'save-data' },
     { name: 'a 3g connection', width: 1440, height: 900, tweak: `window.__device.effectiveType = '3g';`, wantField: false, reason: 'slow-connection' },
     { name: 'a 390px phone', width: 390, height: 844, tweak: '', wantField: false, reason: 'narrow' },
@@ -4802,6 +4810,10 @@ async function checkPhoneAndLowEnd(browser: Browser) {
     const p = await ctx.newPage();
     await p.goto(BASE, { waitUntil: 'networkidle' });
     if (k.wantField) await p.locator('canvas').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    else if (k.drawsFirst) {
+      await p.waitForFunction(`document.querySelector('[data-hero-mode]')?.getAttribute('data-hero-mode') === 'poster:slow-frames'`, null, { timeout: 20_000 }).catch(() => {});
+      await p.waitForTimeout(2000); // the poster fades back in
+    }
     else await p.waitForTimeout(3000);
     const v: any = await p.evaluate(`(() => {
       const poster = document.querySelector('[data-hero-poster]');
@@ -4816,7 +4828,9 @@ async function checkPhoneAndLowEnd(browser: Browser) {
     if (k.wantField) {
       if (v.webgl !== 1) issues.push(`${k.name}: ${v.webgl} WebGL contexts, where the field should draw (the check would pass a page that never draws it)`);
     } else {
-      if (v.webgl > 0) issues.push(`${k.name}: ${v.webgl} WebGL context made, where VISUAL_SYSTEM §8 asks for the poster`);
+      // A measured first second needs drawing to measure, so that one case
+      // may have made its one context; it must then have given it up.
+      if (v.webgl > (k.drawsFirst ? 1 : 0)) issues.push(`${k.name}: ${v.webgl} WebGL context made, where VISUAL_SYSTEM §8 asks for the poster`);
       if (v.canvases > 0) issues.push(`${k.name}: ${v.canvases} canvas in the page, where there should be none`);
       if (v.poster !== '1') issues.push(`${k.name}: the poster is not showing (opacity ${v.poster})`);
       if (v.mode !== `poster:${k.reason}`) issues.push(`${k.name}: the hero says "${v.mode}", not "poster:${k.reason}"`);

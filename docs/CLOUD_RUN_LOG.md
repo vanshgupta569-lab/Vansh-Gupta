@@ -135,3 +135,33 @@ problem, which was fixed before the commit; those are logged too.
 - Look at the hero on a real GPU: the dust's size and brightness (8.7).
 - On the deployed site: a direct load of `/screener?…`, of
   `/learn/notes/<key>/` and of an unknown path (9.5, 9.8).
+
+
+# The second cloud run — 4 November 2026
+
+Branch `claude/cloud-run-2-palette-chart`, started from
+`claude/cloud-run-step5c-step8-step9`. Same standing limits and the same
+do-not-touch list as the first run (above).
+
+## Nihar's decisions on the first run's proposals (4 November 2026)
+
+Approved as proposed: C-3 (`n.m.` under 0.5% of A) and C-4 (the bridge
+explains cent-rounded values); the feature register's status mapping and
+order; no quarter dates until recorded; Total Blocking Time standing in for
+INP; the LCP rule (poster or hero headline, never the canvas); the static
+Learn header; the 404's "Search a company" going to `/`; the menu showing
+Companies and Learn only; the loading screen's two stages. Recorded in
+`docs/STEP5_BUILD_PLAN.md`, `docs/LANDING_SPEC.md` (9, 10),
+`docs/NAV_SEARCH_SPEC.md` (7, 8), `docs/LEARN_STATES_SPEC.md` (L9, L10) and the
+code comments that carried them.
+
+CHANGE: the poster replaces the WebGL field only on 2 or fewer cores, 2GB or
+less, Data Saver, 2g/3g, no WebGL2, or a measured first-second frame average
+above 24ms — not on 4 cores or 4GB. Recorded as `docs/VISUAL_BUILD_PLAN.md` V7
+and in `docs/VISUAL_SYSTEM.md` §8.
+
+## Log, second run
+
+| # | Job | Result |
+|---|---|---|
+| R1 | Record the decisions; the low-end rule changed to V7 | `src/design/constrained.ts`: low-end is now ≤ 2 cores, ≤ 2GB, Data Saver, 2g/3g or no WebGL2 (asked of the `WebGL2RenderingContext` constructor, never by making a context — a probe canvas would be a second context, job 8.8). The particle field measures its own first second of drawing (three warm-up frames left out, since they carry the shader compile) and gives way to the poster above a 24ms average (`SLOW_START_MS`); after that, slow frames only halve its points and it keeps drawing — the old freeze-after-two-halvings rule was a poster on a condition V7 does not list. The hero says `poster:slow-frames`. Under 640px wide stays poster-only: that is LANDING §3.2's phone hero, not a low-end signal (**PROPOSED — needs Nihar:** V7 lists the device signals only; the phone rule is kept). Check (dashboard): 4 cores and 4GB now expected to draw the field; 2 cores, 2GB, no WebGL2 and rAF callbacks slowed to 32ms each expected to show the poster with the right reason (the slow-frames case may make its one context and must give it up). The hero check's clock is slowed to 0.1 rather than 0.15 and its settle wait lengthened to 90s, because on this software GPU a 0.15 clock still read the first second as over 24ms. Proved to fail: the thresholds put back to 4 cores / 4GB (2 problems: no field on either); the first-second rule switched off (3 problems: a canvas, no poster, the hero saying "field"). Found on the way: `verify:landing` flagged the entry script as holding three.js, because its marker matched the bare `WebGL2RenderingContext` the low-end test now names; the marker is `THREE.WebGLRenderer` (three.js's own warning prefix), re-proved by importing the field statically (2 problems). And with 4 cores no longer low-end, Lighthouse here takes the field path again, where one run's TBT ranged 379–1,653ms on the same build; the check now takes the median of three runs (measured: TBT 389, 358, 368 → 368ms; LCP 412ms; CLS 0.019), inside `KI-40`'s 600ms ratchet. Full suite: tsc 0, build OK, verify:routes 0, verify:landing 0, verify to the payload stop, dashboard 0. |

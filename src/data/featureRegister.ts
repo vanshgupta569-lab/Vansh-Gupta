@@ -22,12 +22,13 @@
 //             no link, no button, no "Type in" instruction.
 //
 // QUARTERS. None is printed until one is recorded here as a decision; an
-// invented quarter is a promise (PROPOSED — needs Nihar, CLOUD_RUN_LOG 8.6).
+// invented quarter is a promise (APPROVED, Nihar, 4 November 2026).
 //
 // ORDER. The Idea Book's "Where we are and the build order" section is not in
 // the repository's copy, so the order is the build steps the plans record:
 // step 5 (valuation completion), step 6 (the tearsheet), then the Next items
-// in the order VISION §5 lists them (PROPOSED — needs Nihar).
+// in the order VISION §5 lists them (APPROVED, Nihar, 4 November 2026, with
+// the status mapping above and "no quarter until recorded").
 
 export type FeatureStatus = 'shipped' | 'in_build' | 'planned';
 

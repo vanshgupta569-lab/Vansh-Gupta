@@ -7,6 +7,8 @@
 6. Tagline "A Ledger That Never Lies": KEPT (Nihar, 31 October 2026). It stays as the page title, og:title and twitter:title; it is exempt from the banned-words check for "never". The hero headline and eyebrow follow section 2.1.
 8. The neon yellow starburst in the screenshots is a browser extension, not part of the site: ignore finding 3.
 7. Built in build step 8, together with VISUAL_SYSTEM.
+9. (Nihar, 4 November 2026) The feature register's status mapping from VISION.md and its order: APPROVED. No quarter is printed until one is recorded: APPROVED.
+10. (Nihar, 4 November 2026) Total Blocking Time stands in for INP in the Lighthouse check, and the largest contentful paint may be the poster or the hero headline (never the canvas): APPROVED.
 
 LANDING_SPEC
 Marginalia landing page · v1.0 · 30 October 2026 · obeys VISUAL_SYSTEM v1.0 and the decisions recorded at its top. Where the two disagree, VISUAL_SYSTEM wins.

@@ -365,7 +365,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
   const fieldOn = fieldWanted && !reducedMotion && !fieldFrozen && !constrained;
   const heroMode = fieldOn
     ? 'field'
-    : `poster:${constrained ?? (reducedMotion ? 'reduced-motion' : fieldFrozen ? 'frozen' : 'loading')}`;
+    : `poster:${constrained ?? (reducedMotion ? 'reduced-motion' : fieldFrozen ? 'slow-frames' : 'loading')}`;
   const posterOn = !fieldOn || !fieldDrawn;
   const coverage = useCoverage();
   const countLabel = companyCountLabel(coverage.count);

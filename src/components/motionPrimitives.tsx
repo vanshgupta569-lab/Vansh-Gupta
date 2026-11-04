@@ -156,9 +156,9 @@ export const FlashOnChange: React.FC<{
 // stages, reported by the developer). The loading screen covers the fetch of
 // the filings and nothing else — the model itself is built later, from the
 // Model tab — so it has two stages, not five, and its fill moves only when one
-// of them has really finished: nothing creeps on a timer (§5.3). PROPOSED —
-// needs Nihar: the spec's five names describe a build this screen does not
-// run.
+// of them has really finished: nothing creeps on a timer (§5.3). APPROVED
+// (Nihar, 4 November 2026): the spec's five names describe a build this
+// screen does not run.
 const STAGES = ['Reading the filings', 'Checking the filed statements'];
 
 /**

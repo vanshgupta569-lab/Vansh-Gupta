@@ -33,15 +33,20 @@ import * as THREE from 'three';
    on a desktop: the object was 130,000 and the sky 4,400. The canvas is drawn
    at no more than 1.5 device pixels per CSS pixel. The animation settles five
    seconds after the last input and then holds still until the reader scrolls,
-   points or presses a key (WCAG 2.2.2), stops while the tab is hidden, and,
-   if it cannot keep a frame under 20ms, halves its points — twice at most —
-   before freezing on the poster. */
+   points or presses a key (WCAG 2.2.2), and stops while the tab is hidden.
+   If its frames average more than 24ms over its first second it gives way to
+   the poster (VISUAL_BUILD_PLAN V7, Nihar, 4 November 2026: the measured
+   frame-average signal); after that, frames that run over 20ms halve its
+   points, twice at most, and it keeps drawing. */
 export const PARTICLE_BUDGET = 12000;
 export const OBJECT_POINTS = { desktop: 9000, compact: 5000 } as const;
 export const SKY_POINTS = { desktop: 3000, compact: 1000 } as const;
 export const MAX_PIXEL_RATIO = 1.5;
 export const SETTLE_MS = 5000;
 export const SLOW_FRAME_MS = 20;
+/** The first second's frame average above which the poster takes over (V7). */
+export const SLOW_START_MS = 24;
+export const START_WINDOW_MS = 1000;
 
 interface ParticleFieldProps {
   /** Section ids, in page order, that the object is bound to. */
@@ -52,7 +57,7 @@ interface ParticleFieldProps {
   paused?: boolean;
   /** The first frame is on screen, so the poster can step aside. */
   onFirstFrame?: () => void;
-  /** Frames stayed slow after two halvings: show the poster instead. */
+  /** The first second's frames averaged over 24ms: show the poster instead. */
   onFreeze?: () => void;
 }
 
@@ -670,6 +675,12 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     let sampled: number[] = [];
     let halvings = 0;
     let frozen = false;
+    /* The first second of drawing, measured once (V7). */
+    let startAt = 0;
+    let startSum = 0;
+    let startCount = 0;
+    let startJudged = false;
+    let warm = 0;
     let drawnFirst = false;
     let moving = 1;
     const state = (s: string) => { canvas.dataset.state = s; };
@@ -687,8 +698,29 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     document.addEventListener('visibilitychange', onVisibility);
 
     const keepUp = (now: number) => {
-      if (lastFrameAt) sampled.push(now - lastFrameAt);
+      // The first three frames are left out of the first second's average:
+      // they carry the shaders' compilation, which a reader never sees again.
+      if (lastFrameAt) {
+        sampled.push(now - lastFrameAt);
+        warm++;
+        if (!startJudged && warm > 3) {
+          if (!startAt) startAt = now;
+          startSum += now - lastFrameAt;
+          startCount++;
+        }
+      }
       lastFrameAt = now;
+      if (!startJudged && startAt && now - startAt >= START_WINDOW_MS && startCount > 0) {
+        startJudged = true;
+        const first = startSum / startCount;
+        canvas.dataset.firstSecond = first.toFixed(1);
+        if (first > SLOW_START_MS) {
+          frozen = true;
+          state('frozen');
+          freezeRef.current?.();
+          return;
+        }
+      }
       if (sampled.length < 30) return;
       const average = sampled.reduce((a, b) => a + b, 0) / sampled.length;
       sampled = [];
@@ -698,11 +730,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
         live = Math.max(1, Math.floor(live / 2));
         geom.setDrawRange(0, live);
         canvas.dataset.live = String(live);
-        return;
       }
-      frozen = true;
-      state('frozen');
-      freezeRef.current?.();
     };
 
     /* Decide, after a frame, whether to draw another. */

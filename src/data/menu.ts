@@ -9,8 +9,8 @@
 // its status and no link, read from the feature register (LANDING §2.4), and
 // that group ends with a link to the roadmap.
 //
-// WHAT IS SHOWN TODAY, AND WHY (PROPOSED — needs Nihar; the spec marks every
-// section's contents [CONFIRM]):
+// WHAT IS SHOWN, AND WHY (APPROVED, Nihar, 4 November 2026, for Companies and
+// Learn; the spec marks every section's contents [CONFIRM]):
 //   Companies  Search a company, the screener. Coming: a private company.
 //   Learn      the Learn hub, the margin notes, how it works, coverage, what
 //              is being built next.

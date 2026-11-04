@@ -436,7 +436,7 @@ export function shapley(
 /**
  * "% of total" is not meaningful when the total is too small to divide by
  * (rule 19). Threshold: a change under half a percent of version A's value.
- * PROPOSED — needs Nihar (`docs/STEP5_BUILD_PLAN.md` §6, C-3).
+ * APPROVED, Nihar, 4 November 2026 (`docs/STEP5_BUILD_PLAN.md` §6, C-3).
  */
 export const SHARE_NOT_MEANINGFUL_BELOW = 0.005;
 

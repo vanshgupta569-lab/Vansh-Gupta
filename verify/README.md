@@ -141,7 +141,7 @@ nowhere better to put them and each is cheap:
   run verify:landing`, its own command because it needs the build and
   Lighthouse). The bundle: three.js in a chunk of its own, not loaded by
   `index.html`, at most 180KB gzipped; the poster at most 60KB. Lighthouse,
-  desktop preset, on `vite preview`: LCP at most 2.5s, CLS at most 0.1, TBT
+  desktop preset, on `vite preview`, the median of three runs (one run's TBT ranged from 379 to 1,653ms on the same build here): LCP at most 2.5s, CLS at most 0.1, TBT
   (for INP) under a 600ms ratchet while `KI-40` is open (budget 200ms), and the
   largest paint the poster or the hero headline, never the canvas.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
@@ -969,7 +969,7 @@ around its centre with a mouse, and of a 44px square in a touch context
 land on that ⓘ.
 
 **A ninth is the hero's particle field** (build step 8, job 8.7). On a 2x
-screen with the page's clock slowed to 0.15 of real time (this browser's software GPU
+screen with the page's clock slowed to 0.1 of real time (this browser's software GPU
 cannot keep a frame under 20ms, and would otherwise freeze the field, which is
 checked separately): at most 12,000 points, at most 1.5 device pixels a CSS
 pixel, the poster gone once the first frame is drawn, a 24×24 pause control
