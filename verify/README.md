@@ -114,6 +114,14 @@ nowhere better to put them and each is cheap:
   `MOTION_RATCHET` holds each file's count per category as measured on
   2026-11-04 — 3, 99 and 7 in total — and a file may fall below its number
   and never rise above it; a file not listed must be zero.
+- **the valuation bridge** (build step 5 part C, `verify/bridge.mts`, on the
+  paper fixture, so it needs no payloads). C1: the drivers between two
+  versions equal the inputs changed by hand; A with none of B is A, with all
+  of B is B; each driver moves the value alone; a refused mix is reported with
+  its reason. C2: the spec's worked example to the cent (FCF 161.64, WACC
+  272.20, growth 137.59 after largest-remainder rounding, total 571.43, in
+  2^3 runs), and on the fixture the parts sum to the total to the cent, with a
+  driver that changes nothing at exactly zero.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in

@@ -125,5 +125,70 @@ export async function checkBridge(): Promise<BridgeReport> {
     );
   }
 
+  // ---- C2. EXACT SHAPLEY, THE SPEC'S WORKED EXAMPLE, AND EXACT SUMS ------
+  {
+    // VALUATION_SIDE_BY_SIDE part 2: V = FCF / (WACC - g). A: 100, 10%, 3%;
+    // B: 110, 9%, 3.5%. The expected figures are the spec's, written here,
+    // not computed by the code under test.
+    const A0: any = { FCF: 100, WACC: 0.1, g: 0.03 };
+    const B0: any = { FCF: 110, WACC: 0.09, g: 0.035 };
+    const value = (take: string[]) => {
+      const x: any = { ...A0 };
+      for (const k of take) x[k] = B0[k];
+      return { value: x.FCF / (x.WACC - x.g), refusal: null };
+    };
+    const r = BR.shapley(['FCF', 'WACC', 'g'], value);
+    const got = Object.fromEntries(r.parts.map((p: any) => [p.key, p.rounded]));
+    const want: Record<string, number> = { FCF: 161.64, WACC: 272.2, g: 137.59 };
+    const centsOff = (x: number, y: number) => Math.round(x * 100) !== Math.round(y * 100);
+    if (!r.ok || r.method !== 'exact') problems.push(`C2: the worked example did not run as an exact attribution (${r.method}, ok ${r.ok})`);
+    if (centsOff(r.start, 1428.57) || centsOff(r.end, 2000)) problems.push(`C2: the worked example's versions are ${r.start} and ${r.end}, not 1,428.57 and 2,000.00`);
+    if (centsOff(r.totalRounded, 571.43)) problems.push(`C2: the worked example's change is ${r.totalRounded}, not +571.43`);
+    for (const [k, v] of Object.entries(want))
+      if (centsOff(got[k], v)) problems.push(`C2: the worked example gives ${k} ${got[k]}, not the spec's ${v}`);
+    const gRaw = r.parts.find((p: any) => p.key === 'g')?.raw;
+    if (Math.floor(gRaw * 100) !== 13758) problems.push(`C2: growth's unrounded share is ${gRaw}, not the spec's 137.58 before rounding`);
+    if (r.runs !== 8) problems.push(`C2: three drivers took ${r.runs} runs, not 2^3 = 8`);
+    // The methods the spec rejects give other answers, which is why it rejects
+    // them: one-at-a-time from A sums to 490.84 and leaves 80.59 unexplained.
+    const solo = ['FCF', 'WACC', 'g'].reduce((sum, k) => sum + (value([k]).value - value([]).value), 0);
+    if (centsOff(solo, 490.84)) problems.push(`C2: one-at-a-time from A sums to ${solo.toFixed(2)}, not the spec's 490.84`);
+    lines.push(
+      `C2: the worked example gives FCF ${got.FCF.toFixed(2)}, WACC ${got.WACC.toFixed(2)}, growth ${got.g.toFixed(2)} ` +
+        `(raw ${gRaw.toFixed(4)}), summing to ${r.totalRounded.toFixed(2)} in ${r.runs} runs; one-at-a-time would give ${solo.toFixed(2)}`
+    );
+
+    // On the model itself: the six-driver fixture pair, plus a seventh driver
+    // that changes no value (a correction's reason alone), must add up to the
+    // cent and give the inert driver exactly zero.
+    const { A, B } = fixtureVersions();
+    const B7: any = { fetched: B.fetched, judgements: clone(B.judgements) };
+    B7.judgements.correctionReasons = { ...B7.judgements.correctionReasons, sga: 'fixture: a reason with no correction' };
+    const bridge = BR.bridgeBetween(A, B7);
+    const sum = bridge.parts.reduce((t: number, p: any) => t + Math.round(p.rounded * 100), 0);
+    if (!bridge.ok) problems.push(`C2: the fixture bridge did not run (${bridge.refused.map((x: any) => x.refusal).join('; ')})`);
+    else {
+      if (sum !== Math.round(bridge.totalRounded * 100))
+        problems.push(`C2: the fixture bridge's parts sum to ${sum / 100}, not its total ${bridge.totalRounded}`);
+      const rawSum = bridge.parts.reduce((t: number, p: any) => t + p.raw, 0);
+      if (Math.abs(rawSum - bridge.total) > 1e-9) problems.push(`C2: unrounded parts sum to ${rawSum}, not ${bridge.total}`);
+      const inert = bridge.parts.find((p: any) => p.key === 'correction:sga');
+      if (!inert) problems.push('C2: the reason-only change is not listed as a driver (rule 13: every changed input)');
+      else if (inert.raw !== 0 || inert.rounded !== 0) problems.push(`C2: a driver that changes nothing got ${inert.raw}, not exactly 0 (rule 19)`);
+      if (bridge.runs !== 2 ** bridge.drivers.length) problems.push(`C2: ${bridge.drivers.length} drivers took ${bridge.runs} runs, not ${2 ** bridge.drivers.length}`);
+      lines.push(
+        `C2: the fixture bridge, ${bridge.drivers.length} drivers in ${bridge.runs} runs (${bridge.ms}ms): ` +
+          bridge.parts.map((p: any) => `${p.key} ${p.rounded >= 0 ? '+' : ''}${p.rounded.toFixed(2)}`).join(', ') +
+          ` = ${bridge.totalRounded.toFixed(2)}, parts = total to the cent; the reason-only change is exactly 0`
+      );
+    }
+
+    // A refused mix leaves no bridge, and says which mix and why.
+    const Rf = { fetched: FX.paperPayload('refused'), judgements: clone(B.judgements) };
+    const refusedBridge = BR.bridgeBetween(A, Rf);
+    if (refusedBridge.ok || !refusedBridge.refused.length || !refusedBridge.refused[0].refusal)
+      problems.push('C2: a bridge with a refused mix was not reported as refused, with the mix and the reason');
+  }
+
   return { problems, lines };
 }

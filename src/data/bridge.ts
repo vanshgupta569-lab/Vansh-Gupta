@@ -12,7 +12,11 @@
 //   driversBetween(A, B)  every input that differs, grouped into drivers the
 //                         way rule 15 asks (C1)
 //   mixVersion(A, B, S)   version A with the drivers in S taken from B (C1)
-//   (the attribution — jobs C2 and C3 — is added below as they land)
+//   bridgeBetween(A, B)   the Shapley attribution of B − A to the drivers,
+//                         exact up to 10 drivers (C2; sampled orders above
+//                         that are job C3)
+//   shapley(keys, value)  the attribution itself, for any value function, so
+//                         the spec's worked example can be checked on its own
 //
 // THE ENGINE IS NOT TOUCHED. Every version — A, B and every mix of the two —
 // is valued by `restoreFromJudgements`, the same path a saved model reopens
@@ -259,9 +263,202 @@ export function valueOfVersion(v: BridgeVersion, metric: BridgeMetric = 'perpetu
   }
 }
 
+// ---------------------------------------------------------------------------
+// C2 / C3 — THE ATTRIBUTION
+// ---------------------------------------------------------------------------
+
+/** Exact attribution up to this many drivers: 2^10 = 1,024 runs. */
+export const EXACT_LIMIT = 10;
+/** Orders sampled above the limit, and the seed they are drawn with. */
+export const SAMPLED_ORDERS = 2000;
+export const SAMPLE_SEED = 20261104;
+
+export interface BridgePart {
+  key: string;
+  /** Unrounded share of the total. */
+  raw: number;
+  /** Rounded to the cent by largest remainder, so the parts add up. */
+  rounded: number;
+}
+
+export interface ShapleyResult {
+  ok: boolean;
+  method: 'exact' | 'sampled';
+  /** Distinct subsets valued (every engine run). */
+  runs: number;
+  /** v(A) and v(B): the empty set and the full set. */
+  start: number | null;
+  end: number | null;
+  /** end − start, and the same rounded to the cent. */
+  total: number | null;
+  totalRounded: number | null;
+  parts: BridgePart[];
+  /** Every subset the value function refused, with its reason (rule 16). */
+  refused: { take: string[]; refusal: string }[];
+  /** Orders sampled (sampled method only) and the seed. */
+  orders?: number;
+  seed?: number;
+}
+
+/** A small seeded generator, so a sampled bridge is the same every time. */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Round each part to the cent so that the rounded parts sum exactly to the
+ * rounded total (rule 17): floor every part, then hand the cents left over to
+ * the parts with the largest remainders, ties to the earlier driver.
+ */
+export function largestRemainder(raw: number[], totalRounded: number): number[] {
+  const cents = raw.map((r) => r * 100);
+  const floors = cents.map((c) => Math.floor(c + 1e-9));
+  let left = Math.round(totalRounded * 100) - floors.reduce((s, f) => s + f, 0);
+  const order = cents
+    .map((c, i) => ({ i, rem: c - floors[i] }))
+    .sort((x, y) => y.rem - x.rem || x.i - y.i);
+  const out = [...floors];
+  for (let n = 0; left > 0 && n < order.length; n++, left--) out[order[n].i] += 1;
+  for (let n = order.length - 1; left < 0 && n >= 0; n--, left++) out[order[n].i] -= 1;
+  return out.map((c) => c / 100);
+}
+
+const factorial = (n: number) => {
+  let f = 1;
+  for (let i = 2; i <= n; i++) f *= i;
+  return f;
+};
+
+/**
+ * The Shapley attribution of v(all) − v(none) to `keys`, for any value
+ * function of a subset. Exact (every subset, every weight) up to EXACT_LIMIT
+ * drivers; above it, the average over SAMPLED_ORDERS orders drawn with a fixed
+ * seed — each order's contributions sum to the total exactly, so their average
+ * does too (rule 14).
+ *
+ * A value function that returns null for any subset it needs is a refusal, and
+ * the result is `ok: false` with every refusal listed: a bridge with a hole in
+ * it would not add up.
+ */
+export function shapley(
+  keys: string[],
+  value: (take: string[]) => { value: number | null; refusal: string | null },
+  opts: { exactLimit?: number; orders?: number; seed?: number } = {}
+): ShapleyResult {
+  const k = keys.length;
+  const exactLimit = opts.exactLimit ?? EXACT_LIMIT;
+  const memo = new Map<number, number | null>();
+  const refused: { take: string[]; refusal: string }[] = [];
+  const subsetOf = (mask: number) => keys.filter((_, i) => mask & (1 << i));
+  const v = (mask: number): number | null => {
+    if (memo.has(mask)) return memo.get(mask)!;
+    const take = subsetOf(mask);
+    const r = value(take);
+    memo.set(mask, r.value);
+    if (r.value === null) refused.push({ take, refusal: r.refusal || 'refused' });
+    return r.value;
+  };
+
+  const full = k ? (1 << k) - 1 : 0;
+  const start = v(0);
+  const end = v(full);
+  const fail = (method: 'exact' | 'sampled'): ShapleyResult => ({
+    ok: false, method, runs: memo.size, start, end, total: null, totalRounded: null, parts: [], refused,
+  });
+  if (start === null || end === null) return fail(k <= exactLimit ? 'exact' : 'sampled');
+
+  const raw = new Array(k).fill(0);
+  let method: 'exact' | 'sampled' = 'exact';
+  let orders: number | undefined;
+  let seed: number | undefined;
+
+  if (k <= exactLimit) {
+    const weights = Array.from({ length: k }, (_, s) => (factorial(s) * factorial(k - s - 1)) / factorial(k));
+    for (let mask = 0; mask <= full; mask++) if (v(mask) === null) return fail('exact');
+    for (let i = 0; i < k; i++) {
+      const bit = 1 << i;
+      for (let mask = 0; mask <= full; mask++) {
+        if (mask & bit) continue;
+        let size = 0;
+        for (let m = mask; m; m &= m - 1) size++;
+        raw[i] += weights[size] * ((memo.get(mask | bit) as number) - (memo.get(mask) as number));
+      }
+    }
+  } else {
+    // Sampled orders above the exact limit are job C3.
+    return fail('sampled');
+  }
+
+  const total = end - start;
+  const totalRounded = Math.round(total * 100) / 100;
+  const rounded = largestRemainder(raw, totalRounded);
+  return {
+    ok: true,
+    method,
+    runs: memo.size,
+    start,
+    end,
+    total,
+    totalRounded,
+    parts: keys.map((key, i) => ({ key, raw: raw[i], rounded: rounded[i] })),
+    refused,
+    orders,
+    seed,
+  };
+}
+
+/**
+ * "% of total" is not meaningful when the total is too small to divide by
+ * (rule 19). Threshold: a change under half a percent of version A's value.
+ * PROPOSED — needs Nihar (`docs/STEP5_BUILD_PLAN.md` §6, C-3).
+ */
+export const SHARE_NOT_MEANINGFUL_BELOW = 0.005;
+
+export function shareOfTotal(part: number, total: number, start: number): number | null {
+  if (!isFinite(total) || !isFinite(start) || Math.abs(total) < SHARE_NOT_MEANINGFUL_BELOW * Math.abs(start)) return null;
+  return part / total;
+}
+
+export interface BridgeResult extends ShapleyResult {
+  metric: BridgeMetric;
+  drivers: BridgeDriver[];
+  notBridged: NotBridged[];
+  /** Wall-clock time for the whole attribution, in milliseconds (C4). */
+  ms: number;
+}
+
+/** The bridge between two saved versions of the same model. */
+export function bridgeBetween(
+  A: BridgeVersion,
+  B: BridgeVersion,
+  opts: { metric?: BridgeMetric; exactLimit?: number; orders?: number; seed?: number } = {}
+): BridgeResult {
+  const metric = opts.metric ?? 'perpetuity';
+  const t0 = Date.now();
+  const { drivers, notBridged } = driversBetween(A, B);
+  const keys = drivers.map((d) => d.key);
+  const result = shapley(keys, (take) => valueOfVersion(mixVersion(A, B, take), metric), opts);
+  return { ...result, metric, drivers, notBridged, ms: Date.now() - t0 };
+}
+
 export default {
   driversBetween,
   mixVersion,
   valueOfVersion,
+  shapley,
+  bridgeBetween,
+  largestRemainder,
+  shareOfTotal,
+  mulberry32,
   COST_OF_CAPITAL_KEYS,
+  EXACT_LIMIT,
+  SAMPLED_ORDERS,
+  SAMPLE_SEED,
 };

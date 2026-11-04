@@ -194,3 +194,18 @@ a proposal and stays open**, to be answered by measurement in job D0.
   repository; keep the SEC archive out of git.
 - **D-3. Open (not a proposal):** the archive's size and whether deregistered
   and acquired companies are included (4.2) — answered by measurement in D0.
+
+### Decisions raised while building (cloud run, 4 November 2026)
+
+- **C-3. PROPOSED — needs Nihar.** "% of total" on the bridge reads `n.m.`
+  when the total change is under **0.5% of version A's value**
+  (`SHARE_NOT_MEANINGFUL_BELOW` in `src/data/bridge.ts`). Rule 19 asks for
+  `n.m.` "near zero" without a number; half a percent is small enough that a
+  real move is never hidden and large enough that a rounding-sized change is
+  never divided by.
+- **C-4. PROPOSED — needs Nihar.** The bridge explains the values
+  `restoreFromJudgements` returns, which are rounded to the cent (they come
+  from `valuationBandsFor`). The parts therefore explain the cent-rounded
+  value per share the site shows, not the engine's unrounded figure; the
+  difference is under a cent per run. Changing it needs `restoreModel.ts`,
+  which another session owns.
