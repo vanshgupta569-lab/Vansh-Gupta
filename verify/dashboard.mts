@@ -1055,11 +1055,16 @@ async function checkStaleFigures(page: Page) {
 async function checkHeaderOneLine(page: Page, label: string) {
   const was = page.viewportSize();
   await page.setViewportSize({ width: 1100, height: 900 });
+  // The full header, at the top of the page: scrolled, it gives way to the
+  // 48px bar (job 9.1b), which is checked on its own.
+  const scrolledTo = (await page.evaluate('window.scrollY')) as number;
+  await page.evaluate('window.scrollTo(0, 0)');
   await page.waitForTimeout(400);
   const measured: any = await page.evaluate(`(() => {
     const header = document.querySelector('header');
     if (!header) return { error: 'no header element' };
-    const row = header.querySelector(':scope > div');
+    // The full bar's own row (job 9.1b put the bar and the 48px bar in one header).
+    const row = header.querySelector('[data-header-full] > div') || header.querySelector(':scope > div');
     if (!row) return { error: 'no row inside the header' };
     const box = header.getBoundingClientRect();
     const out = [];
@@ -1134,6 +1139,7 @@ async function checkHeaderOneLine(page: Page, label: string) {
     await page.setViewportSize(was);
     await page.waitForTimeout(300);
   }
+  await page.evaluate(`window.scrollTo(0, ${scrolledTo})`);
 }
 
 async function checkHeadsOnScreen(page: Page) {
@@ -5042,7 +5048,7 @@ async function checkHeaderAndMenu(browser: Browser) {
       const header = document.querySelector('header');
       const r = header.getBoundingClientRect();
       const kids = Array.from(header.querySelectorAll('[aria-label="Marginalia home"], [data-menu-trigger], [aria-label="Search companies"]'))
-        .filter((e) => e.getBoundingClientRect().width > 0)
+        .filter((e) => e.getBoundingClientRect().width > 0 && !e.closest('[data-header-condensed]'))
         .map((e) => { const b = e.getBoundingClientRect(); return { what: e.getAttribute('data-menu-trigger') || e.getAttribute('aria-label'), x: Math.round(b.left), right: Math.round(b.right), w: Math.round(b.width), h: Math.round(b.height), colour: getComputedStyle(e).color, current: e.getAttribute('aria-current') }; });
       const text = header.innerText;
       return {
@@ -5524,7 +5530,7 @@ async function checkSearchPalette(browser: Browser) {
   }
 
   // Layout and semantics.
-  const trigger = p.locator('header [aria-label="Search companies"]');
+  const trigger = p.locator('header [data-header-full] [aria-label="Search companies"]');
   await trigger.click();
   await palette.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
   const L: any = await p.evaluate(`(() => {
@@ -5665,7 +5671,7 @@ async function checkSearchPalette(browser: Browser) {
   await route(phone);
   const q = await phone.newPage();
   await q.goto(BASE, { waitUntil: 'networkidle' });
-  await q.locator('header [aria-label="Search companies"]').click();
+  await q.locator('header [data-header-full] [aria-label="Search companies"]').click();
   await q.waitForSelector('[data-search-palette]', { timeout: 5000 }).catch(() => {});
   await q.locator('[data-search-palette] input').fill('apple');
   await q.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length >= 2`, null, { timeout: 5000 }).catch(() => {});
@@ -5750,6 +5756,70 @@ async function checkMenuCompanyLinks(browser: Browser) {
     console.log(`  PROBLEM: ${issue}`);
   }
   if (!issues.length) ok(`sections shown: ${shown.join(' · ')}; every company link names a built tab; with none open, "Choose a company for Financials" lands on its tab; with ${PAPER_TICKER} open, Tools goes straight to its Model tab`);
+}
+
+// ---- the condensed header bar (job 9.1, NAV_SEARCH §2.2) ------------------
+//
+// Past 80px of scroll the full header is moved up 64px by a transform and a
+// 48px bar comes down; between 40 and 80 nothing changes (the dead band); at
+// 40 or less the header is back. Both move by transform alone, the page's
+// content does not move when they switch (CLS 0), the bar holds the mark,
+// Search and Menu at 36×36, its Menu opens the sheet under it at y = 48 and
+// its Search opens the palette, and the page's progress rule sits under
+// whichever bar is showing.
+async function checkCondensedHeader(browser: Browser) {
+  console.log('\n=== the condensed header bar ===');
+  const issues: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await p.waitForSelector('[data-company-header]', { timeout: 30_000 }).catch(() => {});
+  const read = async () =>
+    (await p.evaluate(`(() => {
+      const full = document.querySelector('[data-header-full]');
+      const bar = document.querySelector('[data-header-condensed]');
+      const rule = document.querySelector('[data-progress-rule]');
+      const anchor = document.querySelector('[data-company-header]');
+      const fb = full.getBoundingClientRect(), bb = bar.getBoundingClientRect();
+      return {
+        flag: document.querySelector('header').getAttribute('data-condensed'),
+        fullBottom: Math.round(fb.bottom), barTop: Math.round(bb.top), barH: Math.round(bb.height),
+        fullTransition: getComputedStyle(full).transitionProperty, barTransition: getComputedStyle(bar).transitionProperty,
+        rule: rule ? Math.round(rule.getBoundingClientRect().top) : null,
+        anchorY: Math.round(anchor.getBoundingClientRect().top + scrollY),
+        buttons: Array.from(bar.querySelectorAll('button')).map((b) => [b.getAttribute('aria-label'), Math.round(b.getBoundingClientRect().width), Math.round(b.getBoundingClientRect().height)]),
+      };
+    })()`)) as any;
+  const at = async (y: number) => { await p.evaluate(`window.scrollTo(0, ${y})`); await p.waitForTimeout(450); return read(); };
+  const top = await at(0);
+  if (top.flag !== 'false' || top.fullBottom !== 64 || top.barTop > -47) issues.push(`at rest: flag ${top.flag}, header bottom ${top.fullBottom}, bar top ${top.barTop}`);
+  const down = await at(200);
+  if (down.flag !== 'true' || down.fullBottom > 1 || down.barTop !== 0 || down.barH !== 48) issues.push(`past 80px: flag ${down.flag}, header bottom ${down.fullBottom}, bar at ${down.barTop}, ${down.barH} high`);
+  if (down.fullTransition !== 'transform' || down.barTransition !== 'transform') issues.push(`the bars move by ${down.fullTransition} / ${down.barTransition}, not transform alone`);
+  if (down.anchorY !== top.anchorY) issues.push(`the page content moved from y ${top.anchorY} to ${down.anchorY} when the bar switched`);
+  if (down.rule !== 48) issues.push(`the progress rule sits at y ${down.rule}, not under the 48px bar`);
+  const labels = down.buttons.map((b: any) => b[0]);
+  if (labels.join() !== 'Marginalia home,Search companies,Menu' || down.buttons.some((b: any) => b[1] !== 36 || b[2] !== 36)) issues.push(`the bar holds ${JSON.stringify(down.buttons)}`);
+  const band = await at(60);
+  if (band.flag !== 'true') issues.push('scrolling back to 60px restores the header: there is no dead band');
+  const back = await at(30);
+  if (back.flag !== 'false' || back.fullBottom !== 64) issues.push(`back at 30px the header is not restored (flag ${back.flag})`);
+  // The bar's Menu and Search.
+  await at(300);
+  await p.click('[data-menu-button-condensed]');
+  const sheetTop = await p.waitForSelector('[data-menu-sheet]', { timeout: 3000 }).then(() => p.evaluate(`Math.round(document.querySelector('[data-menu-sheet]').getBoundingClientRect().top)`)).catch(() => null);
+  if (sheetTop !== 48) issues.push(`the bar's Menu opens ${sheetTop === null ? 'no sheet' : `a sheet at y ${sheetTop}`}, not one at 48`);
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(150);
+  await p.click('[data-header-condensed] [aria-label="Search companies"]');
+  if (!(await p.waitForSelector('[data-search-palette]', { timeout: 5000 }).then(() => true).catch(() => false))) issues.push("the bar's Search opens no palette");
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`past 80px the header goes up and the 48px bar comes down, by transform alone, with nothing on the page moving; 60px keeps it (dead band), 30px restores it; its Menu opens the sheet at y 48, its Search the palette; the progress rule follows`);
 }
 
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
@@ -5841,6 +5911,7 @@ try {
     company: () => checkCompanyHeader(browser as Browser),
     palette: () => checkSearchPalette(browser as Browser),
     menu: () => checkMenuCompanyLinks(browser as Browser),
+    condensed: () => checkCondensedHeader(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5976,6 +6047,7 @@ try {
   await checkCompanyHeader(browser);
   await checkSearchPalette(browser);
   await checkMenuCompanyLinks(browser);
+  await checkCondensedHeader(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

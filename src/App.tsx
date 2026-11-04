@@ -61,13 +61,18 @@ const ScrollProgressBar: React.FC = () => {
   useEffect(() => {
     const header = document.querySelector('header');
     if (!header) return;
-    const measure = () => setTop(Math.round(header.getBoundingClientRect().bottom));
+    // Under the bar that is showing: 48px once the header has condensed.
+    const measure = () =>
+      setTop(header.getAttribute('data-condensed') === 'true' ? 48 : Math.round(header.getBoundingClientRect().bottom));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(header);
+    const flips = new MutationObserver(measure);
+    flips.observe(header, { attributes: true, attributeFilter: ['data-condensed'] });
     window.addEventListener('resize', measure);
     return () => {
       observer.disconnect();
+      flips.disconnect();
       window.removeEventListener('resize', measure);
     };
   }, []);

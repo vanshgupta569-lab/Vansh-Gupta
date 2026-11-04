@@ -89,6 +89,33 @@ export const Header: React.FC<HeaderProps> = ({
   const menuButton = useRef<HTMLButtonElement | null>(null);
   const sheet = useRef<HTMLDivElement | null>(null);
 
+  /* THE CONDENSED BAR (NAV_SEARCH §2.2; job 9.1). Past 80px of scroll the
+     64px header slides up out of view and a 48px bar slides down in its
+     place; back at 40px or less the header returns. The 40px between is a
+     dead band, so a reader resting near the threshold does not set it
+     flickering. Two elements and transforms only — no height animates and
+     the page's 64px of top padding never changes, so nothing shifts. */
+  const CONDENSE_AT = 80;
+  const RESTORE_AT = 40;
+  const [condensed, setCondensed] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const y = window.scrollY;
+      setCondensed((c) => (c ? y > RESTORE_AT : y > CONDENSE_AT));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    read();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+  // A panel belongs to the full header; it closes as the header goes.
+  useEffect(() => { if (condensed) setOpenPanel(null); }, [condensed]);
+
   /* THE CURRENT SECTION: the one the route is inside. At most one. */
   const currentSection: MenuSection['name'] | null =
     currentScreen === 'NOTES' || path.startsWith('/learn')
@@ -277,6 +304,43 @@ export const Header: React.FC<HeaderProps> = ({
   const GHOST =
     'h-9 border px-3 text-[13px] flex items-center gap-2 whitespace-nowrap cursor-pointer transition-colors duration-[110ms]';
 
+  /* THE WAY BACK TO THE FIGURES rides in both bars: a corrected figure must
+     never pass as a filed one on any screen (standing decision 5), and that
+     includes a scrolled one (job 9.1b). */
+  const figuresControl =
+    onReviewFigures && (currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS') ? (
+            <button
+              onClick={onReviewFigures}
+              title={figuresTitle}
+              className={`${GHOST} ${
+                corrected || reclassified
+                  ? 'border-accent bg-accent/20 text-ink'
+                  : 'border-line text-muted hover:text-ink hover:border-accent'
+              }`}
+            >
+              {corrected || reclassified ? (
+                <PencilLine className="w-4 h-4 text-accent-text" strokeWidth={1.5} />
+              ) : (
+                <Table2 className="w-4 h-4" strokeWidth={1.5} />
+              )}
+              <span className="hidden md:inline">
+                {/* BOTH JUDGEMENTS, NAMED SEPARATELY. A combined count would read
+                    as corrected figures and hide the reclassification entirely. */}
+                {[
+                  corrected ? `${corrected.count} corrected figure${corrected.count === 1 ? '' : 's'}` : '',
+                  reclassified ? `${reclassified.count} moved line${reclassified.count === 1 ? '' : 's'}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'Check the figures'}
+              </span>
+              {(corrected || reclassified) && (
+                <span className="md:hidden">
+                  {(corrected?.count ?? 0) + (reclassified?.count ?? 0)}
+                </span>
+              )}
+            </button>
+    ) : null;
+
   return (
     /* ONE HEADER, EVERY SCREEN (NAV_SEARCH_SPEC 2.1). 64px, the page colour
        at 95% under an 8px blur, a hairline at the foot. Wordmark, the section
@@ -285,13 +349,22 @@ export const Header: React.FC<HeaderProps> = ({
        no Home or All companies, because the wordmark and search already go
        there. */
     <header
-      className="fixed top-0 inset-x-0 z-50 h-16 border-b border-line"
-      style={{
-        background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-      }}
+      className="fixed top-0 inset-x-0 z-50 h-16 pointer-events-none"
+      data-condensed={condensed ? 'true' : 'false'}
     >
+      <div
+        data-header-full
+        aria-hidden={condensed ? true : undefined}
+        {...(condensed ? { inert: true } : {})}
+        className="absolute inset-0 border-b border-line pointer-events-auto"
+        style={{
+          background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          transform: condensed ? 'translateY(-64px)' : 'translateY(0)',
+          transition: `transform var(--m-dur-base) ${condensed ? 'var(--m-ease-exit)' : 'var(--m-ease-enter)'}`,
+        }}
+      >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 lg:focus:left-12 focus:top-[14px] focus:z-10 focus:h-9 focus:px-3 focus:flex focus:items-center focus:bg-page focus:border focus:border-line focus:text-ink text-[13px]"
@@ -381,38 +454,7 @@ export const Header: React.FC<HeaderProps> = ({
               wondering where the numbers came from. It stays in the header
               because a corrected figure must never pass as a filed one on any
               screen (standing decision 5). */}
-          {onReviewFigures && (currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS') && (
-            <button
-              onClick={onReviewFigures}
-              title={figuresTitle}
-              className={`${GHOST} ${
-                corrected || reclassified
-                  ? 'border-accent bg-accent/20 text-ink'
-                  : 'border-line text-muted hover:text-ink hover:border-accent'
-              }`}
-            >
-              {corrected || reclassified ? (
-                <PencilLine className="w-4 h-4 text-accent-text" strokeWidth={1.5} />
-              ) : (
-                <Table2 className="w-4 h-4" strokeWidth={1.5} />
-              )}
-              <span className="hidden md:inline">
-                {/* BOTH JUDGEMENTS, NAMED SEPARATELY. A combined count would read
-                    as corrected figures and hide the reclassification entirely. */}
-                {[
-                  corrected ? `${corrected.count} corrected figure${corrected.count === 1 ? '' : 's'}` : '',
-                  reclassified ? `${reclassified.count} moved line${reclassified.count === 1 ? '' : 's'}` : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ') || 'Check the figures'}
-              </span>
-              {(corrected || reclassified) && (
-                <span className="md:hidden">
-                  {(corrected?.count ?? 0) + (reclassified?.count ?? 0)}
-                </span>
-              )}
-            </button>
-          )}
+          {figuresControl}
 
           {/* SEARCH IS A GHOST (NAV_SEARCH_SPEC 2.1). The oxblood wash is kept
               for the one action a screen exists for; search is in every
@@ -452,6 +494,59 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
+      </div>
+
+      {/* The 48px bar: the mark, which goes home, Search and Menu. */}
+      <div
+        data-header-condensed
+        aria-hidden={!condensed}
+        {...(condensed ? {} : { inert: true })}
+        className="absolute top-0 inset-x-0 h-12 border-b border-line pointer-events-auto"
+        style={{
+          background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          transform: condensed ? 'translateY(0)' : 'translateY(-48px)',
+          transition: `transform ${condensed ? 'var(--m-dur-slow) var(--m-ease-enter)' : 'var(--m-dur-base) var(--m-ease-exit)'}`,
+        }}
+      >
+        <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-12 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Marginalia home"
+            onClick={() => {
+              onNavigateToScreen('HOME');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 flex items-center justify-center cursor-pointer"
+          >
+            <span aria-hidden="true" className="block w-6 h-6 bg-accent" />
+          </button>
+          <div className="flex-1" />
+          {figuresControl}
+          {currentScreen !== 'DIRECTORY' && (
+            <button
+              type="button"
+              aria-label="Search companies"
+              onClick={openSearch}
+              className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 border border-line hover:border-accent flex items-center justify-center cursor-pointer"
+            >
+              <Search className="w-4 h-4 text-muted" strokeWidth={1.5} />
+            </button>
+          )}
+          <button
+            type="button"
+            data-menu-button-condensed
+            aria-expanded={sheetOpen}
+            aria-label={sheetOpen ? 'Close the menu' : 'Menu'}
+            onClick={() => (sheetOpen ? closeSheet() : setSheetOpen(true))}
+            className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 border border-line hover:border-accent flex items-center justify-center cursor-pointer"
+          >
+            {sheetOpen ? <X className="w-4 h-4 text-ink" strokeWidth={1.5} /> : <MenuIcon className="w-4 h-4 text-muted" strokeWidth={1.5} />}
+          </button>
+        </div>
+      </div>
+
       {/* THE SHEET (NAV_SEARCH §2.4, LEARN_STATES §4): its top edge at the
           bar's foot, the bar still visible; a 0.72 scrim with no blur; one
           accordion row of 56px per section, its links 48px; the Reduce motion
@@ -461,14 +556,14 @@ export const Header: React.FC<HeaderProps> = ({
           from the bar, not the window, and had no height at all. */}
       {sheetOpen && typeof document !== 'undefined' && createPortal(
         <div data-menu-root className="dark">
-          <div className="fixed inset-x-0 top-16 bottom-0 z-40 bg-scrim min-[1100px]:hidden" onClick={closeSheet} aria-hidden="true" />
+          <div className={`fixed inset-x-0 ${condensed ? 'top-12' : 'top-16 min-[1100px]:hidden'} bottom-0 z-40 bg-scrim`} onClick={closeSheet} aria-hidden="true" />
           <div
             ref={sheet}
             data-menu-sheet
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            className="fixed inset-x-0 top-16 bottom-0 z-50 overflow-y-auto bg-overlay border-t border-line min-[1100px]:hidden min-[640px]:left-auto min-[640px]:w-[480px] min-[640px]:border-l"
+            className={`fixed inset-x-0 ${condensed ? 'top-12' : 'top-16 min-[1100px]:hidden'} bottom-0 z-50 overflow-y-auto bg-overlay border-t border-line min-[640px]:left-auto min-[640px]:w-[480px] min-[640px]:border-l`}
           >
             {MENU.map((section) => {
               const open = sheetSection === section.name;

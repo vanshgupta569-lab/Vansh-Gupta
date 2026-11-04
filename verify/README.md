@@ -1064,9 +1064,16 @@ has a shipped destination, a company link with nothing open asks "Choose a
 company for …" and lands on that tab, and with a company open it goes
 straight there.
 
+**A twentieth is the condensed header bar** (job 9.1b, NAV_SEARCH §2.2):
+past 80px of scroll the full header moves up and a 48px bar comes down, by
+transform alone and with nothing on the page moving; 60px keeps it (the dead
+band) and 30px restores the header; the bar holds the mark, Search and Menu at
+36×36; its Menu opens the sheet at y 48 and its Search the palette; the
+progress rule sits under whichever bar shows.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu, condensed) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 
