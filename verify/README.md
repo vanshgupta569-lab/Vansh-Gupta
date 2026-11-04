@@ -1044,9 +1044,23 @@ other accent in the header, → moving focus without changing the address,
 Enter selecting, the header not moving on a switch, the phone row scrolling
 inside itself. `SHOT_DIR=<folder>` keeps a screenshot of each width.
 
+**An eighteenth is the search palette** (job 9.2, NAV_SEARCH §8 items
+13–21): against a fixture search route that can be slowed or failed on
+demand — Ctrl+K and / open it and neither does while typing in a page field;
+Ctrl+K to a focused input in at most 100ms (median of three, timed in the
+page); 640 wide at y 108 with 56px input, 44px rows, 32px labels and a 40px
+hint bar on the overlay ground with no shadow; "Try" with four rows when
+nothing is recent; the order and the bold; the live count; ↓ ↑ Home End;
+the focus trap; Ctrl+Backspace; Esc back to the trigger; an older answer
+never replacing a newer one and one request in flight (counted in the page);
+"Still searching…"; no match; failure with the query kept and Try again;
+Enter opening the company and it becoming Recent, Delete removing it; the
+phone sheet with Cancel 44×44 and 56px rows. The ranking itself is checked in
+`npm run verify` ("the search palette: matching and ranking").
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

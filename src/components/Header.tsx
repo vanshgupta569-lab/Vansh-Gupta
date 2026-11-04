@@ -57,6 +57,10 @@ interface HeaderProps {
   path?: string;
   /** Move to an address inside the app. */
   onGo?: (path: string) => void;
+  /** Open the search palette (job 9.2); without it, search is the search screen. */
+  onOpenSearch?: () => void;
+  /** Start loading the palette's code before it is asked for. */
+  onPrefetchSearch?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -69,7 +73,10 @@ export const Header: React.FC<HeaderProps> = ({
   onReviewFigures,
   path = '/',
   onGo,
+  onOpenSearch,
+  onPrefetchSearch,
 }) => {
+  const openSearch = () => (onOpenSearch ? onOpenSearch() : onNavigateToScreen('DIRECTORY'));
   const [apple] = useState(isApple);
   const [openPanel, setOpenPanel] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -163,17 +170,17 @@ export const Header: React.FC<HeaderProps> = ({
       if (currentScreen === 'DIRECTORY') {
         document.querySelector<HTMLInputElement>('main input[type="text"]')?.focus();
       } else {
-        onNavigateToScreen('DIRECTORY');
+        openSearch();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [currentScreen, onNavigateToScreen]);
+  }, [currentScreen, onNavigateToScreen, onOpenSearch]);
 
   const follow = (d: Destination) => {
     setOpenPanel(null);
     setSheetOpen(false);
-    if (d.kind === 'screen') onNavigateToScreen(d.screen);
+    if (d.kind === 'screen') openSearch();
     else if (d.kind === 'section') goHomeAnd(d.section);
     else if (d.href === '/learn/' || !onGo) window.location.assign(d.href);
     else {
@@ -403,7 +410,9 @@ export const Header: React.FC<HeaderProps> = ({
               has its own field: never two searches on screen. */}
           {currentScreen !== 'DIRECTORY' && (
             <button
-              onClick={() => onNavigateToScreen('DIRECTORY')}
+              onClick={openSearch}
+              onFocus={onPrefetchSearch}
+              onPointerEnter={onPrefetchSearch}
               aria-label="Search companies"
               aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}
               className="group h-9 w-9 sm:w-[240px] xl:w-[320px] border border-line hover:border-accent flex items-center justify-center sm:justify-start gap-2 sm:pl-3 sm:pr-2 cursor-pointer transition-colors duration-[110ms] pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-coarse:w-[240px]"

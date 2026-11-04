@@ -5404,6 +5404,295 @@ async function checkCompanyHeader(browser: Browser) {
   if (!issues.length) ok(`${notes.join('; ')}; tabs 48 high, the current one ink 600 on a 2px accent rule, the only accent in the header; → moves focus, Enter selects, the header stays put`);
 }
 
+// ---- the search palette (job 9.2) ----------------------------------------
+//
+// NAV_SEARCH §8 items 13–21 and §4.2–4.5, against a fixture search route
+// (`/api/search` answered from a small list, with a delay or a failure on
+// demand). Opened by Ctrl+K and by /, and by neither while typing in a page
+// field; the dialog's role, label and combobox semantics; at 1440×900 640
+// wide with its top at 108 (max(64px, 12vh)), a 56px input row, 44px rows,
+// 32px group labels, a 40px hint bar, the overlay ground and no shadow; with
+// nothing typed and nothing recent, "Try" and four rows; typing gives
+// ranked rows with the match in bold; ↓ moves the highlight, ↑ from the
+// first row goes back to the input, End and Home; Ctrl+Backspace clears;
+// Tab stays inside; Esc closes and focus returns to the trigger; an answer
+// for an older query never replaces a newer one; at most one request in
+// flight; "Still searching…" after a second with no answer, without moving
+// the list; no match says so with the query and "Ask us to add it"; a failed
+// search says "Search is unavailable." as an alert with the query kept and
+// Try again working; Enter opens the company (its build starts) and it
+// becomes Recent, with × and Delete removing it. At 390: a full-screen sheet
+// with a 44×44 Cancel, two-line 56px rows and no hint bar.
+async function checkSearchPalette(browser: Browser) {
+  console.log('\n=== the search palette ===');
+  const issues: string[] = [];
+  const notes: string[] = [];
+  const LIST = [
+    { ticker: PAPER_TICKER, name: 'Fenwick Paper Mills Inc.', exchange: 'NYSE' },
+    { ticker: 'PAPR', name: 'Paper Excellence Corp', exchange: 'Toronto' },
+    { ticker: 'AAPL', name: 'Apple Inc.', exchange: 'NasdaqGS' },
+    { ticker: 'APLE', name: 'Apple Hospitality REIT, Inc.', exchange: 'NYSE' },
+    { ticker: 'NSRGY', name: 'Nestlé S.A.', exchange: 'OTC' },
+    { ticker: 'RELIANCE.NS', name: 'Reliance Industries Limited', exchange: 'NSE' },
+  ];
+  const fold = (t: string) => t.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const mode = { delay: 0, fail: false, slowFor: '' as string, slowMs: 0, inFlight: 0, maxInFlight: 0, requests: [] as string[] };
+  const route = async (ctx: BrowserContext) => {
+    await ctx.unroute('**/api/search*');
+    await ctx.route('**/api/search*', async (r) => {
+      const q = new URL(r.request().url()).searchParams.get('q') || '';
+      mode.requests.push(q);
+      mode.inFlight++;
+      mode.maxInFlight = Math.max(mode.maxInFlight, mode.inFlight);
+      const wait = q === mode.slowFor ? mode.slowMs : mode.delay;
+      if (wait) await new Promise((x) => setTimeout(x, wait));
+      mode.inFlight--;
+      try {
+        if (mode.fail) await r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' });
+        else {
+          const f = fold(q);
+          const results = LIST.filter((l) => fold(l.name).includes(f) || fold(l.ticker).startsWith(f));
+          await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results }) });
+        }
+      } catch { /* aborted by the page: that is the point */ }
+    });
+  };
+
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  await route(ctx);
+  // IN FLIGHT AS THE PAGE SEES IT: a request the page has aborted is over for
+  // the page even while this harness's handler is still sleeping on it.
+  await ctx.addInitScript(`(() => {
+    window.__search = { now: 0, max: 0 };
+    const real = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = String(input && input.url ? input.url : input);
+      if (!url.includes('/api/search')) return real(input, init);
+      const s = window.__search;
+      s.now++; s.max = Math.max(s.max, s.now);
+      let done = false;
+      const end = () => { if (!done) { done = true; s.now--; } };
+      init && init.signal && init.signal.addEventListener('abort', end);
+      return real(input, init).finally(end);
+    };
+  })()`);
+  const p = await ctx.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(2500); // the idle prefetch
+  const palette = p.locator('[data-search-palette]');
+  const open = async (how: 'Control+k' | 'Slash') => {
+    await p.locator('body').click({ position: { x: 5, y: 300 } }).catch(() => {});
+    await p.keyboard.press(how === 'Slash' ? '/' : how);
+    return palette.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
+  };
+  const close = async () => { await p.keyboard.press('Escape'); await p.waitForTimeout(100); };
+
+  // Opening, and not opening. ⌘K to a focused input is timed in the page,
+  // from the key event to focus arriving in the combobox (§4.6: ≤ 100ms),
+  // the median of three opens.
+  await p.evaluate(`(() => {
+    window.__open = [];
+    let t = 0;
+    window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') t = performance.now(); }, true);
+    document.addEventListener('focusin', (e) => { if (t && e.target && e.target.getAttribute && e.target.getAttribute('role') === 'combobox') { window.__open.push(performance.now() - t); t = 0; } });
+  })()`);
+  let opened = true;
+  for (let i = 0; i < 3; i++) {
+    if (!(await open('Control+k'))) opened = false;
+    if (i < 2) { await p.keyboard.press('Escape'); await p.waitForTimeout(150); }
+  }
+  if (!opened) issues.push('Ctrl+K does not open the palette');
+  const opens = ((await p.evaluate('window.__open')) as number[]).sort((a, b) => a - b);
+  const ms = Math.round(opens[Math.floor(opens.length / 2)] ?? NaN);
+  if (!(ms <= 100)) issues.push(`Ctrl+K to a focused input takes ${ms}ms (median of ${opens.length}), over 100`);
+  const focusedIn = await p.evaluate(`document.activeElement?.getAttribute('role') === 'combobox'`);
+  if (!focusedIn) issues.push('the palette opens without its input focused');
+  await close();
+  if (!(await open('Slash'))) issues.push('/ does not open the palette');
+  await close();
+  const field = p.locator('#coverage textarea[name="message"]');
+  if (await field.count()) {
+    await field.scrollIntoViewIfNeeded();
+    await field.click();
+    await p.keyboard.press('/');
+    await p.keyboard.press('Control+k');
+    await p.waitForTimeout(300);
+    if (await palette.count()) { issues.push('typing / or Ctrl+K in a page field opens the palette'); await close(); }
+    await field.fill('');
+    await p.evaluate('window.scrollTo(0, 0)');
+  }
+
+  // Layout and semantics.
+  const trigger = p.locator('header [aria-label="Search companies"]');
+  await trigger.click();
+  await palette.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  const L: any = await p.evaluate(`(() => {
+    const d = document.querySelector('[data-search-palette]');
+    if (!d) return null;
+    const r = d.getBoundingClientRect(), cs = getComputedStyle(d);
+    const input = d.querySelector('input');
+    const rows = Array.from(d.querySelectorAll('[data-search-row]'));
+    return {
+      role: d.getAttribute('role'), modal: d.getAttribute('aria-modal'), label: d.getAttribute('aria-label'),
+      combobox: input?.getAttribute('role'), controls: !!document.getElementById(input?.getAttribute('aria-controls') || '-'),
+      width: Math.round(r.width), top: Math.round(r.top), ground: cs.backgroundColor, shadow: cs.boxShadow,
+      inputRow: Math.round(d.querySelector('[data-search-input-row]').getBoundingClientRect().height),
+      hints: d.querySelector('[data-search-hints]') ? Math.round(d.querySelector('[data-search-hints]').getBoundingClientRect().height) : null,
+      group: d.querySelector('[data-search-group]')?.textContent.trim(),
+      groupH: d.querySelector('[data-search-group]') ? Math.round(d.querySelector('[data-search-group]').getBoundingClientRect().height) : null,
+      tries: rows.filter((x) => x.getAttribute('data-search-row') === 'try').length,
+      rowH: rows[0] ? Math.round(rows[0].getBoundingClientRect().height) : null,
+    };
+  })()`);
+  if (!L) issues.push('the header trigger opens no palette');
+  else {
+    if (L.role !== 'dialog' || L.modal !== 'true' || L.label !== 'Search companies') issues.push(`the dialog is ${L.role}/${L.modal}/"${L.label}"`);
+    if (L.combobox !== 'combobox' || !L.controls) issues.push('the input is not a combobox controlling its list');
+    if (L.width !== 640 || L.top !== 108) issues.push(`the palette is ${L.width} wide at y ${L.top}, not 640 at 108`);
+    if (L.ground !== 'rgb(22, 22, 26)' || (L.shadow && L.shadow !== 'none')) issues.push(`the palette ground ${L.ground}, shadow ${L.shadow}`);
+    if (L.inputRow !== 56 || L.hints !== 40 || L.groupH !== 32 || L.rowH !== 44) issues.push(`rows: input ${L.inputRow}, hints ${L.hints}, group ${L.groupH}, result ${L.rowH} — not 56/40/32/44`);
+    if (L.group !== 'Try' || L.tries !== 4) issues.push(`with nothing typed and nothing recent it shows "${L.group}" with ${L.tries} rows, not Try with 4`);
+  }
+
+  // Typing, the order, the bold, and the live count.
+  const input = palette.locator('input');
+  await input.fill('pap');
+  await p.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length >= 2`, null, { timeout: 5000 }).catch(() => {});
+  const typed: any = await p.evaluate(`(() => ({
+    order: Array.from(document.querySelectorAll('[data-search-row="company"]')).map((r) => r.getAttribute('data-ticker')),
+    bold: document.querySelector('[data-search-row="company"] .font-semibold')?.textContent || null,
+    count: document.querySelector('[data-search-count]')?.textContent.trim(),
+  }))()`);
+  if (typed.order.join() !== `PAPR,${PAPER_TICKER}`) issues.push(`"pap" lists ${typed.order.join(', ')}, not PAPR then ${PAPER_TICKER} (name first, then a name word)`);
+  if (typed.bold !== 'Pap') issues.push(`the matched characters in bold are "${typed.bold}", not "Pap"`);
+  if (typed.count !== '2 results') issues.push(`the live region says "${typed.count}"`);
+  // Keyboard.
+  const active = () => p.evaluate(`(() => { const i = document.querySelector('[data-search-palette] input'); const id = i.getAttribute('aria-activedescendant'); return id ? document.getElementById(id)?.getAttribute('data-ticker') || document.getElementById(id)?.textContent.trim() : null; })()`);
+  await input.press('ArrowDown');
+  const first = await active();
+  await input.press('ArrowDown');
+  const second = await active();
+  await input.press('ArrowDown'); // no wrap
+  const stays = await active();
+  await input.press('Home');
+  const home = await active();
+  await input.press('End');
+  const end = await active();
+  await input.press('Home');
+  await input.press('ArrowUp');
+  const back = await active();
+  if (first !== 'PAPR' || second !== PAPER_TICKER || stays !== PAPER_TICKER || home !== 'PAPR' || end !== PAPER_TICKER || back !== null)
+    issues.push(`keyboard: ↓ ${first}, ↓ ${second}, ↓ ${stays}, Home ${home}, End ${end}, ↑ from the first ${back}`);
+  // Tab stays inside.
+  let escaped = false;
+  for (let i = 0; i < 6; i++) {
+    await p.keyboard.press('Tab');
+    if (!(await p.evaluate(`!!document.activeElement?.closest('[data-search-palette]')`))) escaped = true;
+  }
+  if (escaped) issues.push('Tab leaves the palette (focus is not trapped)');
+  await input.focus();
+  await input.press('Control+Backspace');
+  if ((await input.inputValue()) !== '') issues.push('Ctrl+Backspace does not clear the query');
+  await close();
+  const backTo = await p.evaluate(`document.activeElement?.getAttribute('aria-label')`);
+  if (backTo !== 'Search companies') issues.push(`after Esc focus is on ${backTo}, not the trigger that opened it`);
+
+  // An old answer never replaces a newer one; one request in flight.
+  await trigger.click();
+  await palette.waitFor({ state: 'visible' });
+  mode.slowFor = 'app';
+  mode.slowMs = 1500;
+  mode.maxInFlight = 0;
+  await input.fill('app');
+  await p.waitForTimeout(300);
+  await input.fill('nestle');
+  await p.waitForTimeout(2200);
+  const after: any = await p.evaluate(`Array.from(document.querySelectorAll('[data-search-row="company"]')).map((r) => r.getAttribute('data-ticker'))`);
+  if (after.join() !== 'NSRGY') issues.push(`after "app" (slow) then "nestle", the list is ${after.join(', ') || 'empty'}: an older answer replaced the newer`);
+  const flight: any = await p.evaluate('window.__search');
+  if (flight.max > 1) issues.push(`${flight.max} search requests in flight at once, as the page sees them`);
+  mode.maxInFlight = flight.max;
+  mode.slowFor = '';
+  // Slow.
+  mode.delay = 1600;
+  const listTop = (await p.evaluate(`document.querySelector("[data-search-slow]").getBoundingClientRect().top`)) as number;
+  await input.fill('relian');
+  await p.waitForTimeout(1250);
+  const slow: any = await p.evaluate(`({ text: document.querySelector('[data-search-slow]').textContent, top: document.querySelector('[data-search-slow]').getBoundingClientRect().top })`);
+  if (slow.text !== 'Still searching…') issues.push(`after a second with no answer the status row reads "${slow.text}"`);
+  if (Math.abs(slow.top - listTop) > 1 && after.length === 1) issues.push('the "Still searching…" row moved the list');
+  await p.waitForTimeout(1400);
+  mode.delay = 0;
+  // No match.
+  await input.fill('zzqx');
+  await p.waitForSelector('[data-search-empty]', { timeout: 3000 }).catch(() => {});
+  const empty = (await p.textContent('[data-search-empty]').catch(() => '')) || '';
+  if (!empty.includes('No company matches “zzqx”.') || !empty.includes('Ask us to add it')) issues.push(`no match reads "${empty.slice(0, 80)}"`);
+  // Failure.
+  mode.fail = true;
+  await input.fill('nest');
+  await p.waitForSelector('[data-search-error]', { timeout: 3000 }).catch(() => {});
+  const err: any = await p.evaluate(`({ role: document.querySelector('[data-search-error]')?.getAttribute('role'), text: document.querySelector('[data-search-error]')?.textContent, q: document.querySelector('[data-search-palette] input').value })`);
+  if (err.role !== 'alert' || !String(err.text).startsWith('Search is unavailable.') || err.q !== 'nest') issues.push(`a failed search shows ${JSON.stringify(err)}`);
+  mode.fail = false;
+  await p.getByRole('button', { name: 'Try again' }).click();
+  await p.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length > 0`, null, { timeout: 3000 }).catch(() => {});
+  if (!(await p.locator('[data-search-row="company"]').count())) issues.push('Try again does not search again');
+  // Enter opens; Recent; × and Delete.
+  await input.fill(PAPER_TICKER.toLowerCase());
+  await p.waitForFunction(`document.querySelector('[data-search-row="company"]')?.getAttribute('data-ticker') === '${PAPER_TICKER}'`, null, { timeout: 3000 }).catch(() => {});
+  await input.press('Enter');
+  await p.waitForTimeout(150);
+  if (await palette.count()) issues.push(`Enter on ${PAPER_TICKER} left the palette open`);
+  const arrived = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/`), { timeout: 30_000 }).then(() => true).catch(() => false);
+  if (!arrived) issues.push(`Enter on ${PAPER_TICKER} did not open its company (${new URL(p.url()).pathname})`);
+  await p.keyboard.press('Control+k');
+  await palette.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  const rec: any = await p.evaluate(`({ group: document.querySelector('[data-search-group]')?.textContent.trim(), first: document.querySelector('[data-search-row="company"]')?.getAttribute('data-ticker'), x: document.querySelectorAll('[data-search-remove]').length })`);
+  if (!rec.group?.startsWith('Recent') || rec.first !== PAPER_TICKER || !rec.x) issues.push(`after opening ${PAPER_TICKER}, the empty palette shows ${JSON.stringify(rec)}`);
+  await palette.locator('input').press('ArrowDown');
+  await palette.locator('input').press('Delete');
+  await p.waitForTimeout(150);
+  if (await p.locator('[data-search-row="company"]').count()) issues.push('Delete on a highlighted recent row does not remove it');
+  await close();
+  notes.push(`Ctrl+K to a focused input in ${ms}ms`);
+  await ctx.close();
+
+  // The phone.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  await installFixtureRoutes(phone);
+  await route(phone);
+  const q = await phone.newPage();
+  await q.goto(BASE, { waitUntil: 'networkidle' });
+  await q.locator('header [aria-label="Search companies"]').click();
+  await q.waitForSelector('[data-search-palette]', { timeout: 5000 }).catch(() => {});
+  await q.locator('[data-search-palette] input').fill('apple');
+  await q.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length >= 2`, null, { timeout: 5000 }).catch(() => {});
+  const ph: any = await q.evaluate(`(() => {
+    const d = document.querySelector('[data-search-palette]');
+    if (!d) return null;
+    const r = d.getBoundingClientRect();
+    const cancel = Array.from(d.querySelectorAll('button')).find((b) => b.textContent.trim() === 'Cancel');
+    const row = d.querySelector('[data-search-row="company"]');
+    return { full: Math.round(r.width) === innerWidth && Math.round(r.height) === innerHeight, cancel: cancel ? [Math.round(cancel.getBoundingClientRect().width), Math.round(cancel.getBoundingClientRect().height)] : null, row: row ? Math.round(row.getBoundingClientRect().height) : null, hints: !!d.querySelector('[data-search-hints]') };
+  })()`);
+  if (!ph) issues.push('390: no palette');
+  else {
+    if (!ph.full) issues.push('390: the palette is not a full-screen sheet');
+    if (!ph.cancel || ph.cancel[0] < 44 || ph.cancel[1] < 44) issues.push(`390: Cancel is ${ph.cancel?.join('×') ?? 'missing'}`);
+    if (ph.row < 56) issues.push(`390: result rows are ${ph.row}px, under 56`);
+    if (ph.hints) issues.push('390: the keyboard hint bar shows on a phone');
+  }
+  await phone.close();
+
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${notes.join('; ')}; layout 640 at y 108 with 56/44/32/40 rows; Try, ranking, bold, keyboard, focus trap, Esc back to the trigger; no stale overwrite (at most ${mode.maxInFlight} in flight); slow, no match, failure and Try again; Enter builds and the company becomes Recent; the phone sheet`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5491,6 +5780,7 @@ try {
     header: () => checkHeaderAndMenu(browser as Browser),
     loading: () => checkLoadingScreen(browser as Browser),
     company: () => checkCompanyHeader(browser as Browser),
+    palette: () => checkSearchPalette(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5624,6 +5914,7 @@ try {
   await checkHeaderAndMenu(browser);
   await checkLoadingScreen(browser);
   await checkCompanyHeader(browser);
+  await checkSearchPalette(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

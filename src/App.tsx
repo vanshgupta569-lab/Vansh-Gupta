@@ -15,6 +15,11 @@ const DirectoryScreen = lazy(() => import('./components/DirectoryScreen').then((
 const FiguresEditor = lazy(() => import('./components/figuresEditor').then((m) => ({ default: m.FiguresEditor })));
 const TerminalDashboard = lazy(() => import('./components/TerminalDashboard').then((m) => ({ default: m.TerminalDashboard })));
 const QualitativeIntro = lazy(() => import('./components/qualitativeIntro').then((m) => ({ default: m.QualitativeIntro })));
+// THE SEARCH PALETTE (job 9.2) is its own chunk, fetched before it is asked
+// for: on the trigger's focus or the pointer's approach, and after two idle
+// seconds (NAV_SEARCH §4.6), so ⌘K paints at once.
+const loadPalette = () => import('./components/searchPalette');
+const SearchPalette = lazy(() => loadPalette().then((m) => ({ default: m.SearchPalette })));
 const NotFound = lazy(() => import('./components/notFound').then((m) => ({ default: m.NotFound })));
 const MarginNotesScreen = lazy(() => import('./components/marginNotes').then((m) => ({ default: m.MarginNotesScreen })));
 const CompanyPage = lazy(() => import('./components/companyPage').then((m) => ({ default: m.CompanyPage })));
@@ -477,6 +482,51 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // ---- the search palette (NAV_SEARCH §4; job 9.2) ----------------------
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const paletteOpener = useRef<HTMLElement | null>(null);
+  const prefetchPalette = () => { loadPalette().catch(() => {}); };
+  useEffect(() => {
+    const t = window.setTimeout(prefetchPalette, 2000);
+    return () => window.clearTimeout(t);
+  }, []);
+  const openPalette = () => {
+    paletteOpener.current = document.activeElement as HTMLElement | null;
+    setPaletteOpen(true);
+  };
+  const closePalette = (returnFocus = true) => {
+    setPaletteOpen(false);
+    if (returnFocus) window.setTimeout(() => paletteOpener.current?.focus?.(), 0);
+  };
+  // A company chosen in the palette is opened the way the search screen
+  // opens one: its build starts, on the search screen's loading screen.
+  const openFromPalette = (ticker: string) => {
+    closePalette(false);
+    if (route || notesRoute || unknownPath || nav.path === '/screener') nav.go('/');
+    setCurrentScreen('DIRECTORY');
+    handleLookupTicker(ticker);
+  };
+  const goFromPalette = (d: import('./data/menu').Destination) => {
+    closePalette(false);
+    if (d.kind === 'screen') return;
+    if (d.kind === 'section') { scrollToSection(d.section); return; }
+    if (d.href === '/learn/') window.location.assign(d.href);
+    else { nav.go(d.href); window.scrollTo({ top: 0 }); }
+  };
+  // "Ask us to add it": the feedback form on the landing page, the query in it.
+  const askToAdd = (query: string) => {
+    closePalette(false);
+    if (nav.path !== '/') nav.go('/');
+    setCurrentScreen('HOME');
+    window.setTimeout(() => {
+      const box = document.querySelector<HTMLTextAreaElement>('#coverage textarea[name="message"]');
+      if (!box) return;
+      box.value = `Please add ${query}. I searched for it and it was not found.`;
+      box.scrollIntoView({ block: 'center' });
+      box.focus();
+    }, 300);
+  };
+
   const scrollToSection = (id: string) => {
     if (id === 'platform' || id === 'methodology' || id === 'model') id = 'filings';
     setActiveSection(id);
@@ -512,10 +562,23 @@ export default function App() {
         onReviewFigures={figuresAvailable ? reopenFigures : undefined}
         path={nav.path}
         onGo={(next) => nav.go(next)}
+        onOpenSearch={openPalette}
+        onPrefetchSearch={prefetchPalette}
       />
 
       {/* Scroll Progress Indicator Line */}
       <ScrollProgressBar />
+
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <SearchPalette
+            onClose={() => closePalette(true)}
+            onSelect={(l) => openFromPalette(l.ticker)}
+            onGo={goFromPalette}
+            onAskToAdd={askToAdd}
+          />
+        </Suspense>
+      )}
 
       {/* Screen Views */}
       <main id="main-content" tabIndex={-1} className="flex-grow focus:outline-none">

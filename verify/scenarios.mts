@@ -1759,6 +1759,62 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   totalProblems += bad;
 }
 
+// ---- the search palette's order (build step 9, job 9.2) -------------------
+//
+// NAV_SEARCH §4.3 on a fixture list, worked out by hand from the rule rather
+// than by the code under test: exact ticker, name starts, a name word
+// starts, a near miss, ticker starts, then the rest in the source's order;
+// accents, punctuation and legal suffixes ignored; recent opens break ties.
+// The order against the real company list is LOCAL (it needs the list).
+{
+  console.log('\n=== the search palette: matching and ranking ===');
+  const SR: any = await import(`file:///${REPO}/src/data/searchRank.ts`);
+  const L = (ticker: string, name: string, exchange: string) => ({ ticker, name, exchange });
+  const list = [
+    L('PINE', 'Pineapple Express Inc', 'OTC'),
+    L('AAPL', 'Apple Inc.', 'NasdaqGS'),
+    L('APLE', 'Apple Hospitality REIT, Inc.', 'NYSE'),
+    L('PAPER', 'Fenwick Paper Mills Inc.', 'NYSE'),
+    L('PAPR', 'Paper Excellence Corp', 'Toronto'),
+    L('NSRGY', 'Nestlé S.A.', 'OTC'),
+    L('T', 'AT&T Inc.', 'NYSE'),
+    L('RELIANCE.BO', 'Reliance Industries Limited', 'BSE'),
+    L('RELIANCE.NS', 'Reliance Industries Limited', 'NSE'),
+    L('MSFT', 'Microsoft Corporation', 'NasdaqGS'),
+    L('MSFTX', 'Msftx Trust', 'OTC'),
+    L('GLE.PA', 'Société Générale S.A.', 'Paris'),
+  ];
+  let bad = 0;
+  const say = (m: string) => { bad++; console.log(`  PROBLEM: ${m}`); };
+  const order = (q: string, recent: string[] = []) => SR.rankListings(q, list, recent).map((r: any) => r.ticker);
+  const cases: [string, string[], string[]?][] = [
+    ['aapl', ['AAPL']],
+    ['apple', ['AAPL', 'APLE']],
+    ['apple', ['APLE', 'AAPL'], ['APLE']],
+    ['nestle', ['NSRGY']],
+    ['societe generale', ['GLE.PA']],
+    ['att', ['T']],
+    ['mills', ['PAPER']],
+    ['microsft', ['MSFT']],
+    ['pap', ['PAPR', 'PAPER']],
+    ['RELIANCE.NS', ['RELIANCE.NS']],
+    ['msft', ['MSFT', 'MSFTX']],
+  ];
+  for (const [q, want, recent] of cases) {
+    const got = order(q, recent || []);
+    if (got.slice(0, want.length).join() !== want.join()) say(`"${q}"${recent ? ` (recent ${recent.join()})` : ''} ranks ${got.slice(0, want.length + 1).join(', ')}, not ${want.join(', ')} first`);
+  }
+  const inc = SR.rankListings('inc', list).filter((r: any) => r.tier <= 5);
+  if (inc.length) say(`"inc" matches ${inc.map((r: any) => r.ticker).join(', ')} by name: legal suffixes are not ignored`);
+  if (SR.rankListings('', [...list, ...list, ...list]).length > SR.RESULTS_RETURNED) say(`more than ${SR.RESULTS_RETURNED} results returned`);
+  for (const [ex, cc] of [['NasdaqGS', 'US'], ['NSE', 'IN'], ['BSE', 'IN'], ['LSE', 'GB'], ['Toronto', 'CA'], ['Somewhere', '']])
+    if (SR.countryFor(ex) !== cc) say(`the country for ${ex} is "${SR.countryFor(ex)}", not "${cc}"`);
+  const bold = SR.rankListings('nestle', list)[0]?.matched?.[0];
+  if (!bold || list.find((l) => l.ticker === 'NSRGY')!.name.slice(bold[0], bold[1]) !== 'Nestlé') say(`the matched characters of "Nestlé" for "nestle" are ${JSON.stringify(bold)}`);
+  console.log(`  ${cases.length + 3} ranking cases (exact ticker, name, word, near miss, ticker prefix, accents, punctuation, suffixes, recent ties), country codes, the matched span -- ${bad ? bad + ' PROBLEMS' : 'all clear'}`);
+  totalProblems += bad;
+}
+
 // ---------------------------------------------------------------------------
 // ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE
 // ---------------------------------------------------------------------------
