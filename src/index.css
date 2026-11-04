@@ -238,12 +238,43 @@ textarea,
   caret-color: var(--m-accent-text);
 }
 
-/* Keyboard focus, from the palette and only for the keyboard. A disclosure row
-   is a real button, so it was getting the default ring; a mouse user never saw
-   it and a keyboard user saw the wrong colour. */
-:focus-visible {
-  outline: 1px solid var(--m-accent-text);
+/* KEYBOARD FOCUS (VISUAL_SYSTEM section 7, CHANGE; build step 8, job 8.5).
+   2px ink, 2px offset, on every interactive element, never restyled per
+   component. Ink is 17.26:1 on the page and 8.0:1 on the oxblood, so it shows
+   on any surface the site has; the 1px read-oxblood it replaces was thin and
+   sat on controls that are already oxblood. On paper the ring is paper-ink,
+   because ink there is the paper itself.
+
+   `:root` in front lifts the rule above a component's own `outline: none`
+   (the figures screen's inputs set one in an embedded stylesheet), which a
+   bare `:focus-visible` lost on source order. */
+/* THE RING APPEARS AT ONCE (VISUAL_SYSTEM section 4: focus ring, 0ms).
+   Tailwind's `transition-colors` animates `outline-color`, and an element's
+   outline colour starts as its own text colour, so the ring used to fade in
+   from the text colour over 110ms, and an element with `transition-all`
+   animated its width and offset too. Every element carries the ring's colour,
+   width and offset all the time instead (invisible while the style is none),
+   so focus only switches the style on, which does not animate. */
+:root * {
+  outline-color: var(--m-ink);
+  outline-width: 2px;
   outline-offset: 2px;
+}
+:root :is(#margin-notes, [style*="background: rgb(242, 240, 234)"]) * {
+  outline-color: var(--m-paper-ink);
+}
+:root :focus-visible {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+
+/* A FOCUSED ELEMENT IS NEVER UNDER THE HEADER OR THE BOTTOM BAR (WCAG 2.4.11).
+   88px is the 64px header plus 24 (VISUAL_SYSTEM section 7); the header is
+   75px until job 9.1 sets it to 64, still inside the 88. */
+html {
+  scroll-padding-top: 88px;
+  scroll-padding-bottom: calc(var(--bottom-bar-inset, 0px) + 16px);
 }
 
 /* Marquee animation */

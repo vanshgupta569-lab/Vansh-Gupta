@@ -4087,6 +4087,152 @@ async function checkReducedMotion(browser: Browser) {
   }
 }
 
+// ---- focus and targets: the ring, the header, the ⓘ ---------------------
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.5, VISUAL_SYSTEM §7. Tabbing forward and
+// then back through the landing page (which has a paper band), the Margin
+// notes screen (paper) and the company overview, every element that takes
+// focus must show a 2px solid outline, 2px off it, in ink on the dark ground
+// and paper-ink on paper; and none may sit under the fixed header (WCAG
+// 2.4.11), which is what `scroll-padding-top` is for — tabbing BACK up the
+// page is the direction that would leave one there. Then every ⓘ is hit at
+// the corners of a 24px square around its centre with a mouse, and of a 44px
+// square in a touch context, and each point must land on that ⓘ.
+const FOCUS_PROBE = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const parse = (s) => { const m = s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(',').map(Number); return { r:p[0], g:p[1], b:p[2], a:p.length>3?p[3]:1 }; };
+  const lum = (c) => { const f=[c.r,c.g,c.b].map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);}); return 0.2126*f[0]+0.7152*f[1]+0.0722*f[2]; };
+  let n = el.parentElement, bg = null;
+  while (n && n !== document.documentElement) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0.85) { bg = c; break; } n = n.parentElement; }
+  const st = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  const header = document.querySelector('header');
+  return {
+    desc: (el.tagName.toLowerCase() + ' ' + (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40)) + (el.matches(':focus-visible') ? '' : ' [not :focus-visible]'),
+    style: st.outlineStyle, width: st.outlineWidth, offset: st.outlineOffset, colour: st.outlineColor,
+    paper: bg ? lum(bg) > 0.5 : false,
+    top: r.top, bottom: r.bottom, height: r.height,
+    headerBottom: header ? header.getBoundingClientRect().bottom : 0,
+    inHeader: !!el.closest('header'),
+  };
+})()`;
+
+const INK_RGB = 'rgb(242, 240, 234)';
+const PAPER_INK_RGB = 'rgb(22, 21, 15)';
+
+async function walkFocus(page: Page, where: string, found: Map<string, string>): Promise<number> {
+  let focused = 0;
+  const look = async () => {
+    const f: any = await page.evaluate(FOCUS_PROBE);
+    if (!f) return;
+    focused++;
+    const want = f.paper ? PAPER_INK_RGB : INK_RGB;
+    const issues: string[] = [];
+    if (f.style !== 'solid' || f.width !== '2px') issues.push(`outline ${f.style} ${f.width}, not solid 2px`);
+    if (f.offset !== '2px') issues.push(`offset ${f.offset}, not 2px`);
+    if (f.colour !== want) issues.push(`outline ${f.colour}, not ${f.paper ? 'paper-ink' : 'ink'} (${want})`);
+    if (!f.inHeader && f.height > 0 && f.bottom > 0 && f.top < f.headerBottom - 1)
+      issues.push(`its top is at ${Math.round(f.top)}px, under the header, which ends at ${Math.round(f.headerBottom)}px`);
+    for (const issue of issues) {
+      const key = `${where}: ${issue}`;
+      if (!found.has(key)) found.set(key, f.desc);
+    }
+  };
+  for (let i = 0; i < 45; i++) { await page.keyboard.press('Tab'); await look(); }
+  for (let i = 0; i < 30; i++) { await page.keyboard.press('Shift+Tab'); await look(); }
+  return focused;
+}
+
+const HINT_HITS = `((half) => {
+  const out = { count: 0, missed: [] };
+  // A reading is only fair where the whole square is in view and below the
+  // fixed header: a scroll step can leave an ⓘ half under the header, and the
+  // header being on top there is the header doing its job.
+  const header = document.querySelector('header');
+  const top = header ? header.getBoundingClientRect().bottom : 0;
+  for (const el of document.querySelectorAll('[data-hint]')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (cx - half < 0 || cy - half < top + 1 || cx + half > innerWidth || cy + half > innerHeight) continue;
+    out.count++;
+    for (const [dx, dy] of [[-half, -half], [half, -half], [-half, half], [half, half]]) {
+      const hit = document.elementFromPoint(cx + dx, cy + dy);
+      if (!hit || hit.closest('[data-hint]') !== el) {
+        const what = hit ? (hit.tagName.toLowerCase() + '.' + String(hit.getAttribute('class') || '').split(' ').slice(0, 3).join('.') + ' "' + (hit.textContent || '').trim().slice(0, 24) + '"') : 'nothing';
+        out.missed.push((el.getAttribute('aria-label') || 'ⓘ').slice(0, 40) + ' at ' + dx + ',' + dy + ', where ' + what + ' is on top');
+        break;
+      }
+    }
+  }
+  return out;
+})`;
+
+async function hintHitAreas(page: Page, size: number): Promise<{ count: number; missed: string[] }> {
+  const half = size / 2 - 0.5;
+  const total = { count: 0, missed: [] as string[] };
+  const height = (await page.evaluate('document.documentElement.scrollHeight')) as number;
+  const step = (await page.evaluate('window.innerHeight')) as number;
+  const seen = new Set<string>();
+  for (let y = 0; y < height; y += step * 0.7) {
+    await page.evaluate(`window.scrollTo(0, ${Math.round(y)})`);
+    await page.waitForTimeout(150);
+    const r: any = await page.evaluate(`${HINT_HITS}(${half})`);
+    total.count += r.count;
+    for (const m of r.missed) if (!seen.has(m)) { seen.add(m); total.missed.push(m); }
+  }
+  return total;
+}
+
+async function checkFocusAndTargets(browser: Browser) {
+  console.log('\n=== focus and targets: the ring, the header, the hit area ===');
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  const found = new Map<string, string>();
+  const counts: string[] = [];
+
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1200);
+  counts.push(`landing page ${await walkFocus(p, 'the landing page', found)}`);
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.getByRole('button', { name: /^All \d+ notes$/ }).click();
+  await p.waitForTimeout(800);
+  counts.push(`Margin notes ${await walkFocus(p, 'the Margin notes screen', found)}`);
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1200);
+  counts.push(`company overview ${await walkFocus(p, 'the company overview', found)}`);
+
+  for (const [issue, element] of found) {
+    problems++;
+    console.log(`  PROBLEM: ${issue} (e.g. ${element})`);
+  }
+  if (!found.size) ok(`focus walked forward 45 and back 30 on each screen (${counts.join(', ')} focused): every ring 2px solid, 2px off, ink or paper-ink, none under the header`);
+
+  const fine = await hintHitAreas(p, 24);
+  await ctx.close();
+
+  const touch = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await installFixtureRoutes(touch);
+  const t = await touch.newPage();
+  await t.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await t.waitForTimeout(1200);
+  const coarse = await t.evaluate(`matchMedia('(pointer: coarse)').matches`);
+  const finger = coarse ? await hintHitAreas(t, 44) : { count: 0, missed: [] };
+  await touch.close();
+
+  for (const [name, size, r] of [['mouse', 24, fine], ['touch', 44, finger]] as const) {
+    if (!r.count) {
+      problems++;
+      console.log(`  PROBLEM: no ⓘ measured with the ${name} on the company overview${name === 'touch' && !coarse ? ' (the touch context does not match pointer: coarse)' : ''}`);
+    } else if (r.missed.length) {
+      problems++;
+      console.log(`  PROBLEM: ${r.missed.length} ⓘ miss${r.missed.length === 1 ? 'es' : ''} a ${size}×${size} hit with the ${name}: ${r.missed.slice(0, 3).join(' | ')}`);
+    } else ok(`${r.count} ⓘ readings with the ${name}: every corner of a ${size}×${size} square lands on its ⓘ`);
+  }
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4264,6 +4410,7 @@ try {
 
   // 7. Nothing anywhere on any of those screens is below WCAG AA.
   await checkReducedMotion(browser);
+  await checkFocusAndTargets(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

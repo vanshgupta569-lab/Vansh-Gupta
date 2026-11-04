@@ -882,6 +882,17 @@ can see motion, and at most 110ms under reduced motion. The 1440 pass also
 checks the scroll-progress rule: on the header's bottom edge, the accent, no
 `box-shadow`.
 
+**An eighth is focus and targets** (build step 8, job 8.5). On the landing
+page (with its paper bands), the Margin notes screen (paper) and the company
+overview, the keyboard tabs forward 45 times and back 30; every focused
+element must show a 2px solid outline 2px off it, in ink on the dark ground
+and paper-ink on paper, and none may sit under the fixed header — tabbing
+back up the page is the direction `scroll-padding-top` exists for. Then
+every ⓘ fully below the header is hit at the four corners of a 24px square
+around its centre with a mouse, and of a 44px square in a touch context
+(`isMobile`, `hasTouch`, which matches `pointer: coarse`); each corner must
+land on that ⓘ.
+
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it
 waits. It must carry one of the notes from `didYouKnow.ts` — matched against the

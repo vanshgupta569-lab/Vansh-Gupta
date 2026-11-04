@@ -306,7 +306,20 @@ export const RowMenu: React.FC<RowMenuProps> = ({ label, heading, items }) => {
   );
 };
 
-/** The styles both controls need, mounted once by the screen that uses them. */
+/**
+ * The styles both controls need, mounted once by the screen that uses them.
+ *
+ * THE ⓘ'S HIT AREA IS LARGER THAN ITS GLYPH (VISUAL_SYSTEM decision 1, WCAG
+ * 2.5.8; build step 8, job 8.5). The button is a 16px box around a 13px
+ * glyph, too small to hit; an invisible square centred on it (`::after`)
+ * makes the area 24 by 24, and 44 by 44 under `pointer: coarse`. The glyph and
+ * the line it sits in do not move.
+ *
+ * WRITE EXPLANATIONS HERE, NOT IN THE STRING BELOW. It is mounted as a
+ * <style> element in the page, so a comment inside it is part of the page's
+ * text content, and the screener's banned-word scan reads that content: this
+ * note, written inside the string, said "target" and failed it.
+ */
 export const HINT_STYLES = `
   .mg-hint {
     display: inline-flex;
@@ -322,6 +335,19 @@ export const HINT_STYLES = `
     padding: 0;
     cursor: help;
     flex: none;
+    position: relative;
+  }
+  .mg-hint::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    transform: translate(-50%, -50%);
+  }
+  @media (pointer: coarse) {
+    .mg-hint::after { width: 44px; height: 44px; }
   }
   .mg-hint:hover, .mg-hint:focus-visible { color: ${INK}; }
   .mg-rowmenu {
