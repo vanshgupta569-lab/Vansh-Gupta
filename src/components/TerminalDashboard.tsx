@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel, isIntegrityRefusal } from '../data/companies';
-import { valuationSummary, premiumOf } from '../data/valuationSummary';
+import { valuationSummary, premiumOf, admissibleInputs } from '../data/valuationSummary';
+import { NOT_REPORTED } from '../data/figureFormat';
 import { payloadQuery } from '../data/payloadVersion';
 import { FootballField, RatioBand } from './valuationSections';
 import type { FieldBand } from './valuationSections';
@@ -1085,18 +1086,46 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     }
   };
 
-  // Sensitivity Matrix Calculations
-  const waccRange = [drivers.waccPct - 1.0, drivers.waccPct - 0.5, drivers.waccPct, drivers.waccPct + 0.5, drivers.waccPct + 1.0];
-  const gRange = [drivers.terminalGrowthPct - 1.0, drivers.terminalGrowthPct - 0.5, drivers.terminalGrowthPct, drivers.terminalGrowthPct + 0.5, drivers.terminalGrowthPct + 1.0];
+  // ---- THE SENSITIVITY GRID (`docs/STUDIO_SPEC.md` §4.5) -----------------
+  //
+  // TWO THINGS WERE WRONG WITH IT, and they were the same thing twice: the grid
+  // and its axes were not computed from each other.
+  //
+  //   EVERY CELL WAS CLAMPED AND THE AXIS WAS NOT (conflict 5, severity H).
+  //   The cell ran at `Math.max(4, wacc)` and `Math.max(0.5, growth)` while the
+  //   label printed the unclamped figure, so with terminal growth at 1.0% the
+  //   0.0% and 0.5% columns were BOTH computed at 0.5% and printed the same
+  //   value under two different labels.
+  //
+  //   AND IT DISAGREED WITH THE RANGES ON THE SAME PAGE ($111 against $112.90,
+  //   `docs/STUDIO_SPEC_ADDENDUM.md` G2). The football field's income range is
+  //   the row through the base cell of THE ENGINE'S grid; this was a second
+  //   grid, re-run here through `runDCF` with overridden drivers, and two
+  //   computations of one thing disagree the moment either changes.
+  //
+  // So there is one grid. The engine publishes it with the axes it was computed
+  // at (`model.js`, `R.sensitivity` and `R.sensitivityAxes`), the bands already
+  // read it, and this screen now reads the same arrays. The row through the
+  // base cell IS the range printed on the page, by construction rather than by
+  // agreement.
+  const gridAxes = (dcfResult as any)?.sensitivityAxes;
+  const waccRange: number[] = Array.isArray(gridAxes?.wacc)
+    ? gridAxes.wacc.map((v: number) => v * 100)
+    : [];
+  const gRange: number[] = Array.isArray(gridAxes?.growth)
+    ? gridAxes.growth.map((v: number) => v * 100)
+    : [];
+  const sensitivityMatrix: number[][] = Array.isArray((dcfResult as any)?.sensitivity?.perpetuity)
+    ? (dcfResult as any).sensitivity.perpetuity
+    : [];
 
-  const sensitivityMatrix = useMemo(() => {
-    return waccRange.map((w) =>
-      gRange.map((g) => {
-        const res = runDCF({ ...drivers, waccPct: Math.max(4, w), terminalGrowthPct: Math.max(0.5, g) });
-        return res.targetPrice;
-      })
-    );
-  }, [drivers, runDCF]);
+  /**
+   * WHETHER A PAIR OF INPUTS IS ADMISSIBLE AT ALL, read from the figures the
+   * axes PRINT. A perpetuity needs a discount rate above its growth rate: at or
+   * below it the formula diverges, and what comes back is not a large value but
+   * no value. A negative discount rate is not a discount rate.
+   */
+  const admissible = admissibleInputs;
 
   const [hoveredMatrixCell, setHoveredMatrixCell] = useState<{ wacc: number; g: number; val: number } | null>(null);
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
@@ -1868,11 +1897,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   const currG = gRange[cIdx];
                   const isCurrentDriver = rIdx === 2 && cIdx === 2;
                   
-                  // A cell can be non-finite where the discount rate meets the
-                  // growth rate, which makes the perpetuity formula diverge.
-                  // That is an undefined figure, not a very large one, so it
-                  // reads as a dash rather than printing infinity.
-                  const usable = typeof val === 'number' && isFinite(val) && val > 0;
+                  // NOT MEANINGFUL IS NOT THE SAME AS NOT REPORTED. Where
+                  // the growth rate reaches the discount rate the perpetuity
+                  // formula diverges: there is no value at those inputs, and
+                  // the cell says so in the one notation that means it
+                  // (`n.m.`, TABLES D4 as scoped by VISUAL_BUILD_PLAN C20).
+                  // The axis still prints the true input, because the reader
+                  // is owed the pair that has no answer.
+                  const cellAdmissible = admissible(currWacc, currG);
+                  const usable = cellAdmissible && typeof val === 'number' && isFinite(val) && val > 0;
                   // SHADED AGAINST THE PRICE THE GRID'S OWN FIGURES WERE
                   // STRUCK AT, which is the price the whole screen uses (S3).
                   const ratio = usable && struckPrice > 0 ? val / struckPrice : 0;
@@ -1896,8 +1929,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                         isCurrentDriver ? 'ring-1 ring-[#F2F0EA]' : ''
                       }`}
                     >
-                      <span className="font-figure text-[10px] text-[#F2F0EA] font-semibold tracking-tighter">
-                        {usable ? `${company.currencySymbol}${Math.round(val)}` : '—'}
+                      <span
+                        className="font-figure text-[10px] text-[#F2F0EA] font-semibold tracking-tighter"
+                        data-sensitivity-cell={`${currWacc.toFixed(2)}|${currG.toFixed(2)}`}
+                        title={
+                          cellAdmissible
+                            ? undefined
+                            : `No value at ${currG.toFixed(1)}% growth against a ${currWacc.toFixed(1)}% discount rate: a perpetuity needs the discount rate above the growth rate.`
+                        }
+                      >
+                        {usable
+                          ? `${company.currencySymbol}${Math.round(val)}`
+                          : cellAdmissible
+                            ? NOT_REPORTED
+                            : 'n.m.'}
                       </span>
                     </motion.div>
                   );
@@ -1915,9 +1960,11 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   </span>
                   <span className="text-[#8B1E1E] font-bold tracking-widest uppercase">
                     Target:{' '}
-                    {typeof hoveredMatrixCell.val === 'number' && isFinite(hoveredMatrixCell.val)
+                    {admissible(hoveredMatrixCell.wacc, hoveredMatrixCell.g) &&
+                    typeof hoveredMatrixCell.val === 'number' &&
+                    isFinite(hoveredMatrixCell.val)
                       ? `${company.currencySymbol}${hoveredMatrixCell.val.toFixed(2)}`
-                      : 'not defined at this rate'}
+                      : 'not meaningful: a perpetuity needs the discount rate above the growth rate'}
                   </span>
                 </>
               ) : (

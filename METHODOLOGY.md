@@ -4150,6 +4150,49 @@ written out four times before, twice as `(price − value) / value` and twice as
 
 ---
 
+## 23a2. The sensitivity grid, and the inputs it prints
+
+`src/engine/model.js`, `src/components/TerminalDashboard.tsx`, 2026-11-04.
+
+**Every cell is computed at the inputs its own row and column print.** Two
+things were wrong, and they were the same thing twice: the grid and its axes
+were not computed from each other.
+
+**The cell was clamped and the axis was not** (`docs/STUDIO_SPEC.md` conflict 5,
+severity H). Each cell ran at `Math.max(4, wacc)` and `Math.max(0.5, growth)`
+while its label printed the unclamped figure, so with terminal growth at 1.0%
+the 0.0% and 0.5% columns were **both computed at 0.5% and printed the same
+value under two different labels**.
+
+**And the grid disagreed with the ranges on the same page** — $111 against
+$112.90 on a screenshot (`docs/STUDIO_SPEC_ADDENDUM.md` G2). The football
+field's income bar is the one-at-a-time range: the base-WACC row of the
+ENGINE's grid, read across. The screen drew a second grid of its own, re-run
+through `runDCF` with the drivers overridden, and two computations of one thing
+disagree the moment either changes.
+
+**So there is one grid.** The engine publishes it with the axes it was computed
+at (`R.sensitivity`, `R.sensitivityAxes`), the bands already read it, and the
+screen reads the same arrays. The row through the base cell **is** the range
+printed on the page, by construction rather than by agreement. The 25 extra DCF
+runs per render go with it.
+
+**A pair with no answer says so.** A perpetuity needs the discount rate above
+the growth rate; at or below it `(1 + g) / (wacc − g)` diverges, and what comes
+back is not a large value but no value. Those cells read **`n.m.`** — not
+meaningful, which is a different fact from not reported — with the pair still
+printed on the axes, because the reader is owed the inputs that have no answer.
+`admissibleInputs` in `src/data/valuationSummary.ts` is the one definition of
+which pairs those are, read by the grid and by the words over it.
+
+**Measured on 2026-11-04**: 1,525 cells across 61 companies, every one equal to
+a recomputation at the WACC and growth its own axes print, worst difference
+0.00e+0; and on 60 companies the income range printed on the page is the base
+row of that grid, read across. No valuation moved — the grid is a display of
+the engine's own figures, and the engine's figures did not change.
+
+---
+
 ## 23b. What each figure records about where it came from
 
 `api/company.js`, `src/data/financials.ts`, payload version 11.

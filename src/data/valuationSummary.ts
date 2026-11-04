@@ -82,6 +82,24 @@ export function premiumOf(price: number | null | undefined, value: number | null
 }
 
 /**
+ * WHETHER A PAIR OF SENSITIVITY INPUTS HAS AN ANSWER AT ALL.
+ *
+ * A perpetuity needs the discount rate ABOVE the growth rate: at or below it
+ * `(1 + g) / (wacc − g)` diverges, and what comes back is not a large value but
+ * no value. A negative discount rate is not a discount rate.
+ *
+ * Lives here, with one caller on the screen and one in `verify/`, because the
+ * grid's own cells and the words the screen prints over them have to agree
+ * about which pairs those are (`docs/STUDIO_SPEC.md` §4.5). Both percentages,
+ * as the axes print them.
+ */
+export function admissibleInputs(waccPct: number, growthPct: number): boolean {
+  return (
+    isNum(waccPct) && isNum(growthPct) && waccPct > 0 && growthPct < waccPct
+  );
+}
+
+/**
  * THE WHOLE SUMMARY, from the source, the reader's drivers, the other two
  * approaches and the struck price.
  *
@@ -163,4 +181,4 @@ export function valuationSummary(
   return { struckPrice: price, bands, terminalMethods, premiumAgainst, fieldBands };
 }
 
-export default { valuationSummary, premiumOf };
+export default { valuationSummary, premiumOf, admissibleInputs };

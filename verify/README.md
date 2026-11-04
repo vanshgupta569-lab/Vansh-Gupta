@@ -435,6 +435,31 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### Every sensitivity cell is computed at the inputs it prints
+
+Five arms. **Every cell, recomputed from the axis it prints** — rebuilt in the
+check from the series the model publishes (the unlevered cash flows, the
+discount factors, the normalised flow, net debt, the other claims and the share
+count) at the WACC and growth the axes name, so a cell computed at a clamped
+input would not match: 1,525 cells across 61 companies, worst 0.00e+0. **The row
+through the base cell is the range on the page**, which is G2's own measurement
+($111 against $112.90 on a screenshot) held to zero on 60 companies. **The
+screen reads that grid and draws no other**, asserted on the component rather
+than the engine, because the defect was a second grid. **And the two cases no
+company on disk reaches are driven rather than assumed**: the pairs with no
+answer, eight of them with the answers written out by hand; and the clamp's own
+case, a company set to 1.0% terminal growth, where the 0.0% and 0.5% columns
+were one computation under two labels. Every company in the set discounts above
+4% with terminal growth above 1.5%, so without those two the arms above pass
+whether the clamp is there or not.
+
+Proved by breaking, five ways: the clamp put back inside the computation while
+the axis prints the true figure, which is the defect itself (**1 fault**, and
+only the constructed low-growth case catches it); the axis printing a step the
+cell was not computed at (**1,220**); the screen drawing its own grid again
+(**2**); a pair with no answer treated as one (**2**); and the screen parting
+company with the shared admissibility rule (**1**).
+
 ### One price per valuation
 
 Four arms, over every payload. **The summary says which price it was struck

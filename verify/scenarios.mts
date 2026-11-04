@@ -6518,6 +6518,302 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// EVERY SENSITIVITY CELL IS COMPUTED AT THE INPUTS ITS ROW AND COLUMN PRINT
+// ---------------------------------------------------------------------------
+//
+// Two faults, and they were the same fault twice: the grid and its axes were
+// not computed from each other.
+//
+//   THE CELL WAS CLAMPED AND THE AXIS WAS NOT (`docs/STUDIO_SPEC.md` conflict
+//   5, severity H). Each cell ran at `Math.max(4, wacc)` and
+//   `Math.max(0.5, growth)` while its label printed the unclamped figure, so
+//   with terminal growth at 1.0% the 0.0% and 0.5% columns were both computed
+//   at 0.5% and printed the same value under two different labels.
+//
+//   AND THE GRID DISAGREED WITH THE RANGES ON THE SAME PAGE — $111 against
+//   $112.90 (`docs/STUDIO_SPEC_ADDENDUM.md` G2). The football field's income
+//   range is the row through the base cell of the ENGINE'S grid; the screen
+//   drew a second grid of its own, and two computations of one thing disagree
+//   the moment either changes.
+//
+// Three arms, over every payload that values.
+{
+  console.log('\n=== every sensitivity cell is computed at the inputs it prints ===');
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor, buildFullModel, valuationBandsFor } = await import(
+    `file:///${REPO}/src/data/companies.ts`
+  );
+  const { admissibleInputs } = await import(`file:///${REPO}/src/data/valuationSummary.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let companies = 0;
+  let cells = 0;
+  let notMeaningful = 0;
+  let worstCell = 0;
+  let worstWhere = '';
+  let bandsTied = 0;
+  let lowGrowthDriven = '';
+
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+    let built: any;
+    try {
+      built = buildFullModel(rec.modelData, drivers);
+    } catch {
+      continue;
+    }
+    const D: any = built?.dcf;
+    if (!D?.applicable) continue;
+    const gridRows: any[] = D.sensitivity?.perpetuity || [];
+    const axes = D.sensitivityAxes;
+    if (!gridRows.length || !axes?.wacc?.length || !axes?.growth?.length) continue;
+    companies++;
+    const ticker = payload.ticker || file;
+
+    // ---- 1. EVERY CELL, RECOMPUTED FROM THE AXIS IT PRINTS --------------
+    //
+    // Not read back from the engine's own grid function: the value is rebuilt
+    // here from the series the model publishes — the unlevered cash flows,
+    // the discount factors, the normalised flow, net debt, the other claims
+    // and the share count — at the wacc and growth THE AXES PRINT. If a cell
+    // were computed at a clamped input, this recomputation would not match it,
+    // which is what the defect looked like.
+    const fcf: number[] = D.unleveredFCF || [];
+    const df: number[] = D.discountFactor || [];
+    const lastDF = df[df.length - 1];
+    const normalised = D.normalisedFCF;
+    const netDebt = D.netDebt;
+    const claims = D.otherClaims;
+    const shares = D.dilutedShares;
+    const canRecompute =
+      fcf.length === df.length &&
+      fcf.length > 0 &&
+      isNum(lastDF) &&
+      isNum(normalised) &&
+      isNum(netDebt) &&
+      isNum(claims) &&
+      isNum(shares) &&
+      shares > 0;
+
+    axes.wacc.forEach((w: number, r: number) => {
+      axes.growth.forEach((g: number, c: number) => {
+        const shown = gridRows[r]?.[c];
+        // A PAIR WITH NO ANSWER. A perpetuity needs the discount rate above
+        // the growth rate; at or below it the formula diverges, and what
+        // comes back is not a large value but no value. The screen prints
+        // `n.m.` there and the axis still prints the pair.
+        if (!admissibleInputs(w * 100, g * 100)) {
+          notMeaningful++;
+          return;
+        }
+        if (!canRecompute || !isNum(shown)) return;
+        const pv = fcf.reduce((sum, f, t) => sum + f / (1 + w) ** df[t], 0);
+        const tv = (normalised * (1 + g)) / (w - g);
+        const ev = pv + tv / (1 + w) ** lastDF;
+        const expected = (ev - netDebt - claims) / shares;
+        cells++;
+        const gap = Math.abs(shown - expected) / Math.max(1, Math.abs(expected));
+        if (gap > 1e-9) {
+          faults.push(
+            `${ticker} cell [${(w * 100).toFixed(1)}% × ${(g * 100).toFixed(1)}%]: the grid holds ` +
+              `${shown.toFixed(4)} and those inputs give ${expected.toFixed(4)}`
+          );
+        }
+        if (gap > worstCell) {
+          worstCell = gap;
+          worstWhere = `${ticker} at ${(w * 100).toFixed(1)}% × ${(g * 100).toFixed(1)}%`;
+        }
+      });
+    });
+
+    // ---- 2. THE ROW THROUGH THE BASE CELL IS THE RANGE ON THE PAGE ------
+    //
+    // The football field's income bar is the one-at-a-time range: the base
+    // WACC row of this grid, read across. If the screen drew its own grid
+    // again, the two would differ — which is G2, measured at $111 against
+    // $112.90 on a screenshot.
+    const bands: any[] = valuationBandsFor(rec.modelData, drivers, payload?.quote?.price ?? null) as any[];
+    const growthBand = bands.find((b) => /perpetuity/i.test(String(b.label)));
+    if (growthBand) {
+      const middle = Math.floor((axes.wacc.length - 1) / 2);
+      const row: number[] = (gridRows[middle] || []).filter((v: any) => isNum(v) && v > 0);
+      if (row.length) {
+        const low = Math.min(...row);
+        const high = Math.max(...row);
+        const off = (a: number, b: number) => Math.abs(a - b) / Math.max(1, Math.abs(b));
+        if (off(growthBand.low, low) > 1e-9 || off(growthBand.high, high) > 1e-9) {
+          faults.push(
+            `${ticker}: the income range reads ${growthBand.low.toFixed(2)}–${growthBand.high.toFixed(2)} ` +
+              `and the base row of the grid beside it runs ${low.toFixed(2)}–${high.toFixed(2)}`
+          );
+        } else {
+          bandsTied++;
+        }
+      }
+    }
+  }
+
+  // ---- THE CLAMP'S OWN CASE, WHICH NO COMPANY ON DISK REACHES EITHER ----
+  //
+  // The defect was a clamp INSIDE the computation — `Math.max(0.04, wacc)` and
+  // `Math.max(0.005, growth)` — while the axis printed the unclamped figure. It
+  // only bites where a step falls below the clamp, and every company in the set
+  // discounts above 4% with terminal growth above 1.5%, so the lowest step of
+  // every real grid is admissible and ABOVE the clamp: the arms above pass
+  // whether the clamp is there or not. That is the trap, so the clamp's own
+  // case is driven here.
+  //
+  // THE SPEC'S OWN EXAMPLE: terminal growth at 1.0%, where the grid's steps are
+  // 0.0%, 0.5%, 1.0%, 1.5% and 2.0% and the first two would BOTH be computed at
+  // 0.5% and printed under two different labels.
+  {
+    const file = fs.readdirSync(PAYLOADS).find((f) => f.endsWith('.json') && /^AAPL\./.test(f));
+    let probe: any = null;
+    try {
+      probe = file ? readPayload(file) : null;
+    } catch {
+      probe = null;
+    }
+    if (!probe) {
+      faults.push('no payload to drive the low-growth grid with');
+    } else {
+      const rec: any = buildCompanyFrom(probe);
+      const drivers: any = {
+        ...rec.defaultDrivers,
+        ...defaultDriversFor(rec.modelData),
+        terminalGrowthPct: 1.0,
+      };
+      let built: any = null;
+      try {
+        built = buildFullModel(rec.modelData, drivers);
+      } catch {
+        built = null;
+      }
+      const D: any = built?.dcf;
+      const axes = D?.sensitivityAxes;
+      const rows: any[] = D?.sensitivity?.perpetuity || [];
+      if (!axes?.growth?.length || !rows.length) {
+        faults.push('the low-growth grid could not be built, so the clamp ships untested');
+      } else {
+        const printed = axes.growth.map((g: number) => Number((g * 100).toFixed(2)));
+        // 1. THE AXIS PRINTS THE STEPS IT WAS ASKED FOR, including the one at
+        //    nought, rather than a clamped figure.
+        if (Math.abs(printed[0]) > 0.001) {
+          faults.push(
+            `the lowest growth step reads ${printed[0]}% where terminal growth is 1.0% and the step is ` +
+              '1.0 point — the axis is printing a clamped figure'
+          );
+        }
+        // 2. AND THE TWO LOWEST COLUMNS HOLD DIFFERENT VALUES. Under the clamp
+        //    they were the same figure under two labels, which is the defect
+        //    seen from the reader's side.
+        const middle = Math.floor((axes.wacc.length - 1) / 2);
+        const row: any[] = rows[middle] || [];
+        const a = row[0];
+        const b = row[1];
+        if (!isNum(a) || !isNum(b)) {
+          faults.push('the two lowest growth columns hold no value at 1.0% terminal growth');
+        } else if (Math.abs(a - b) < 1e-9) {
+          faults.push(
+            `at 1.0% terminal growth the ${printed[0]}% and ${printed[1]}% columns both read ` +
+              `${a.toFixed(4)} — two labels over one computation, which is the clamp`
+          );
+        } else {
+          lowGrowthDriven = `${printed[0]}% reads ${a.toFixed(2)} and ${printed[1]}% reads ${b.toFixed(2)}`;
+        }
+      }
+    }
+  }
+
+  // ---- AND THE PAIRS WITH NO ANSWER, WHICH NO COMPANY ON DISK REACHES ---
+  //
+  // Every company in the set discounts above its own terminal growth, on every
+  // step of the grid, so the branch that prints `n.m.` would ship untested on
+  // the real data — the trap `CLAUDE.md` lists. So the rule is driven directly,
+  // on the pairs a reader can produce by moving the two sliders towards each
+  // other, with the answers written out by hand.
+  const PAIRS: [number, number, boolean, string][] = [
+    [8, 2, true, 'an ordinary pair'],
+    [8, 7.5, true, 'growth just below the discount rate, which still has an answer'],
+    [8, 8, false, 'growth AT the discount rate: the formula divides by nothing'],
+    [8, 8.5, false, 'growth above the discount rate: a value that grows faster than it is discounted'],
+    [0, 2, false, 'no discount rate at all'],
+    [-2, -5, false, 'a negative discount rate is not a discount rate'],
+    [NaN, 2, false, 'no figure for the discount rate'],
+    [8, NaN, false, 'no figure for the growth rate'],
+  ];
+  for (const [w, g, want, why] of PAIRS) {
+    const got = admissibleInputs(w, g);
+    if (got !== want) {
+      faults.push(
+        `the pair ${w}% × ${g}% reads ${got ? 'admissible' : 'not meaningful'} and it is ${
+          want ? 'admissible' : 'not meaningful'
+        }: ${why}`
+      );
+    }
+  }
+
+  // ---- 3. THE SCREEN READS THAT GRID AND DRAWS NO OTHER ----------------
+  //
+  // The arms above hold the engine. This holds the component, because the
+  // defect was a SECOND grid: a `runDCF` per cell with the drivers overridden
+  // and clamped. One grid means the screen reads `sensitivity.perpetuity` and
+  // its axes, and clamps nothing.
+  const dashboard = fs.readFileSync(path.join(REPO, 'src/components/TerminalDashboard.tsx'), 'utf8');
+  if (!/sensitivityMatrix: number\[\]\[\] = Array\.isArray\(\(dcfResult as any\)\?\.sensitivity\?\.perpetuity\)/.test(dashboard)) {
+    faults.push('the screen no longer reads the engine\'s own sensitivity grid');
+  }
+  if (/Math\.max\(4,\s*w\)|Math\.max\(0\.5,\s*g\)/.test(dashboard)) {
+    faults.push('the screen clamps a sensitivity input again while its axis prints the unclamped figure');
+  }
+  if (!/const admissible = admissibleInputs;/.test(dashboard)) {
+    faults.push(
+      'the screen no longer reads the shared admissibility rule, so the grid and the words over it can ' +
+        'disagree about which pairs have an answer'
+    );
+  }
+
+  console.log(
+    `  ${cells} cells across ${companies} companies, every one equal to a recomputation at the wacc and ` +
+      `growth its own axes print (worst ${worstCell.toExponential(2)}${worstWhere ? `, ${worstWhere}` : ''})`
+  );
+  console.log(
+    `  ${notMeaningful} cells on disk have no answer at the pair they print; the rule is driven on ` +
+      `${PAIRS.length} pairs written out by hand, because every company in the set discounts above its own ` +
+      'terminal growth on every step of its grid'
+  );
+  console.log(
+    `  and on ${bandsTied} companies the income range printed on the page IS the base row of that grid, ` +
+      'read across'
+  );
+  console.log(
+    `  the clamp's own case is driven on a company set to 1.0% terminal growth, where the two lowest ` +
+      `columns were one computation under two labels: ${lowGrowthDriven || 'NOT DRIVEN'}`
+  );
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the sensitivity grid:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // ONE PRICE PER VALUATION
 // ---------------------------------------------------------------------------
 //
