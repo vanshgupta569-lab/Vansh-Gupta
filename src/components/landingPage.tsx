@@ -24,8 +24,15 @@
 // magazine, and this is meant to read as an institution. Playfair is kept for
 // the three places it earns: the wordmark, the margin notes, and the quote.
 
-import React, { useEffect, useRef, useState } from 'react';
-import { ParticleField } from './particleField';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from '../design/motion';
+/* THE 3D CHUNK LOADS AFTER THE FIRST PAINT (VISUAL_SYSTEM §6, job 8.7):
+   three.js is its own chunk, fetched once the page has drawn, and the poster
+   is what is painted first. */
+const ParticleField = lazy(() => import('./particleField'));
+/* The still the page paints first, and the largest thing it paints: the
+   wordmark as the particle field draws it, captured once (≤ 60KB). */
+const HERO_POSTER = '/hero-poster.webp';
 import { MarginNotesSection } from './marginNotesSection';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
@@ -306,6 +313,9 @@ function useCoverage(): { count: number | null; exchanges: string[]; built: stri
   return state;
 }
 
+/** The years claim in words, for the hero's sentence. */
+const YEARS_IN_WORDS: Record<number, string> = { 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten' };
+
 const asAt = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null;
 
@@ -326,6 +336,19 @@ interface LandingProps {
 
 export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo, onOpenNotes, children }) => {
   const [launching, setLaunching] = useState(false);
+  const reducedMotion = useReducedMotion();
+  // The field mounts after the first paint, never before it.
+  const [fieldWanted, setFieldWanted] = useState(false);
+  const [fieldDrawn, setFieldDrawn] = useState(false);
+  const [fieldFrozen, setFieldFrozen] = useState(false);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    let a = 0, b = 0;
+    a = requestAnimationFrame(() => { b = requestAnimationFrame(() => setFieldWanted(true)); });
+    return () => { cancelAnimationFrame(a); cancelAnimationFrame(b); };
+  }, []);
+  const fieldOn = fieldWanted && !reducedMotion && !fieldFrozen;
+  const posterOn = !fieldOn || !fieldDrawn;
   const coverage = useCoverage();
   const countLabel = companyCountLabel(coverage.count);
   const builtAt = asAt(coverage.built);
@@ -423,26 +446,51 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             'radial-gradient(ellipse 130% 85% at 50% 10%, #14141C 0%, #0E0E13 40%, #08080B 78%, #060608 100%)',
         }}
       />
-      <ParticleField sectionIds={OBJECT_SECTIONS} launching={launching} />
+      <img
+        src={HERO_POSTER}
+        alt=""
+        aria-hidden="true"
+        data-hero-poster
+        width={1440}
+        height={900}
+        fetchPriority="high"
+        className="absolute inset-x-0 top-0 w-full h-screen object-cover z-[4] pointer-events-none"
+        style={{ opacity: posterOn ? 1 : 0, transition: 'opacity var(--m-dur-reveal) var(--m-ease-enter)' }}
+      />
+      {fieldOn && (
+        <Suspense fallback={null}>
+          <ParticleField
+            sectionIds={OBJECT_SECTIONS}
+            launching={launching}
+            paused={paused}
+            onFirstFrame={() => setFieldDrawn(true)}
+            onFreeze={() => setFieldFrozen(true)}
+          />
+        </Suspense>
+      )}
 
       <div className="relative z-10 pointer-events-none">
         {/* ---------------------------------------------------------- */}
         {/* the wordmark, drawn in particles above the words            */}
         {/* ---------------------------------------------------------- */}
         <Block id="hero" side="mid">
-          <Eyebrow centred>Filed data, not estimates</Eyebrow>
+          {/* LANDING §2.1, final text. The display and lead steps are the
+              landing page's alone (VISUAL_SYSTEM finding 8). "Live models"
+              went because it reads as live market data. */}
+          <Eyebrow centred>Source: company filings</Eyebrow>
           <h1
-            className="text-[34px] sm:text-[46px] lg:text-[58px] mb-6"
-            style={{ ...DISPLAY, color: INK }}
+            className="text-display mb-6 mx-auto max-w-[1000px]"
+            style={{ ...DISPLAY, color: INK, lineHeight: 1.05, textWrap: 'balance' as any }}
           >
             {/* No full stop here: the red square is the full stop. Written
                 out, the line ended on two of them. */}
-            Real financials. Live models
+            Filed numbers. A model you can argue with
             <Mark />
           </h1>
-          <p className="text-[18px] leading-[1.6] mx-auto max-w-[38rem]" style={{ color: READ }}>
-            Five years of income statements, balance sheets and cash flows, read
-            from a company&rsquo;s own filings exactly as reported.
+          <p className="text-lead leading-[1.5] mx-auto max-w-[620px]" style={{ color: READ }}>
+            Marginalia reads up to {YEARS_IN_WORDS[CLAIMS.historyYears] ?? CLAIMS.historyYears} years of a
+            company&rsquo;s own filings, builds the three-statement model and DCF, and shows where every
+            figure came from.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <button
@@ -482,6 +530,23 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           >
             Scroll to see how it works
           </p>
+          {fieldOn && (
+            /* WCAG 2.2.2: the motion can be stopped. 24×24 at the hero's
+               lower edge, inside the pointer-events-none column, so it opts
+               back in. */
+            <button
+              type="button"
+              data-motion-toggle
+              onClick={() => setPaused((v) => !v)}
+              aria-pressed={paused}
+              aria-label={paused ? 'Play the animation' : 'Pause the animation'}
+              className="pointer-events-auto mx-auto mt-4 flex h-6 w-6 items-center justify-center border border-line-control text-muted hover:text-ink"
+            >
+              <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                {paused ? <path d="M3 2 L10 6 L3 10 Z" fill="currentColor" /> : <path d="M3 2 H5 V10 H3 Z M7 2 H9 V10 H7 Z" fill="currentColor" />}
+              </svg>
+            </button>
+          )}
         </Block>
 
         {/* 01 — what you can do */}

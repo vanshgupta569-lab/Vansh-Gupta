@@ -4521,6 +4521,119 @@ async function checkFeatureGate(browser: Browser) {
     );
 }
 
+// ---- the hero's particle field keeps its budgets (build step 8, job 8.7) -
+//
+// VISUAL_SYSTEM §6: at most 12,000 points, drawn at no more than 1.5 device
+// pixels per CSS pixel; a pause control 24×24; settled — no frames at all —
+// once nothing has happened for five seconds; stopped while the tab is hidden;
+// the poster painted first and shown again whenever the field gives up; no
+// field at all under reduced motion.
+//
+// This browser draws WebGL in software and cannot keep a frame under 20ms, so
+// left alone the field halves its points twice and freezes on the poster —
+// which is checked as it is. For the rest, the page's clock is slowed to a
+// quarter for the field's own frame timing, so it behaves as it does on a
+// real GPU (a sixth and a bit, so frames up to ~130ms real pass); every wait
+// below is in real milliseconds.
+async function checkHeroField(browser: Browser) {
+  console.log('\n=== the hero: the particle field keeps its budgets ===');
+  const PF: any = await import(`file:///${REPO}/src/components/particleField.tsx`).catch(() => null);
+  const budget = PF?.PARTICLE_BUDGET ?? 12000;
+  const issues: string[] = [];
+  const counters = `(() => { window.__raf = 0; const raf = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; })()`;
+  // A sixth and a bit: frames up to ~130ms real read as under 20ms, so the
+  // field neither halves nor freezes here; five settling seconds become ~33.
+  const slow = `(() => { const real = performance.now.bind(performance); performance.now = () => real() * 0.15; })()`;
+  const state = (p: Page) => p.evaluate(`document.querySelector('canvas')?.dataset.state || null`) as Promise<string | null>;
+
+  // 1. A 2x screen, the clock slowed: budgets, the pause control, settling.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(counters);
+    await ctx.addInitScript(slow);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await p.locator('canvas').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    await p.waitForTimeout(1500);
+    const c: any = await p.evaluate(`(() => { const c = document.querySelector('canvas'); const poster = document.querySelector('[data-hero-poster]'); return c ? { particles: Number(c.dataset.particles), ratio: c.width / c.clientWidth, posterOpacity: poster ? getComputedStyle(poster).opacity : null } : null; })()`);
+    if (!c) issues.push('no particle canvas mounted on the landing page');
+    else {
+      if (!(c.particles > 0 && c.particles <= budget)) issues.push(`the field draws ${c.particles} points, over the ${budget} budget`);
+      if (c.ratio > 1.5 + 1e-6) issues.push(`the canvas is drawn at ${c.ratio.toFixed(2)} device pixels per CSS pixel on a 2x screen, over 1.5`);
+      if (c.posterOpacity !== '0') issues.push(`the poster is still showing (opacity ${c.posterOpacity}) after the field drew its first frame`);
+    }
+    const toggle = p.locator('[data-motion-toggle]').first();
+    const box = await toggle.boundingBox();
+    if (!box) issues.push('no pause control under the hero');
+    else {
+      if (box.width < 24 || box.height < 24) issues.push(`the pause control is ${box.width}×${box.height}, under 24×24`);
+      await toggle.click();
+      await p.waitForTimeout(400);
+      if ((await state(p)) !== 'paused') issues.push(`pressing pause leaves the field ${await state(p)}`);
+      await toggle.click();
+      await p.waitForTimeout(400);
+    }
+    // Leave it alone: within five (slowed) seconds of the last input it must
+    // stop drawing altogether.
+    let settled = false;
+    for (let i = 0; i < 60 && !settled; i++) {
+      await p.waitForTimeout(1000);
+      settled = (await state(p)) === 'settled';
+    }
+    if (!settled) issues.push(`left alone for 60 seconds the field is still ${await state(p)}, not settled`);
+    else {
+      const before = (await p.evaluate('window.__raf')) as number;
+      await p.waitForTimeout(2000);
+      const after = (await p.evaluate('window.__raf')) as number;
+      if (after - before > 2) issues.push(`settled, the page still asked for ${after - before} frames in two seconds`);
+      await p.mouse.wheel(0, 40);
+      await p.waitForTimeout(500);
+      const woke = await state(p);
+      if (woke !== 'running') issues.push(`a scroll after settling leaves the field ${woke}, not running`);
+      await p.evaluate(`(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); })()`);
+      await p.waitForTimeout(600);
+      if ((await state(p)) !== 'hidden') issues.push(`with the tab hidden the field is ${await state(p)}, not stopped`);
+    }
+    await ctx.close();
+  }
+
+  // 2. The real clock: this software GPU is slow, and the field must give up
+  //    gracefully — halving, then freezing with the poster back on screen.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(12_000);
+    const r: any = await p.evaluate(`(() => { const c = document.querySelector('canvas'); const poster = document.querySelector('[data-hero-poster]'); return { canvas: !!c, live: c ? c.dataset.live || null : null, particles: c ? c.dataset.particles : null, poster: poster ? getComputedStyle(poster).opacity : null }; })()`);
+    if (!r.canvas && r.poster !== '1') issues.push(`the field froze and the poster is not showing (opacity ${r.poster})`);
+    ok(r.canvas ? `on this browser's own clock the field is still drawing (${r.live ?? r.particles} points live)` : `on this browser's software GPU the field froze after halving, and the poster is back (opacity ${r.poster})`);
+    await ctx.close();
+  }
+
+  // 3. Reduced motion: the poster, and no WebGL at all.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(2500);
+    const r: any = await p.evaluate(`(() => ({ canvas: !!document.querySelector('canvas'), poster: getComputedStyle(document.querySelector('[data-hero-poster]')).opacity, toggle: !!document.querySelector('[data-motion-toggle]') }))()`);
+    if (r.canvas) issues.push('under reduced motion the particle canvas still mounts');
+    if (r.poster !== '1') issues.push(`under reduced motion the poster is not showing (opacity ${r.poster})`);
+    if (r.toggle) issues.push('under reduced motion a pause control is offered for motion that is not there');
+    await ctx.close();
+  }
+
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: the hero: ${issue}`);
+  }
+  if (!issues.length)
+    ok(`at most ${budget} points at ≤ 1.5 device pixels a pixel; the poster gives way to the first frame; pause holds the frame; settled after five seconds with no frames asked for; a scroll wakes it; a hidden tab stops it; reduced motion shows only the poster`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4588,6 +4701,29 @@ try {
   const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
 
   await installFixtureRoutes(context);
+
+  // ONE SECTION AT A TIME, FOR PROVING A CHECK FAILS. `DASHBOARD_ONLY=hero,features
+  // npm run verify:dashboard` runs just those self-contained sections and
+  // stops, so a deliberate break is reported by the check it was made for
+  // rather than by whichever earlier journey it happened to slow down. The
+  // full run, which is the one a commit quotes, takes no such variable.
+  const ONLY: Record<string, () => Promise<void>> = {
+    motion: () => checkReducedMotion(browser as Browser),
+    focus: () => checkFocusAndTargets(browser as Browser),
+    bridge: () => checkBridgeWorker(browser as Browser),
+    features: () => checkFeatureGate(browser as Browser),
+    hero: () => checkHeroField(browser as Browser),
+  };
+  const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (only.length) {
+    for (const name of only) {
+      if (!ONLY[name]) throw new Error(`DASHBOARD_ONLY names "${name}"; the sections are ${Object.keys(ONLY).join(', ')}`);
+      await ONLY[name]();
+    }
+    console.log(`\n(DASHBOARD_ONLY=${only.join(',')}: only these sections ran)`);
+    throw Object.assign(new Error('__only__'), { only: true });
+  }
+
   const page = await context.newPage();
   page.on('pageerror', (error) => {
     problems++;
@@ -4701,9 +4837,11 @@ try {
   await checkFocusAndTargets(browser);
   await checkBridgeWorker(browser);
   await checkFeatureGate(browser);
+  await checkHeroField(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
+  if (!error?.only) {
   problems++;
   console.log(`\n  PROBLEM: the check could not finish — ${error?.message || error}`);
   // WHICH SCREEN IT WAS ON. A timeout on a button says nothing about where the
@@ -4720,6 +4858,7 @@ try {
     }
   } catch {
     /* the browser may already be gone */
+  }
   }
 } finally {
   await browser?.close().catch(() => {});

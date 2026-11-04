@@ -1,17 +1,22 @@
 // FILE: src/App.tsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useScroll, MotionConfig } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
 import { LandingPage } from './components/landingPage';
 import { CoverageStatsSection } from './components/CoverageStatsSection';
 import { FeedbackFormSection } from './components/FeedbackFormSection';
-import { DirectoryScreen } from './components/DirectoryScreen';
-import { FiguresEditor } from './components/figuresEditor';
-import { TerminalDashboard } from './components/TerminalDashboard';
-import { QualitativeIntro } from './components/qualitativeIntro';
-import { MarginNotesScreen } from './components/marginNotes';
-import { CompanyPage } from './components/companyPage';
+/* THE SCREENS BEYOND THE LANDING PAGE LOAD WHEN THEY ARE OPENED (build step
+   8, job 8.7). Imported here statically, they made the landing page's first
+   script 2.2MB — the workbook writer, the dashboard, the figures editor and
+   the screener among it — and evaluating it held the main thread for about
+   400ms before anyone could scroll. Each is now its own chunk. */
+const DirectoryScreen = lazy(() => import('./components/DirectoryScreen').then((m) => ({ default: m.DirectoryScreen })));
+const FiguresEditor = lazy(() => import('./components/figuresEditor').then((m) => ({ default: m.FiguresEditor })));
+const TerminalDashboard = lazy(() => import('./components/TerminalDashboard').then((m) => ({ default: m.TerminalDashboard })));
+const QualitativeIntro = lazy(() => import('./components/qualitativeIntro').then((m) => ({ default: m.QualitativeIntro })));
+const MarginNotesScreen = lazy(() => import('./components/marginNotes').then((m) => ({ default: m.MarginNotesScreen })));
+const CompanyPage = lazy(() => import('./components/companyPage').then((m) => ({ default: m.CompanyPage })));
 import { useNavigation } from './data/router';
 import { parseCompanyPath, companyPath, DEFAULT_TAB } from './data/companyRoute';
 import type { Verdict } from './data/qualitativeFactors';
@@ -23,7 +28,7 @@ import type { HeadAssignment } from './data/heads';
 import type { CorrectionReasons } from './data/corrections';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
-import { ScreenerScreen } from './components/screenerScreen';
+const ScreenerScreen = lazy(() => import('./components/screenerScreen').then((m) => ({ default: m.ScreenerScreen })));
 import { installMotionAttribute, useReducedMotion } from './design/motion';
 
 // `<html data-motion>` follows the operating system and the stored setting
@@ -462,6 +467,7 @@ export default function App() {
 
       {/* Screen Views */}
       <main id="main-content" tabIndex={-1} className="flex-grow focus:outline-none">
+        <Suspense fallback={null}>
         {/* THE COMPANY PAGE WINS WHEN THE PATH NAMES ONE. Checked before the
             screen values so that a deep link renders the company rather than
             the landing page that `currentScreen` still says is open. */}
@@ -583,6 +589,7 @@ export default function App() {
             onOpenCompanyPage={openCompanyPage}
           />
         )}
+        </Suspense>
       </main>
 
       {/* Institutional Footer */}
