@@ -226,6 +226,33 @@ The two copies of the index allow-list — `src/data/marketIndex.ts` and
 symbol and name by name, because a second copy that nothing checks is a second
 copy that goes stale.
 
+### One header, on one line, at the width it is tightest
+
+`dashboard.mts`. One header now serves every screen: the wordmark, four nav
+links, the way back to the figures, a ghost search and the theme control, in a
+bar 64px tall. The inner row is `flex items-center` with **no wrap**, so a bar
+that does not fit does not fold onto a second line — it OVERFLOWS, and the
+control at the end goes off the edge of the screen where nobody finds it.
+
+**1100px is where it is tightest**, which is why it is the width driven: the nav
+links and the figures label appear at the `lg` breakpoint (1024px) and the bar
+has least spare room just above it, while below 1024px the links are hidden and
+the label collapses to an icon. Four things are asserted at that width, on the
+two screens that do not carry the same controls — the routed company page (6
+controls) and the valuation screen (7): the row does not overflow its own box,
+every child sits inside the 64px band, no child passes the right edge of the
+window, and the document itself does not scroll sideways.
+
+**And the way back to the figures is there, in those words.** "Check the
+figures" with nothing yet corrected or moved, which is the state a reader
+looking at a valuation that seems wrong is in.
+
+Proved by breaking, two ways: the bar's gap widened to 200px, which is the shape
+of every header that has ever broken — it does not wrap, it overflows (**436px
+past the row on the valuation screen and 279px on a company screen**); and the
+label renamed to "Figures", which the saved-model walk reports as the way back
+to the figures being gone.
+
 ### One decimal rule per row
 
 `docs/VISUAL_SYSTEM.md` finding 1, severity H: a single row printed **9,439.0,
