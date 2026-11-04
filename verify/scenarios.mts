@@ -1505,6 +1505,39 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     }
   }
 
+  // -- the type steps agree too (build step 8, job 8.2)
+  //
+  // `SIZE` in tokens.ts and `--m-size-*` in the stylesheet's @theme block are
+  // the same scale written twice, for the same reason the colours are. A step
+  // changed in one and not the other would leave the size check in the
+  // browser (which reads the tokens) measuring against a scale the page is
+  // not set in.
+  const themeAt = css.indexOf('@theme {');
+  const theme = css.slice(themeAt, css.indexOf('\n}', themeAt));
+  let sizesCompared = 0;
+  for (const [step, expected] of Object.entries(T.SIZE as Record<string, string>)) {
+    sizesCompared++;
+    const name = `--m-size-${step}`;
+    const found = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(theme)?.[1]?.trim();
+    if (!found) {
+      bad++;
+      console.log(`  PROBLEM: src/index.css @theme declares no ${name}; src/design/tokens.ts SIZE.${step} is ${expected}`);
+    } else if (found.replace(/\s+/g, '') !== expected.replace(/\s+/g, '')) {
+      bad++;
+      console.log(`  PROBLEM: ${name} is ${found} in src/index.css and ${expected} in src/design/tokens.ts`);
+    }
+  }
+  for (const step of [...T.SIZE_STEPS_EVERYWHERE, ...T.SIZE_STEPS_LANDING_ONLY]) {
+    if (!(step in T.SIZE)) {
+      bad++;
+      console.log(`  PROBLEM: the step list names ${step}, which SIZE does not define`);
+    }
+  }
+  if (T.HERO_FIGURE_SIZE !== T.SIZE.title) {
+    bad++;
+    console.log(`  PROBLEM: the hero figure is ${T.HERO_FIGURE_SIZE}, not the title step; there is no 40px size (COMPANY_OVERVIEW D1)`);
+  }
+
   // -- nobody declares their own again
   const COMPONENTS = path.join(REPO, 'src', 'components');
   const strays: string[] = [];
@@ -1522,7 +1555,7 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   const counted = T.TEXT_ON_DARK.length * T.DARK_GROUNDS.length + T.TEXT_ON_PAPER.length * T.PAPER_GROUNDS.length;
   console.log(
     `  ${counted} text-and-ground pairs and ${boundaryPairs} boundary-and-ground pairs measured, ` +
-      `2 sequential ramps checked, ${Object.keys(T.CSS_VARIABLES).length} custom properties compared ` +
+      `2 sequential ramps checked, ${Object.keys(T.CSS_VARIABLES).length} custom properties and ${sizesCompared} type steps compared ` +
       `against src/index.css -- ${
         bad
           ? bad + ' PROBLEMS'

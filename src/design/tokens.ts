@@ -195,18 +195,36 @@ export const TYPE = {
 } as const;
 
 /**
- * THE WHOLE TYPE SCALE. Four steps, and nothing between them.
+ * THE WHOLE TYPE SCALE. Four steps for words, one for a tile's figure, and
+ * two the landing page alone may use — and nothing between them.
+ *
+ * The four (`title`, `section`, `body`, `small`) are DESIGN.md's. `tile` is the
+ * 24px figure step VISUAL_SYSTEM finding 8 approved. `lead` and `display` are
+ * the two landing-only steps from the same finding, and appear nowhere else.
+ * There is no 40px hero figure: COMPANY_OVERVIEW D1 maps it onto the nearest
+ * step, so a hero figure is set at the `title` size in the figure face
+ * (`docs/VISUAL_BUILD_PLAN.md` C5). `hero` is that alias, not a new size.
  *
  * Mirrored in `src/index.css` as `--m-size-*`, which also carries the block
- * that snaps every arbitrary size a screen still asks for onto one of these.
- * The explainer build script reads these rather than repeating them.
+ * that snaps every arbitrary size a screen still asks for onto one of these;
+ * `npm run verify` compares the two halves.
  */
 export const SIZE = {
   title: 'clamp(28px, 2.8vw, 36px)',
   section: '20px',
   body: '15px',
   small: '13px',
+  tile: '24px',
+  lead: '20px',
+  display: 'clamp(40px, 5vw, 64px)',
 } as const;
+
+/** A hero figure is the title size, in the figure face. Not a separate step. */
+export const HERO_FIGURE_SIZE = SIZE.title;
+
+/** The steps any screen may use, and the extra ones only the landing page may. */
+export const SIZE_STEPS_EVERYWHERE: (keyof typeof SIZE)[] = ['title', 'section', 'body', 'small', 'tile'];
+export const SIZE_STEPS_LANDING_ONLY: (keyof typeof SIZE)[] = ['lead', 'display'];
 
 /** A display heading, as both reading screens set one. */
 export const DISPLAY_HEADING = {

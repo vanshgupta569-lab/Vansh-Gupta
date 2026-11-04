@@ -89,6 +89,8 @@ const { buildWorkbook } = await import(`file:///${REPO}/src/data/excelExport.ts`
 // The families the design system declares, which the font-request check below
 // measures what the browser actually fetched against.
 const { TYPE } = await import(`file:///${REPO}/src/design/tokens.ts`);
+// The type steps, read from the tokens so the size check moves with them.
+const SIZE_TOKENS: any = await import(`file:///${REPO}/src/design/tokens.ts`);
 
 // Each variant of the paper company is reached under its own ticker, so one
 // intercept answers for all of them without the browser knowing which is
@@ -2096,7 +2098,119 @@ const contrastSeen = new Map<string, any>();
 let contrastScreens = 0;
 let contrastElements = 0;
 
+// ---- every size on the screen is one of the type steps --------------------
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.2. The remapping block in `index.css`
+// snaps the class names it knows onto the steps; a size can still arrive
+// through a class it does not list (`text-[60px]`), an inline style, a
+// Tailwind named step, or an SVG attribute, and only the computed style shows
+// it. So every element holding its own text, and every SVG <text>, is read
+// for its computed font size, which must be one of the steps allowed on that
+// screen, and never below the 13px floor.
+const TYPE_PROBE = `(() => {
+  const out = [];
+  const seen = new Set();
+  const own = (el) => Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim().length > 0);
+  for (const el of document.querySelectorAll('*')) {
+    const svg = el instanceof SVGElement;
+    if (svg ? !(el.tagName === 'text' || el.tagName === 'tspan') : !own(el)) continue;
+    if (svg && !own(el)) continue;
+    const st = getComputedStyle(el);
+    if (st.visibility === 'hidden' || st.display === 'none') continue;
+    const box = el.getBoundingClientRect();
+    if (!box.width || !box.height) continue;
+    // A visually-hidden accessibility label (clip to 1px) is not set type.
+    if (box.width <= 1 && box.height <= 1) continue;
+    const size = Math.round(parseFloat(st.fontSize) * 100) / 100;
+    out.push({ size, svg, tag: el.tagName.toLowerCase(), text: (el.textContent || '').trim().slice(0, 40), cls: String(el.getAttribute('class') || '').slice(0, 80) });
+  }
+  return { width: window.innerWidth, items: out };
+})()`;
+
+// Which screens are the landing page: the only ones the landing steps may use.
+const LANDING_TYPE_SCREEN = 'the landing page, loaded';
+
+// THE RATCHET (`docs/VISUAL_BUILD_PLAN.md` §3, decision V4). One off-step size
+// still reaches the screen from component code that no stylesheet can
+// overrule: the figures screen sets 14px in inline styles and in its own
+// embedded <style> block (`figuresEditor.tsx`). That is build step 9's job
+// (9.17), not this one. Until then the count of elements at each recorded size
+// may FALL but never RISE, and any off-step size not listed here fails at
+// once. Measured 2026-11-04 over every screen this check drives. Lower the
+// number when a job removes some; delete the entry when it reaches zero.
+const TYPE_RATCHET: Record<string, { count: number; why: string }> = {
+  '14': { count: 347, why: 'the figures screen, figuresEditor.tsx inline styles and its embedded <style>' },
+};
+
+const typeSeen = new Map<string, any>();
+const typeOffStep = new Map<string, number>();
+let typeScreens = 0;
+let typeElements = 0;
+
+// The steps as the browser resolves them at a given width, from the tokens
+// rather than from a list written here, so a step changed in tokens.ts moves
+// the check with it.
+const resolveStep = (value: string, width: number): number => {
+  const m = /clamp\(\s*([\d.]+)px\s*,\s*([\d.]+)vw\s*,\s*([\d.]+)px\s*\)/.exec(value);
+  if (m) return Math.min(Math.max(Number(m[1]), (Number(m[2]) * width) / 100), Number(m[3]));
+  return parseFloat(value);
+};
+const allowedSizes = (width: number, landing: boolean): number[] =>
+  [...SIZE_TOKENS.SIZE_STEPS_EVERYWHERE, ...(landing ? SIZE_TOKENS.SIZE_STEPS_LANDING_ONLY : [])].map(
+    (k: string) => resolveStep(SIZE_TOKENS.SIZE[k], width)
+  );
+
+async function readType(page: Page, where: string) {
+  const { width, items }: any = await page.evaluate(TYPE_PROBE);
+  typeScreens++;
+  const landing = where.startsWith(LANDING_TYPE_SCREEN);
+  const allowed = allowedSizes(width, landing);
+  for (const it of items) {
+    typeElements++;
+    const onStep = allowed.some((a) => Math.abs(a - it.size) < 0.05);
+    const below = it.size < 12.95;
+    if (onStep && !below) continue;
+    const ratcheted = !below && TYPE_RATCHET[String(it.size)];
+    if (ratcheted) {
+      typeOffStep.set(String(it.size), (typeOffStep.get(String(it.size)) ?? 0) + 1);
+      continue;
+    }
+    const key = `${where} | ${it.size}px${it.svg ? ' svg' : ''}`;
+    if (!typeSeen.has(key)) typeSeen.set(key, { ...it, where, width, allowed, below, count: 0 });
+    typeSeen.get(key).count++;
+  }
+}
+
+function reportType() {
+  console.log('\n=== every size on the screen is a type step ===');
+  for (const r of [...typeSeen.values()].sort((a, b) => a.where.localeCompare(b.where) || a.size - b.size)) {
+    problems++;
+    console.log(
+      `  PROBLEM: ${r.count} element${r.count === 1 ? '' : 's'} at ${r.size}px${r.svg ? ' (SVG text)' : ''} on ${r.where} ` +
+        `(width ${r.width}) — ${r.below ? 'under the 13px floor' : `not a step here (${r.allowed.map((a: number) => Math.round(a * 100) / 100).join(', ')})`}; ` +
+        `e.g. <${r.tag} class="${r.cls}"> "${r.text}"`
+    );
+  }
+  for (const [size, entry] of Object.entries(TYPE_RATCHET)) {
+    const now = typeOffStep.get(size) ?? 0;
+    if (now > entry.count) {
+      problems++;
+      console.log(`  PROBLEM: ${now} elements at ${size}px, more than the ${entry.count} recorded (${entry.why}); the ratchet only falls`);
+    } else if (now < entry.count) {
+      console.log(`  NOTE: ${now} elements at ${size}px, fewer than the ${entry.count} recorded: lower TYPE_RATCHET['${size}'] to ${now}`);
+    }
+  }
+  if (!typeSeen.size)
+    ok(
+      `${typeScreens} screens, ${typeElements.toLocaleString('en-GB')} pieces of type: every size a step, none under 13px` +
+        Object.entries(TYPE_RATCHET)
+          .map(([size, e]) => `; ratchet ${size}px at ${typeOffStep.get(size) ?? 0} of ${e.count} (${e.why})`)
+          .join('')
+    );
+}
+
 async function readContrast(page: Page, where: string) {
+  await readType(page, where);
   const found: any[] = await page.evaluate(CONTRAST_PROBE);
   contrastScreens++;
   contrastElements += await page.evaluate(
@@ -3714,6 +3828,21 @@ try {
   // a check that fails for the wrong reason, and would have gone on failing
   // after the fix.
   await checkFontRequests(page, requests);
+  // THE LANDING PAGE, LOADED. The contrast read labelled "the landing page"
+  // above runs before the first navigation and so measures an empty tab; the
+  // type check needs the real page, at the desktop width and at a phone's,
+  // because the landing steps are fluid. In a tab of its own, so the journey
+  // in `page` is not moved and the font check's request count is untouched.
+  {
+    const landing = await context.newPage();
+    await landing.goto(BASE, { waitUntil: 'networkidle' });
+    await landing.waitForTimeout(1500);
+    await readType(landing, LANDING_TYPE_SCREEN);
+    await landing.setViewportSize({ width: 390, height: 844 });
+    await landing.waitForTimeout(600);
+    await readType(landing, `${LANDING_TYPE_SCREEN}, at 390`);
+    await landing.close();
+  }
   await readContrast(page, 'the questions screen');
   await checkValued(page, 'Apple, the curated model', AAPL_SOURCE, apple.currencySymbol || '$');
   await readContrast(page, 'the analysis screen, curated');
@@ -3784,6 +3913,7 @@ try {
 
   // 7. Nothing anywhere on any of those screens is below WCAG AA.
   reportContrast();
+  reportType();
 } catch (error: any) {
   problems++;
   console.log(`\n  PROBLEM: the check could not finish — ${error?.message || error}`);

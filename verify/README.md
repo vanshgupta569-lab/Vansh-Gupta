@@ -697,6 +697,19 @@ holding text, on all five screens, has its computed colour compared with the
 first solid background behind it, against the floor its own measured size and
 weight call for. 2,285 elements, nothing below AA.
 
+**A sixth is size** (build step 8, job 8.2). Every element holding its own
+text, and every SVG `<text>`, is read for its computed font size on every
+screen the colour read covers, plus the landing page loaded in a tab of its
+own at 1400 and 390 (the colour read labelled "the landing page" runs before
+the first navigation, so it measures an empty tab). Each size must be a step
+from `SIZE` in `src/design/tokens.ts`, resolved at the screen's width — title,
+section, body, small and the 24px tile figure everywhere, lead and display on
+the landing page only — and none may be under 13px. One off-step size is
+held by a ratchet, `TYPE_RATCHET`: the figures screen's 14px, which comes from
+inline styles in `figuresEditor.tsx` no stylesheet can overrule. Its count
+(347) may fall and never rise; any other off-step size fails at once.
+Measured on 2026-11-04: 21 screens, 3,493 pieces of type.
+
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it
 waits. It must carry one of the notes from `didYouKnow.ts` — matched against the
