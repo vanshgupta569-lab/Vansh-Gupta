@@ -1399,7 +1399,90 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     for (const groundToken of T.DARK_GROUNDS)
       measure(`DARK.${token}`, T.DARK[token], `DARK.${groundToken}`, T.DARK[groundToken]);
   for (const token of T.TEXT_ON_PAPER)
-    measure(`PAPER.${token}`, T.PAPER[token], 'PAPER.ground', T.PAPER.ground);
+    for (const groundToken of T.PAPER_GROUNDS)
+      measure(`PAPER.${token}`, T.PAPER[token], `PAPER.${groundToken}`, T.PAPER[groundToken]);
+
+  // -- boundaries and chart marks: 3:1 (WCAG 1.4.11, docs/VISUAL_SYSTEM.md §7)
+  //
+  // The 4.5:1 floor is for words. A control's boundary, a focus indicator and a
+  // chart mark need 3:1, and the decorative hairline (`line`, 1.28:1) can be
+  // none of them — which is why `lineControl` exists. Measured on every ground
+  // the token is drawn on, the same way the words are.
+  let worstBoundary = { ratio: Infinity, what: '' };
+  let boundaryPairs = 0;
+  const measureBoundary = (token: string, colour: string, groundName: string, ground: string) => {
+    boundaryPairs++;
+    const r = contrast(colour, ground);
+    if (r < worstBoundary.ratio) worstBoundary = { ratio: r, what: `${token} on ${groundName}` };
+    if (r < T.BOUNDARY_FLOOR) {
+      bad++;
+      console.log(
+        `  PROBLEM: ${token} (${colour}) is ${r.toFixed(2)}:1 on ${groundName} (${ground}), ` +
+          `under the ${T.BOUNDARY_FLOOR}:1 floor for a boundary or a chart mark`
+      );
+    }
+  };
+  for (const token of T.BOUNDARY_ON_DARK)
+    for (const groundToken of T.DARK_GROUNDS)
+      measureBoundary(`DARK.${token}`, T.DARK[token], `DARK.${groundToken}`, T.DARK[groundToken]);
+  for (const token of T.BOUNDARY_ON_PAPER)
+    for (const groundToken of T.PAPER_GROUNDS)
+      measureBoundary(`PAPER.${token}`, T.PAPER[token], `PAPER.${groundToken}`, T.PAPER[groundToken]);
+  for (const series of T.CHART_SERIES)
+    for (const groundToken of T.CHART_GROUNDS)
+      measureBoundary(`CHART.${series.key}`, series.colour, `DARK.${groundToken}`, T.DARK[groundToken]);
+
+  // Five series is the hard cap, and no two may share a stroke: a chart has to
+  // read in greyscale, where two lines of different colour and the same dash
+  // are the same line.
+  if (T.CHART_SERIES.length > 5) {
+    bad++;
+    console.log(`  PROBLEM: ${T.CHART_SERIES.length} chart series; five is the cap`);
+  }
+  const dashes = T.CHART_SERIES.map((x: any) => x.dash);
+  const sharedDash = dashes.filter((d: string, i: number) => d !== 'solid' && dashes.indexOf(d) !== i);
+  // Two solid series are allowed only because the second sits on its own axis
+  // with its own direct label (the Two-Axis Rule); a third would not be.
+  if (sharedDash.length || dashes.filter((d: string) => d === 'solid').length > 2) {
+    bad++;
+    console.log(`  PROBLEM: chart series share a stroke (${dashes.join(' | ')}), so they cannot be told apart in greyscale`);
+  }
+
+  // -- the sequential ramps: in order, and honest about their pale steps
+  //
+  // On the dark ground the lightest step is the largest value; on paper the
+  // darkest is. A ramp out of order encodes a value backwards, and nothing on
+  // the screen would say so. The pale steps cannot reach 3:1, so the tokens
+  // name them (`SEQUENTIAL_NEEDS_OUTLINE`) and a cell drawn in one needs an
+  // outline and a printed value; the list must be exactly the steps that fail,
+  // or a step that needs an outline would go without one.
+  const ramps: [string, readonly string[], string[], 'up' | 'down'][] = [
+    ['dark', T.SEQUENTIAL.dark, T.DARK_GROUNDS.filter((g: string) => g !== 'overlay').map((g: string) => T.DARK[g]), 'up'],
+    ['paper', T.SEQUENTIAL.paper, T.PAPER_GROUNDS.map((g: string) => T.PAPER[g]), 'down'],
+  ];
+  for (const [name, steps, grounds, direction] of ramps) {
+    for (let i = 1; i < steps.length; i++) {
+      const rising = relLum(steps[i]) > relLum(steps[i - 1]);
+      if (rising !== (direction === 'up')) {
+        bad++;
+        console.log(
+          `  PROBLEM: the ${name} sequential ramp is out of order at step ${i + 1} (${steps[i - 1]} then ${steps[i]}); ` +
+            `on ${name === 'dark' ? 'the dark ground the lightest' : 'paper the darkest'} step must be the largest value`
+        );
+      }
+    }
+    const pale = steps
+      .map((c, i) => (grounds.some((g) => contrast(c, g) < T.BOUNDARY_FLOOR) ? i : -1))
+      .filter((i) => i >= 0);
+    const declared = [...(T.SEQUENTIAL_NEEDS_OUTLINE[name] as readonly number[])];
+    if (pale.join(',') !== declared.join(',')) {
+      bad++;
+      console.log(
+        `  PROBLEM: the ${name} ramp's steps under ${T.BOUNDARY_FLOOR}:1 are [${pale.map((i) => i + 1).join(', ')}] ` +
+          `but SEQUENTIAL_NEEDS_OUTLINE.${name} names [${declared.map((i) => i + 1).join(', ')}]`
+      );
+    }
+  }
 
   // The mark is not text and is not expected to clear the floor; what it must
   // not do is stop hanging in the gutter.
@@ -1422,6 +1505,39 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     }
   }
 
+  // -- the type steps agree too (build step 8, job 8.2)
+  //
+  // `SIZE` in tokens.ts and `--m-size-*` in the stylesheet's @theme block are
+  // the same scale written twice, for the same reason the colours are. A step
+  // changed in one and not the other would leave the size check in the
+  // browser (which reads the tokens) measuring against a scale the page is
+  // not set in.
+  const themeAt = css.indexOf('@theme {');
+  const theme = css.slice(themeAt, css.indexOf('\n}', themeAt));
+  let sizesCompared = 0;
+  for (const [step, expected] of Object.entries(T.SIZE as Record<string, string>)) {
+    sizesCompared++;
+    const name = `--m-size-${step}`;
+    const found = new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(theme)?.[1]?.trim();
+    if (!found) {
+      bad++;
+      console.log(`  PROBLEM: src/index.css @theme declares no ${name}; src/design/tokens.ts SIZE.${step} is ${expected}`);
+    } else if (found.replace(/\s+/g, '') !== expected.replace(/\s+/g, '')) {
+      bad++;
+      console.log(`  PROBLEM: ${name} is ${found} in src/index.css and ${expected} in src/design/tokens.ts`);
+    }
+  }
+  for (const step of [...T.SIZE_STEPS_EVERYWHERE, ...T.SIZE_STEPS_LANDING_ONLY]) {
+    if (!(step in T.SIZE)) {
+      bad++;
+      console.log(`  PROBLEM: the step list names ${step}, which SIZE does not define`);
+    }
+  }
+  if (T.HERO_FIGURE_SIZE !== T.SIZE.title) {
+    bad++;
+    console.log(`  PROBLEM: the hero figure is ${T.HERO_FIGURE_SIZE}, not the title step; there is no 40px size (COMPANY_OVERVIEW D1)`);
+  }
+
   // -- nobody declares their own again
   const COMPONENTS = path.join(REPO, 'src', 'components');
   const strays: string[] = [];
@@ -1436,14 +1552,156 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     for (const s of strays.slice(0, 10)) console.log(`           ${s}`);
   }
 
-  const counted = T.TEXT_ON_DARK.length * T.DARK_GROUNDS.length + T.TEXT_ON_PAPER.length;
+  const counted = T.TEXT_ON_DARK.length * T.DARK_GROUNDS.length + T.TEXT_ON_PAPER.length * T.PAPER_GROUNDS.length;
   console.log(
-    `  ${counted} token-and-ground pairs measured, ${Object.keys(T.CSS_VARIABLES).length} custom properties compared ` +
-      `against src/index.css -- ${bad ? bad + ' PROBLEMS' : `all clear ${T.CONTRAST_FLOOR}:1, worst ${worst.ratio.toFixed(2)}:1 (${worst.what})`}`
+    `  ${counted} text-and-ground pairs and ${boundaryPairs} boundary-and-ground pairs measured, ` +
+      `2 sequential ramps checked, ${Object.keys(T.CSS_VARIABLES).length} custom properties and ${sizesCompared} type steps compared ` +
+      `against src/index.css -- ${
+        bad
+          ? bad + ' PROBLEMS'
+          : `words all clear ${T.CONTRAST_FLOOR}:1, worst ${worst.ratio.toFixed(2)}:1 (${worst.what}); ` +
+            `boundaries and chart marks all clear ${T.BOUNDARY_FLOOR}:1, worst ${worstBoundary.ratio.toFixed(2)}:1 (${worstBoundary.what})`
+      }`
   );
   totalProblems += bad;
 }
 
+
+// ---- motion runs on the tokens, and only on the properties that may move ----
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.3, VISUAL_SYSTEM §12.2–12.4. Every
+// duration and curve is meant to be an `--m-*` token (`EASE`, `DURATION_MS`,
+// `MOTION_JS` in tokens.ts); nothing animates `all`; and only transform,
+// opacity, the chart's clip-path, the colours a hover changes and the
+// disclosure's height may move. The source is scanned, comments removed, for
+// three things:
+//
+//   all       `transition-all`, `transition: all`
+//   literal   a duration, delay or curve written out rather than taken from a
+//             token: Tailwind `duration-500` / `delay-100` / `ease-out`; a
+//             CSS transition or animation with `ms`, `s`, `cubic-bezier(` or a
+//             keyword curve; a motion `duration:` / `delay:` number or an
+//             `ease:` array or string
+//   property  something animated outside the allowed set: a bare Tailwind
+//             `transition` or `transition-shadow` / `transition-[…]`, a CSS
+//             transition on another property, a motion `animate` / `initial`
+//             / `exit` / `while…` key outside the set
+//
+// THE RATCHET (decision V4). Today's code breaks these in many files, and
+// fixing every component belongs to step 9, not to the job that writes the
+// tokens. So each file's count per category is recorded below and may FALL but
+// never RISE; a file not listed must be zero. Lower a number when a job
+// removes some; delete the file's entry when it reaches zero. Measured on
+// 2026-11-04.
+{
+  console.log('\n=== motion: one set of tokens, and only properties that may move ===');
+  const MOTION_RATCHET: Record<string, { all?: number; literal?: number; property?: number }> = {
+    'src/components/CoverageStatsSection.tsx': { literal: 2 },
+    'src/components/EtymologySection.tsx': { literal: 22, property: 2 },
+    'src/components/HeroSection.tsx': { all: 1, literal: 19, property: 2 },
+    'src/components/MechanismSection.tsx': { literal: 17 },
+    'src/components/MethodologyGrid.tsx': { all: 1, literal: 4 },
+    'src/components/TerminalDashboard.tsx': { literal: 9, property: 2 },
+    'src/components/figuresEditor.tsx': { literal: 1 },
+    'src/components/figuresHint.tsx': { literal: 2 },
+    'src/components/instrument.tsx': { literal: 3 },
+    'src/components/landingPage.tsx': { all: 1, literal: 1 },
+    'src/components/motionPrimitives.tsx': { literal: 16, property: 1 },
+    'src/index.css': { literal: 3 },
+  };
+
+  const ALLOWED_CSS = new Set([
+    'transform', 'translate', 'scale', 'rotate', 'opacity', 'clip-path',
+    'color', 'background-color', 'border-color', 'outline-color', 'height', 'none',
+  ]);
+  const ALLOWED_MOTION = new Set([
+    'opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotate', 'clipPath',
+    'translateX', 'translateY', 'transform', 'color', 'backgroundColor', 'borderColor', 'transition',
+    // The disclosure's height is the one height animation VISUAL_SYSTEM §4
+    // allows. A scan cannot tell a disclosure from a bar growing, so height is
+    // allowed everywhere and the bars are left to the step-9 review.
+    'height',
+  ]);
+  const count = (text: string, re: RegExp) => (text.match(re) || []).length;
+  const scan = (raw: string) => {
+    const text = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const all = count(text, /\btransition-all\b|\btransition(?:-property)?\s*:\s*['"`]?\s*all\b/g);
+    let literal =
+      count(text, /(?<![\w-])(?:duration|delay)-\d+\b/g) +
+      count(text, /(?<![\w-])ease-(?:in-out|in|out|linear)\b/g) +
+      // Not after a hyphen: `animation-duration:` is CSS, counted below, once.
+      count(text, /(?<![\w-])(?:duration|delay|repeatDelay)\s*:\s*(?:reduced\s*\?\s*0\s*:\s*)?\d*\.?\d/g) +
+      count(text, /(?<![\w-])ease\s*:\s*(?:\[|['"])/g);
+    // A bare Tailwind `transition` (which moves box-shadow and filter among
+    // others) only counts inside a class list: a quoted string of several
+    // words, at least one of them shaped like a utility (`px-3`, `hover:…`).
+    // A label such as the Financials tab's "11M transition" column is not one.
+    let property = 0;
+    for (const q of text.matchAll(/(["'`])([^"'`\n]*?)\1/g))
+      if (/\s/.test(q[2].trim()) && /(?:^|\s)[a-z0-9]+(?::[\w-]+)*-[\w\[\]#./%-]+/.test(q[2]))
+        property += count(q[2], /(?<![\w-])transition(?:-shadow|-\[[^\]]*\])?(?![\w-])/g);
+    for (const m of text.matchAll(/\b(transition|animation)(-duration|-delay|-timing-function|-property)?\s*:\s*([^;}\n]*)/g)) {
+      const value = m[3].replace(/var\(--m-[a-z-]+\)/g, '');
+      if (m[2] !== '-property' && /\d*\.?\d+m?s\b|cubic-bezier\(|\b(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)\b/.test(value))
+        literal++;
+      if (m[1] === 'transition' && (!m[2] || m[2] === '-property')) {
+        for (const part of value.split(',')) {
+          const prop = part.trim().replace(/^['"`]/, '').split(/\s+/)[0];
+          if (prop && /^[a-z-]+$/.test(prop) && prop !== 'all' && !ALLOWED_CSS.has(prop)) property++;
+        }
+      }
+    }
+    for (const m of text.matchAll(/\b(?:animate|initial|exit|whileHover|whileTap|whileInView|whileFocus)\s*=\s*\{\{([^}]*)\}\}/g))
+      for (const k of m[1].matchAll(/(\w+)\s*:/g)) if (!ALLOWED_MOTION.has(k[1])) property++;
+    return { all, literal, property };
+  };
+
+  const SRC = path.join(REPO, 'src');
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(tsx?|css)$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(SRC);
+
+  let bad = 0;
+  const totals = { all: 0, literal: 0, property: 0 };
+  const recorded = { all: 0, literal: 0, property: 0 };
+  const found: Record<string, { all: number; literal: number; property: number }> = {};
+  for (const file of files) {
+    const rel = path.relative(REPO, file).split(path.sep).join('/');
+    // The tokens are where the values are SUPPOSED to be written.
+    if (rel === 'src/design/tokens.ts') continue;
+    const got = scan(fs.readFileSync(file, 'utf8'));
+    if (got.all || got.literal || got.property) found[rel] = got;
+    for (const k of ['all', 'literal', 'property'] as const) {
+      totals[k] += got[k];
+      const limit = MOTION_RATCHET[rel]?.[k] ?? 0;
+      if (got[k] > limit) {
+        bad++;
+        console.log(
+          `  PROBLEM: ${rel} has ${got[k]} ${k === 'all' ? '"transition: all"' : k === 'literal' ? 'duration or curve literal' : 'animated property outside the allowed set'}` +
+            `${got[k] === 1 ? '' : 's'}, more than the ${limit} recorded; the ratchet only falls`
+        );
+      } else if (got[k] < limit) {
+        console.log(`  NOTE: ${rel} is down to ${got[k]} ${k}, from ${limit}: lower MOTION_RATCHET to match`);
+      }
+    }
+  }
+  for (const entry of Object.values(MOTION_RATCHET))
+    for (const k of ['all', 'literal', 'property'] as const) recorded[k] += entry[k] ?? 0;
+  if (process.env.MOTION_MEASURE) console.log('  MEASURED ' + JSON.stringify(found));
+
+  console.log(
+    `  ${files.length - 1} source files scanned: ${totals.all} "transition: all", ${totals.literal} duration or curve literals, ` +
+      `${totals.property} animated properties outside the allowed set (recorded ${recorded.all} / ${recorded.literal} / ${recorded.property}) -- ` +
+      `${bad ? bad + ' PROBLEMS' : 'none above the ratchet'}`
+  );
+  totalProblems += bad;
+}
 
 // ---------------------------------------------------------------------------
 // ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE

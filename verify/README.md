@@ -95,7 +95,25 @@ nowhere better to put them and each is cheap:
   mark's `-0.21em` right margin is checked, since that is the whole reason it
   has zero advance width. And no component may declare a palette colour of its
   own, which is the habit that produced eight copies of the same six hex codes
-  and an eyebrow at 3.90:1 on every screen.
+  and an eyebrow at 3.90:1 on every screen. Since build step 8 job 8.1 the
+  grounds include the overlay and the paper panel, and a second floor of 3:1
+  (WCAG 1.4.11) covers the control boundary (`lineControl`, on dark and on
+  paper) and every chart series; the five series must not share a stroke; and
+  each sequential ramp must run in order (lightest largest on dark, darkest
+  largest on paper) with its pale steps — those under 3:1 — named exactly in
+  `SEQUENTIAL_NEEDS_OUTLINE`, because a cell in one needs an outline. Since
+  job 8.2 the seven type steps in `SIZE` are compared with `--m-size-*`, and
+  the hero figure must be the title step; since job 8.3 the motion tokens
+  (`--m-ease-*`, `--m-dur-*`) are part of the same mirror.
+- **motion runs on the tokens** (build step 8, job 8.3). Every source file
+  under `src/` except the tokens is scanned, comments removed, for
+  `transition: all`, for a duration, delay or curve written out instead of
+  taken from a token, and for anything animated outside transform, opacity,
+  clip-path, the hover colours and the disclosure's height. Today's code
+  breaks these in twelve files, so the check is a ratchet (decision V4):
+  `MOTION_RATCHET` holds each file's count per category as measured on
+  2026-11-04 — 3, 99 and 7 in total — and a file may fall below its number
+  and never rise above it; a file not listed must be zero.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in
@@ -836,6 +854,19 @@ with. Nothing short of reading the computed style finds that. So every element
 holding text, on all five screens, has its computed colour compared with the
 first solid background behind it, against the floor its own measured size and
 weight call for. 2,285 elements, nothing below AA.
+
+**A sixth is size** (build step 8, job 8.2). Every element holding its own
+text, and every SVG `<text>`, is read for its computed font size on every
+screen the colour read covers, plus the landing page loaded in a tab of its
+own at 1400 and 390 (the colour read labelled "the landing page" runs before
+the first navigation, so it measures an empty tab). Each size must be a step
+from `SIZE` in `src/design/tokens.ts`, resolved at the screen's width — title,
+section, body, small and the 24px tile figure everywhere, lead and display on
+the landing page only — and none may be under 13px. One off-step size is
+held by a ratchet, `TYPE_RATCHET`: the figures screen's 14px, which comes from
+inline styles in `figuresEditor.tsx` no stylesheet can overrule. Its count
+(347) may fall and never rise; any other off-step size fails at once.
+Measured on 2026-11-04: 21 screens, 3,493 pieces of type.
 
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it
