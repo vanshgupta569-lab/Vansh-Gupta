@@ -262,7 +262,7 @@ Each is a few lines of work and disproportionately useful.
 | Residual income, banks and financials | LIVE | Parent's common-shareholder basis (`e277bf5`, `2d02f95`). |
 | Reverse DCF | LIVE | Solves against the perpetuity value. **Surface it for retail** (section 7): "at today's price, buyers are assuming X% growth for ten years; it has managed Y%." |
 | Refusal logic | LIVE | |
-| Health score | LIVE | |
+| ~~Health score~~ | **DECIDED AGAINST** | Removed 4 November 2026 (`docs/STUDIO_SPEC.md` S2). The score, its radar and its badge go; the five ratios behind them stay, as plain ratios with their formulas. Section 12 carries the reason. |
 | Batch mode | LIVE | |
 | Terminal values shown separately | LIVE | `933fc2c` |
 | Systematic company sweep | LIVE | `verify/`, `48c95b6` |
@@ -330,7 +330,7 @@ The Excel export is what a paying user is most likely to value. Nobody else supp
 | Named ranges and input validation | QUEUED | |
 | Automated calendarisation | QUEUED | Align differing fiscal year ends to a common twelve months. Needed by the peer workbook. |
 | Native Excel charts | BLOCKED | ExcelJS has no chart API. Data bars are the substitute; hand-written chart XML is the route if it matters. |
-| Tearsheet, the one-pager | QUEUED | A print layout over figures already computed. |
+| Tearsheet, the one-pager | QUEUED | A print layout over figures already computed, which computes nothing itself. **D1 confirmed 4 November 2026** (`docs/TEARSHEET_SPEC.md`): the THREE APPROACHES SIDE BY SIDE on the one-pager, ownership on the two-pager. One layout in a shared 680 × 943px box for A4 and US Letter (D2); rupee companies in crore and everything else in million or billion (D3); the browser's print-to-PDF first and a server download after (D6). |
 | **Peer spreading workbook** | QUEUED | Target and up to ten peers on identical formula-driven tabs. Depends on the standard chart of accounts. |
 | **Excel add-in** | IDEA | Professionals live in Excel, not in browser tabs. Refresh a model, pull a figure, set a judgement, from inside the sheet. This is how the terminals became habits rather than websites. |
 | Excel round trip | IDEA | Take the model out, work on it, bring it back. |
@@ -477,6 +477,7 @@ The wedge: nobody supplies a ready-built, convention-formatted, live three-state
 | Branding the output ("prepared using Marginalia") | A customer who must advertise the tool could have used the tool themselves. It devalues the deliverable. Dropped 28 September 2026. |
 | Take-private screening filter | Needs a full universe of fundamentals we will not have until the data layer is complete. Revisit then. |
 | Scraping court records for litigation | Replaced by what the company disclosed in its own filings. |
+| The financial health score, its radar and its badge | **Dropped 4 November 2026** (`docs/STUDIO_SPEC.md` S2, approved by Nihar). A score is an OPINION ON A SECURITY wearing the clothes of a measurement: five ratios went in, one shape and one letter came out, and nothing on the screen could say what the weighting was or why those five were the five. Standing decision 6 is to explain mechanics, not merit, and `docs/FEATURES.md` had already answered Simply Wall St's snowflake with factual checks rather than a scored shape; `docs/VISION.md` never mentioned it at all. **The five ratios stay** — each as a plain ratio with its formula and its own figures, which is the part a reader can check. It was listed LIVE in section 3 and is struck through there. |
 | Averaging the three approaches, or the two terminal values | They answer different questions. Side by side, always. |
 | Licensed precedent data displayed on the site | Unless a written derived-data permission exists. |
 | Hand-built company models on the site | Models are engine-built only. |

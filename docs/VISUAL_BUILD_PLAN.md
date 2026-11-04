@@ -55,7 +55,7 @@ In this order; the first rule that applies wins.
 | C5 | COMPANY_OVERVIEW §1.3 / its D1 (and TABLES D13) | Body defines Title-md 20, Title-lg 28, hero figure 40/44. D1: map 20, 28 and 40 onto DESIGN.md steps plus the 24 step; nearest step; no new sizes. TABLES_SPEC body calls D1 "still open" while its own D13 settles it. | **No 40px size.** Title-md = Section (20); Title-lg = Title (`clamp(28px, 2.8vw, 36px)`); hero figure = Source Sans 3 600 tabular at the Title size (36 at 1440, 28 at 390), the nearest step. STUDIO_SPEC §1.4/§4.2 corrected in this commit to say so. | 2, 3 |
 | C6 | VISUAL_SYSTEM §4 (chart draw-in 640ms) / VISUAL_SYSTEM §5 (page-load sequences ≤ 600ms) / COMPANY_OVERVIEW D7 | The system's own draw-in token breaks its own 600ms page-load cap. D7: draw-in 400ms + 200ms fill. | **400 + 200ms on every chart** (Overview, studio, tearsheet preview); `--m-dur-chart` is redefined as 400. Settles STUDIO S7. | 3, 6 |
 | C7 | VISUAL_SYSTEM §4 rule / its own table | "Exit = 70% of enter, always", but the page transition is out 120 / in 280 (43%). | **The table's numbers** (120 / 280); the rule is corrected to "exit ≈ 70% of enter unless a value is given". | 6 |
-| C8 | DESIGN.md spacing tokens / COMPANY_OVERVIEW §1.1 (PROPOSED, not decided) / LANDING, NAV, TABLES | DESIGN.md: 1, 4, 8, 12, 20, 24, 40, 96. COMPANY_OVERVIEW proposes 4, 8, 12, 16, 24, 32, 48, 64 "no other values" (never decided). The specs use both sets (16, 32, 48, 64 in NAV/TABLES/COMPANY; 20, 40 in DESIGN and LANDING). | **The union**: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96. Nothing in any spec then needs a value outside it. **PROPOSED — needs Nihar** (V1). | 5 (DESIGN wins on its own values; the proposal only adds) |
+| C8 | DESIGN.md spacing tokens / COMPANY_OVERVIEW §1.1 (PROPOSED, not decided) / LANDING, NAV, TABLES | DESIGN.md: 1, 4, 8, 12, 20, 24, 40, 96. COMPANY_OVERVIEW proposes 4, 8, 12, 16, 24, 32, 48, 64 "no other values" (never decided). The specs use both sets (16, 32, 48, 64 in NAV/TABLES/COMPANY; 20, 40 in DESIGN and LANDING). | **The union**: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96. Nothing in any spec then needs a value outside it. **APPROVED 4 Nov 2026** (V1). | 5 (DESIGN wins on its own values; the proposal only adds) |
 | C9 | VISUAL_SYSTEM §3.2 (price = S1 = ink; the only categorical oxblood is the this-model forecast line) / the football field in code, STUDIO_SPEC and TEARSHEET_SPEC drafts | Code draws the income bars oxblood; my drafts put the current-price line in accent-text. | **Price line ink** (paper-ink on paper); no oxblood in the football field. STUDIO_SPEC §4.3 and TEARSHEET_SPEC §2.6 corrected in this commit. | 4 |
 | C10 | VISUAL_SYSTEM §3.1 (one selected state: raised ground, 1px accent border, ink, 600) / COMPANY_OVERVIEW §1.5 (2px underline on the company tab row) / LEARN_STATES draft (2px accent bar on the current note and menu row) | Three "current" markers. | **One selected state**, with the single exemption VISUAL_SYSTEM itself grants: the 2px active-tab underline on the company tab row. LEARN_STATES §2.5 and §4 and STUDIO §3.2 corrected in this commit. The Paper raised ground is `#FAF9F5` (VISUAL_SYSTEM §2 Paper panel). | 4 |
 | C11 | LANDING_SPEC header (wordmark, three links, ghost Search) / NAV_SEARCH §2 (one header on every screen: seven sections, Search, no clock) | Two headers for the landing page. | **NAV_SEARCH's one header.** It is later (1 Nov) and "one header on every screen" is its whole point. Until job 9.1 ships, the landing job leaves the existing header in place rather than build LANDING's version and replace it a week later. | 3, 4 |
@@ -67,7 +67,7 @@ In this order; the first rule that applies wins.
 | C17 | DESIGN.md PriceChart axis 11px / VISUAL_SYSTEM §3.2 CHANGE | Axis size. | **13px.** | 5 |
 | C18 | DESIGN.md "uppercase mono" on buttons, chips, pills, nav / DESIGN.md's own Uniform Label rule and 13px floor / VISUAL_SYSTEM debt list | DESIGN.md contradicts itself. | **Sentence case, Source Sans 3, 13px** (already enforced in `index.css` by cancelling `.uppercase`). Literal capitals in source text (`NOTHING TO SHOW`, `FINANCIAL HEALTH SCORE`) are not reached by that and are fixed per screen. | 5 |
 | C19 | DESIGN.md "Do set every number with `.font-figure`… including any number that tweens" / VISUAL_SYSTEM §5 CHANGE ("no number tweens") | Tweening. | **No number tweens** (`TweenNumber`, `FlashOnChange` go). | 5 |
-| C20 | Missing-value notation: COMPANY_OVERVIEW §2.4 (words: Not reported `—`, Not applicable, Not meaningful) / TABLES D4 (`—`, `n/a`, `†` derived, `‡` restated) / SCREENER_SPEC rule 4 (value · `n.m.` · not available) / TEARSHEET (`c`, `r`, italic modelled) | Four notations. | **Scoped, one meaning each**: in a table cell, TABLES D4 symbols (`—` not reported, `n/a` not applicable, `n.m.` not meaningful — added to D4's set because SCREENER rule 4 and COMPANY_OVERVIEW both need it, `†` derived, `‡` restated); on a tile or in prose, the words; on paper, TABLES D4 symbols plus TEARSHEET's `c` and `r` for the user's own corrections and reclassifications, which D4 does not cover. Never `n/a` for "not available". **PROPOSED — needs Nihar** (V2), because it extends TABLES D4. | 6 |
+| C20 | Missing-value notation: COMPANY_OVERVIEW §2.4 (words: Not reported `—`, Not applicable, Not meaningful) / TABLES D4 (`—`, `n/a`, `†` derived, `‡` restated) / SCREENER_SPEC rule 4 (value · `n.m.` · not available) / TEARSHEET (`c`, `r`, italic modelled) | Four notations. | **Scoped, one meaning each**: in a table cell, TABLES D4 symbols (`—` not reported, `n/a` not applicable, `n.m.` not meaningful — added to D4's set because SCREENER rule 4 and COMPANY_OVERVIEW both need it, `†` derived, `‡` restated); on a tile or in prose, the words; on paper, TABLES D4 symbols plus TEARSHEET's `c` and `r` for the user's own corrections and reclassifications, which D4 does not cover. Never `n/a` for "not available". **APPROVED 4 Nov 2026** (V2), because it extends TABLES D4. | 6 |
 | C21 | TABLES D2 (rows 40 desktop, 52 phone) / LEARN_STATES (note index rows 40 / 48) / NAV_SEARCH (menu rows 36 desktop, 48 phone) | Row heights. | **No conflict once scoped**: D2 governs data-table rows; navigation lists keep their own spec's height. Recorded so the check for D2 is scoped to tables. | 6 |
 | C22 | VISUAL_SYSTEM §4 (reveal on scroll allowed on landing and /learn) / LEARN_STATES L6 (not on article body) | Scope of reveal. | **LEARN_STATES' narrower rule**, which is permitted (it uses less motion than allowed). Proposed as L6. | 6 |
 | C23 | LANDING decision 3 (true counts read at build) / LANDING §2.1 sub-headline ("up to five years of a company's own filings") / TABLES and TEARSHEET (ten years) | The page claims five years while the Financials tab and tearsheet show up to ten. | **The claims register** (LANDING §2.3): the number is read from what the build actually holds, with its date. The sentence is rewritten from the register in job 8.7. | 2 |
@@ -191,21 +191,23 @@ verify:payloads` done first.
 
 Documentation-only jobs (this file, the specs) run anywhere and need no suite.
 
-## 5. Decisions for Nihar
+## 5. Decisions (Nihar, 4 November 2026)
 
-- **V1. PROPOSED — needs Nihar.** Spacing scale = the union of DESIGN.md's
+**V1 to V6 are approved.**
+
+- **V1. APPROVED** (Nihar, 4 November 2026). Spacing scale = the union of DESIGN.md's
   and the specs' values: 4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 96 (C8).
-- **V2. PROPOSED — needs Nihar.** Missing-value notation scoped by place:
+- **V2. APPROVED** (Nihar, 4 November 2026). Missing-value notation scoped by place:
   symbols in table cells (TABLES D4 plus `n.m.`), words on tiles and in
   prose, TEARSHEET's `c` and `r` added on paper (C20).
-- **V3. PROPOSED — needs Nihar.** `--m-dur-chart` becomes 400ms everywhere
+- **V3. APPROVED** (Nihar, 4 November 2026). `--m-dur-chart` becomes 400ms everywhere
   (C6), settling STUDIO S7.
-- **V4. PROPOSED — needs Nihar.** Ratchet checks for motion literals and
+- **V4. APPROVED** (Nihar, 4 November 2026). Ratchet checks for motion literals and
   animated properties until step 9 removes the last one (section 3), rather
   than fixing every component in job 8.3.
-- **V5. PROPOSED — needs Nihar.** The landing page keeps today's header until
+- **V5. APPROVED** (Nihar, 4 November 2026). The landing page keeps today's header until
   job 9.1 builds NAV_SEARCH's single header, instead of building LANDING's
   three-link header first (C11).
-- **V6. PROPOSED — needs Nihar.** DESIGN.md to be updated for C4, C14–C19 by
+- **V6. APPROVED** (Nihar, 4 November 2026). DESIGN.md to be updated for C4, C14–C19 by
   the session that owns it; until then the approved VISUAL_SYSTEM CHANGE items
   are treated as law (rule 5).

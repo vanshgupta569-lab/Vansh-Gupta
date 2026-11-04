@@ -130,8 +130,11 @@ components:
     rounded: "{rounded.none}"
     padding: "4px 10px"
   chip-ticker-selected:
-    backgroundColor: "{colors.accent}"
+    # C15: the one selected state, not a solid oxblood ground.
+    backgroundColor: "{colors.panel}"
+    borderColor: "{colors.accent}"
     textColor: "{colors.ink}"
+    fontWeight: 600
     typography: "{typography.label}"
     rounded: "{rounded.none}"
     padding: "4px 10px"
@@ -199,10 +202,31 @@ square.
 - Two grounds, two ramps: a warm near-black instrument, warm paper for reading.
 - Hairlines and tonal layering only. Not one `box-shadow` in the build.
 - Square corners. Radius appears only as a full circle, on a status dot or a diagram ring.
-- Every figure tabular; every title Newsreader at 600, cut tight. One pairing, four sizes.
+- Every figure tabular; every title Newsreader at 600, cut tight. One pairing,
+  six product steps and two that are landing-only.
 - One red, one green, one amber. Their rarity is what makes them mean anything.
 - A red square, not a full stop, ends a heading.
 - Even the surfaces nobody draws — scrollbar, selection, caret, focus ring — come from the palette.
+
+## Where this file disagreed with the specs, and how it was settled
+
+`docs/VISUAL_BUILD_PLAN.md` §2 put every contradiction between this file and the
+later specs in one table and said which rule wins. **Nihar approved its
+decisions V1 to V6 on 4 November 2026**, and the seven that are this file's are
+settled here rather than left to be rediscovered:
+
+| | What it was | What it is |
+|---|---|---|
+| **C4** | Four steps and nothing between them; a tile figure at 17px | Six product steps plus two landing-only — the Typography section's own table |
+| **C14** | Said to be read oxblood in an earlier draft | **2px ink at 2px offset**, which is what the Buttons and Inputs entries below already say; recorded so the two documents cannot drift again |
+| **C15** | A selected ticker chip on a solid oxblood ground | **The one selected state**: raised ground, 1px accent border, ink at 600 |
+| **C16** | "A computed figure" permitted in read oxblood | **A figure is always ink**, except the changed figure after an edit |
+| **C17** | A chart axis at 11px | **13px**, the small step; there is no size below it |
+| **C18** | Uppercase mono labels on buttons, chips, pills and nav, against this file's own Uniform Label Rule | **Sentence case, Source Sans 3, 13px** |
+| **C19** | "Including any number that tweens" | **No number tweens**; `TweenNumber` and `FlashOnChange` go |
+
+The rest of that table settles contradictions between the specs rather than with
+this file, and `docs/VISUAL_BUILD_PLAN.md` is where they live.
 
 ## Colors
 
@@ -215,7 +239,10 @@ one amber permitted as colour.
   the page black — right for a square, a rule or a fill, illegible as words. It
   is never text.
 - **Read Oxblood** (`colors.accent-text`): the same red lifted to carry words —
-  eyebrows, the ticker lockup, section numbers, links, a computed figure — and
+  eyebrows, the ticker lockup, section numbers, links — but **never a figure**
+  (C16, approved 4 November 2026: a figure is always ink, with the single
+  exception of the changed figure after an edit, which VISUAL_SYSTEM §3.1 owns).
+  This entry said "a computed figure" until then, and
   also the caret. 5.08:1 on the page and 4.87:1 on
   a panel. The lift holds hue at 3° and moves lightness, taking saturation from
   51% to 56% (nearer the mark's own 64%), because lightening a red at fixed
@@ -312,14 +339,29 @@ render it from a fallback on a page of Indian accounts. Indian digit grouping
 the digits; what the face has to supply is the grouping commas at tabular
 width, which both do.
 
-### The four steps, and nothing between them
+### The steps, and nothing between them
+
+**SIX PRODUCT STEPS AND TWO THAT ARE LANDING-ONLY** (`docs/VISUAL_BUILD_PLAN.md`
+C4, approved by Nihar 4 November 2026). It was four and nothing between them
+until then, with the tile figure at 17px, and `src/index.css` remapped
+`text-[24px]` onto the Section step so a 24px tile figure could not be written
+at all. VISUAL_SYSTEM finding 8 adds the tile-figure step and the two the
+landing page needs; this table is the whole set, and the rule that a size
+outside it cannot be introduced by writing one is unchanged.
 
 | Step | Size | Face | What it is |
 |---|---|---|---|
 | **Title** | `clamp(28px, 2.8vw, 36px)` | Newsreader 600 | The one heading that names a page |
 | **Section** | 20px | Newsreader 600 | A heading inside a page |
+| **Tile figure** | 24px | Source Sans 3 600 tabular | The one figure a tile exists to show |
 | **Body** | 15px | Source Sans 3 400 | Paragraphs, table rows, controls |
 | **Small** | 13px | Source Sans 3 400 | Captions, labels, secondary lines |
+| **Lead** | 20px / 1.5 | Source Sans 3 400 | LANDING ONLY — the sentence under the hero |
+| **Display** | `clamp(40px, 5vw, 64px)` | Newsreader 600 | LANDING ONLY — the hero title |
+
+**No 40px size anywhere else** (C5): a hero figure on a product screen is the
+Title step — Source Sans 3 600 tabular, 36px at 1440 and 28px at 390 — which is
+the nearest step to the 40/44 the drafts asked for.
 
 **Measured before this replaced the old ramp: the site asked for twenty-five
 sizes between 9px and 62px** — 91 uses of 13px, 90 of 12px, 86 of 11px, 74 of
@@ -352,6 +394,13 @@ the numbers. Source Sans 3's tabular figures line up exactly as well, and the
 prose beside them stays prose. `.font-figure` is the former `.font-mono`,
 renamed across 343 call sites in 30 files, because a class that said "mono"
 while resolving to a proportional face would be a lie in the markup.
+
+**AND NO NUMBER TWEENS** (C19, approved 4 November 2026). An earlier form of
+this rule said to set every number with `.font-figure` *including any number
+that tweens*, which read as permission to tween one. VISUAL_SYSTEM §5 forbids
+it: a figure counting up is motion with nothing to explain, and a reader cannot
+copy a number that is still moving. `TweenNumber` and `FlashOnChange` go with
+the rule.
 
 **The Uniform Label Rule.** A label is a word, and it is set like one: sentence
 case, at the small step, at weight 500, with normal letter-spacing. **No
@@ -468,8 +517,12 @@ one.
 ## Components
 
 ### Buttons
-- **Shape:** square (0px radius), 1px hairline border, uppercase mono label with
-  wide tracking.
+- **Shape:** square (0px radius), 1px hairline border, **sentence-case label in
+  Source Sans 3 at the small step** — The Uniform Label Rule, which this entry
+  contradicted until 4 November 2026 (C18). `index.css` already cancels
+  `.uppercase`, so the contradiction was in the words rather than in the build;
+  a literal capital in source text (`NOTHING TO SHOW`) is not reached by that
+  and is fixed per screen.
 - **Primary:** an oxblood border over an oxblood wash at 20%, ink label, 14px
   horizontal / 8px vertical padding, a 14px inline SVG icon at an 8px gap. Used
   for the one action a screen exists for — downloading the workbook.
@@ -481,9 +534,15 @@ one.
   label goes ink. This is the default for a secondary action.
 
 ### Chips
-- **Style:** ticker chips are square, 10px / 4px padding, uppercase mono.
-  Unselected is the panel ground with a hairline border and a muted label;
-  selected is a solid oxblood ground with an ink label at weight 600.
+- **Style:** ticker chips are square, 10px / 4px padding, sentence case at the
+  small step (C18). Unselected is the panel ground with a hairline border and a
+  muted label; **selected is THE ONE SELECTED STATE** — the raised ground, a 1px
+  accent border, an ink label at weight 600 (C15, approved 4 November 2026). It
+  was a solid oxblood ground here and the one selected state everywhere else,
+  which is two answers to the same question; the frontmatter token
+  `chip-ticker-selected` is corrected with it. The single exemption
+  VISUAL_SYSTEM grants itself stands: the 2px active-tab underline on the
+  company tab row.
 - **State:** hover on an unselected chip lifts the border to quiet at 40% and the
   label to ink. The "+ All" escape chip carries read oxblood rather than muted,
   marking it as the one that leaves the set.
@@ -689,6 +748,9 @@ tabular; the crosshair is a quiet 3/3 dash with a 3px ink dot. The readout
 sits in a fixed place under the chart rather than following the pointer: a
 tooltip that moves makes the eye chase it, and the figures it carries are
 meant to be compared with the ones above.
+
+**THE AXIS IS SET AT THE SMALL STEP**, 13px, not 11px (C17, approved
+4 November 2026). An axis label is a label, and the scale has no size below 13.
 
 **THE TWO-AXIS RULE.** The price owns the left axis and an overlay owns the
 right, always, and an overlay is drawn in amber so it cannot be mistaken for

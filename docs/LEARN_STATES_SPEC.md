@@ -19,7 +19,10 @@ Nihar** = my choice where the docs are silent; every one is listed in section
   `scripts/buildExplainers.mts` (the eight `/learn/` pages and their
   stylesheet), `content/explainers/*.md`, `src/data/explainers.ts`,
   `src/components/marginNotes.tsx`, `src/components/marginNotesSection.tsx`,
-  `src/data/marginNotes.ts` (20 notes), `src/App.tsx`, `src/data/router.ts`,
+  `src/data/marginNotes.ts` (**19** notes — `MARGIN_NOTES.length`, measured
+  4 November 2026; this file said 20, which was a miscount, and the count a
+  screen prints must be read from the array rather than written here),
+  `src/App.tsx`, `src/data/router.ts`,
   `src/data/companyRoute.ts`, `src/components/Header.tsx`,
   `src/components/companyPage.tsx`, `src/components/staleFigures.tsx`,
   `src/data/figuresAge.ts`, `src/components/screenerScreen.tsx`,
@@ -80,7 +83,7 @@ by the build script from `PAPER` and `TYPE` in `src/design/tokens.ts`), so
 `src/index.css`'s size and capitals remapping **does not reach them**. What
 the stylesheet asks for is what renders.
 
-### 2.2 Addresses (PROPOSED — needs Nihar)
+### 2.2 Addresses (APPROVED 4 Nov 2026)
 
 The Margin notes cannot be linked to, bookmarked or reached with Back, and
 both `/learn/` pages link "the margin notes" to `/`, which opens the landing
@@ -144,7 +147,7 @@ Disclose, KEEP). Rows ≥ 44 tall.
 - 48px. `The other explainers`: Label paper-quiet, then seven rows as on the
   hub (title + standfirst), sub-line weight 400 (CHANGE: today weight 300,
   14px).
-- Right rail at ≥ 1280 only (PROPOSED — needs Nihar): "Related margin notes",
+- Right rail at ≥ 1280 only (APPROVED 4 Nov 2026): "Related margin notes",
   up to three links, Small, sticky at top 88. Hidden below 1280 so the
   article never narrows.
 
@@ -171,7 +174,8 @@ padding, index column 280px, `gap-20` (80px), article `max-w-[68ch]`.
 | Buffett lens | Left rule 2px paper-accent-text (KEEP — one oxblood element), label `The Buffett lens` Label paper-quiet (CHANGE: today accent-text uppercase), body Body 15/24. The credit paragraph at the foot is Small paper-quiet and stays (load-bearing: see the file's header comment). |
 | Previous / next | ADD. Under the article, 48px, two links `← {previous note}` and `{next note} →`, Body 15, in the index order, so a reader walks the statements in order without returning to the index. |
 
-**390:** the index becomes one Disclose row at the top, `All 20 notes`,
+**390:** the index becomes one Disclose row at the top, `All 19 notes` (the
+count is read from `MARGIN_NOTES.length`, never written into the label),
 closed by default, opening the three groups in place; the article follows.
 Today the full index (28 rows, about 1,100px) sits above the article on a
 phone, so the note the reader tapped is a long scroll away (conflict 9).
@@ -180,7 +184,7 @@ Previous / next stay, full-width, 48px tall each.
 ### 2.6 The Margin notes band on the landing page
 
 Owned by `docs/LANDING_SPEC.md` (build step 8). This pack only fixes where
-its links go: each card to `/learn/notes/<key>/`, `All 20 notes` to
+its links go: each card to `/learn/notes/<key>/`, `All 19 notes` to
 `/learn/notes/`. The count is read from `MARGIN_NOTES.length` (KEEP — it
 already is; `docs/VISION.md` still says 19).
 
@@ -298,7 +302,7 @@ checked (`autoCompany.ts` ~53). ADD one mapping, in one place
 - The header stays usable. No full-page takeover: the block replaces only the
   panel that needed the network.
 - A top-of-page band for offline? No — one state per panel is enough and a
-  second band would stack with the stale bands. (PROPOSED — needs Nihar.)
+  second band would stack with the stale bands. (APPROVED 4 Nov 2026.)
 - The static `/learn/` pages have no offline handling and need none beyond the
   browser's; a service worker for reading offline is out of scope (Next).
 
@@ -380,7 +384,7 @@ Scroll on note change: `window.scrollTo({ behavior: 'smooth' })` today
 one viewport; smooth only otherwise.
 
 Never: reveal-on-scroll on /learn article text (VISUAL_SYSTEM §4 allows it on
-landing and /learn — PROPOSED — needs Nihar: not on article body, which is
+landing and /learn — APPROVED 4 Nov 2026: not on article body, which is
 read, only on the hub's two column headings); skeleton shimmer; spinners;
 typewriter; animated "…"; any number tweening.
 
@@ -463,31 +467,31 @@ Motion and accessibility
 19. Focus ring 2px ink (paper-ink on Paper), offset 2px; nothing focused sits under the header.
 20. Reflow at 320px and 200% zoom with no horizontal page scroll.
 
-## 9. Decisions for Nihar
+## 9. Decisions (Nihar, 4 November 2026)
 
-Each is my choice, made to stay closest to the existing docs; the build may
-proceed on it unless you change it.
+**L1 to L8 are approved.** Each was my choice, made to stay closest to the
+existing docs; the build proceeds on them.
 
-- **L1. PROPOSED — needs Nihar.** Addresses `/learn/notes/` and
+- **L1. APPROVED** (Nihar, 4 November 2026). Addresses `/learn/notes/` and
   `/learn/notes/<key>/` for the Margin notes, and `/learn/` as one hub for
   explainers and notes (2.2).
-- **L2. PROPOSED — needs Nihar.** Long-form reading on Paper uses the Body
+- **L2. APPROVED** (Nihar, 4 November 2026). Long-form reading on Paper uses the Body
   step (15px) with a 640px measure rather than a larger reading size, because
   COMPANY_OVERVIEW D1 forbids new sizes and the landing-only Lead step is
   landing-only.
-- **L3. PROPOSED — needs Nihar.** The global header on the static `/learn/`
+- **L3. APPROVED** (Nihar, 4 November 2026). The global header on the static `/learn/`
   pages as a static copy generated at build (wordmark, menu links, a Search
   link that opens the app's search), since the palette cannot run on a
   static page.
-- **L4. PROPOSED — needs Nihar.** A "Related margin notes" rail on explainers
+- **L4. APPROVED** (Nihar, 4 November 2026). A "Related margin notes" rail on explainers
   at ≥ 1280px only.
-- **L5. PROPOSED — needs Nihar.** Offline is shown per panel, with no
+- **L5. APPROVED** (Nihar, 4 November 2026). Offline is shown per panel, with no
   site-wide offline band.
-- **L6. PROPOSED — needs Nihar.** No reveal-on-scroll on article body text in
+- **L6. APPROVED** (Nihar, 4 November 2026). No reveal-on-scroll on article body text in
   /learn, although VISUAL_SYSTEM §4 permits it on /learn; only the hub's
   column headings may reveal.
-- **L7. PROPOSED — needs Nihar.** The stale-price band uses a line-control
+- **L7. APPROVED** (Nihar, 4 November 2026). The stale-price band uses a line-control
   border, the stale-figures band amber, as COMPANY_OVERVIEW §1.9 already
   words them.
-- **L8. PROPOSED — needs Nihar.** One error-wording module
+- **L8. APPROVED** (Nihar, 4 November 2026). One error-wording module
   (`src/data/errorText.ts`) owning the 3.5 table, so no screen writes its own.
