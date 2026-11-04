@@ -4550,6 +4550,7 @@ async function checkHeroField(browser: Browser) {
   {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
     await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
     await ctx.addInitScript(counters);
     await ctx.addInitScript(slow);
     const p = await ctx.newPage();
@@ -4603,6 +4604,7 @@ async function checkHeroField(browser: Browser) {
   {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
     const p = await ctx.newPage();
     await p.goto(BASE, { waitUntil: 'networkidle' });
     await p.waitForTimeout(12_000);
@@ -4616,6 +4618,7 @@ async function checkHeroField(browser: Browser) {
   {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
     await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
     const p = await ctx.newPage();
     await p.goto(BASE, { waitUntil: 'networkidle' });
     await p.waitForTimeout(2500);
@@ -4648,6 +4651,7 @@ async function checkOneWebglContext(browser: Browser) {
   for (const width of [1440, 390]) {
     const ctx = await browser.newContext({ viewport: { width, height: width > 600 ? 900 : 844 } });
     await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
     await ctx.addInitScript(`(() => {
       window.__webgl = 0;
       const original = HTMLCanvasElement.prototype.getContext;
@@ -4756,6 +4760,107 @@ async function checkLandingAccentBudget(browser: Browser) {
   if (!issues.length) ok(`landing sections 1–4 in 100px steps — ${worst.join('; ')}; no CSS uppercase; no banned words`);
 }
 
+// ---- phone and low-end: the poster, no WebGL (job 8.11) -----------------
+//
+// VISUAL_SYSTEM §8. The machines this harness runs on report 4 cores, which
+// is itself low-end, so a check that needs the field says what device it is
+// (CAPABLE_DEVICE: 8 cores, 8GB, no Data Saver, 4g) and each low-end case
+// below changes one signal from that. On each: no WebGL context is made, no
+// canvas is in the page, the poster is showing and the hero says why
+// (`data-hero-mode`). The capable device at 1440 must get the field, or the
+// check would pass on a page that never draws it. Then the whole landing page
+// at 390 and 320 wide, scrolled top to bottom, must never scroll sideways.
+const CAPABLE_DEVICE = `(() => {
+  const def = (o, k, v) => { try { Object.defineProperty(o, k, { get: () => v, configurable: true }); } catch {} };
+  def(navigator, 'hardwareConcurrency', 8);
+  def(navigator, 'deviceMemory', 8);
+  const conn = { saveData: false, effectiveType: '4g', addEventListener() {}, removeEventListener() {} };
+  def(navigator, 'connection', conn);
+  window.__device = conn;
+})()`;
+const WEBGL_COUNTER = `(() => {
+  window.__webgl = 0;
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+    const made = original.call(this, kind, ...rest);
+    if (made && /webgl/i.test(String(kind)) && !this.__counted) { this.__counted = true; window.__webgl++; }
+    return made;
+  };
+})()`;
+async function checkPhoneAndLowEnd(browser: Browser) {
+  console.log('\n=== phone and low-end: the poster, no WebGL ===');
+  const issues: string[] = [];
+  const seen: string[] = [];
+  const cases: { name: string; width: number; height: number; tweak: string; wantField: boolean; reason?: string }[] = [
+    { name: 'a capable desktop', width: 1440, height: 900, tweak: '', wantField: true },
+    { name: '4 cores', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });`, wantField: false, reason: 'few-cores' },
+    { name: '4GB of memory', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'deviceMemory', { get: () => 4 });`, wantField: false, reason: 'low-memory' },
+    { name: 'Data Saver', width: 1440, height: 900, tweak: `window.__device.saveData = true;`, wantField: false, reason: 'save-data' },
+    { name: 'a 3g connection', width: 1440, height: 900, tweak: `window.__device.effectiveType = '3g';`, wantField: false, reason: 'slow-connection' },
+    { name: 'a 390px phone', width: 390, height: 844, tweak: '', wantField: false, reason: 'narrow' },
+  ];
+  for (const k of cases) {
+    const ctx = await browser.newContext({ viewport: { width: k.width, height: k.height } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(WEBGL_COUNTER);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    if (k.tweak) await ctx.addInitScript(`(() => { ${k.tweak} })()`);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    if (k.wantField) await p.locator('canvas').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    else await p.waitForTimeout(3000);
+    const v: any = await p.evaluate(`(() => {
+      const poster = document.querySelector('[data-hero-poster]');
+      const hero = document.querySelector('[data-hero-mode]');
+      return {
+        webgl: window.__webgl, canvases: document.querySelectorAll('canvas').length,
+        poster: poster ? getComputedStyle(poster).opacity : null,
+        mode: hero ? hero.getAttribute('data-hero-mode') : null,
+      };
+    })()`);
+    seen.push(`${k.name}: ${v.webgl} WebGL, ${v.mode}`);
+    if (k.wantField) {
+      if (v.webgl !== 1) issues.push(`${k.name}: ${v.webgl} WebGL contexts, where the field should draw (the check would pass a page that never draws it)`);
+    } else {
+      if (v.webgl > 0) issues.push(`${k.name}: ${v.webgl} WebGL context made, where VISUAL_SYSTEM §8 asks for the poster`);
+      if (v.canvases > 0) issues.push(`${k.name}: ${v.canvases} canvas in the page, where there should be none`);
+      if (v.poster !== '1') issues.push(`${k.name}: the poster is not showing (opacity ${v.poster})`);
+      if (v.mode !== `poster:${k.reason}`) issues.push(`${k.name}: the hero says "${v.mode}", not "poster:${k.reason}"`);
+    }
+    await ctx.close();
+  }
+  // 320px reflow (WCAG 1.4.10) and 390.
+  const wide: string[] = [];
+  for (const width of [390, 320]) {
+    const ctx = await browser.newContext({ viewport: { width, height: 740 }, reducedMotion: 'reduce' });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    const total = (await p.evaluate(`document.documentElement.scrollHeight`)) as number;
+    let worst = 0;
+    let where = '';
+    for (let y = 0; y < total; y += 600) {
+      await p.evaluate(`window.scrollTo(0, ${y})`);
+      await p.waitForTimeout(40);
+      const r: any = await p.evaluate(`(() => {
+        const over = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        let el = null;
+        if (over > 0) for (const e of document.querySelectorAll('body *')) { const b = e.getBoundingClientRect(); if (b.right > innerWidth + 1 && b.width > 0 && getComputedStyle(e).position !== 'fixed') { el = (e.tagName + '.' + String(e.className).slice(0, 50) + ' ' + (e.textContent || '').trim().slice(0, 30)); break; } }
+        return { over, el };
+      })()`);
+      if (r.over > worst) { worst = r.over; where = `${r.el} at y ${y}`; }
+    }
+    wide.push(`${width}px ${worst}px`);
+    if (worst > 0) issues.push(`at ${width}px the landing page scrolls sideways by ${worst}px (${where})`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${seen.join('; ')}; sideways scroll ${wide.join(', ')}`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4837,6 +4942,7 @@ try {
     hero: () => checkHeroField(browser as Browser),
     webgl: () => checkOneWebglContext(browser as Browser),
     accent: () => checkLandingAccentBudget(browser as Browser),
+    lowend: () => checkPhoneAndLowEnd(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -4964,6 +5070,7 @@ try {
   await checkHeroField(browser);
   await checkOneWebglContext(browser);
   await checkLandingAccentBudget(browser);
+  await checkPhoneAndLowEnd(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

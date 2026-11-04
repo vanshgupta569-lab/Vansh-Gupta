@@ -26,6 +26,7 @@
 
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from '../design/motion';
+import { useConstrained } from '../design/constrained';
 /* THE 3D CHUNK LOADS AFTER THE FIRST PAINT (VISUAL_SYSTEM §6, job 8.7):
    three.js is its own chunk, fetched once the page has drawn, and the poster
    is what is painted first. */
@@ -200,11 +201,14 @@ const Readout: React.FC<{ rows: [string, string][]; centred?: boolean }> = ({ ro
 const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' }) => {
   const ref = useRef<HTMLSpanElement>(null);
   const [n, setN] = useState(0);
+  // VISUAL_SYSTEM §8: on a phone-width or low-end device, and under reduced
+  // motion, the figure is shown at its value at once.
+  const still = useConstrained() !== null || useReducedMotion();
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (typeof IntersectionObserver === 'undefined') { setN(to); return; }
+    if (still || typeof IntersectionObserver === 'undefined') { setN(to); return; }
 
     let raf = 0;
     let fired = false;
@@ -229,7 +233,7 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
     );
     io.observe(el);
     return () => { io.disconnect(); if (raf) cancelAnimationFrame(raf); };
-  }, [to]);
+  }, [to, still]);
 
   return (
     <span ref={ref} className="tabular-nums">
@@ -355,7 +359,13 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
     a = requestAnimationFrame(() => { b = requestAnimationFrame(() => setFieldWanted(true)); });
     return () => { cancelAnimationFrame(a); cancelAnimationFrame(b); };
   }, []);
-  const fieldOn = fieldWanted && !reducedMotion && !fieldFrozen;
+  // VISUAL_SYSTEM §8: a phone-width screen or a low-end device gets the
+  // poster and no WebGL at all (src/design/constrained.ts says which signals).
+  const constrained = useConstrained();
+  const fieldOn = fieldWanted && !reducedMotion && !fieldFrozen && !constrained;
+  const heroMode = fieldOn
+    ? 'field'
+    : `poster:${constrained ?? (reducedMotion ? 'reduced-motion' : fieldFrozen ? 'frozen' : 'loading')}`;
   const posterOn = !fieldOn || !fieldDrawn;
   const coverage = useCoverage();
   const countLabel = companyCountLabel(coverage.count);
@@ -459,6 +469,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         alt=""
         aria-hidden="true"
         data-hero-poster
+        data-hero-mode={heroMode}
         width={1440}
         height={900}
         fetchPriority="high"

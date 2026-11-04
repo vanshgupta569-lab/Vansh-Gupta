@@ -973,9 +973,19 @@ heading mark, `data-mark`, are not fills) and five words in the accent text
 colour. No text there may be uppercased by CSS, and the copy of those sections
 holds none of LANDING §2.3's banned words.
 
+**A twelfth is phone and low-end** (job 8.11, VISUAL_SYSTEM §8). This
+harness's machine reports 4 cores, which is itself low-end, so the checks
+that need the particle field declare a capable device (`CAPABLE_DEVICE`: 8
+cores, 8GB, no Data Saver, 4g). From that device, one signal at a time — 4
+cores, 4GB, Data Saver, a 3g connection, a 390px screen — must give no WebGL
+context, no canvas, the poster showing and `data-hero-mode="poster:<why>"`;
+the capable desktop itself must get the field, so the check cannot pass on a
+page that never draws it. Then the landing page at 390 and 320 wide, scrolled
+top to bottom, must never scroll sideways.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 
