@@ -2483,7 +2483,7 @@ async function checkCardFromFigures(page: Page) {
     }
   });
 
-  const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
+  const overlay = page.locator('[data-build-modal]').filter({ hasText: /building the model/i }).first();
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
 
@@ -2668,7 +2668,20 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     }
   });
 
-  const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
+  // THE MODAL, not the role=status inside it: the card sits outside the live
+  // region on purpose (it is not announced), so the overlay is read whole.
+  const overlay = page.locator('[data-build-modal]').filter({ hasText: /building the model/i }).first();
+  // WHEN EACH PART APPEARED, stamped in the page (NAV_SEARCH §8 items 22–24;
+  // job 9.3): the page rule, the modal, the belief, the correction.
+  await context.addInitScript(`(() => {
+    window.__build = {};
+    const stamp = () => {
+      const now = performance.now();
+      for (const [k, sel] of [['rule', '[data-build-rule]'], ['modal', '[data-build-modal]'], ['belief', '[data-myth]'], ['fact', '[data-fact]']])
+        if (window.__build[k] === undefined && document.querySelector(sel)) window.__build[k] = now;
+    };
+    new MutationObserver(stamp).observe(document, { childList: true, subtree: true });
+  })()`);
   const read = async () => {
     const text = (await overlay.textContent().catch(() => null)) || '';
     return {
@@ -2683,51 +2696,21 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
 
-  // ---- 0. NOT A FLICKER: NO CARD IN THE FIRST SECOND ----
+  // ---- 0. THE FIRST SECOND IS THE PAGE RULE ALONE (NAV §8 items 22–24) ----
   //
-  // TWO ASSERTIONS, AND THE FIRST IS THE ONE THAT HOLDS.
-  //
-  // No card when the overlay is first read: that read lands wherever it lands
-  // and the hold-off has to have outlasted it.
-  //
-  // Then the arrival is timed, from first sight rather than from the click,
-  // which this check cannot see: the search is deliberately not awaited so the
-  // overlay can be read while the fetch is outstanding. First sight trails the
-  // overlay opening by about a third of a second in this harness (the measured
-  // arrival is 671ms against a 1,000ms hold-off), so the floor is set below the
-  // hold-off by more than that margin. Between them the two catch a hold-off
-  // shortened to anything a reader could not read.
-  const openedAt = Date.now();
-  const atOnce = await overlay.locator('[data-myth-card]').count();
-  if (atOnce) {
-    fail(
-      'the card held back while a quick build could still finish',
-      'the progress rule alone for the first second',
-      `a card ${Date.now() - openedAt}ms after the overlay opened`
-    );
-  }
-  let appearedAfter: number | null = null;
-  for (let waited = 0; waited < 5000; waited += 100) {
-    if (await overlay.locator('[data-myth-card]').count()) {
-      appearedAfter = Date.now() - openedAt;
-      break;
-    }
-    await page.waitForTimeout(100);
-  }
-  if (appearedAfter === null) {
-    fail('the card on the loading screen', 'a card within five seconds', 'none ever appeared');
-  } else if (appearedAfter < 500) {
-    fail(
-      'the card held back while a quick build could still finish',
-      'no card inside the first second',
-      `the card appeared ${appearedAfter}ms in`
-    );
-  } else {
-    ok(
-      `no card when the overlay was first read, and the card ${appearedAfter}ms later: a build that ` +
-        'finishes inside a second shows the progress rule and closes rather than flashing a myth'
-    );
-  }
+  // Timed in the page from the moment the 2px rule appeared (the build's
+  // start as the reader sees it): the modal at 1,000ms, the belief with it,
+  // the correction 2,200ms after the belief. A quick build closes on the rule
+  // alone; that case is checked by the loading-timeline section.
+  const t: any = await page.evaluate(`window.__build || {}`);
+  const gap = (a: string, b: string) => (t[a] === undefined || t[b] === undefined ? null : Math.round(t[b] - t[a]));
+  const modalGap = gap('rule', 'modal');
+  const beliefGap = gap('modal', 'belief');
+  if (modalGap === null || modalGap < 950 || modalGap > 1250)
+    fail('the modal held back for the first second', 'the page rule alone, then the modal at 1,000ms', modalGap === null ? `stamps ${JSON.stringify(t)}` : `the modal ${modalGap}ms after the rule`);
+  else if (beliefGap === null || beliefGap > 150)
+    fail('the belief with the modal', 'the belief as the modal opens', beliefGap === null ? 'no belief' : `${beliefGap}ms after it`);
+  else ok(`the page rule alone for ${modalGap}ms, then the modal and its belief together (${beliefGap}ms apart)`);
 
   // ---- 1. THE MYTH BEFORE THE FACT ----
   const first = await read();
@@ -2754,10 +2737,14 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     await page.waitForTimeout(900);
   }
 
+  const t2: any = await page.evaluate(`window.__build || {}`);
+  const factGap = t2.fact !== undefined && t2.belief !== undefined ? Math.round(t2.fact - t2.belief) : null;
   if (!sawFact) {
     fail('the fact following the myth', "the card's own correction", 'the myth held the screen alone');
+  } else if (factGap === null || factGap < 2100 || factGap > 2500) {
+    fail('the correction 2,200ms after the belief', 'belief + 2,200ms', factGap === null ? 'not stamped' : `${factGap}ms after the belief`);
   } else {
-    ok(`the fact follows it: "${sawFact.fact.slice(0, 56)}…"`);
+    ok(`the fact follows it ${factGap}ms after the belief: "${sawFact.fact.slice(0, 56)}…"`);
   }
   if (states.length < 2) {
     fail(
@@ -5159,6 +5146,152 @@ async function checkHeaderAndMenu(browser: Browser) {
   if (!issues.length) ok(`${notes.join('; ')}; panels open by click, Enter and ↓, not hover, and Esc returns focus; no clock, live dot or pulse`);
 }
 
+// ---- the loading screen's timeline and controls (job 9.3) -----------------
+//
+// NAV_SEARCH §8 items 22–29. First the timeline itself
+// (`src/data/loadingTimeline.ts`) with fake times, for every finishing time
+// from 0 to 90 seconds in 50ms steps: a build done inside a second opens no
+// modal and is not held; otherwise the modal opens at 1,000ms, the
+// correction shows no later than belief + 2,200ms (at once if the build is
+// done first), stays at least 1,200ms, the modal at least 500ms, and no build
+// is held more than 1,200ms past finishing. Then in the browser: a build
+// answered at once never opens the modal; a build held open shows "Step 1 of
+// 2" with the fill at 0 (nothing creeps), no percentage and no counting
+// seconds, a fixed 232px card area, "Taking longer than usual." by 15
+// seconds; Esc closes it and gives focus back to the search field, and the
+// late answer is ignored; Esc at 300ms, before the modal, cancels too.
+async function checkLoadingScreen(browser: Browser) {
+  console.log('\n=== the loading screen: timeline and controls ===');
+  const LT: any = await import(`file:///${REPO}/src/data/loadingTimeline.ts`);
+  const issues: string[] = [];
+  let cases = 0;
+  for (let done = 0; done <= 90_000; done += 50) {
+    cases++;
+    const t = LT.loadingTimeline(done);
+    if (done < 1000) {
+      if (t.modalAt !== null || t.closeAt !== done) { issues.push(`timeline: a build done at ${done}ms opens the modal or is held (close ${t.closeAt})`); break; }
+      continue;
+    }
+    const bad =
+      t.modalAt !== 1000 ? 'the modal is not at 1,000ms' :
+      t.correctionAt === null || t.correctionAt > t.beliefAt + 2200 ? 'the correction is late' :
+      t.correctionAt < Math.min(done, t.beliefAt + 2200) ? 'the correction comes before it is due' :
+      t.closeAt - t.correctionAt < 1200 ? 'the correction is up under 1,200ms' :
+      t.closeAt - t.modalAt < 500 ? 'the modal is up under 500ms' :
+      t.closeAt - done > 1200 ? `the build is held ${t.closeAt - done}ms past finishing` : null;
+    if (bad) { issues.push(`timeline at ${done}ms: ${bad}`); break; }
+  }
+
+  const stampScript = `(() => {
+    window.__build = {};
+    const stamp = () => {
+      const now = performance.now();
+      for (const [k, sel] of [['rule', '[data-build-rule]'], ['modal', '[data-build-modal]']])
+        if (window.__build[k] === undefined && document.querySelector(sel)) window.__build[k] = now;
+    };
+    new MutationObserver(stamp).observe(document, { childList: true, subtree: true });
+  })()`;
+
+  // A build answered at once.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(stampScript);
+    const p = await ctx.newPage();
+    await search(p, PAPER_TICKER);
+    await p.waitForURL(/\/company\//, { timeout: 30_000 }).catch(() => {});
+    const t: any = await p.evaluate(`window.__build || {}`);
+    if (t.modal !== undefined) issues.push(`a build answered at once opened the modal (${Math.round(t.modal - (t.rule ?? t.modal))}ms after the rule)`);
+    if (t.rule === undefined) issues.push('a build answered at once showed no page rule either');
+    await ctx.close();
+  }
+
+  // A build held open.
+  let measured = '';
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    let release = () => {};
+    const held = new Promise<void>((r) => { release = () => r(); });
+    await ctx.unroute('**/api/company*');
+    await ctx.route('**/api/company*', async (route) => {
+      await held;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtureFor(PAPER_TICKER)) }); } catch { /* the check moved on */ }
+    });
+    const p = await ctx.newPage();
+    const started = search(p, PAPER_TICKER).catch(() => {});
+    const modal = p.locator('[data-build-modal]');
+    await modal.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {});
+    const v: any = await p.evaluate(`(() => {
+      const m = document.querySelector('[data-build-modal]');
+      const area = document.querySelector('[data-build-card-area]');
+      return m ? {
+        step: (document.querySelector('[data-build-step]')?.textContent || '').trim(),
+        fill: document.querySelector('[data-build-modal] [data-build-fill]')?.getAttribute('data-build-fill'),
+        area: area ? Math.round(area.getBoundingClientRect().height) : null,
+        cancel: !!document.querySelector('[data-build-cancel]'),
+        text: (m.querySelector('[role=status]')?.textContent || '') + ' ' + (m.querySelector('[data-build-cancel]')?.parentElement?.textContent || ''),
+      } : null;
+    })()`);
+    if (!v) issues.push('a held build never opened the modal');
+    else {
+      if (v.step !== 'Step 1 of 2') issues.push(`a held build reads "${v.step}", not "Step 1 of 2"`);
+      if (v.fill !== '0') issues.push(`the fill is ${v.fill} with no stage finished, not 0`);
+      if (v.area !== 232) issues.push(`the card area is ${v.area}px high at 1440, not a fixed 232`);
+      if (!v.cancel) issues.push('no Cancel on the loading screen');
+      if (/\d\s*%/.test(v.text)) issues.push(`a percentage in the loading screen's progress: "${v.text.trim().slice(0, 80)}"`);
+    }
+    const a = (await modal.textContent().catch(() => '')) || '';
+    await p.waitForTimeout(2000);
+    const b = (await modal.textContent().catch(() => '')) || '';
+    const secs = (x: string) => (x.match(/\b\d+\s*(s|sec|seconds)\b/g) || []).join();
+    if (secs(a) !== secs(b) && secs(b)) issues.push('a counting number of seconds on the loading screen');
+    await p.waitForFunction(`(document.querySelector('[data-build-modal]')?.textContent || '').includes('Taking longer than usual.')`, null, { timeout: 16_000 }).catch(() => {});
+    const late = (await modal.textContent().catch(() => '')) || '';
+    if (!late.includes('Taking longer than usual.')) issues.push('no "Taking longer than usual." by 15 seconds');
+    await p.keyboard.press('Escape');
+    await p.waitForTimeout(200);
+    const after: any = await p.evaluate(`({ modal: !!document.querySelector('[data-build-modal], [data-build-rule]'), focus: document.activeElement?.tagName === 'INPUT' })`);
+    if (after.modal) issues.push('Esc does not close the loading screen');
+    if (!after.focus) issues.push('after Esc focus is not back on the search field');
+    release();
+    await p.waitForTimeout(6000);
+    if (/\/company\//.test(p.url())) issues.push('the cancelled build still opened the company when its answer came');
+    await started;
+    measured = v ? `${v.step}, fill ${v.fill}, card area ${v.area}px` : '';
+    await ctx.close();
+  }
+
+  // Esc before the modal.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    let release = () => {};
+    const held = new Promise<void>((r) => { release = () => r(); });
+    await ctx.unroute('**/api/company*');
+    await ctx.route('**/api/company*', async (route) => {
+      await held;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtureFor(PAPER_TICKER)) }); } catch { /* moved on */ }
+    });
+    const p = await ctx.newPage();
+    const started = search(p, PAPER_TICKER).catch(() => {});
+    await p.locator('[data-build-rule]').waitFor({ state: 'attached', timeout: 30_000 }).catch(() => {});
+    await p.waitForTimeout(300);
+    await p.keyboard.press('Escape');
+    await p.waitForTimeout(1200);
+    if (await p.locator('[data-build-modal], [data-build-rule]').count()) issues.push('Esc at 300ms, before the modal, does not cancel the build');
+    release();
+    await started;
+    await ctx.close();
+  }
+
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`the timeline holds for ${cases} finishing times (0–90s); a quick build shows the rule and no modal; a held one reads ${measured}, says "Taking longer than usual." by 15s, and Esc closes it (also at 300ms) with focus back on the field and the late answer ignored`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5244,6 +5377,7 @@ try {
     notes: () => checkNotesAddresses(browser as Browser),
     notfound: () => checkInAppNotFound(browser as Browser),
     header: () => checkHeaderAndMenu(browser as Browser),
+    loading: () => checkLoadingScreen(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5375,6 +5509,7 @@ try {
   await checkNotesAddresses(browser);
   await checkInAppNotFound(browser);
   await checkHeaderAndMenu(browser);
+  await checkLoadingScreen(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

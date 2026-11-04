@@ -1025,9 +1025,19 @@ no shadow, and its "Coming" items carry no link. At 390 with touch: Search
 and Menu 44×44, the sheet's top at y = 64, rows 56px, links 48px, no target
 under 44, Esc closes it with focus back on Menu.
 
+**A sixteenth is the loading screen's timeline and controls** (job 9.3,
+NAV_SEARCH §8 items 22–29): `src/data/loadingTimeline.ts` for every finishing
+time from 0 to 90 seconds in 50ms steps (no modal inside the first second;
+the modal at 1,000ms; the correction no later than belief + 2,200ms and up at
+least 1,200ms; no build held more than 1,200ms past finishing); a build
+answered at once never opening the modal; a held build reading "Step 1 of 2"
+with the fill at 0, no percentage, no counting seconds, a fixed 232px card
+area, "Taking longer than usual." by 15 seconds; Esc closing it with focus
+back on the field and the late answer ignored, and Esc at 300ms cancelling.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

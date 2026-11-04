@@ -21,6 +21,7 @@ const CompanyPage = lazy(() => import('./components/companyPage').then((m) => ({
 import { useNavigation } from './data/router';
 import { parseCompanyPath, companyPath, DEFAULT_TAB } from './data/companyRoute';
 import { parseNotesPath, notePath, NOTES_PATH } from './data/notesRoute';
+import { LOADING, holdFor } from './data/loadingTimeline';
 import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
@@ -136,10 +137,14 @@ export default function App() {
   // company's own filings, so it needs them as soon as they land rather than
   // when the screen after it opens — which on a fast fetch is nearly five
   // seconds later, because the build stages are held on screen deliberately.
+  const lookupToken = useRef(0);
   const [lookupState, setLookupState] = useState<{
     loading: boolean;
     error: string | null;
     payload?: any;
+    /** When the build started and when its filings arrived (job 9.3). */
+    startedAt?: number;
+    doneAt?: number;
   }>({
     loading: false,
     error: null,
@@ -267,29 +272,41 @@ export default function App() {
       return;
     }
 
-    setLookupState({ loading: true, error: null });
-
-    // Responses are cached at the edge, so a repeat lookup can return in a few
-    // hundred milliseconds. Hold the build stages on screen briefly so the work
-    // is legible rather than flashing past; a slow fetch simply takes longer.
-    const MIN_VISIBLE_MS = 4800;
+    const token = ++lookupToken.current;
     const startedAt = Date.now();
+    setLookupState({ loading: true, error: null, startedAt });
+
+    // THE HOLD COMES FROM THE LOADING TIMELINE (NAV_SEARCH §5.2; job 9.3),
+    // not a fixed 4.8 seconds. A build done inside a second is not held at
+    // all and never opens the modal; one that opened it holds until the
+    // correction has been read for 1.2 seconds — at most 1.2 seconds more.
     const settle = async () => {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < MIN_VISIBLE_MS) {
-        await new Promise((resolve) => setTimeout(resolve, MIN_VISIBLE_MS - elapsed));
-      }
+      const wait = holdFor(Date.now() - startedAt);
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
     };
+    const cancelled = () => lookupToken.current !== token;
 
     try {
       // Fetch the filings and stop. Nothing is modelled until the reader has
-      // had the chance to look at what it would be modelled from.
-      const fetched = await fetchCompanyPayload(ticker);
+      // had the chance to look at what it would be modelled from. Given up
+      // after 90 seconds (§5.3).
+      let giveUp = 0;
+      const fetched = await Promise.race([
+        fetchCompanyPayload(ticker),
+        new Promise<never>((_, reject) => {
+          giveUp = window.setTimeout(
+            () => reject(new Error(`The model could not be built for ${ticker}. The filings did not arrive within ${LOADING.giveUpAfterMs / 1000} seconds.`)),
+            LOADING.giveUpAfterMs,
+          );
+        }),
+      ]).finally(() => window.clearTimeout(giveUp));
+      if (cancelled()) return;
       // Handed to the loading screen BEFORE the hold below, so the card it is
       // showing becomes this company's card while the reader is still
       // watching rather than a moment after they have left.
-      setLookupState({ loading: true, error: null, payload: fetched });
+      setLookupState({ loading: true, error: null, payload: fetched, startedAt, doneAt: Date.now() });
       await settle();
+      if (cancelled()) return;
       setPayload(fetched);
       // A new company gets the engine's own defaults back. A judgement made
       // about one company's cost lines is not a judgement about another's.
@@ -315,9 +332,19 @@ export default function App() {
       nav.go(companyPath(ticker));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
+      if (cancelled()) return;
       await settle();
+      if (cancelled()) return;
       setLookupState({ loading: false, error: error.message || 'Could not build a model for that ticker.' });
     }
+  };
+
+  // CANCEL, AND ESC, FROM THE FIRST MILLISECOND (§5.4). The fetch cannot be
+  // recalled, so its answer is ignored instead: the token moves on and the
+  // lookup above returns without touching the screen.
+  const cancelLookup = () => {
+    lookupToken.current++;
+    setLookupState({ loading: false, error: null });
   };
 
   // Leaving the figures screen is the moment the model is built. A failure
@@ -574,6 +601,7 @@ export default function App() {
             onBackToHome={() => handleNavigateToScreen('HOME')}
             onLookupTicker={handleLookupTicker}
             lookupState={lookupState}
+            onCancelLookup={cancelLookup}
           />
         )}
 

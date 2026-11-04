@@ -65,7 +65,9 @@ interface DirectoryScreenProps {
   onSelectCompany: (ticker: string) => void;
   onBackToHome: () => void;
   onLookupTicker: (ticker: string) => void;
-  lookupState: { loading: boolean; error: string | null; payload?: any };
+  lookupState: { loading: boolean; error: string | null; payload?: any; startedAt?: number; doneAt?: number };
+  /** Cancel the build in flight (Cancel and Esc on the loading screen). */
+  onCancelLookup?: () => void;
 }
 
 export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
@@ -75,6 +77,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
   onBackToHome,
   onLookupTicker,
   lookupState,
+  onCancelLookup,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<
@@ -281,7 +284,20 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           </p>
 
           {/* While a model is being built, name the stages instead of spinning */}
-          <BuildPipeline active={lookupState.loading} payload={lookupState.payload} />
+          <BuildPipeline
+            active={lookupState.loading}
+            payload={lookupState.payload}
+            startedAt={lookupState.startedAt}
+            doneAt={lookupState.doneAt}
+            onCancel={
+              onCancelLookup &&
+              (() => {
+                onCancelLookup();
+                // Focus goes back to the field the build was asked for from.
+                window.setTimeout(() => document.querySelector<HTMLInputElement>('main input[type="text"]')?.focus(), 0);
+              })
+            }
+          />
 
           {/* Grey, not oxblood. This is a missed step, not a failure, and a
               red box would tell the user the site is broken when it is not. */}

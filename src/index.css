@@ -300,6 +300,14 @@ html {
    The gap between the copies lives INSIDE each copy, as padding, rather than
    as a gap on the strip. With a gap on the strip the half-way point is one
    copy plus half a gap, and the loop drifts by that half-gap every cycle. */
+/* A fade, for a screen element that arrives (the loading screen, job 9.3).
+   Opacity only; its duration and curve come from the --m-* tokens where it
+   is used. */
+@keyframes m-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }

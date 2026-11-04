@@ -1606,7 +1606,7 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     'src/components/figuresHint.tsx': { literal: 2 },
     'src/components/instrument.tsx': { literal: 3 },
     'src/components/landingPage.tsx': { all: 1, literal: 1 },
-    'src/components/motionPrimitives.tsx': { literal: 16, property: 1 },
+    'src/components/motionPrimitives.tsx': { literal: 8 },
     'src/index.css': { literal: 1 },
   };
 
