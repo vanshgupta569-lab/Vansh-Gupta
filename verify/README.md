@@ -1078,9 +1078,19 @@ and no Cancel; an HTML answer never shows the parser's words; Back returns
 focus to the field; Try again builds; a successful close fades opacity over
 168ms on the exit curve before the screen goes.
 
+**A twenty-second is the price chart** (job 9.11, COMPANY_OVERVIEW §3), on a
+fixture of 300 weekday closes with five missing and 130 monthly closes rising
+thirtyfold: the draw-in (the clip over ~400ms, then the fill over ~200ms, axes
+from the first frame, no replay on a range change, none under reduced motion),
+the gap breaking the line and fill with its hatched band and its readout, the
+log toggle on Max only and linear by default, 13px labels and at most five
+ticks, the range and overlay radios, the readout at rest and on Home.
+`SHOT_DIR=<folder>` keeps screenshots. Its arithmetic is in `npm run verify`
+("the price chart: gaps, ticks, log scale, dates").
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu, condensed, loadingerror) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu, condensed, loadingerror, chart) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

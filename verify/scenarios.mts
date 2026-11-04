@@ -1815,6 +1815,77 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   totalProblems += bad;
 }
 
+// ---- the price chart's arithmetic (build step 9, job 9.11) ----------------
+//
+// COMPANY_OVERVIEW §3.2 and §3.7 on hand-built series: a weekend is not a
+// gap; one or two missing weekdays are read as holidays; three or more break
+// the line, four or more also band; a missing month breaks a monthly series.
+// Ticks on 1-2-5 steps, at most five, whole numbers without decimals; the log
+// scale offered on 10Y and Max only, above a twentyfold move; x labels on
+// the spec's worked examples (1Y at 1184px monthly, at 218px six-monthly; 3Y
+// two-monthly; 5Y six-monthly; 10Y yearly), the first carrying its year.
+{
+  console.log('\n=== the price chart: gaps, ticks, log scale, dates ===');
+  const CS: any = await import(`file:///${REPO}/src/data/chartScale.ts`);
+  let bad = 0;
+  const say = (m: string) => { bad++; console.log(`  PROBLEM: ${m}`); };
+  const weekdays = (from: string, n: number, skip: (i: number) => boolean = () => false) => {
+    const out: { date: string; value: number }[] = [];
+    let t = Date.parse(`${from}T00:00:00Z`), i = 0;
+    while (out.length < n) {
+      const d = new Date(t).getUTCDay();
+      if (d !== 0 && d !== 6) { if (!skip(i)) out.push({ date: new Date(t).toISOString().slice(0, 10), value: 10 + i }); i++; }
+      t += 86400000;
+    }
+    return out;
+  };
+  const cases: [string, any[], 'daily' | 'monthly', number, boolean][] = [
+    ['a run across weekends', weekdays('2026-01-05', 40), 'daily', 1, false],
+    ['one missing weekday (a holiday)', weekdays('2026-01-05', 40, (i) => i === 10), 'daily', 1, false],
+    ['two missing weekdays (Good Friday and Easter Monday)', weekdays('2026-01-05', 40, (i) => i === 10 || i === 11), 'daily', 1, false],
+    ['three missing weekdays', weekdays('2026-01-05', 40, (i) => i >= 10 && i < 13), 'daily', 2, false],
+    ['five missing weekdays', weekdays('2026-01-05', 40, (i) => i >= 10 && i < 15), 'daily', 2, true],
+    ['a missing month', ['2025-01-01', '2025-02-01', '2025-04-01', '2025-05-01'].map((date, i) => ({ date, value: i + 1 })), 'monthly', 2, true],
+  ];
+  for (const [what, pts, grain, runs, band] of cases) {
+    const r = CS.segmentsOf(pts, grain);
+    if (r.segments.length !== runs) say(`${what}: ${r.segments.length} runs, not ${runs}`);
+    if (runs > 1 && r.gaps[0]?.band !== band) say(`${what}: band ${r.gaps[0]?.band}, not ${band}`);
+  }
+  for (const [lo, hi] of [[0.3, 0.9], [17.2, 26.1], [180, 245], [3, 4200], [0.012, 0.031]]) {
+    const { ticks, step } = CS.ticks125(lo, hi, 5);
+    const m = step / Math.pow(10, Math.floor(Math.log10(step) + 1e-9));
+    if (ticks.length > 5 || ![1, 2, 5].some((x) => Math.abs(m - x) < 1e-6)) say(`ticks for ${lo}–${hi}: ${ticks.join(', ')} (step ${step})`);
+    if (ticks[0] < lo - 1e-9 || ticks[ticks.length - 1] > hi + 1e-9) say(`ticks for ${lo}–${hi} leave the range: ${ticks.join(', ')}`);
+  }
+  if (CS.priceTick(225, 25, '$') !== '$225') say(`a whole-number tick reads ${CS.priceTick(225, 25, '$')}`);
+  if (CS.priceTick(1.5, 0.5, '$') !== '$1.5') say(`a half tick reads ${CS.priceTick(1.5, 0.5, '$')}`);
+  const up = (n: number, ratio: number) => Array.from({ length: n }, (_, i) => Math.pow(ratio, i / (n - 1)));
+  const logCases: [string, number[], boolean][] = [['10Y', up(50, 25), true], ['MAX', up(50, 21), true], ['MAX', up(50, 15), false], ['5Y', up(50, 40), false], ['1Y', up(50, 40), false]];
+  for (const [range, vs, want] of logCases) if (CS.logOffered(range, vs) !== want) say(`log on ${range} at ×${(vs[vs.length - 1] / vs[0]).toFixed(0)}: ${!want ? 'offered' : 'not offered'}`);
+  const lt = CS.logTicks(1, 30, 5);
+  if (lt.length > 5 || lt.some((v: number) => v < 1 || v > 30)) say(`log ticks for 1–30: ${lt.join(', ')}`);
+  const end = Date.parse('2026-10-30T00:00:00Z');
+  const span = (days: number) => [end - days * 86400000, end] as const;
+  const stepOf = (ticks: any[]) => {
+    if (ticks.length < 2) return NaN;
+    const a = new Date(ticks[0].t), b = new Date(ticks[1].t);
+    return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth();
+  };
+  const xCases: [string, number, number, number][] = [['1Y at 1184', 366, 1184, 1], ['1Y at 218', 366, 218, 6], ['3Y at 1184', 3 * 366, 1184, 2], ['5Y at 1184', 5 * 366, 1184, 6], ['10Y at 1184', 10 * 366, 1184, 12]];
+  for (const [what, days, w, want] of xCases) {
+    const ticks = CS.xTicks(...span(days), w, false);
+    if (stepOf(ticks) !== want) say(`${what}: a ${stepOf(ticks)}-month step, not ${want}`);
+  }
+  const y1 = CS.xTicks(...span(366), 1184, false);
+  if (!/\d{4}$/.test(y1[0]?.label) || !y1[0]?.landmark) say(`the first 1Y label "${y1[0]?.label}" does not carry its year`);
+  if (!y1.some((x: any) => x.label === '2026' && x.landmark)) say('January is not replaced by its year');
+  const wk = CS.xTicks(...span(31), 1184, true);
+  if (!wk.length || wk.some((x: any) => new Date(x.t).getUTCDay() !== 1)) say('1M labels are not on Mondays');
+  console.log(`  ${cases.length} gap cases, 5 tick ranges, 2 tick labels, ${logCases.length} log cases, ${xCases.length + 2} date-axis cases -- ${bad ? bad + ' PROBLEMS' : 'all clear'}`);
+  totalProblems += bad;
+}
+
 // ---------------------------------------------------------------------------
 // ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE
 // ---------------------------------------------------------------------------

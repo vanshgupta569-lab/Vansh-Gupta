@@ -3983,7 +3983,8 @@ async function checkCompanyTabsOnScreen(page: Page) {
 
     // AN OVERLAY IS A SECOND LINE, and choosing one must change the drawing.
     const before = await page.evaluate(`document.querySelectorAll('section[aria-label="Price history"] svg[role="img"] path').length`);
-    const overlayButton = page.getByRole('button', { name: 'P / E', exact: true }).first();
+    // The overlay and range controls are radio groups (job 9.11, §3.4).
+    const overlayButton = page.getByRole('radio', { name: 'P / E', exact: true }).first();
     if (await overlayButton.count()) {
       await overlayButton.click();
       await page.waitForTimeout(400);
@@ -3999,8 +4000,10 @@ async function checkCompanyTabsOnScreen(page: Page) {
     }
 
     // A RANGE IS A DIFFERENT NUMBER OF CLOSES, so switching must change it.
-    const readout = () => page.locator('[data-chart-readout]').first().textContent();
-    const month = page.getByRole('button', { name: '1M', exact: true }).first();
+    // The count of closes is in the source line now; the readout holds the
+    // last close at rest (job 9.11, §3.6).
+    const readout = () => page.locator('[data-chart-count]').first().textContent();
+    const month = page.getByRole('radio', { name: '1M', exact: true }).first();
     if (await month.count()) {
       const wide = ((await readout()) || '').match(/([\d,]+) daily closes/)?.[1];
       await month.click();
@@ -5909,6 +5912,174 @@ async function checkLoadingErrorAndClose(browser: Browser) {
   if (!issues.length) ok(`a failed build keeps the screen up with "The model could not be built for ${PAPER_TICKER}.", the server's reason, Try again and Back; the parser's own words never shown; Back returns to the field; Try again builds; the close fades opacity over 168ms on the exit curve`);
 }
 
+// ---- the price chart (job 9.11, COMPANY_OVERVIEW §3) ----------------------
+//
+// On the paper company with its price history replaced by a fixture built
+// for the purpose: 300 weekday closes with five weekdays missing in the
+// middle, and 130 monthly closes rising thirtyfold. Checked: the draw-in
+// (the data's clip opens over 400ms, then the fill fades in over 200ms;
+// axes there from the first frame; no draw-in again on a range change; none
+// under reduced motion); the gap breaks the line and its fill and is a
+// hatched band, and pointing at it names both ends; the log scale offered on
+// Max (ratio over 20) and not on 1Y or 5Y, linear by default, with its note
+// when on; every axis label at 13px and at most five price ticks, whole
+// numbers without decimals; the readout at rest is the last close and Home
+// moves it to the first; the range and overlay controls are radio groups.
+function chartFixture(base: any) {
+  const p = JSON.parse(JSON.stringify(base));
+  const last = Date.parse(`${p?.quote?.history?.daily?.dates?.slice(-1)?.[0] ?? '2026-09-22'}T00:00:00Z`);
+  const dates: string[] = [];
+  const closes: (number | null)[] = [];
+  for (let t = last; dates.length < 300; t -= 86400000) {
+    const d = new Date(t).getUTCDay();
+    if (d === 0 || d === 6) continue;
+    dates.unshift(new Date(t).toISOString().slice(0, 10));
+  }
+  dates.forEach((_, i) => closes.push(i >= 150 && i < 155 ? null : 20 + i * 0.01 + Math.sin(i / 9)));
+  const months: string[] = [];
+  const mcloses: number[] = [];
+  const end = new Date(last);
+  for (let k = 129; k >= 0; k--) {
+    const d = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - k, 1));
+    months.push(d.toISOString().slice(0, 10));
+    mcloses.push(+(1 * Math.pow(30, (129 - k) / 129)).toFixed(4));
+  }
+  p.quote = { ...(p.quote || {}), history: { ...(p.quote?.history || {}), daily: { dates, closes }, monthly: { dates: months, closes: mcloses } } };
+  return { payload: p, missingFrom: dates[149], missingTo: dates[155] };
+}
+
+async function checkPriceChart(browser: Browser) {
+  console.log('\n=== the price chart ===');
+  const issues: string[] = [];
+  const { payload, missingFrom, missingTo } = chartFixture(fixtureFor(PAPER_TICKER));
+  const open = async (reduced: boolean) => {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    await ctx.unroute('**/api/company*');
+    await ctx.route('**/api/company*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }));
+    // Each phase the chart passes through, stamped as it happens, with what
+    // was on screen at that moment.
+    await ctx.addInitScript(`(() => {
+      window.__draw = [];
+      let last = null;
+      const look = () => {
+        const svg = document.querySelector('section[aria-label="Price history"] svg[role="img"]');
+        if (svg) {
+          const ph = svg.getAttribute('data-draw-in');
+          if (ph !== last) {
+            last = ph;
+            const fill = svg.querySelector('[data-price-fill]');
+            window.__draw.push({ ph, t: performance.now(), axes: svg.querySelectorAll('[data-axis]').length, fill: fill ? getComputedStyle(fill).opacity : null, clip: getComputedStyle(svg.querySelector('[data-chart-data]')).clipPath });
+          }
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    })()`);
+    const p = await ctx.newPage();
+    await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+    await p.locator('section[aria-label="Price history"]').scrollIntoViewIfNeeded();
+    await p.waitForFunction(`document.querySelector('section[aria-label="Price history"] svg')?.getAttribute('data-draw-in') === 'done'`, null, { timeout: 20_000 }).catch(() => {});
+    return { ctx, p };
+  };
+
+  // 1. The draw-in, with motion.
+  {
+    const { ctx, p } = await open(false);
+    const d: any[] = await p.evaluate('window.__draw');
+    const at = (ph: string) => d.find((x) => x.ph === ph);
+    const wait = at('wait'), clip = at('clip'), fill = at('fill'), done = at('done');
+    if (!wait || !clip || !fill || !done) issues.push(`the draw-in phases seen: ${d.map((x) => x.ph).join(' → ') || 'none'}`);
+    else {
+      const clipMs = Math.round(fill.t - clip.t), fillMs = Math.round(done.t - fill.t);
+      if (clipMs < 350 || clipMs > 520) issues.push(`the clip opens over ${clipMs}ms, not 400`);
+      if (fillMs < 150 || fillMs > 320) issues.push(`the fill fades in over ${fillMs}ms, not 200`);
+      if (!wait.axes) issues.push('the axes are not there from the first frame');
+      if (wait.fill !== '0' || !/100%/.test(String(wait.clip))) issues.push(`before the draw-in the data shows (fill ${wait.fill}, clip ${wait.clip})`);
+    }
+    await p.getByRole('radio', { name: '6M', exact: true }).first().click();
+    await p.waitForTimeout(300);
+    const again: any[] = await p.evaluate('window.__draw');
+    if (again.length !== d.length) issues.push(`a range change replays the draw-in (${again.slice(d.length).map((x) => x.ph).join(' → ')})`);
+
+    // 2. The gap.
+    await p.getByRole('radio', { name: '1Y', exact: true }).first().click();
+    await p.waitForTimeout(300);
+    // For a reviewer: SHOT_DIR=<folder> keeps the chart at 1Y.
+    if (process.env.SHOT_DIR) await p.locator('section[aria-label="Price history"]').screenshot({ path: path.join(process.env.SHOT_DIR, 'price-chart-1y.png') });
+    const g: any = await p.evaluate(`(() => {
+      const svg = document.querySelector('section[aria-label="Price history"] svg[role="img"]');
+      const line = svg.querySelector('[data-price-line]').getAttribute('d') || '';
+      const fill = svg.querySelector('[data-price-fill]').getAttribute('d') || '';
+      const band = svg.querySelector('[data-gap-band] rect');
+      const r = band ? band.getBoundingClientRect() : null;
+      const texts = Array.from(svg.querySelectorAll('[data-axis]'));
+      return {
+        moves: (line.match(/M/g) || []).length, fills: (fill.match(/Z/g) || []).length,
+        band: r ? { x: r.right, y: r.top + r.height / 2 } : null,
+        sizes: [...new Set(texts.map((t) => t.getAttribute('font-size')))],
+        left: texts.filter((t) => t.getAttribute('data-axis') === 'left').map((t) => t.textContent),
+        radios: document.querySelectorAll('section[aria-label="Price history"] [role=radiogroup] [role=radio]').length,
+        readout: document.querySelector('[data-chart-readout]').textContent,
+      };
+    })()`);
+    if (g.moves < 2 || g.fills < 2) issues.push(`the line is ${g.moves} run(s) and the fill ${g.fills}: the gap is bridged`);
+    if (!g.band) issues.push('no hatched band over a five-day gap');
+    else {
+      await p.mouse.move(g.band.x + 1, g.band.y);
+      await p.waitForTimeout(150);
+      const said = (await p.textContent('[data-chart-readout]')) || '';
+      const want = (iso: string) => { const x = new Date(`${iso}T00:00:00Z`); return `${x.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getUTCMonth()]} ${x.getUTCFullYear()}`; };
+      if (!said.includes(`No data ${want(missingFrom)} – ${want(missingTo)}`)) issues.push(`pointing at the gap reads "${said.trim().slice(0, 80)}"`);
+      await p.mouse.move(5, 5);
+    }
+    if (g.sizes.join() !== '13') issues.push(`axis labels at ${g.sizes.join(', ')}px, not 13`);
+    if (g.left.length > 5) issues.push(`${g.left.length} price ticks, over 5`);
+    if (g.left.some((x: string) => /\.\d*0$|\.0+$/.test(x) && !/\.\d*[1-9]/.test(x))) issues.push(`a whole-number tick carries decimals: ${g.left.join(', ')}`);
+    const PS: any = await import(`file:///${REPO}/src/data/priceSeries.ts`);
+    const wantRadios = PS.RANGES.length + PS.OVERLAYS.length + 1;
+    if (g.radios !== wantRadios) issues.push(`${g.radios} radio controls, not the ${PS.RANGES.length} ranges, None and ${PS.OVERLAYS.length} overlays`);
+    if (!/Price/.test(g.readout)) issues.push(`the readout at rest reads "${g.readout.slice(0, 60)}"`);
+    await p.locator('section[aria-label="Price history"] [role=group]').focus();
+    await p.keyboard.press('Home');
+    await p.waitForTimeout(100);
+    const first = (await p.textContent('[data-chart-readout]')) || '';
+    if (first === g.readout) issues.push('Home does not move the readout to the first close');
+
+    // 3. The log scale.
+    const logButton = () => p.locator('[data-chart-log]').count();
+    const offered: Record<string, number> = {};
+    for (const r of ['1Y', '5Y', 'Max']) {
+      await p.getByRole('radio', { name: r, exact: true }).first().click();
+      await p.waitForTimeout(250);
+      offered[r] = await logButton();
+    }
+    if (offered['1Y'] || offered['5Y'] || !offered['Max']) issues.push(`the log scale is offered on ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nothing'}, not on Max only`);
+    else {
+      const before = await p.evaluate(`document.querySelector('section[aria-label="Price history"] svg[role="img"]').getAttribute('data-scale')`);
+      await p.click('[data-chart-log]');
+      await p.waitForTimeout(250);
+      const after: any = await p.evaluate(`({ scale: document.querySelector('section[aria-label="Price history"] svg[role="img"]').getAttribute('data-scale'), note: !!document.querySelector('[data-log-note]') })`);
+      if (before !== 'linear' || after.scale !== 'log' || !after.note) issues.push(`log: default ${before}, then ${after.scale}, note ${after.note}`);
+      if (process.env.SHOT_DIR) await p.locator('section[aria-label="Price history"]').screenshot({ path: path.join(process.env.SHOT_DIR, 'price-chart-max-log.png') });
+    }
+    await ctx.close();
+  }
+  // 4. Reduced motion: no draw-in.
+  {
+    const { ctx, p } = await open(true);
+    const d: any[] = await p.evaluate('window.__draw');
+    if (d.some((x) => x.ph === 'clip' || x.ph === 'fill')) issues.push(`under reduced motion the chart draws in (${d.map((x) => x.ph).join(' → ')})`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok('the clip opens over ~400ms then the fill over ~200ms, axes there from the first frame, never again on a range change, never under reduced motion; a five-day gap breaks the line and fill, is hatched, and is named end to end; log offered on Max only, linear by default; axis labels 13px, ≤ 5 ticks; the readout rests on the last close');
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5999,6 +6170,7 @@ try {
     palette: () => checkSearchPalette(browser as Browser),
     menu: () => checkMenuCompanyLinks(browser as Browser),
     condensed: () => checkCondensedHeader(browser as Browser),
+    chart: () => checkPriceChart(browser as Browser),
     loadingerror: () => checkLoadingErrorAndClose(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
@@ -6136,6 +6308,7 @@ try {
   await checkSearchPalette(browser);
   await checkMenuCompanyLinks(browser);
   await checkCondensedHeader(browser);
+  await checkPriceChart(browser);
   await checkLoadingErrorAndClose(browser);
   reportContrast();
   reportType();
