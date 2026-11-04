@@ -170,3 +170,105 @@ and in `docs/VISUAL_SYSTEM.md` §8.
 | 9.1b | The condensed 48px header bar (NAV_SEARCH §2.2; left over from 9.1) | The header is now two elements inside one fixed, click-through `<header>`: the full 64px bar and a 48px bar holding the 24px mark (home), Search and Menu at 36×36 (44×44 on touch). Past 80px of scroll the full bar moves up 64px (200ms, exit curve) and the 48px bar comes down (280ms, enter curve); at 40px or less it reverses; between them nothing changes (the dead band). Transforms only; the page keeps its 64px top padding, so nothing shifts. The hidden bar is `inert`, so focus and the screen reader meet one bar at a time; an open panel closes as the full bar goes; the bar's Menu opens the sheet under it at y = 48 (on desktop too); the page's progress rule follows whichever bar shows. Check (dashboard, new): at rest the header ends at 64 and the bar is off-screen; at 200px the header is gone (bottom ≤ 1), the bar is at 0 and 48 high, both move by `transform` alone, the company header's page position is unchanged (CLS 0), the progress rule is at 48, the bar holds Marginalia home, Search companies and Menu at 36×36; at 60px it stays condensed; at 30px it is restored; the bar's Menu opens the sheet at 48 and its Search the palette. Two existing checks that found the Search trigger by label are scoped to the full bar, which now shares the label with the condensed one. Proved to fail: the dead band removed ("scrolling back to 60px restores the header"). Screenshot reviewed; the bar first showed page text through it and now carries the header's 8px blur. Found on the way, by the full run: on the scrolled valuation screen the "Check the figures" control was only in the full bar, so a scrolled reader lost the sign that figures were corrected (standing decision 5) — it now rides in both bars, and the hidden bar is `aria-hidden` as well as `inert`; and the one-line header check measured the bar after the page had scrolled, and then the skip link once the bar became a wrapper — it now measures the full bar's own row from the top of the page. **PROPOSED — needs Nihar:** the figures control in the 48px bar, beyond §2.2's mark, Search and Menu. Full suite: tsc 0, build OK, verify:routes 0, verify to the payload stop, dashboard 0 (the third run; the first two found the two problems above). |
 | 9.3b | The loading screen's error layout and its fade-out (NAV_SEARCH §5.2, §5.4; left over from 9.3) | A failed build used to close the loading screen and leave one line under the search box. Now the screen stays up and the error replaces the card in its fixed area, `role=alert`: "The model could not be built for {company}." on the Title step, a 15px reason line, and Try again and Back as ghosts (no Cancel); the stage line reads "Stopped" and the footer "Nothing was built, and nothing was saved." The reason is the source's own sentence where it is one, and a plain one where the text is the browser's or the parser's (`lookupReason` in `App.tsx`; **PROPOSED — needs Nihar:** a stop-gap until `src/data/errorText.ts`, L8, job 9.4, owns this wording). Try again builds again; Back closes it with focus on the search field. The close is a fade: opacity to 0 over 168ms on the exit curve (a new token, `--m-dur-mod-exit`, 70% of the 240ms modal entry, mirrored in `DURATION_MS.modExit`), then gone. For that the loading screen moved from the search screen up to `App.tsx`: a successful build replaces the search screen with the company page, and the screen inside it vanished with it before it could fade. Check (dashboard, new): a failure the server explains (its sentence shown, the title, Try again and Back, no Cancel, no card); Back closing with focus on the field; an HTML answer where JSON was expected (the parser's words never shown); Try again succeeding; the close fading `opacity` over 0.168s on `cubic-bezier(0.2, 0, 1, 0.9)` and gone after about 168ms. Proved to fail: the old one-line error put back (5 problems); the fade switched off ("closes without fading"). Screenshot of the error reviewed; the stage and footer lines first still said the filings were being read. Full suite: tsc 0, build OK, verify:routes 0, verify to the payload stop (motion ratchet clean), dashboard 0. |
 | 9.11 | The price chart restyle (COMPANY_OVERVIEW §3; D7, D9), on fixtures | Found: the price line was one path across every hole in the data (only the overlays broke), axis labels at 11px under the 13px floor, ticks on a 2.5 step with up to five x labels spaced by index rather than by calendar, the chips as tracked labels with a maroon wash, a readout that said "N daily closes, point at the chart" at rest, no draw-in, no log scale, no keyboard, no table, and "NO CHART" in capitals. Now `src/data/chartScale.ts` (pure) and a rewritten `src/components/priceChart.tsx`: **gaps never bridged** — a gap is three or more consecutive missing weekdays (one or two are read as holidays) or a missing month, it breaks the line and the fill, four or more days get a 1px 45° hatch at an 8px pitch between dotted quiet edges, and pointing at it reads "No data {from} – {to} (n trading days)"; **the draw-in** — once per page view, on first mount within 200px of the viewport, the data's clip opens over 400ms on the enter curve and the fill fades in over 200ms, axes and readout there from frame 0, never again on a range change (which crossfades in 110ms), a resize, an overlay or a return; none under 640px, on a low-end device or under reduced motion; **the log scale** — a "Log scale" toggle offered only on 10Y and Max when max ÷ min exceeds 20, linear by default, 1-2-5 log ticks and a quiet "Log scale" note at the plot's top-left. Also: a fixed 360px chart (260 on a phone: 8 inset, 320/220 plot, 32 axis zone); a left gutter from the widest label; a fixed right gutter; at most five 1-2-5 price ticks, whole numbers without decimals; 13px labels; x labels on calendar boundaries (weekly Mondays on 1M, else the smallest of 1/2/3/6/12/24/60 months leaving 64px; the first carrying its year, January replaced by the year, both 600); overlay labels on the price gridlines; range and overlay controls as radio groups (selected: panel, 1px accent, ink 600, width reserved); the readout at rest on the last close ("22 Sep 2026 · Price $23.96"); a dashed read crosshair; arrow keys, Shift, PageUp/Down, Home and End on a focusable group, spoken at most every 500ms; an `svg role=img` with a generated title and description; "View data as a table"; the count of closes in the source line. Checks: `npm run verify` (new section) — 6 gap cases (weekend, one and two holidays, three and five missing weekdays, a missing month), 5 tick ranges, the two tick labels, 5 log cases, 7 date-axis cases from the spec's worked examples; the dashboard (new section, on a fixture of 300 weekday closes with five missing and 130 monthly closes rising thirtyfold) — the draw-in's phases and timings, no replay on a range change and none under reduced motion, the broken line and fill, the band and its readout, the log toggle on Max only and linear by default, 13px labels, at most five ticks, the radios, the readout at rest and on Home; the existing chart assertions now find the controls as radios and the count in the source line. Proved to fail: the gap bridged (GAP_MIN_WEEKDAYS raised: verify 4 problems; dashboard "the gap is bridged" and "no hatched band"). Screenshots of 1Y and Max-on-log reviewed: the selected chip first drew a white outline (now an inset accent line), and on a yearly axis every label was bold. **PROPOSED — needs Nihar:** weekdays stand in for the exchange calendar, with one or two missing weekdays read as holidays; on a yearly axis no label is a landmark. **Not done:** the D4 split of "Sales and margin" into Sales and Operating margin, the basis rule (overlay against tile to 0.05×), the end labels, the bank and no-data disabled chips with popovers, the loading/error frames and the short-history line (§3.5–3.7) — the overlay data layer and the payload's states are next, as their own job. **LOCAL:** the pass over real price series — gaps against real exchange calendars, the log offer on real 10Y/Max ranges, splits on the source line. Found by the full suite: the motion check read `transition: phase === …` as a transition on "phase"; the moving values are now named first. Full suite: tsc 0, build OK, verify:routes 0, verify to the payload stop (motion ratchet clean; chart 0), dashboard 0 (then the chart section again, 0, on the corrected transitions). |
+
+## Summary of the second run, in plain English
+
+**What was done.** Seven jobs, one commit each, all pushed to
+`claude/cloud-run-2-palette-chart`. Each new check was broken on purpose and
+seen to fail before its commit. The full suite ran after every job: `tsc`,
+the build, `verify:routes`, `npm run verify` as far as the empty payloads
+folder lets it go, and `verify:dashboard`, plus `verify:landing` where the
+landing page changed. Each final run was at zero.
+
+1. **Your decisions recorded, and the low-end rule changed.** Every proposal
+   you approved is now marked approved where it lives, in the specs and in
+   the code comments. The poster now replaces the 3D field only on 2 or fewer
+   cores, 2GB or less, Data Saver, a 2g/3g connection, no WebGL2, or a first
+   second of drawing that averages over 24ms a frame. A 4-core or 4GB machine
+   now gets the field. Phones still get the poster: that rule comes from the
+   landing spec, not from the low-end test.
+2. **The search palette (9.2).** Ctrl/⌘K, /, or the header's Search open it
+   on any screen. It has Recent, Try, Go to, "Still searching…", a no-match
+   message with "Ask us to add it", and a failure message with Try again. It
+   follows the spec's keyboard model and keeps focus inside it. It never lets
+   an old answer replace a newer one, and orders results by the spec's
+   ranking rules. It opens in 65ms, against a 100ms budget.
+3. **The menu.** Tools now appears: it opens the company's Model tab, where
+   the Excel download, peers, the template and saved models are. Companies
+   gained Overview and Financials. With no company open, these links ask
+   "Choose a company for …" and then go to that tab. Research and Deals stay
+   hidden, because none of their tabs is built yet.
+4. **The 48px header bar (9.1b).** After 80px of scrolling, the header slides
+   away and a slim bar comes down with the mark, Search and Menu. It goes
+   back at 40px, and nothing on the page moves. The "Check the figures"
+   control rides in both bars, so a corrected figure is always flagged.
+5. **The loading screen's error and close (9.3b).** A failed build now stays
+   on the loading screen and says "The model could not be built for X.",
+   with the reason in plain words, Try again and Back. When a build succeeds,
+   the screen fades out over 168ms instead of vanishing.
+6. **The price chart (9.11).** The line now breaks at missing days instead of
+   joining across them, and longer gaps are hatched and named in the readout.
+   On first view the chart draws in: 400ms for the line, then 200ms for the
+   fill, and only once. A log scale is offered on 10Y and Max when the price
+   has moved more than twentyfold. The chart also has new axes, 13px labels,
+   proper calendar dates, radio-style controls, keyboard reading, and a "View
+   data as a table" option.
+
+**Two check fixes along the way.** The Lighthouse check's blocking time
+swung from 379ms to 1,653ms between identical runs, so it now takes the
+median of three runs. And it had flagged the entry script as holding three.js
+because of one shared word; it now looks for three.js's own name.
+
+**What was skipped, and why.**
+- **Research and Deals in the menu:** they have nothing to link to yet,
+  since their company tabs aren't built.
+- **From 9.2:**
+  - The instant answers from the 200 largest listings: that list has to be
+    built from the real company set, which is local.
+  - Rebuilding the search screen on the palette's rows.
+  - The Country and Exchange filters: the spec marks them P2.
+- **From 9.11:** splitting "Sales and margin" into Sales and Operating margin
+  (D4), the overlay-against-tile rule, end labels, the greyed-out bank and
+  no-data chips, and the chart's own loading, error and short-history frames.
+  These depend on the overlay data layer and the payload's states, so they
+  are a job of their own.
+- **Nothing on the do-not-touch list was edited.**
+
+**Every PROPOSED decision (each needs Nihar).**
+1. Phones stay poster-only. V7 lists device signals only, and the landing
+   spec's phone hero is the poster.
+2. In search ranking, the source's own order stands in for the
+   market-capitalisation tie-break. The search source returns no market cap,
+   and sorting A→Z put "Apple Inc." third.
+3. ISIN search waits until listings carry an ISIN.
+4. The palette's "Try" rows fill in the query rather than opening a guessed
+   ticker.
+5. Tools shows one row for the Model tab, covering the model, the Excel
+   download, saved models and the template. Each destination may appear only
+   once, and all four live in the same place.
+6. The "Check the figures" control appears in the slim 48px bar, in addition
+   to the spec's mark, Search and Menu.
+7. Plain-words reasons for a failed build are a stop-gap until
+   `src/data/errorText.ts` (job 9.4) owns that wording.
+8. On the chart, weekdays stand in for the exchange calendar: one or two
+   missing weekdays count as holidays, three or more as a gap.
+9. On a yearly chart axis, no year label is drawn bold.
+
+**Checks to run locally in Cursor after merging.**
+- With the payloads in `verify/payloads/`: `npm run verify` through to the
+  end, plus `verify:workbook`, `verify:sweep` and `verify:compare`.
+- The landing page's company count against the real screener table, and the
+  "up to 5 years" claim against the payloads. These are carried over from the
+  first run.
+- `npm run build && npm run verify:landing` on a machine with a real GPU.
+  This settles `KI-40` on the field path: this machine reported a median TBT
+  of 368ms on a software GPU, against a 200ms budget.
+- Search ranking against the real company list, and keystroke-to-results
+  speed against the real `/api/search` (target p50 ≤ 80ms, p95 ≤ 200ms).
+- Building the 200-largest instant-answer list from the real company set.
+- The price chart over real price series: gaps against real exchange
+  calendars, when the log scale is offered on real 10Y and Max ranges, and
+  whether the source line covers splits.
+- On the deployed site, the palette against live search; and, carried over
+  from the first run, direct loads of `/screener?…`,
+  `/learn/notes/<key>/` and a made-up address.
