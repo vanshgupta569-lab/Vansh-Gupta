@@ -152,6 +152,15 @@ nowhere better to put them and each is cheap:
   the index — and the pages are checked to carry no script at all, which is the
   whole point of them. Run before `npm run build`, it says so and checks the
   sources only.
+- **the /learn/ pages on the type system** (build step 9, job 9.7;
+  `verify/learnPages.mts`, run at the end of `npm run build`, which fails on
+  it, and on its own with `npx tsx verify/learnPages.mts`). The static pages
+  are outside `src/index.css`'s remapping, so their stylesheet is read as
+  written: every font size through the four step variables (13, 15, 20 and
+  the Title clamp, themselves checked against `SIZE`), no text-transform,
+  weights 400/500/600 only (in the CSS and in the font request), letter-spacing
+  only on the h1, `lang="en-IN"`, the header with Learn current, and no inline
+  type styles.
 
 - **the quarters: cumulative, derived, and what the TTM is made of.** Three
   failures that would all look right on screen. **A cumulative figure shown as
