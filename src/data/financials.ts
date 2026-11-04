@@ -148,6 +148,16 @@ export interface Row {
    * list of inputs stops checking the row the day the row changes.
    */
   inputs?: string[];
+  /**
+   * The inputs whose ABSENCE from a column is not a hole but part of what the
+   * row carries. A row with any of these is DEFINED AGAINST THE FIGURES ITS OWN
+   * COLUMN SHOWS, so it is not additive across columns: where three quarters
+   * report a selling cost and the fourth does not, the trailing twelve months
+   * names no selling cost at all and carries that amount in the bridge instead.
+   * Anything re-adding a trailing figure to its quarters needs to know that, so
+   * the list travels with the row rather than being kept a second time.
+   */
+  optional?: string[];
 }
 
 export interface FinancialsView {
@@ -295,8 +305,25 @@ interface RowDef {
   field?: string;
   /** For a line the feed does not carry at all. */
   missing?: string;
-  /** For a derived row: the inputs and how they combine. */
-  derive?: { inputs: string[]; formula: string; of: (r: any) => number | null };
+  /**
+   * For a derived row: the inputs and how they combine.
+   *
+   * `optional` names the inputs whose ABSENCE is not a hole. Every derived row
+   * but one needs all of its inputs — a gross profit without a cost of sales
+   * would be a guess — and this is the exception: the bridge from gross profit
+   * to operating income is defined as what is left after THE NAMED LINES THIS
+   * COLUMN SHOWS, so a research line the source does not report for a period is
+   * inside the bridge rather than missing from it. Treating it as a hole would
+   * leave the column not adding up; treating it as a nil would be a claim the
+   * company reported nothing, which it is not. It is neither: it is unnamed,
+   * and the row it falls into is the row that says so.
+   */
+  derive?: {
+    inputs: string[];
+    optional?: string[];
+    formula: string;
+    of: (r: any) => number | null;
+  };
 }
 
 const num = (v: any): v is number => typeof v === 'number' && isFinite(v);
@@ -414,6 +441,52 @@ const INCOME_INDUSTRIAL: RowDef[] = [
   },
   { key: 'rnd', label: 'Research and development', statement: 'income', detail: true, field: 'rnd' },
   { key: 'sga', label: 'Selling, general and administrative', statement: 'income', detail: true, field: 'sga' },
+  // ---- THE BRIDGE FROM GROSS PROFIT TO OPERATING INCOME -------------------
+  //
+  // Without this row the statement did not add up, and said nothing about it. A
+  // reader who took the printed revenue, subtracted the printed cost of sales,
+  // the printed research and the printed selling costs, and compared the answer
+  // with the printed operating income, got a different number — on 1,323 of the
+  // 1,574 columns that print all four — and the difference had no name on the
+  // screen. It is an impairment, a restructuring charge, a gain on a disposal,
+  // other operating income: real lines of the company's own statement that this
+  // template has no row for, because neither free source tags them in a shape
+  // that maps to one row across 180 companies (`DATA_CONSTRAINTS.md`).
+  //
+  // So the difference is named and shown rather than left as a silence. It is
+  // DERIVED, which is one of the four visible states (rule 5): nothing here is
+  // the company's own figure except the figures it is struck from.
+  //
+  // THE SIGN IS THE STATEMENT'S OWN: a charge is negative, income positive, so
+  // the column reads gross profit, less what is named, plus this, equals
+  // operating income — and operating income is the FILED figure, so the bridge
+  // closing on it is a tie against the filing rather than against itself.
+  {
+    key: 'otherOperatingItems',
+    label: 'Other operating items',
+    statement: 'income',
+    detail: true,
+    note:
+      'The bridge from gross profit to operating income: what the company charged or credited inside its ' +
+      'own operating income that has no row of its own in this template — an impairment, a restructuring ' +
+      'charge, a gain on a disposal, other operating income. A charge is negative. Where a line above is ' +
+      'not reported for a period, its amount is inside this figure too, because there is no row there to ' +
+      'hold it; it is not a nil.',
+    derive: {
+      inputs: ['operatingIncome', 'revenue', 'cogs', 'rnd', 'sga'],
+      // Research and selling costs are named where the source reports them and
+      // inside this figure where it does not. See `RowDef.derive`.
+      optional: ['rnd', 'sga'],
+      formula:
+        'Operating income − (gross profit − research and development − selling, general and administrative)',
+      of: (r) => {
+        const v = all(r, ['operatingIncome', 'revenue', 'cogs']);
+        if (!v) return null;
+        const named = (f: string) => (num(r?.[f]) ? (r[f] as number) : 0);
+        return v[0] - (v[1] - v[2] - named('rnd') - named('sga'));
+      },
+    },
+  },
   { key: 'operatingIncome', label: 'Operating income', statement: 'income', field: 'operatingIncome' },
   {
     key: 'operatingMargin',
@@ -597,7 +670,15 @@ export function templateFor(payload: any): 'industrial' | 'bank' {
  * industrial template later is checked on banks without anybody remembering to
  * update the check.
  */
-export const FORBIDDEN_FOR_BANKS = ['operatingMargin', 'ebitda', 'grossProfit', 'cogs'];
+export const FORBIDDEN_FOR_BANKS = [
+  'operatingMargin',
+  'ebitda',
+  'grossProfit',
+  'cogs',
+  // The bridge from gross profit to operating income, which a statement
+  // with no gross profit has no bridge from.
+  'otherOperatingItems',
+];
 
 // ---------------------------------------------------------------------------
 // BUILDING THE VIEW
@@ -649,7 +730,8 @@ const cellFor = (def: RowDef, source: SourceRow): Cell => {
   if (def.derive) {
     const v = def.derive.of(row);
     if (v === null) {
-      const absent = def.derive.inputs.filter((f) => !num(row?.[f]));
+      const optional = def.derive.optional || [];
+      const absent = def.derive.inputs.filter((f) => !num(row?.[f]) && !optional.includes(f));
       return {
         state: 'notReported',
         value: null,
@@ -801,7 +883,10 @@ const ttmCell = (
           : { key: field, label: field, statement: def.statement, field };
       return { field, cell: ttmCell(asRow, annual, all, method, defs) };
     });
-    const absent = inputs.filter((i) => !num(i.cell.value)).map((i) => i.field);
+    const optional = def.derive.optional || [];
+    const absent = inputs
+      .filter((i) => !num(i.cell.value) && !optional.includes(i.field))
+      .map((i) => i.field);
     if (absent.length) {
       return {
         state: 'notReported',
@@ -814,7 +899,7 @@ const ttmCell = (
       };
     }
     const row: Record<string, number> = {};
-    for (const i of inputs) row[i.field] = i.cell.value as number;
+    for (const i of inputs) if (num(i.cell.value)) row[i.field] = i.cell.value;
     const v = def.derive.of(row);
     if (!num(v)) {
       return {
@@ -1117,6 +1202,7 @@ function buildView(
       note: def.note,
       formula: def.derive?.formula,
       inputs: def.derive?.inputs,
+      optional: def.derive?.optional,
     };
   });
 

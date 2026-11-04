@@ -5491,6 +5491,9 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   let divisions = 0;
   let withheld = 0;
   let ttmSums = 0;
+  // Trailing figures whose quarters name a line the year cannot, so the two do
+  // not add up and the difference is the line.
+  let ttmNotAdditive = 0;
   let companies = 0;
   let largest = { what: 'none', v: 0 };
 
@@ -5679,11 +5682,38 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
                 const shown = row.cells[ti]?.value;
                 if (!isNum(shown)) continue;
                 ttmSums++;
-                if (Math.abs(shown - summed) > 1e-6 * Math.max(1, Math.abs(summed))) {
+                // A ROW DEFINED AGAINST THE FIGURES ITS OWN COLUMN SHOWS IS
+                // NOT ADDITIVE ACROSS COLUMNS, and the difference has to be
+                // accounted for to the penny rather than tolerated.
+                //
+                // "Other operating items" carries whatever a column does not
+                // name (`METHODOLOGY.md` §5). Where three quarters report a
+                // selling cost and the fourth does not, those three quarters
+                // subtract it and the trailing twelve months cannot name it at
+                // all, so the trailing bridge carries it and the quarterly
+                // bridges do not. The difference is then EXACTLY the amounts
+                // the quarters named and the year could not — which is what is
+                // asserted, so a wrong bridge still fails here.
+                let expected = 0;
+                for (const field of row.optional || []) {
+                  const trailing = view.rows.find((r: any) => r.key === field)?.cells[ti]?.value;
+                  const qr = quarters.rows.find((r: any) => r.key === field);
+                  const named = wanted
+                    .map((end) => qr?.cells[atEnd.get(end) as number]?.value)
+                    .filter(isNum) as number[];
+                  expected +=
+                    (isNum(trailing) ? (trailing as number) : 0) - named.reduce((t, v) => t + v, 0);
+                }
+                if (expected !== 0) ttmNotAdditive++;
+                if (Math.abs(shown - summed - expected) > 1e-6 * Math.max(1, Math.abs(summed))) {
                   faults.push(
                     `${ticker} ${statement} TTM: "${row.label}" shows ` +
                       `${Math.round(shown).toLocaleString('en-US')} and the four quarters it names add ` +
-                      `to ${Math.round(summed).toLocaleString('en-US')}`
+                      `to ${Math.round(summed).toLocaleString('en-US')}` +
+                      (expected
+                        ? `, a difference of ${Math.round(shown - summed).toLocaleString('en-US')} where the ` +
+                          `lines this column cannot name come to ${Math.round(expected).toLocaleString('en-US')}`
+                        : '')
                   );
                 }
               }
@@ -5777,7 +5807,11 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     );
     console.log(
       `  ${ttmSums} trailing-twelve-month figures re-add to the four quarters they name, read from the ` +
-        'quarterly columns rather than from the method that built them'
+        'quarterly columns rather than from the method that built them' +
+        (ttmNotAdditive
+          ? `, and on ${ttmNotAdditive} of them the quarters name a line the year cannot, so the two differ ` +
+            'by exactly that line'
+          : '')
     );
   }
 }
@@ -6221,6 +6255,240 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
           .map((k) => `${k} (${[...conceptsSeen[k]].join(', ')})`)
           .join('; ')}`
     );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// EVERY COLUMN ADDS UP, FROM REVENUE TO OPERATING INCOME
+// ---------------------------------------------------------------------------
+//
+// Until 2026-11-04 it did not, and said nothing about it. A reader who took the
+// printed revenue, subtracted the printed cost of sales, the printed research
+// and the printed selling costs, and compared the answer with the printed
+// operating income, got a different number on 1,323 of the 1,574 columns that
+// print all four — and the difference had no name on the screen. It is an
+// impairment, a restructuring charge, a gain on a disposal, other operating
+// income: real lines of the company's own statement that this template has no
+// row for, because neither free source tags them in a shape that maps to one
+// row across 180 companies (`DATA_CONSTRAINTS.md`).
+//
+// The new row is "Other operating items", derived, and it is the bridge. What
+// makes this a check rather than a restatement of the formula is WHICH FIGURE
+// THE BRIDGE HAS TO CLOSE ON: operating income is the company's own filed line,
+// read from its own XBRL concept, and nothing in the bridge touches it. So
+//
+//     revenue − cost of sales                                 = gross profit
+//     gross profit − research − selling − other items reversed = OPERATING INCOME
+//
+// is a tie against the filing in every column, exactly as the engine's reported
+// operating profit is. A sign error, a dropped input or a row left absent
+// breaks it on every company at once.
+//
+// Four arms:
+//
+//   1. GROSS PROFIT IS REVENUE LESS COST OF SALES, in every column.
+//   2. THE BRIDGE CLOSES ON FILED OPERATING INCOME, in every column of every
+//      company, annual and quarterly, trailing twelve months included.
+//   3. THE ROW IS THERE WHEREVER THE BRIDGE CAN BE STRUCK. A row that quietly
+//      went absent would pass arm 2 by having nothing to check.
+//   4. AND THE FIGURE IS NOT A DECORATION: on the columns where the filing
+//      needs no bridge the row is nil, and on the others it is the difference,
+//      so the count of each is reported rather than assumed.
+{
+  console.log('\n=== every column adds up from revenue to operating income ===');
+  const { financialsFor } = await import(`file:///${REPO}/src/data/financials.ts`);
+
+  const faults: string[] = [];
+  const files = fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'));
+  let columns = 0;
+  let bridged = 0;
+  let nil = 0;
+  let unbridgeable = 0;
+  let namedLineAbsent = 0;
+  let worstGap = 0;
+  let worstWhere = '';
+  const biggest: [number, string][] = [];
+  // WHERE THE BRIDGE IS CARRYING SOMETHING WORTH LOOKING AT, which is how it
+  // found `KI-39`. The named costs alone exceeding revenue, beside an operating
+  // PROFIT, is not impossible: a gain inside operating income that has no row
+  // of its own does exactly that, and Boeing's FY2025 business sale is 10.8% of
+  // its revenue (`METHODOLOGY.md` §5). But a TOP LINE THAT IS SHORT OF THE
+  // FILING'S OWN TOTAL does it too, and that is a defect — Enbridge's revenue
+  // is read from a tag that covers part of its revenue. Only the filing tells
+  // the two apart, so this is a count and a list rather than a fault, kept
+  // because it is where the second kind shows up.
+  const topHeavy: [number, string][] = [];
+
+  for (const file of files) {
+    let payload: any;
+    try {
+      payload = JSON.parse(fs.readFileSync(path.join(PAYLOADS, file), 'utf8'));
+    } catch {
+      continue;
+    }
+    const ticker = file.replace('.json', '');
+    for (const frequency of ['annual', 'quarterly'] as const) {
+      let view: any;
+      try {
+        view = (financialsFor as any)(payload, { statement: 'income', frequency, window: 'all' });
+      } catch (e: any) {
+        faults.push(`${ticker} ${frequency}: the income statement could not be built (${e?.message})`);
+        continue;
+      }
+      // A BANK HAS NO GROSS PROFIT AND SO NO BRIDGE FROM ONE. That the row is
+      // absent from the bank template is asserted by the template check, which
+      // holds every forbidden row at once.
+      if (view.template !== 'industrial') continue;
+      // AND A FREQUENCY THIS COMPANY DOES NOT FILE IS NOT A COLUMN. Screen
+      // design 1: a company that files no quarterly income statement is told
+      // so and shown no grid, which is a different answer from a grid that
+      // does not add up. 13 of the 178 are that case, all of them half-yearly
+      // filers outside the United States.
+      if (view.empty) continue;
+      const rowOf = (key: string) => view.rows.find((r: any) => r.key === key);
+      const bridge = rowOf('otherOperatingItems');
+      if (!bridge) {
+        faults.push(`${ticker} ${frequency}: the industrial income statement has no "other operating items" row`);
+        continue;
+      }
+      const need = ['revenue', 'cogs', 'grossProfit', 'rnd', 'sga', 'operatingIncome'].map(rowOf);
+      if (need.some((r) => !r)) {
+        faults.push(`${ticker} ${frequency}: the income statement is missing a row the bridge is struck from`);
+        continue;
+      }
+      const [revenue, cogs, grossProfit, rnd, sga, operatingIncome] = need as any[];
+
+      view.periods.forEach((period: any, i: number) => {
+        columns++;
+        const at = (row: any) => {
+          const cell = row.cells[i];
+          return cell && typeof cell.value === 'number' && isFinite(cell.value) ? cell.value : null;
+        };
+        const where = `${ticker} ${period.key} (${frequency})`;
+        const rev = at(revenue);
+        const cost = at(cogs);
+        const gross = at(grossProfit);
+        const ebit = at(operatingIncome);
+
+        // ---- 1. GROSS PROFIT IS REVENUE LESS COST OF SALES ----------------
+        if (rev !== null && cost !== null) {
+          if (gross === null) {
+            faults.push(`${where}: revenue and cost of sales are both shown and gross profit is not`);
+          } else {
+            const gap = Math.abs(gross - (rev - cost));
+            if (gap > 1e-6 * Math.max(1, Math.abs(gross))) {
+              faults.push(
+                `${where}: gross profit ${gross} against revenue ${rev} less cost of sales ${cost} = ${rev - cost}`
+              );
+            }
+          }
+        }
+
+        // ---- 3. THE ROW IS THERE WHEREVER THE BRIDGE CAN BE STRUCK --------
+        const strikeable = gross !== null && ebit !== null;
+        const items = at(bridge);
+        if (!strikeable) {
+          unbridgeable++;
+          // And it must not invent one where there is nothing to strike it
+          // from: a figure with no gross profit or no operating income behind
+          // it would be a number from nowhere.
+          if (items !== null) {
+            faults.push(
+              `${where}: other operating items is ${items} and ${
+                gross === null ? 'gross profit' : 'operating income'
+              } is not reported for this column`
+            );
+          }
+          return;
+        }
+        if (items === null) {
+          faults.push(
+            `${where}: gross profit ${gross} and operating income ${ebit} are both shown, and the row that ` +
+              `bridges them says "${bridge.cells[i]?.state}" — the column does not add up and nothing says why`
+          );
+          return;
+        }
+        if (bridge.cells[i].state !== 'derived') {
+          faults.push(
+            `${where}: other operating items is in the state "${bridge.cells[i].state}" — it is this site's ` +
+              'arithmetic over filed figures and must be labelled derived (rule 5)'
+          );
+        }
+
+        // ---- 2. THE BRIDGE CLOSES ON FILED OPERATING INCOME ---------------
+        //
+        // A named line the source does not report for this column is not in the
+        // subtraction, and its amount is inside the bridge. That is the row's
+        // definition and it is said on the row itself.
+        const named = (row: any) => {
+          const v = at(row);
+          if (v === null) namedLineAbsent++;
+          return v === null ? 0 : v;
+        };
+        const rndAt = named(rnd);
+        const sgaAt = named(sga);
+        const built = gross - rndAt - sgaAt + items;
+        const gap = Math.abs(built - ebit) / Math.max(1, Math.abs(ebit));
+        if (gap > 1e-9) {
+          faults.push(
+            `${where}: gross profit ${gross} less research and selling costs plus other operating items ` +
+              `${items} comes to ${built}, and the filing's own operating income is ${ebit}`
+          );
+        }
+        if (gap > worstGap) {
+          worstGap = gap;
+          worstWhere = where;
+        }
+
+        // ---- 4. WHAT THE BRIDGE ACTUALLY CARRIES --------------------------
+        const namedCosts = (cost as number) + rndAt + sgaAt;
+        if (rev !== null && namedCosts > rev && ebit > 0) {
+          topHeavy.push([
+            (namedCosts - (rev as number)) / (rev as number),
+            `${where}: revenue ${rev}, named costs ${namedCosts.toFixed(0)}, operating income ${ebit}`,
+          ]);
+        }
+        if (Math.abs(items) < 1e-9) nil++;
+        else {
+          bridged++;
+          if (rev) biggest.push([Math.abs(items / rev), `${where}: ${items.toFixed(1)} on revenue ${rev}`]);
+        }
+      });
+    }
+  }
+
+  biggest.sort((a, b) => b[0] - a[0]);
+  console.log(
+    `  ${columns} income columns across ${files.length} payloads: ${bridged} need a bridge from gross profit ` +
+      `to operating income and carry one, ${nil} need none and show nil, and ${unbridgeable} have no gross ` +
+      'profit or no operating income to bridge between'
+  );
+  console.log(
+    `  the worst gap between the column's own arithmetic and the filing's operating income is ${worstGap.toExponential(2)}` +
+      (worstWhere ? ` (${worstWhere})` : '')
+  );
+  console.log(
+    `  ${namedLineAbsent} named lines are not reported separately in the column they are missing from, so ` +
+      'their amount is inside the bridge, which the row says'
+  );
+  for (const [, line] of biggest.slice(0, 5)) console.log(`    ${line}`);
+  topHeavy.sort((a, b) => b[0] - a[0]);
+  console.log(
+    `  ${topHeavy.length} columns in ${
+      new Set(topHeavy.map(([, line]) => line.split(' ')[0])).size
+    } companies carry named costs that exceed revenue beside an operating PROFIT — either a gain inside ` +
+      "operating income with no row of its own, or a top line short of the filing's own total (`KI-39`)"
+  );
+  for (const [over, line] of topHeavy.slice(0, 4)) {
+    console.log(`    ${(over * 100).toFixed(0)}% over: ${line}`);
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} columns that do not add up:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
   }
 }
 

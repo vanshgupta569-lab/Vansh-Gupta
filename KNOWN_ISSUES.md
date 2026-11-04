@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-38`. **Next free: `KI-39`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-39`. **Next free: `KI-40`.** Retired, meaning
   fixed and never to be reused: `KI-36` (a quarterly figure read from a proxy
   statement or an 8-K. The annual path has taken 10-K facts and nothing else
   since the beginning; the quarterly path filtered by PERIOD and not by form
@@ -224,9 +224,63 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**None is open, as of 2026-11-04.** `KI-31` to `KI-38` were all fixed within
-four days of each other, and the ID ledger above says what each retired number
-was.
+**One is open, as of 2026-11-04**, and it moves no valuation because the company
+it is measured on is refused one. `KI-31` to `KI-38` were all fixed within four
+days of each other, and the ID ledger above says what each retired number was.
+
+### `KI-39` A revenue tag that is only part of the top line
+
+**Where:** `US_TAGS.revenue` in `api/company.js`, and the tag precedence it
+sets.
+
+**What is wrong.** The revenue tags are read in order of preference and the
+first one present wins:
+`RevenueFromContractWithCustomerExcludingAssessedTax`, then
+`RevenueFromContractWithCustomerIncludingAssessedTax`, then `Revenues`, then
+`SalesRevenueNet`. For most filers the first of those IS the top line. For a
+company whose revenue is not all revenue from contracts with customers — a
+pipeline selling commodities, an insurer with premium and investment income — it
+is a COMPONENT of the top line, and the filing's own total sits in `Revenues`,
+further down the list, where nothing reads it.
+
+`KI-32` settled this question for financial companies on 2026-11-01: the top
+line is settled per company and recorded on the payload as `revenueDefinition`.
+It was not extended to everyone else, and `revenueDefinition` is null on every
+industrial company in the set.
+
+**Measured on 2026-11-04. Enbridge, three years**, confirmed against its own
+filings at the SEC: FY2021 reads **19,432** where its 10-K files `Revenues` of
+**47,071** (CAD), FY2022 23,916 against the filed total, FY2023 24,097. The
+figure shown is **59% short** of the company's own top line in the worst year.
+
+**How it was found.** The new "other operating items" row, which is the bridge
+from gross profit to operating income (`METHODOLOGY.md` §5, *Other operating items*): Enbridge's FY2021
+bridge is **+23,787 on revenue of 19,432**, because its cost of sales alone
+exceeds the revenue being shown. `npm run verify` counts the columns where the
+named costs exceed revenue beside an operating profit — 8, in 4 companies — and
+says in the same line that the other three are the harmless shape of the same
+arithmetic: a gain inside operating income with no row of its own, which is
+Boeing's FY2025 business sale at 10.8% of revenue.
+
+**How much it moves: no valuation, on the company it is measured on.** Enbridge
+is refused a valuation for a different reason — it files no cost of sales for its
+last reported year (`DATA_CONSTRAINTS.md`) — so nothing discounts its revenue.
+What it moves is every figure on the Financials tab and every ratio struck on
+revenue, which is why it is here.
+
+**What is not known** is how many other companies are in it. The symptom only
+shows where the named costs then exceed revenue, and a company whose revenue is
+understated by less than its costs would not show it at all. Finding the rest
+means reading `Revenues` against the tag used for every SEC filer in the set,
+which is the fix's own measurement and is this entry's next job. The capture
+archive holds payloads and not the facts they were built from, so that
+measurement means one `companyfacts` request per filer — the fetch the fix would
+be making anyway.
+
+**What the fix is.** `KI-32`'s shape, widened: settle the top line per company
+by reading the filing's own total, record it as `revenueDefinition` for every
+filer and not only for financial ones, and refuse rather than guess where the
+tags disagree by more than rounding.
 
 **What the list being short does not mean.** It is not a claim that the model is
 right about everything, only that **nothing else is known to be wrong and left

@@ -368,9 +368,18 @@ constraint, above).
 
 **Nothing is wrong with the figures.** Operating income is the company's own
 reported line, so the column ties to the filing and every margin struck on it is
-the company's own margin. What is missing is the **explanation**: a reader who
-subtracts the printed costs from the printed revenue gets a different number
-from the printed operating income, and the difference has no name on the screen.
+the company's own margin.
+
+**Since 2026-11-04 the difference has a name and a figure.** `Other operating
+items` is the bridge from gross profit to operating income, derived, on every
+column of every industrial company, and `npm run verify` holds the column to the
+filing's own operating income (`METHODOLOGY.md` §5, *Other operating items*). So the column adds up and
+the reader can see how much is unaccounted for.
+
+**What is still missing is the SPLIT.** One row saying 29,813 of charges is not
+the same as an impairment, a restructuring charge and a loss on disposal, each
+with its own caption and its own figure, and a reader who wants to know whether
+a charge recurs needs the caption. That is what neither source gives.
 
 **Bound: none on any valuation.** The engine reads operating income, not the
 lines above it, so no value per share depends on the split. The bound is on

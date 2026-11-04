@@ -343,6 +343,63 @@ every filing address in a payload (**15**); and the line's first candidate
 printed instead of the figure's own, which is what recording the preference
 list's head would look like (**24,180**, and 1 in the browser).
 
+### Every column adds up, from revenue to operating income
+
+The statement printed revenue, cost of sales, gross profit, research, selling
+costs and operating income, and on 1,267 of its 2,025 columns those figures did
+not add up to each other — the difference being an impairment, a restructuring
+charge or a gain on a disposal that the template has no row for. `Other
+operating items` is that row, and this is what holds it.
+
+**What makes it a check rather than a restatement of its own formula** is which
+figure the bridge has to close on. Operating income is the company's own filed
+line, read from its own XBRL concept, and nothing in the bridge touches it, so
+the column adding up is a tie against the filing. A sign error, a dropped input
+or a row quietly gone absent breaks it on every company at once.
+
+Four arms: gross profit is revenue less cost of sales in every column; the
+bridge closes on filed operating income in every column of every company,
+annual and quarterly, trailing twelve months included (worst gap in 2,025
+columns: **4.08e-15**); the row is THERE wherever a bridge can be struck, since
+a row that went absent would pass the second arm by having nothing to check; and
+it is nil where the named lines account for everything, so the 240 nil columns
+and the 1,267 bridged ones are counted rather than assumed. A frequency the
+company does not file is not a column — 13 of the 178 file no quarterly income
+statement and are told so on the screen, which is a different answer from a grid
+that does not add up.
+
+In `dashboard.mts`, in a real browser: the printed figures, read off the screen
+with the screen's own minus sign and thousands commas, add up to the printed
+operating income — the arithmetic a reader can do, which is the thing that did
+not work. The fixture's own statement needs no bridge, so the row must read nil
+there rather than a dash, and the cell's evidence must say **Derived** and show
+the formula instead of a concept it has not got.
+
+The trailing-twelve-month arm of the margin check re-adds every trailing money
+figure to the four quarters it names, and this row is **not additive**: a row
+defined against the figures its own column shows cannot also be the sum of its
+neighbours. One trailing figure in the set differs from its quarters (TCS.NS, by
+98,610), and the arm accounts for the difference to the penny — the lines the
+trailing column cannot name, because one quarter reports them and the year
+therefore cannot — rather than tolerating it or skipping the row.
+
+**And the count it keeps**: 8 columns in 4 companies carry named costs that
+exceed revenue beside an operating profit. That is not impossible arithmetic — a
+gain inside operating income does it, and Boeing's FY2025 business sale is 10.8%
+of its revenue — but a top line short of the filing's own total does it too, and
+that is `KI-39`, which this row is what found.
+
+Proved by breaking, five ways: the sign of the bridge flipped, so a charge reads
+as income (**1,267 faults**); selling costs dropped out of the formula
+(**1,417**); the row taken out of the template, which is the state before this
+job (**271** — two per company, annual and quarterly, rather than one per column,
+because a statement with no bridge row at all is one fault about the statement);
+the optional inputs made required, so a column that reports no research line
+stops adding up instead of carrying that amount in the bridge (**41**, every one
+a trailing-twelve-month column, which is where the absent-input rule lives); and
+the row's state written as reported rather than derived, which is this site's
+arithmetic dressed as the company's own figure (**1,395**).
+
 ### A quarterly figure comes from the statement it was reported in
 
 Three arms, because the obvious one cannot fail on its own. Once the data layer

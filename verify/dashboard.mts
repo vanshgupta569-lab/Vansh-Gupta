@@ -3366,6 +3366,111 @@ async function checkCompanyTabsOnScreen(page: Page) {
         }
       }
 
+      // ---- AND THE COLUMN ADDS UP, ON THE SCREEN -------------------------
+      //
+      // The statement had no row for the difference between the printed costs
+      // and the printed operating income, so a reader who added the column up
+      // got a different number and nothing said why. "Other operating items"
+      // is that row. What is asserted here is the arithmetic A READER CAN DO:
+      // the figures as they are PRINTED, not the figures behind them, because
+      // the printed column is the thing that did not add up.
+      //
+      // The paper company's own statement needs no bridge — its costs are
+      // fixed shares of revenue and its operating income is what is left — so
+      // the row must read nil here rather than a dash or a gap, and the
+      // arithmetic over 2,025 real columns is held in `npm run verify`, where
+      // 1,267 of them carry a bridge that is not nil.
+      {
+        const moreLines = page.getByRole('button', { name: /more lines/i });
+        if (await moreLines.count()) {
+          await moreLines.evaluate((el: any) => el.click());
+          await page.waitForTimeout(200);
+        }
+        const printed = async (key: string): Promise<number | null> => {
+          const cell = table.locator(`[data-cell="${key}:FY2025"]`).first();
+          if (!(await cell.count())) return null;
+          const said = ((await cell.textContent()) || '').trim();
+          // The screen's own characters: a real minus sign, thousands commas
+          // and a currency symbol inside the sign.
+          const n = Number(said.replace(/−/g, '-').replace(/[^0-9.-]/g, ''));
+          return Number.isFinite(n) ? n : null;
+        };
+        const figures: Record<string, number | null> = {};
+        for (const key of ['revenue', 'cogs', 'grossProfit', 'rnd', 'sga', 'otherOperatingItems', 'operatingIncome']) {
+          figures[key] = await printed(key);
+        }
+        const missing = Object.entries(figures)
+          .filter(([, v]) => v === null)
+          .map(([k]) => k);
+        if (missing.length) {
+          fail(
+            'the income statement bridging revenue to operating income',
+            'a printed figure on every line of the bridge',
+            `no ${missing.join(', ')} cell on the screen`
+          );
+        } else {
+          const gross = (figures.revenue as number) - (figures.cogs as number);
+          const built =
+            gross - (figures.rnd as number) - (figures.sga as number) + (figures.otherOperatingItems as number);
+          // Three printed figures and one derived one, each rounded to the
+          // nearest million, so the slack is the rounding and nothing else.
+          if (Math.abs(gross - (figures.grossProfit as number)) > 3) {
+            fail(
+              'the printed gross profit',
+              `revenue ${figures.revenue} less cost of sales ${figures.cogs} = ${gross}`,
+              String(figures.grossProfit)
+            );
+          } else if (Math.abs(built - (figures.operatingIncome as number)) > 3) {
+            fail(
+              'the printed column adding up to the printed operating income',
+              `${built} from the lines above it`,
+              `operating income ${figures.operatingIncome}`
+            );
+          } else if (Math.abs(figures.otherOperatingItems as number) > 3) {
+            fail(
+              'other operating items on a statement whose named lines account for all of it',
+              'nil',
+              String(figures.otherOperatingItems)
+            );
+          } else {
+            ok(
+              `the printed column adds up: revenue ${figures.revenue} less cost of sales ${figures.cogs} ` +
+                `less research ${figures.rnd} and selling ${figures.sga}, plus other operating items ` +
+                `${figures.otherOperatingItems}, is the printed operating income ${figures.operatingIncome}`
+            );
+          }
+        }
+        // AND IT IS LABELLED AS OURS. The figure is this site's arithmetic over
+        // the company's figures, so it is derived — one of the four visible
+        // states — and the sheet shows the formula rather than a concept it has
+        // not got.
+        const bridgeCell = table.locator('[data-cell="otherOperatingItems:FY2025"]').first();
+        if (await bridgeCell.count()) {
+          await bridgeCell.evaluate((el: any) => el.click());
+          await page.waitForTimeout(200);
+          const sheet = page.locator('[data-evidence-sheet]');
+          const said = ((await sheet.textContent()) || '').replace(/\s+/g, ' ');
+          if (!/State\s*Derived/.test(said.replace(/\s+/g, ' ')) && !/Derived/.test(said)) {
+            fail('the state of other operating items', 'Derived', said.slice(0, 80));
+          } else if (!/Operating income/.test(said) || !/gross profit/.test(said)) {
+            fail(
+              'the evidence for other operating items',
+              'the formula it was worked out by',
+              said.slice(0, 120)
+            );
+          } else {
+            ok('other operating items is labelled derived and shows the formula it was worked out by');
+          }
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(120);
+        }
+        const fewer = page.getByRole('button', { name: /Fewer lines/i });
+        if (await fewer.count()) {
+          await fewer.evaluate((el: any) => el.click());
+          await page.waitForTimeout(150);
+        }
+      }
+
       // ---- A GAP IS AN EM DASH ON THE SCREEN TOO ----
       //
       // On the BALANCE SHEET with its detail rows open, because that is where

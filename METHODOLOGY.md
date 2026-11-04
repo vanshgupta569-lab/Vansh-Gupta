@@ -549,6 +549,68 @@ the engine, not capped.
 a defined set of methods, documented) — followed by analogy; the choice is in
 `provenance.operatingCosts`.
 
+### Other operating items, on the Financials tab
+
+The line above is the engine's. This one is the SCREEN's, and it is the same
+difference seen from the other side (`src/data/financials.ts`, 2026-11-04).
+
+The Financials tab prints revenue, cost of sales, gross profit, research and
+development, selling general and administrative, and operating income. **A
+reader who added that column up got a different number from the printed
+operating income, on 1,267 of the 2,025 columns, and nothing on the screen said
+why.** The difference is an impairment, a restructuring charge, a gain on a
+disposal, other operating income — real lines of the company's own statement
+that this template has no row for, because neither source tags them in a shape
+that maps to one row across 180 companies (`DATA_CONSTRAINTS.md`).
+
+**So the difference is named and shown.** `Other operating items` sits between
+the named costs and operating income:
+
+    other operating items = operating income − (gross profit − research − selling)
+
+and the sign is the statement's own, so a charge is negative and income positive
+and the column reads downwards. It is **derived**, which is one of the four
+visible states: nothing in it is the company's own figure except the figures it
+is struck from.
+
+**What it closes on is the filing.** Operating income is the company's own line,
+read from its own XBRL concept, and nothing in the bridge touches it — so the
+column adding up is a tie against the filing rather than against itself,
+exactly as the engine's reported operating profit is (§4). `npm run verify`
+holds it in every column of every company, annual and quarterly, trailing twelve
+months included: the worst gap in 2,025 columns is 4.08e-15.
+
+**A named line the source does not report is inside this figure**, not missing
+from it and not a nil. 1,146 named lines across the set are absent from the
+column they would belong in — research and development most of them, which a
+retailer does not report because it has none and a pharmaceutical company
+sometimes does not report for a single quarter — and the row says so on its own
+face. Treating an absence as a hole would leave the column not adding up;
+treating it as a nil would be a claim the company reported nothing. It is
+neither: it is unnamed, and this is the row that says so.
+
+**And it is not additive across columns**, which follows from the line above.
+A row defined against the figures its own column shows cannot also be the sum of
+its neighbours: where three quarters report a selling cost and the fourth does
+not, those three subtract it, the trailing twelve months cannot name it at all,
+and the trailing bridge carries it instead. One trailing figure in the set is
+that case (TCS.NS, a difference of 98,610), and `npm run verify` accounts for
+the difference to the penny — the lines the column cannot name — rather than
+tolerating it, so a wrong bridge still fails there.
+
+**Where there is nothing to bridge, there is no figure.** 518 columns have no
+gross profit or no operating income — a bank, a company that files no cost of
+sales — and the row is "not reported" there rather than a number from nowhere.
+240 columns need no bridge at all and read nil, which is a fact about those
+columns: the named lines account for all of it.
+
+**A bank has no row for it**, because a bank has no gross profit to bridge from
+(rule 13). It is in `FORBIDDEN_FOR_BANKS` with the other three.
+
+**What it made visible** is `KI-39`: a revenue tag that is only part of the top
+line. Enbridge's FY2021 bridge is +23,787 on revenue of 19,432, because the
+revenue being shown is 59% short of the 47,071 its own 10-K files.
+
 ### Depreciation and amortisation
 
 Charged as its own line in the EBITDA-to-EBIT bridge, which is `IS 8`.
