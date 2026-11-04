@@ -1716,6 +1716,49 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   totalProblems += report.problems.length;
 }
 
+// ---- the feature register (build step 8, job 8.6) ------------------------
+//
+// LANDING §2.4: one list of what ships, which the landing page reads. Here the
+// list itself is held to its own rules; `verify:dashboard` checks the page
+// against it.
+{
+  console.log('\n=== the feature register: statuses, tenses, dates ===');
+  const FR: any = await import(`file:///${REPO}/src/data/featureRegister.ts`);
+  const SCR: any = await import(`file:///${REPO}/src/data/screener.ts`);
+  let bad = 0;
+  const say = (m: string) => { bad++; console.log(`  PROBLEM: ${m}`); };
+  const ids = new Set<string>();
+  for (const f of FR.FEATURES) {
+    if (ids.has(f.id)) say(`feature id ${f.id} appears twice`);
+    ids.add(f.id);
+    if (!['shipped', 'in_build', 'planned'].includes(f.status)) say(`${f.id} has status "${f.status}"`);
+    if (!f.basis || !/VISION/.test(f.basis)) say(`${f.id} does not say which VISION.md row its status comes from`);
+    // A quarter is a promise: recorded as "Q1 2027" or not at all, never computed.
+    if (f.quarter !== null && !/^Q[1-4] 20\d\d$/.test(f.quarter)) say(`${f.id} has quarter "${f.quarter}"`);
+    if (f.status !== 'shipped' && !String(f.willDo).trim()) say(`${f.id} is not shipped and has no future-tense line`);
+    if (f.status !== 'shipped' && /\b(will|being built|is being)\b/i.test(f.willDo) === false)
+      say(`${f.id}'s line for an unshipped feature is not in the future tense: "${f.willDo}"`);
+    for (const text of [f.title, f.does, f.willDo]) {
+      // Both lists: the screener's (SCREENER_SPEC rule 12) and the landing
+      // page's own (LANDING §2.3), since this is landing copy. "exit" is in
+      // the first and no allow-list covers it outside "exit multiple".
+      const banned = [...SCR.bannedWordsIn(text), ...FR.landingBannedIn(text)];
+      if (banned.length) say(`${f.id} uses ${banned.join(', ')} ("${text}")`);
+    }
+  }
+  // The count label, by LANDING §2.3's own rule, against values worked out
+  // here: "10,000+" only at 10,000 or more; below, rounded down to the hundred.
+  const cases: [number | null, string | null][] = [[null, null], [0, null], [45, '45'], [178, '100+'], [250, '200+'], [9999, '9,900+'], [10000, '10,000+'], [25000, '10,000+']];
+  for (const [n, want] of cases) if (FR.companyCountLabel(n) !== want) say(`companyCountLabel(${n}) is ${FR.companyCountLabel(n)}, not ${want}`);
+  if (FR.CLAIMS.showFreeToUse !== false) say('"Free to use" is switched on before pricing is decided (LANDING decision 2)');
+  const shipped = FR.FEATURES.filter((f: any) => f.status === 'shipped').length;
+  console.log(
+    `  ${FR.FEATURES.length} features (${shipped} shipped), each with its VISION.md basis, a future-tense line until it ships, ` +
+      `no computed quarter, no banned word; the count label holds to LANDING §2.3 on ${cases.length} cases -- ${bad ? bad + ' PROBLEMS' : 'all clear'}`
+  );
+  totalProblems += bad;
+}
+
 // ---------------------------------------------------------------------------
 // ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE
 // ---------------------------------------------------------------------------

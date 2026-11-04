@@ -18,6 +18,8 @@
 
 import React from 'react';
 import { MARGIN_NOTES } from '../data/marginNotes';
+import { featureById, statusLabel } from '../data/featureRegister';
+import type { Feature } from '../data/featureRegister';
 import { PAPER as P, DISPLAY_HEADING } from '../design/tokens';
 
 /* "Kept local rather than imported so this file stands on its own" is what the
@@ -39,26 +41,13 @@ const DISPLAY: React.CSSProperties = { ...DISPLAY_HEADING };
    from the data file this quietly shows fewer cards rather than breaking. */
 const FEATURED = ['revenue', 'gross-margin', 'reading-the-three-statements-together'];
 
-const upcomingQuarters = (count: number) => {
-  const now = new Date();
-  let q = Math.floor(now.getMonth() / 3) + 1;
-  let y = now.getFullYear();
-  const out: string[] = [];
-  for (let i = 0; i < count; i += 1) {
-    q += 1;
-    if (q > 4) { q = 1; y += 1; }
-    out.push(`Q${q} ${y}`);
-  }
-  return out;
-};
-
-const ROADMAP = [
-  { title: 'Private company inputs', status: 'In build' },
-  { title: 'Things to check in a filing', status: 'In build' },
-  { title: 'One-page desk summary', status: 'In build' },
-  { title: 'Leveraged buyout model', status: 'Planned' },
-  { title: 'Workbook reformatting', status: 'Planned' },
-];
+/* THE ROADMAP ROWS, FROM THE FEATURE REGISTER (LANDING §2.4, decision 5).
+   They used to carry quarter dates computed as "the next five quarters from
+   today", which moved forward on their own and were recorded nowhere. A row
+   now prints a quarter only when the register records one. */
+const ROADMAP: Feature[] = ['private-company', 'filing-checks', 'one-pager', 'lbo', 'reformat-workbook'].map(
+  (id) => featureById(id) as Feature
+);
 
 interface Props {
   onOpenNotes: (key?: string) => void;
@@ -69,7 +58,6 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
     .map((key) => MARGIN_NOTES.find((n) => n.key === key))
     .filter((n): n is (typeof MARGIN_NOTES)[number] => !!n);
 
-  const quarters = upcomingQuarters(ROADMAP.length);
 
   return (
     <section id="margin-notes" data-ground="paper" className="w-full" style={{ background: PAPER }}>
@@ -138,28 +126,29 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
           What is being built next
         </div>
         <div>
-          {ROADMAP.map((item, i) => (
+          {ROADMAP.map((item) => (
             <div
-              key={item.title}
+              key={item.id}
+              data-feature={item.id}
+              data-feature-status={item.status}
               className="flex items-center justify-between gap-6 py-4 border-b"
               style={{ borderColor: PAPER_LINE }}
             >
               <div className="flex items-baseline gap-6 lg:gap-12 min-w-0">
-                <span
-                  className="font-figure text-[12px] tracking-[0.16em] shrink-0"
-                  style={{ color: PAPER_DIM }}
-                >
-                  {quarters[i]}
-                </span>
+                {item.quarter && (
+                  <span className="font-figure text-[12px] tracking-[0.16em] shrink-0" style={{ color: PAPER_DIM }}>
+                    {item.quarter}
+                  </span>
+                )}
                 <span className="text-[16px] lg:text-[18px] truncate" style={{ color: PAPER_INK }}>
                   {item.title}
                 </span>
               </div>
               <span
                 className="font-figure text-[12px] tracking-[0.16em] uppercase shrink-0"
-                style={{ color: item.status === 'In build' ? RED_TEXT : PAPER_DIM }}
+                style={{ color: item.status === 'in_build' ? RED_TEXT : PAPER_DIM }}
               >
-                {item.status}
+                {statusLabel(item)}
               </span>
             </div>
           ))}

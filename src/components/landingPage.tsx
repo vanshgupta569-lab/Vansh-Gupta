@@ -29,6 +29,8 @@ import { ParticleField } from './particleField';
 import { MarginNotesSection } from './marginNotesSection';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
+import { featureById, statusLabel, claimFor, isShipped, CLAIMS, companyCountLabel } from '../data/featureRegister';
+import type { Feature } from '../data/featureRegister';
 
 /* The sections the object is bound to, in page order. Every id here must be
    rendered below, and the object holds one formation per entry. */
@@ -231,48 +233,16 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
 /* model that already exists and belongs on that model's own screen.    */
 /* Status is stated once, in the roadmap lower down, and nowhere else.  */
 /* ------------------------------------------------------------------ */
-const ROUTES = [
-  {
-    n: '01',
-    title: 'Value a listed company',
-    line: 'Type a ticker. Its filings become a three-statement model and a DCF you can argue with.',
-  },
-  {
-    n: '02',
-    title: 'Value a private company',
-    line: 'A private company files nothing public. Type in the accounts you already have and get the same model a listed company gets.',
-  },
-  {
-    n: '03',
-    title: 'Make a one or two-pager',
-    line: 'A whole company on one page — the summary you would be asked for before a meeting.',
-  },
-  {
-    n: '04',
-    title: 'Reformat your Excel model',
-    line: 'Your own workbook set to house convention: blue for inputs, black for formulas. Not one number changes.',
-  },
-];
+/* FROM THE FEATURE REGISTER (`src/data/featureRegister.ts`, LANDING §2.4).
+   A route that has not shipped keeps its place, carries its status, is
+   written in the future tense and opens nothing. */
+const ROUTES: { n: string; feature: Feature }[] = ['listed-company', 'private-company', 'one-pager', 'reformat-workbook'].map(
+  (id, i) => ({ n: String(i + 1).padStart(2, '0'), feature: featureById(id) as Feature })
+);
 
 /* What is not built yet. Every line here is stated as a plan, because a plan
    described in the present tense is a false claim about a website. */
-const NEXT = [
-  {
-    title: 'A one or two-pager',
-    status: 'In build',
-    line: 'The whole company on a single page: what it does, what it earns, what it is worth, and the figures you would be asked about first.',
-  },
-  {
-    title: 'A leveraged buyout model',
-    status: 'Planned',
-    line: 'The same forecast run for a buyer using debt — the structure it is bought with, the years of repayment, the exit, and the return that falls out of it.',
-  },
-  {
-    title: 'A private company',
-    status: 'In build',
-    line: 'A private company files nothing public, so you supply the accounts. Type in the income statement and balance sheet you already have and the same engine runs on them.',
-  },
-];
+const NEXT: Feature[] = ['one-pager', 'lbo', 'private-company'].map((id) => featureById(id) as Feature);
 
 
 const MARGIN_LINES = [
@@ -302,12 +272,42 @@ const MARGIN_LINES = [
   },
 ];
 
-const STATS = [
-  { to: 10000, suffix: '+', label: 'Listed companies', detail: 'NYSE · NASDAQ · NSE · BSE · LSE · TSX' },
-  { to: 5, suffix: 'Y', label: 'Of filed history', detail: 'IS · BS · CF · WC · PP&E · Debt · Equity' },
-  { to: 0, suffix: '', label: 'Cost to use', detail: 'No subscription, no paywall' },
-  { to: 3, suffix: '', label: 'Valuation approaches', detail: 'Income · Market · Asset' },
-];
+/* THE COUNTS (LANDING §2.3, decisions 2–4). Each is read from what it
+   claims about, or not shown: the company count and the exchanges from the
+   screener table, the years from the register's recorded claim. "Free to
+   use" waits for pricing (decision 2); "Three valuation approaches" waits
+   for build step 5 to ship (decision 4). */
+interface Stat { key: string; to: number; suffix: string; label: string; detail: string; source: string }
+
+function useCoverage(): { count: number | null; exchanges: string[]; built: string | null } {
+  const [state, setState] = useState<{ count: number | null; exchanges: string[]; built: string | null }>({
+    count: null,
+    exchanges: [],
+    built: null,
+  });
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/screener')
+      .then((r) => r.json())
+      .then((body) => {
+        if (!alive || !Array.isArray(body?.rows)) return;
+        // One listing per company, as the screener counts them.
+        const home = body.rows.filter((row: any) => row?.homeListing !== false);
+        const exchanges = [...new Set(home.map((row: any) => row?.exchange).filter(Boolean))].sort() as string[];
+        setState({ count: home.length, exchanges, built: body.built ?? null });
+      })
+      .catch(() => {
+        /* No table, no count: the tile is left out rather than guessed. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return state;
+}
+
+const asAt = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null;
 
 /* ------------------------------------------------------------------ */
 
@@ -326,6 +326,28 @@ interface LandingProps {
 
 export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo, onOpenNotes, children }) => {
   const [launching, setLaunching] = useState(false);
+  const coverage = useCoverage();
+  const countLabel = companyCountLabel(coverage.count);
+  const builtAt = asAt(coverage.built);
+  const STATS: (Stat & { label: string; text: string | null })[] = [
+    ...(countLabel
+      ? [{
+          key: 'companies', to: coverage.count as number, suffix: '', text: countLabel,
+          label: 'Listed companies',
+          detail: coverage.exchanges.join(' · '),
+          source: `Counted from the screener table${builtAt ? `, as at ${builtAt}` : ''}`,
+        }]
+      : []),
+    {
+      key: 'years', to: CLAIMS.historyYears, suffix: 'Y', text: null,
+      label: 'Up to, of filed history',
+      detail: 'IS · BS · CF · WC · PP&E · Debt · Equity',
+      source: 'Fiscal years read from each company\u2019s own filings',
+    },
+    ...(isShipped('three-approaches')
+      ? [{ key: 'approaches', to: 3, suffix: '', text: null, label: 'Valuation approaches', detail: 'Income · Market · Asset', source: 'Shown side by side, never averaged' }]
+      : []),
+  ];
   const [activeMargin, setActiveMargin] = useState(0);
   const marginRef = useRef<HTMLDivElement>(null);
 
@@ -431,14 +453,28 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             >
               Value a listed company
             </button>
-            <button
-              type="button"
-              onClick={launch}
-              className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent transition-colors hover:border-[#8B1E1E]"
-              style={{ borderColor: LINE, color: MUTED }}
-            >
-              Value a private company
-            </button>
+            {isShipped('private-company') ? (
+              <button
+                type="button"
+                onClick={launch}
+                data-feature="private-company"
+                className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent transition-colors hover:border-[#8B1E1E]"
+                style={{ borderColor: LINE, color: MUTED }}
+              >
+                Value a private company
+              </button>
+            ) : (
+              /* LANDING §2.4: while private-company inputs are not shipped,
+                 the ghost button is a text link to what is being built. */
+              <button
+                type="button"
+                onClick={() => onScrollTo('beyond')}
+                className="font-figure text-[13px] px-2 py-3.5 bg-transparent underline underline-offset-4 transition-colors"
+                style={{ color: MUTED }}
+              >
+                What is being built next &darr;
+              </button>
+            )}
           </div>
           <p
             className="font-figure text-[12px] tracking-[0.16em] uppercase mt-8"
@@ -456,26 +492,38 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <Mark />
           </h2>
           <div className="grid gap-6">
-            {ROUTES.map((r) => (
+            {ROUTES.map((r) => {
+              const shipped = r.feature.status === 'shipped';
+              const opens = shipped && r.feature.id === 'listed-company';
+              return (
               <button
                 key={r.n}
                 type="button"
-                onClick={r.n === '01' ? launch : undefined}
-                className={`text-left ${r.n === '01' ? 'cursor-pointer' : 'cursor-default'}`}
+                onClick={opens ? launch : undefined}
+                disabled={!opens}
+                data-feature={r.feature.id}
+                data-feature-status={r.feature.status}
+                className={`text-left ${opens ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <div className="flex items-baseline gap-4">
                   <span className="font-figure text-[13px] tracking-[0.2em] shrink-0" style={{ color: RED_TEXT }}>
                     {r.n}
                   </span>
                   <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
-                    {r.title}
+                    {r.feature.title}
                   </span>
+                  {!shipped && (
+                    <span className="font-figure text-[13px]" style={{ color: MUTED }}>
+                      {statusLabel(r.feature)}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[15px] leading-[1.55] mt-1.5 pl-10" style={{ color: MUTED }}>
-                  {r.line}
+                  {claimFor(r.feature)}
                 </p>
               </button>
-            ))}
+              );
+            })}
           </div>
         </Block>
 
@@ -576,8 +624,13 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             What a business earns, what buyers pay for businesses like it, and
-            what it owns outright are three different questions. All three are
-            run and all three are shown. They are never averaged into one tidy
+            what it owns outright are three different questions.{' '}
+            <span data-feature="three-approaches" data-feature-status={featureById('three-approaches')?.status}>
+              {isShipped('three-approaches')
+                ? 'All three are run and all three are shown.'
+                : 'All three are run; showing them side by side on one chart is being built.'}
+            </span>{' '}
+            They are never averaged into one tidy
             number, because an average of three different questions answers none
             of them.
           </p>
@@ -622,7 +675,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           </h2>
           <div className="grid gap-7">
             {NEXT.map((item) => (
-              <div key={item.title}>
+              <div key={item.id} data-feature={item.id} data-feature-status={item.status}>
                 <div className="flex items-baseline gap-3 flex-wrap">
                   <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
                     {item.title}
@@ -630,15 +683,15 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                   <span
                     className="font-figure text-[10px] tracking-[0.18em] uppercase px-2 py-1 border"
                     style={{
-                      color: item.status === 'In build' ? RED_TEXT : MUTED,
-                      borderColor: item.status === 'In build' ? 'rgba(139,30,30,0.55)' : LINE,
+                      color: item.status === 'in_build' ? RED_TEXT : MUTED,
+                      borderColor: item.status === 'in_build' ? 'rgba(139,30,30,0.55)' : LINE,
                     }}
                   >
-                    {item.status}
+                    {statusLabel(item)}
                   </span>
                 </div>
                 <p className="text-[15px] leading-[1.55] mt-2" style={{ color: MUTED }}>
-                  {item.line}
+                  {claimFor(item)}
                 </p>
               </div>
             ))}
@@ -719,11 +772,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               <span className="h-px w-8" style={{ background: RED }} />
               09 &middot; Coverage
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-14 gap-x-8">
+            <div className={`grid grid-cols-2 ${STATS.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-y-14 gap-x-8`}>
               {STATS.map((s) => (
-                <div key={s.label}>
+                <div key={s.key} data-stat={s.key}>
                   <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: PAPER.ink }}>
-                    <CountUp to={s.to} suffix={s.suffix} />
+                    {/* A count that is a label ("200+") is printed, not counted up. */}
+                    {s.text ? <span className="font-figure tabular-nums">{s.text}</span> : <CountUp to={s.to} suffix={s.suffix} />}
                   </div>
                   <div
                     className="font-figure text-[12px] tracking-[0.2em] uppercase mt-4"
@@ -733,6 +787,9 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                   </div>
                   <div className="font-figure text-[12px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
                     {s.detail}
+                  </div>
+                  <div className="font-figure text-[12px] mt-1 leading-[1.5]" data-stat-source style={{ color: PAPER.quiet }}>
+                    {s.source}
                   </div>
                 </div>
               ))}

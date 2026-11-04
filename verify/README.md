@@ -131,6 +131,12 @@ nowhere better to put them and each is cheap:
   `bridgeInWorker` in the real browser and must come back once and whole —
   every part, adding up, equal to the Node bridge part for part — while a
   50ms timer on the page keeps at least half its own idle rate.
+- **the feature register** (build step 8, job 8.6, `src/data/featureRegister.ts`).
+  Every feature has a valid status and the VISION.md row it was read from; an
+  unshipped one has a future-tense line; a quarter is recorded as "Q1 2027" or
+  absent, never computed; no banned word from either list (the screener's and
+  LANDING §2.3's); the company-count label follows LANDING §2.3 on eight cases.
+  `verify:dashboard` then reads the rendered landing page against it.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in

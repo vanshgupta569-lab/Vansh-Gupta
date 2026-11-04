@@ -4439,6 +4439,88 @@ async function checkBridgeWorker(browser: Browser) {
     );
 }
 
+// ---- the landing page claims only what has shipped (build step 8, 8.6) ---
+//
+// LANDING §2.4: the page may describe in the present tense only what the
+// feature register says has shipped; everything else keeps its place, carries
+// its status, is in the future tense, and opens nothing. §2.3: the company
+// count is read from the data and printed by the spec's own rule. This loads
+// the landing page with a screener table of 250 companies (and 12 duplicate
+// listings) and reads what it says.
+async function checkFeatureGate(browser: Browser) {
+  console.log('\n=== the landing page claims only what has shipped ===');
+  const FR: any = await import(`file:///${REPO}/src/data/featureRegister.ts`);
+  const exchanges = ['NYSE', 'NASDAQ', 'NSE', 'LSE'];
+  const rows = [
+    ...Array.from({ length: 250 }, (_, i) => ({ ticker: `C${i}`, exchange: exchanges[i % 4], homeListing: true })),
+    ...Array.from({ length: 12 }, (_, i) => ({ ticker: `D${i}`, exchange: 'TSX', homeListing: false })),
+  ];
+  // Worked out here, by the rule in LANDING §2.3, not by the code under test.
+  const wantCount = '200+';
+  const wantExchanges = [...exchanges].sort().join(' · ');
+  const built = '2026-11-01T00:00:00Z';
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  await installFixtureRoutes(ctx);
+  await ctx.route('**/api/screener*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, built }) })
+  );
+  const p = await ctx.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await revealWholePage(p);
+  const page: any = await p.evaluate(`(() => ({
+    text: document.body.innerText,
+    features: Array.from(document.querySelectorAll('[data-feature]')).map((el) => ({
+      id: el.getAttribute('data-feature'),
+      status: el.getAttribute('data-feature-status'),
+      text: el.innerText,
+      opens: !!(el.matches('a[href], button:not([disabled])') || el.querySelector('a[href], button:not([disabled])')),
+    })),
+    stats: Array.from(document.querySelectorAll('[data-stat]')).map((el) => ({ key: el.getAttribute('data-stat'), text: el.innerText })),
+  }))()`);
+  await ctx.close();
+  const issues: string[] = [];
+  const unshipped = FR.FEATURES.filter((f: any) => f.status !== 'shipped');
+  for (const f of unshipped) {
+    if (f.does && page.text.includes(f.does)) issues.push(`the page describes "${f.title}" in the present tense, and it is ${f.status}: "${f.does.slice(0, 60)}…"`);
+  }
+  for (const el of page.features) {
+    const f = FR.featureById(el.id);
+    if (!f) { issues.push(`an element claims feature "${el.id}", which the register does not list`); continue; }
+    if (el.status && el.status !== f.status) issues.push(`"${f.title}" is marked ${el.status} on the page and ${f.status} in the register`);
+    if (f.status !== 'shipped' && el.opens) issues.push(`"${f.title}" is ${f.status} and its element opens something`);
+    const label = FR.statusLabel(f);
+    if (f.status !== 'shipped' && el.id !== 'three-approaches' && !el.text.includes(label)) issues.push(`"${f.title}" is ${f.status} and its element does not say "${label}"`);
+  }
+  const quarters = page.text.match(/\bQ[1-4] 20\d\d\b/g) || [];
+  const recorded = FR.FEATURES.map((f: any) => f.quarter).filter(Boolean);
+  const invented = quarters.filter((q: string) => !recorded.includes(q));
+  if (invented.length) issues.push(`the page prints ${invented.join(', ')}, which no register entry records`);
+  const count = page.stats.find((x: any) => x.key === 'companies');
+  if (!count) issues.push('there is no company-count tile with a screener table to count');
+  else {
+    if (!count.text.includes(wantCount)) issues.push(`the count reads "${count.text.split('\n')[0]}", not ${wantCount} for 250 companies`);
+    if (!count.text.includes(wantExchanges)) issues.push(`the exchanges read "${count.text}", not ${wantExchanges}`);
+    if (!/as at 1 Nov 2026/.test(count.text)) issues.push('the count does not say what date the table is as at');
+  }
+  if (/10,000\+/.test(page.text)) issues.push('the page says 10,000+ with 250 companies in the table');
+  if (!FR.CLAIMS.showFreeToUse && /cost to use|free to use/i.test(page.text)) issues.push('the page says it is free to use before pricing is decided (decision 2)');
+  if (!FR.isShipped('three-approaches') && page.stats.some((x: any) => x.key === 'approaches'))
+    issues.push('the page counts three valuation approaches before build step 5 has shipped (decision 4)');
+  if (!FR.isShipped('private-company') && /value a private company/i.test(page.text) && page.features.some((x: any) => x.id === 'private-company' && x.opens))
+    issues.push('the hero still offers "Value a private company" as a button');
+  for (const stat of page.stats) if (!/\S/.test(stat.text.split('\n').slice(-1)[0])) issues.push(`the ${stat.key} tile has no source line`);
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length)
+    ok(
+      `${page.features.length} feature elements, each with the register's status and nothing that opens unless shipped; ` +
+        `${unshipped.length} unshipped features, none described in the present tense; no invented quarter; ` +
+        `the count reads ${wantCount} from 250 companies over ${wantExchanges}, as at 1 Nov 2026; no free-to-use or three-approaches claim`
+    );
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4618,6 +4700,7 @@ try {
   await checkReducedMotion(browser);
   await checkFocusAndTargets(browser);
   await checkBridgeWorker(browser);
+  await checkFeatureGate(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
