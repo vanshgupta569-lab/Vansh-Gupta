@@ -50,7 +50,7 @@ There is no step indicator, no address per step (Back leaves the studio),
 and outputs are buttons inside the valuation screen. The company page's Model
 tab opens this flow (`openModelFromHub`).
 
-### 1.2 Specified: four steps, four addresses (PROPOSED — needs Nihar)
+### 1.2 Specified: four steps, four addresses (APPROVED 4 Nov 2026)
 
 `/company/:ticker/model/figures` · `/judgements` · `/valuation` ·
 `/outputs`. They sit under the company hub's Model tab (one web address per
@@ -143,7 +143,7 @@ head the engine forecasts them on (`heads.ts`), with:
 - Undo (ADD): `Undo` and `Redo` ghost buttons left of the judgement count in
   the step bar, with ⌘Z / ⌘⇧Z (Ctrl on Windows) while focus is not in a text
   field; 50 steps; an undo restores both the figure and its reason. Today
-  only `Reset all` and the per-figure way back exist. (PROPOSED — needs Nihar:
+  only `Reset all` and the per-figure way back exist. (APPROVED 4 Nov 2026:
   50 steps, session only.)
 - After any change, the step bar's primary reads `Rebuild with changes` and a
   one-line note under the title, Small read: `The valuation below this point
@@ -154,8 +154,9 @@ head the engine forecasts them on (`heads.ts`), with:
 One statement at a time (segmented control full width). The table scrolls
 sideways inside its own container with the label column pinned at 40% width
 (TABLES_SPEC), a visible scroll cue (8px fade of the panel ground at the right
-edge — a fade on content, not chrome, PROPOSED — needs Nihar; alternative: a
-`Scroll for more years →` caption). Drag is not offered on touch; the row
+edge — a fade on content, not chrome; APPROVED 4 Nov 2026, the fade rather than
+the `Scroll for more years →` caption that was the alternative). Drag is not
+offered on touch; the row
 menu is the only move path (48 × 48 target). Reason field full width.
 
 ## 3. Step 2 — Judgements
@@ -375,7 +376,7 @@ solution exists, the reason, not a blank.
 | Drop | row settling in its new head | transform → 0 | `--m-dur-base` 200ms `--m-ease-standard` |
 | Undo / redo | the figure | instant value swap; accent-text colour on | `--m-dur-fast` 110ms colour |
 | Disclose panels | §4.1 item 5 | height, opacity; chevron | `--m-dur-base` 200ms / 140ms |
-| Football field, waterfall first mount | the chart container | `clip-path: inset(0 100% 0 0)→0` | `--m-dur-chart` 640ms `--m-ease-enter` once per page view (COMPANY_OVERVIEW D7 caps draw-in at 400ms + 200ms on the Overview's page-load budget — PROPOSED — needs Nihar: same 400 + 200 here) |
+| Football field, waterfall first mount | the chart container | `clip-path: inset(0 100% 0 0)→0` | `--m-dur-chart` `--m-ease-enter` once per page view. The token is **400ms** since job 8.1 (VISUAL_BUILD_PLAN C6, decision V3, approved 4 Nov 2026), which is COMPANY_OVERVIEW D7's 400 + 200 and inside VISUAL_SYSTEM §5's 600ms page-load cap that its own 640ms broke. Settles S7. |
 | Data change (after Apply or rebuild) | charts | none — redraw instantly | 0 |
 | Hover | rows, bars, cells | colour only | `--m-dur-fast` 110ms |
 
@@ -463,12 +464,20 @@ Motion and accessibility
 17. Every duration and curve is a `--m-*` token; reduced motion leaves no transform except direct manipulation of a dragged row.
 18. Every chart has a table alternative; every target ≥ 24×24 (44×44 on touch); `scroll-padding-top: 136px` on studio routes.
 
-## 10. Decisions for Nihar
+## 10. Decisions (Nihar, 4 November 2026)
 
-- **S1. PROPOSED — needs Nihar.** The studio lives at
+**S1 to S9 are approved**, with the two that offered alternatives settled:
+
+- **S2** — remove the financial health score, its radar and its badge, and keep
+  the five ratios as plain ratios with their formulas. `ROADMAP.md` moves the
+  health score to "Decided against" with the reason.
+- **S8** — a **right-edge fade** as the sideways-scroll cue on phone tables,
+  not a text caption.
+
+- **S1. APPROVED** (Nihar, 4 November 2026). The studio lives at
   `/company/:ticker/model/{figures|judgements|valuation|outputs}`, inside the
   Model tab, rather than at a separate `/studio/` address.
-- **S2. PROPOSED — needs Nihar.** Remove the financial health score, its
+- **S2. APPROVED** (Nihar, 4 November 2026). Remove the financial health score, its
   radar and its badge entirely (conflicts 1–3), keeping the five ratios as
   plain ratios. This removes a feature `ROADMAP.md` §3 lists as LIVE ("Health
   score") and `docs/VISION.md` does not mention; consistent with standing
@@ -476,19 +485,19 @@ Motion and accessibility
   snowflake (factual checks, not a scored shape), but a removal, so it is
   yours to confirm. `ROADMAP.md` would move it to "Decided against" with the
   reason (another session owns that file).
-- **S3. PROPOSED — needs Nihar.** One price per valuation: the struck price,
+- **S3. APPROVED** (Nihar, 4 November 2026). One price per valuation: the struck price,
   with a newer quote shown beside it and a `Rebuild at the latest price`
   action, rather than silently re-pricing (conflict 4).
-- **S4. PROPOSED — needs Nihar.** Undo and redo, 50 steps, held for the
+- **S4. APPROVED** (Nihar, 4 November 2026). Undo and redo, 50 steps, held for the
   session only.
-- **S5. PROPOSED — needs Nihar.** One statement at a time on the Figures
+- **S5. APPROVED** (Nihar, 4 November 2026). One statement at a time on the Figures
   step with a segmented control, rather than all three stacked.
-- **S6. PROPOSED — needs Nihar.** Football-field bars in `read` for every
+- **S6. APPROVED** (Nihar, 4 November 2026). Football-field bars in `read` for every
   approach and an ink price line; nothing in the chart oxblood; approaches
   told apart by label.
-- **S7. PROPOSED — needs Nihar.** The chart draw-in on the studio's charts
+- **S7. APPROVED** (Nihar, 4 November 2026). The chart draw-in on the studio's charts
   uses COMPANY_OVERVIEW D7's 400 + 200ms rather than VISUAL_SYSTEM's 640ms.
-- **S8. PROPOSED — needs Nihar.** A right-edge fade as the sideways-scroll
+- **S8. APPROVED** (Nihar, 4 November 2026). A right-edge fade as the sideways-scroll
   cue on phone tables, or a text caption instead.
-- **S9. PROPOSED — needs Nihar.** Delete the unused BULL / BEAR / FORENSIC
+- **S9. APPROVED** (Nihar, 4 November 2026). Delete the unused BULL / BEAR / FORENSIC
   presets rather than keep them for later (conflict 10).

@@ -701,6 +701,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         {/* 09 — coverage, counted up on arrival */}
         <section
           id="numbers"
+          data-ground="paper"
           className="w-full"
           style={{
             background: PAPER.ground,
@@ -743,6 +744,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 and only the note changes. */}
         <section
           id="in-the-margin"
+          data-ground="paper"
           ref={marginRef}
           className="relative w-full"
           style={{ background: PAPER.ground, height: `calc(100vh + ${MARGIN_LINES.length * 62}vh)` }}

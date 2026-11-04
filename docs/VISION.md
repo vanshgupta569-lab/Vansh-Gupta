@@ -224,7 +224,7 @@ Listings (anonymous teasers), verified buyers with mandates, seller deal-readine
 | **Live Excel workbook** | **Built** | All statements, annexures, DCF, ratios, Checks, Sources, Assumptions. |
 | **House template upload; peer workbook** | **Built** | Firm's own format; target plus ten peers. |
 | **Named ranges and input validation** | **Next** | Safe to hand over. |
-| **One-pager (tearsheet)** | **Now** | Description, price, key financials, multiples, model value, premium or discount. |
+| **One-pager (tearsheet)** | **Now** | Description, price, key financials, multiples, model value, premium or discount. **D1, confirmed 4 November 2026:** the three valuation approaches side by side on the one-pager; ownership moves to the two-pager (`docs/TEARSHEET_SPEC.md`). |
 | **Two-pager** | **Now** | Adds valuation summary, ownership and guidance record. |
 | **Research pack and Word report draft** | **Next** | See section 6. |
 | **PowerPoint pages** | **Next** | Football field, comps, tearsheet linked to the model. |
@@ -299,7 +299,7 @@ Goal: give every user a research report on any listed company, as good as a brok
 
 A research report that gives an opinion on the value of a security needs SEBI Research Analyst registration. Packs are built with both modes: user-authored (facts, the user's model, the user's conclusion) and Marginalia-authored (with rating and target), the second switched on after registration.
 
-1. **One-pager.** Description, price, ten-year key financials, ratios, multiples against peers, the user's model value, ownership changes.
+1. **One-pager.** Description, price, ten-year key financials, ratios, multiples against peers, the user's model value, and **the three valuation approaches side by side** (D1, confirmed 4 November 2026). **Ownership changes move to the two-pager**: the one-pager's 680 × 943px box is full once the three approaches are on it (`docs/TEARSHEET_SPEC.md`).
 
 1. **Two-pager.** Adds three-approach valuation, football field, guidance record, risk factors as disclosed, insider and promoter activity.
 

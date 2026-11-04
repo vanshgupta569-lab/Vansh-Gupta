@@ -1033,6 +1033,109 @@ async function checkStaleFigures(page: Page) {
   }
 }
 
+/**
+ * THE HEADER FITS ON ONE LINE, AT THE WIDTH IT IS TIGHTEST.
+ *
+ * One header now serves every screen (`DESIGN.md`, 2026-11-04): the wordmark,
+ * four nav links, the way back to the figures, a ghost search and the theme
+ * control, in a bar 64px tall that does not wrap. The inner row is
+ * `flex items-center` with NO wrap, so a bar that does not fit does not fold
+ * onto a second line — it OVERFLOWS, silently, and the control at the end goes
+ * off the edge of the screen where nobody finds it.
+ *
+ * 1100px IS THE WIDTH IT IS TIGHTEST AT. The nav links and the figures label
+ * appear at the `lg` breakpoint (1024px) and the bar has least spare room just
+ * above it; below 1024px the links are hidden and the label collapses to an
+ * icon, so the bar carries less.
+ *
+ * Driven on two screens, because they do not carry the same controls: the
+ * routed company page, and the valuation screen, which is the only one with
+ * the way back to the figures in it.
+ */
+async function checkHeaderOneLine(page: Page, label: string) {
+  const was = page.viewportSize();
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.waitForTimeout(400);
+  const measured: any = await page.evaluate(`(() => {
+    const header = document.querySelector('header');
+    if (!header) return { error: 'no header element' };
+    const row = header.querySelector(':scope > div');
+    if (!row) return { error: 'no row inside the header' };
+    const box = header.getBoundingClientRect();
+    const out = [];
+    for (const el of Array.from(row.children)) {
+      const st = getComputedStyle(el);
+      if (st.display === 'none' || st.visibility === 'hidden') continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      out.push({
+        what: (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 30),
+        top: Math.round(r.top * 10) / 10,
+        bottom: Math.round(r.bottom * 10) / 10,
+        right: Math.round(r.right * 10) / 10,
+      });
+    }
+    return {
+      height: Math.round(box.height),
+      headerTop: Math.round(box.top * 10) / 10,
+      headerBottom: Math.round(box.bottom * 10) / 10,
+      scrollWidth: row.scrollWidth,
+      clientWidth: row.clientWidth,
+      bodyScrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      controls: row.querySelectorAll('a,button,input').length,
+      children: out,
+    };
+  })()`);
+  if (measured?.error) {
+    fail(`the header at 1100px (${label})`, 'a header with a row of controls', String(measured.error));
+  } else {
+    // 1. NOTHING OVERFLOWS THE ROW. A flex row that cannot fit pushes its last
+    //    child past the edge rather than wrapping.
+    const over = measured.scrollWidth - measured.clientWidth;
+    // 2. AND EVERY CONTROL IS INSIDE THE 64px BAND, which is what "one line"
+    //    means for a bar whose children could otherwise sit below it.
+    const outside = (measured.children || []).filter(
+      (c: any) => c.top < measured.headerTop - 0.5 || c.bottom > measured.headerBottom + 0.5
+    );
+    const pastEdge = (measured.children || []).filter((c: any) => c.right > measured.innerWidth + 0.5);
+    if (over > 1) {
+      fail(
+        `the header at 1100px (${label})`,
+        'a row of controls that fits the bar',
+        `${over}px of overflow (${measured.scrollWidth} into ${measured.clientWidth})`
+      );
+    } else if (outside.length) {
+      fail(
+        `the header at 1100px (${label})`,
+        `every control inside the ${measured.height}px bar`,
+        `${outside.length} below or above it: ${outside.map((c: any) => c.what).join(', ')}`
+      );
+    } else if (pastEdge.length) {
+      fail(
+        `the header at 1100px (${label})`,
+        'every control inside the window',
+        `${pastEdge.map((c: any) => c.what).join(', ')} past the right edge`
+      );
+    } else if (measured.bodyScrollWidth > measured.innerWidth + 1) {
+      fail(
+        `the page at 1100px (${label})`,
+        'no horizontal scroll',
+        `${measured.bodyScrollWidth}px of content in ${measured.innerWidth}px`
+      );
+    } else {
+      ok(
+        `the header fits on one line at 1100px (${label}): ${measured.controls} controls in a ` +
+          `${measured.height}px bar, ${measured.scrollWidth}px of row in ${measured.clientWidth}px`
+      );
+    }
+  }
+  if (was) {
+    await page.setViewportSize(was);
+    await page.waitForTimeout(300);
+  }
+}
+
 async function checkHeadsOnScreen(page: Page) {
   console.log(`\n=== the figures screen: the lines under their heads ===`);
   const title = page.getByRole('heading', { name: /^reported figures/i });
@@ -1655,12 +1758,28 @@ async function checkSavedModelsOnScreen(page: Page, label: string, ticker: strin
   // Proved by gutting `restoreSaved` and watching this pass, which is why the
   // walk back to the figures screen is here.
   const defaultValue = (await page.textContent('body')) || '';
+  // THE FULLEST BAR THERE IS, measured where it is already on screen: the
+  // valuation screen carries the wordmark, the nav, the way back to the
+  // figures, the search and the theme control at once.
+  await checkHeaderOneLine(page, 'the valuation screen');
   const figuresButton = page
     .getByRole('button', { name: /check the figures|corrected figure|moved line/i })
     .first();
   if (!(await figuresButton.count())) {
     fail('the way back to the figures', 'in the header', '(not there)');
     return;
+  }
+  // AND IN THOSE WORDS, with nothing corrected or moved yet. The walk below
+  // would fail without the button at all, but it would fail as a restore that
+  // did not restore, hundreds of lines from the header that dropped it.
+  if (await page.getByRole('button', { name: /^check the figures$/i }).count()) {
+    ok('the header carries "Check the figures" with nothing yet corrected or moved');
+  } else {
+    fail(
+      'the way back to the figures',
+      '"Check the figures", before any judgement is made',
+      ((await figuresButton.textContent()) || '').trim() || '(no label)'
+    );
   }
   await figuresButton.click();
   await page.getByRole('heading', { name: /^reported figures/i }).waitFor({ timeout: 60_000 });
@@ -2159,9 +2278,15 @@ const LANDING_TYPE_SCREEN = 'the landing page, loaded';
 // may FALL but never RISE, and any off-step size not listed here fails at
 // once. Measured 2026-11-04 over every screen this check drives. Lower the
 // number when a job removes some; delete the entry when it reaches zero.
+//
+// RAISED ONCE, ON THE DAY IT WAS WRITTEN, AND SAID RATHER THAN SLIPPED IN. It
+// was recorded at 347 in the cloud, against a main that did not yet have the
+// two judgement-layer hooks (`8a13663`). Those made three more heads drop
+// targets, and every movable line's row menu lists each head it can go to, so
+// 36 more elements of exactly the same kind appeared in exactly the same file:
+// 383. Nothing else on any screen moved. A rise this check cannot explain is
+// still a failure, which is the whole point of it.
 const TYPE_RATCHET: Record<string, { count: number; why: string }> = {
-  // 347 when recorded; 383 after merging build step 5 part A (8a13663), whose
-  // "below the operating line" bridge rows are drawn by the same 14px styles.
   '14': { count: 383, why: 'the figures screen, figuresEditor.tsx inline styles and its embedded <style>' },
 };
 
@@ -3237,6 +3362,16 @@ async function checkCostOfCapitalOnScreen(page: Page) {
 async function checkCompanyTabsOnScreen(page: Page) {
   console.log('\n=== the company page: every tab has an address, and it loads ===');
   const { COMPANY_TABS } = await import(`file:///${REPO}/src/data/companyRoute.ts`);
+
+  // THE HEADER, ON THE SCREEN A LINK LANDS ON. The valuation screen's fuller
+  // bar is driven where that screen is already up, further down.
+  await page.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'domcontentloaded' });
+  try {
+    await page.getByRole('heading', { name: PAPER_NAME, level: 1 }).first().waitFor({ timeout: 60_000 });
+    await checkHeaderOneLine(page, 'a company screen');
+  } catch {
+    fail('the company page at 1100px', 'the company heading', 'it never rendered');
+  }
 
   for (const tab of COMPANY_TABS as any[]) {
     const url = `${BASE}/company/${PAPER_TICKER}/${tab.slug}`;

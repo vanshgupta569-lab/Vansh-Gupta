@@ -39,11 +39,11 @@ Nothing exists yet for the Shapley attribution, the waterfall, or base rates.
 | Job | What | Check | Proved to fail by | Where |
 |---|---|---|---|---|
 | B1 | **One valuation summary.** Lift `valuationBands`, `terminalMethods`, `premiumAgainst` and `fieldBands` out of `TerminalDashboard.tsx` into a pure `src/data/valuationSummary.ts` that takes the source, drivers, the market and asset results and **the struck price**. The dashboard reads it. This is also `docs/TEARSHEET_SPEC.md` job 1 — one job, not two. | Across the payload set, every band, point and premium equals what the dashboard printed before the move, captured from the rendered page (not from the new function — CLAUDE.md "comparing a figure against itself"). Premium is struck at the record's price (STUDIO S3). | Flip the premium's sign in the new function: the browser check and the sweep comparison both fail. | Local (sweep); the dashboard half runs on fixtures |
-| B2 | **Market range from a stated flex.** For each usable multiple, the implied per-share value at the peers' 25th and 75th percentile multiple, with the median as the point; the row's range is the union across the usable multiples and its detail line names them (`EV/EBITDA 9.8–14.1×, P/E 18–26×, 7 peers`). Fewer than 4 peers on a multiple: that multiple uses min–max of the peers and says so. **PROPOSED — needs Nihar** (B-1). `METHODOLOGY.md` §18 and §20 updated. | Identities on every company: low ≤ point ≤ high; each bound reproduces from the listed peer multiples and the company's own figure (computed independently in the check); a peer set changed by the reader moves the range. Sweep before/after: how many market ranges widened or narrowed, and the largest move. | Use the mean instead of the percentile in the builder: the independent recomputation fails. | Local |
+| B2 | **Market range from a stated flex.** For each usable multiple, the implied per-share value at the peers' 25th and 75th percentile multiple, with the median as the point; the row's range is the union across the usable multiples and its detail line names them (`EV/EBITDA 9.8–14.1×, P/E 18–26×, 7 peers`). Fewer than 4 peers on a multiple: that multiple uses min–max of the peers and says so. **APPROVED 4 Nov 2026** (B-1). `METHODOLOGY.md` §18 and §20 updated. | Identities on every company: low ≤ point ≤ high; each bound reproduces from the listed peer multiples and the company's own figure (computed independently in the check); a peer set changed by the reader moves the range. Sweep before/after: how many market ranges widened or narrowed, and the largest move. | Use the mean instead of the percentile in the builder: the independent recomputation fails. | Local |
 | B3 | **Asset row.** Label `Asset — book, tangible book, net current assets` (plus `liquidation at your recovery rates` when shown); the point is drawn only where one measure survives (rule 5: "a point or a narrow band if there is no honest range"); `informative: false` prints the suitability sentence in the row. | Every asset row's label lists exactly the measures inside its range; no point drawn when more than one measure is in range. | Re-add the median point: fails. | Cloud (fixtures) |
 | B4 | **Refusals, caption, overlap.** A refused approach (market unavailable, asset all negative, DCF refused) is a row carrying the engine's sentence (rule 6); `Shown side by side; not combined.` (rule 8); `The ranges do not overlap.` when no two approach ranges intersect, and never otherwise (rule 7). | Over every company: approaches shown + approaches refused = approaches attempted; the overlap sentence appears iff the computed ranges are disjoint. Banned-word scan (`src/data/screener.ts` `bannedWordsIn`, with the exit-multiple allow-list of TEARSHEET D4) over every row string. | Hide one refused row: the count identity fails. Print the overlap sentence on an overlapping case: fails. | Local for "every company"; fixtures for the browser half |
 | B5 | **No average anywhere.** A scan that fails on any field named or computed as a cross-approach mean, midpoint, weight or "consensus" in `valuationSummary.ts`, the workbook builder and the tearsheet contract. | Static and runtime: no output value equals the mean of two approach points except by coincidence flagged for review (report the count; today 0 expected). | Add a "blended" field: fails. | Cloud |
-| B6 | **Export.** The side-by-side table in the workbook (rule 12) — each row's low, point and high as **live formulas or links** to the cells that produce them, never pasted (KI-4). Adding a sheet changes the sheet set, which `CLAUDE.md` says to ask about first: **PROPOSED — needs Nihar** (B-2): a new `Valuation summary` sheet after DCF, appended so no existing row position moves. The tearsheet reads B1's summary directly. | `verify:workbook`: each workbook row recalculates to the site's value; editing the WACC cell in the workbook moves the income rows (the KI-4 first-edit test). | Paste a value instead of a formula: the first-edit test fails. | Cloud (Apple) + local (every company) |
+| B6 | **Export.** The side-by-side table in the workbook (rule 12) — each row's low, point and high as **live formulas or links** to the cells that produce them, never pasted (KI-4). Adding a sheet changes the sheet set, which `CLAUDE.md` says to ask about first: **APPROVED 4 Nov 2026** (B-2): a new `Valuation summary` sheet after DCF, appended so no existing row position moves. The tearsheet reads B1's summary directly. | `verify:workbook`: each workbook row recalculates to the site's value; editing the WACC cell in the workbook moves the income rows (the KI-4 first-edit test). | Paste a value instead of a formula: the first-edit test fails. | Cloud (Apple) + local (every company) |
 | B7 | **Phone and table view** (rule 10) — the visual half is `docs/VISUAL_BUILD_PLAN.md` job 9.22; this job adds `View as table` and the bottom sheet of assumptions. | 390px: label above bar, ≥ 24px rows, one price line; the table holds the same numbers as the chart. | Drop one row from the table view: fails. | Cloud |
 
 Order: B1 → B2 → B3 → B4 → B5 → B6 → B7. LANDING_SPEC decision 4 ("Three
@@ -56,7 +56,7 @@ perpetuity value by default, the exit-multiple value on request; never one
 converted into the other, and never an EV attribution turned into per share
 afterwards (rule 20). The market and asset rows are not bridged in version 1
 (they move only with peers and recoveries, which are their own drivers); the
-screen says so. **PROPOSED — needs Nihar** (C-1).
+screen says so. **APPROVED 4 Nov 2026** (C-1).
 
 **The drivers (rule 15), from `SavedJudgements`:**
 
@@ -76,7 +76,7 @@ screen says so. **PROPOSED — needs Nihar** (C-1).
 | C1 | **Driver list and version mixing.** `src/data/bridge.ts`: `driversBetween(A, B)` lists every input that differs, grouped as above (rule 13); `mix(A, B, subset)` returns a judgement record taking `subset` from B and the rest from A; each mix valued with `restoreFromJudgements`. A refused mix is reported, not skipped (rule 16). | For every pair of saved fixtures: `mix(A,B,∅)` reproduces A's value and `mix(A,B,all)` B's, exactly; every changed input appears in exactly one driver; a mix the engine refuses appears in the result with its sentence. | Drop one input from the grouping: the "exactly one driver" identity fails. | Cloud (fixtures) |
 | C2 | **Exact Shapley up to 10 drivers.** 2^k runs, cached by subset; largest-remainder rounding of the displayed parts. | The spec's worked example as a fixture: A 1,428.57, B 2,000.00, change +571.43; FCF 161.64, WACC 272.20, growth 137.58 (137.59 after rounding); one-at-a-time from A sums to 490.84 and is **not** what is shown; parts sum to the total to the cent on every random pair of fixtures; a zero-change driver gets exactly 0 (rule 19). Measure the time for 10 drivers (1,024 runs) and report it. | Replace Shapley with a sequential walk in a fixed order: the worked example fails (WACC 238.10 or 307.69, not 272.20). | Cloud |
 | C3 | **Above 10 drivers: sampled orders** with a fixed seed. Each sampled order's contributions sum to the total, so the average does too (rule 14). | Sum exactness on a 14-driver fixture; same seed gives identical parts; the sampled estimate for a 10-driver case lies within a stated tolerance of the exact one (tolerance measured and recorded). | Change the seed per run: the repeatability check fails. | Cloud |
-| C4 | **Performance.** If C2's measurement exceeds 2 seconds on the dashboard's machine, run the subsets in a Web Worker with the bridge shown after it completes, not progressively. **PROPOSED — needs Nihar** (C-2) only if needed. | Time to result reported; the UI never shows partial parts. | Render before completion: the "parts = total" line fails mid-run. | Cloud |
+| C4 | **Performance.** If C2's measurement exceeds 2 seconds on the dashboard's machine, run the subsets in a Web Worker with the bridge shown after it completes, not progressively. **APPROVED 4 Nov 2026** (C-2) only if needed. | Time to result reported; the UI never shows partial parts. | Render before completion: the "parts = total" line fails mid-run. | Cloud |
 | C5 | **The screen.** STUDIO_SPEC §4.6: waterfall sorted by size, table (driver · A · B · change · % of total, `n.m.` near zero), `Parts {sum} = total {Δ} ✓`, the method line (rule 23), "associated with" (rule 22), optional sequential walk labelled "results change with the order" (rule 21). Phone horizontal waterfall (rule 24). | Dashboard: the reconciliation line's two numbers are equal on the page; every displayed part matches C2's rounded output; no "caused" string (scan). | Remove largest-remainder rounding: the displayed parts stop adding up on the worked example and the line fails. | Cloud |
 | C6 | **Real versions.** Bridge between a saved model and its reopen after new filings, over the payload set: how often "New filings" is the largest driver, largest absolute part. | Every company with two versions: parts sum exactly; no NaN; refused mixes counted. | Corrupt one payload's statements: its mixes are reported as refused, not skipped. | Local |
 
@@ -109,7 +109,7 @@ the drivers.
   counted (rule 11).
 - **Size bands:** starting revenue in nominal USD of the start year, bands
   fixed in advance and published: < $0.5bn, $0.5–2bn, $2–5bn, $5–25bn, ≥
-  $25bn. **PROPOSED — needs Nihar** (D-1) — our own bands, not a study's.
+  $25bn. **APPROVED 4 Nov 2026** (D-1) — our own bands, not a study's.
 - **Real growth:** deflated with BLS CPI-U annual averages (rule 7), the
   series and its as-at date stored with the table.
 - **Survivorship:** include every company whose facts exist for the window,
@@ -169,22 +169,28 @@ beside B because they read only `restoreFromJudgements`. D0–D2 are
 independent and can start at any time on the local machine. B6 (export) and
 C5 (screen) wait for their decisions (B-2, C-1).
 
-## 6. Decisions for Nihar
+## 6. Decisions (Nihar, 4 November 2026)
 
-- **B-1. PROPOSED — needs Nihar.** The market range is the peers' 25th–75th
+**B-1, B-2, C-1, C-2, D-1 and D-2 are approved.** B-2 is the one that needed
+asking under `CLAUDE.md` — a new sheet in the workbook — and it is approved as
+proposed: a `Valuation summary` sheet **appended after DCF**, so no existing
+sheet moves and no row position a firm's macro depends on changes. **D-3 is not
+a proposal and stays open**, to be answered by measurement in job D0.
+
+- **B-1. APPROVED** (Nihar, 4 November 2026). The market range is the peers' 25th–75th
   percentile of each usable multiple applied to the company's own figure, with
   min–max below four peers, said in the row.
-- **B-2. PROPOSED — needs Nihar.** A new `Valuation summary` sheet in the
+- **B-2. APPROVED** (Nihar, 4 November 2026). A new `Valuation summary` sheet in the
   workbook, appended after DCF so no row position moves. `CLAUDE.md` requires
   asking before the sheet set changes.
-- **C-1. PROPOSED — needs Nihar.** Version 1 of the bridge explains the
+- **C-1. APPROVED** (Nihar, 4 November 2026). Version 1 of the bridge explains the
   perpetuity value (exit value on request) only, not the market or asset
   rows.
-- **C-2. PROPOSED — needs Nihar.** Run the bridge in a Web Worker if 1,024
+- **C-2. APPROVED** (Nihar, 4 November 2026). Run the bridge in a Web Worker if 1,024
   engine runs take more than 2 seconds.
-- **D-1. PROPOSED — needs Nihar.** Size bands < $0.5bn, $0.5–2bn, $2–5bn,
+- **D-1. APPROVED** (Nihar, 4 November 2026). Size bands < $0.5bn, $0.5–2bn, $2–5bn,
   $5–25bn, ≥ $25bn, nominal USD of the start year.
-- **D-2. PROPOSED — needs Nihar.** Commit the computed base-rate table to the
+- **D-2. APPROVED** (Nihar, 4 November 2026). Commit the computed base-rate table to the
   repository; keep the SEC archive out of git.
 - **D-3. Open (not a proposal):** the archive's size and whether deregistered
   and acquired companies are included (4.2) — answered by measurement in D0.

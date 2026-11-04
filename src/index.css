@@ -260,7 +260,7 @@ textarea,
   outline-width: 2px;
   outline-offset: 2px;
 }
-:root :is(#margin-notes, [style*="background: rgb(242, 240, 234)"]) * {
+:root [data-ground="paper"] * {
   outline-color: var(--m-paper-ink);
 }
 :root :focus-visible {

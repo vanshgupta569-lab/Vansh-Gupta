@@ -72,7 +72,7 @@ export const MarginNotesSection: React.FC<Props> = ({ onOpenNotes }) => {
   const quarters = upcomingQuarters(ROADMAP.length);
 
   return (
-    <section id="margin-notes" className="w-full" style={{ background: PAPER }}>
+    <section id="margin-notes" data-ground="paper" className="w-full" style={{ background: PAPER }}>
       <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-20 lg:py-24">
         <p
           className="font-figure text-[12px] tracking-[0.22em] uppercase mb-6 flex items-center gap-3"
