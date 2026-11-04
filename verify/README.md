@@ -95,7 +95,13 @@ nowhere better to put them and each is cheap:
   mark's `-0.21em` right margin is checked, since that is the whole reason it
   has zero advance width. And no component may declare a palette colour of its
   own, which is the habit that produced eight copies of the same six hex codes
-  and an eyebrow at 3.90:1 on every screen.
+  and an eyebrow at 3.90:1 on every screen. Since build step 8 job 8.1 the
+  grounds include the overlay and the paper panel, and a second floor of 3:1
+  (WCAG 1.4.11) covers the control boundary (`lineControl`, on dark and on
+  paper) and every chart series; the five series must not share a stroke; and
+  each sequential ramp must run in order (lightest largest on dark, darkest
+  largest on paper) with its pale steps — those under 3:1 — named exactly in
+  `SEQUENTIAL_NEEDS_OUTLINE`, because a cell in one needs an outline.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in

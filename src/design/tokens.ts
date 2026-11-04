@@ -55,8 +55,21 @@ export const DARK = {
   page: '#0B0B0D',
   /** Any raised surface: a card, a modal, a panel. */
   panel: '#111114',
-  /** Hairlines. */
+  /** Hairlines. Decorative: 1.28:1, so never the only boundary of a control. */
   line: '#262521',
+  /**
+   * A raised surface above a panel: a modal, a sheet, a popover, a menu.
+   * Elevation is tonal (`docs/VISUAL_SYSTEM.md` §2): lighter means higher.
+   */
+  overlay: '#16161A',
+  /**
+   * The boundary of a control: an input, a segmented control, a checkbox.
+   * WCAG 1.4.11 asks 3:1 of a control's boundary; `line` is 1.28:1 and cannot
+   * be that boundary. 3.65 on page, 3.49 on panel, 3.35 on overlay.
+   */
+  lineControl: '#6E6A60',
+  /** Behind a modal or a sheet. Not a colour anything is read in. */
+  scrim: 'rgba(11,11,13,0.72)',
 
   /** Headings, figures, anything being read closely. */
   ink: '#F2F0EA',
@@ -83,13 +96,67 @@ export const DARK = {
 /** The reading screens: Margin Notes, and the explainer pages under /learn/. */
 export const PAPER = {
   ground: '#F2F0EA',
+  /** The raised surface on paper, and the paper selected state's ground. */
+  panel: '#FAF9F5',
   ink: '#16150F',
   read: '#3A382F',
   quiet: '#6B6759',
   line: '#DAD6CC',
+  /** The boundary of a control on paper: 3.43 on the ground, 3.71 on panel. */
+  lineControl: '#85816F',
 
   accent: '#8B1E1E',
   accentText: '#A23A34',
+} as const;
+
+// ---------------------------------------------------------------------------
+// CHARTS (`docs/VISUAL_SYSTEM.md` §3.2)
+//
+// Five series at most, three as the target. Every series is a palette colour
+// already on the ramp, told apart by its stroke as well as its colour, because
+// a chart must read in greyscale and to a reader with a colour-vision
+// deficiency. Each carries a direct label; there is no legend to look up.
+// Oxblood is not a series: its one categorical use is the this-model forecast
+// line, drawn dashed in `accentText`.
+export const CHART_SERIES = [
+  { key: 's1', role: 'the subject, e.g. the price', colour: DARK.ink, dash: 'solid' },
+  { key: 's2', role: 'an overlay on the second axis', colour: DARK.amber, dash: 'solid' },
+  { key: 's3', role: 'a third series', colour: DARK.read, dash: '6 4' },
+  { key: 's4', role: 'a fourth series', colour: DARK.muted, dash: '1.5 3.5' },
+  { key: 's5', role: 'the fifth, and the last', colour: DARK.quiet, dash: '6 3 1.5 3' },
+] as const;
+
+/**
+ * THE SEQUENTIAL RAMPS, five steps each. On the dark ground the lightest step
+ * is the largest value; on paper the darkest is (Carbon's rule). Stepped, never
+ * a gradient standing in for one.
+ */
+export const SEQUENTIAL = {
+  dark: ['#2B2B2C', '#50504F', '#7E7E7C', '#B1B0AC', '#F2F0EA'],
+  paper: ['#D3D1CB', '#B0AEA8', '#84827C', '#54524C', '#16150F'],
+} as const;
+
+/**
+ * The steps that fall below 3:1 against their ground, by index. A cell filled
+ * with one of these needs a hairline outline and a printed value, because the
+ * fill alone does not meet the 3:1 a graphical object needs. Stated here rather
+ * than remembered; the verification suite computes the set and fails if this
+ * list does not match it.
+ */
+export const SEQUENTIAL_NEEDS_OUTLINE = {
+  dark: [0, 1],
+  paper: [0, 1],
+} as const;
+
+/**
+ * DIVERGING, only where there is a true midpoint (price against value). The
+ * two ends are the existing signal colours, the midpoint a neutral step; every
+ * cell prints a signed value, so colour never carries the sign alone.
+ */
+export const DIVERGING = {
+  negative: DARK.accentText,
+  midpoint: '#50504F',
+  positive: DARK.positive,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -170,6 +237,9 @@ export const CSS_VARIABLES: Record<string, string> = {
   '--m-positive-line': DARK.positiveLine,
   '--m-positive-fill': DARK.positiveFill,
   '--m-amber': DARK.amber,
+  '--m-overlay': DARK.overlay,
+  '--m-line-control': DARK.lineControl,
+  '--m-scrim': DARK.scrim,
 
   '--m-paper': PAPER.ground,
   '--m-paper-ink': PAPER.ink,
@@ -177,6 +247,15 @@ export const CSS_VARIABLES: Record<string, string> = {
   '--m-paper-quiet': PAPER.quiet,
   '--m-paper-line': PAPER.line,
   '--m-paper-accent-text': PAPER.accentText,
+  '--m-paper-panel': PAPER.panel,
+  '--m-paper-line-control': PAPER.lineControl,
+
+  ...Object.fromEntries(CHART_SERIES.map((s) => [`--m-chart-${s.key}`, s.colour])),
+  ...Object.fromEntries(SEQUENTIAL.dark.map((c, i) => [`--m-seq-${i + 1}`, c])),
+  ...Object.fromEntries(SEQUENTIAL.paper.map((c, i) => [`--m-paper-seq-${i + 1}`, c])),
+  '--m-div-negative': DIVERGING.negative,
+  '--m-div-midpoint': DIVERGING.midpoint,
+  '--m-div-positive': DIVERGING.positive,
 };
 
 // ---------------------------------------------------------------------------
@@ -190,7 +269,19 @@ export const TEXT_ON_DARK: (keyof typeof DARK)[] = [
   'ink', 'read', 'muted', 'quiet', 'accentText', 'positive', 'amber',
 ];
 export const TEXT_ON_PAPER: (keyof typeof PAPER)[] = ['ink', 'read', 'quiet', 'accentText', 'accent'];
-export const DARK_GROUNDS: (keyof typeof DARK)[] = ['page', 'panel'];
+export const DARK_GROUNDS: (keyof typeof DARK)[] = ['page', 'panel', 'overlay'];
+export const PAPER_GROUNDS: (keyof typeof PAPER)[] = ['ground', 'panel'];
+
+/**
+ * Which tokens draw the boundary of a control, and so must clear 3:1 on every
+ * ground (WCAG 1.4.11). `line` is deliberately absent: it is decorative.
+ */
+export const BOUNDARY_ON_DARK: (keyof typeof DARK)[] = ['lineControl'];
+export const BOUNDARY_ON_PAPER: (keyof typeof PAPER)[] = ['lineControl'];
+/** Chart marks sit on the page and on panels, never on an overlay. */
+export const CHART_GROUNDS: (keyof typeof DARK)[] = ['page', 'panel'];
 
 /** WCAG AA for normal text. Nothing on either ground is allowed below it. */
 export const CONTRAST_FLOOR = 4.5;
+/** WCAG 1.4.11: control boundaries, focus indicators and chart marks. */
+export const BOUNDARY_FLOOR = 3;

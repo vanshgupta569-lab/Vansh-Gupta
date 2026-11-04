@@ -1399,7 +1399,90 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     for (const groundToken of T.DARK_GROUNDS)
       measure(`DARK.${token}`, T.DARK[token], `DARK.${groundToken}`, T.DARK[groundToken]);
   for (const token of T.TEXT_ON_PAPER)
-    measure(`PAPER.${token}`, T.PAPER[token], 'PAPER.ground', T.PAPER.ground);
+    for (const groundToken of T.PAPER_GROUNDS)
+      measure(`PAPER.${token}`, T.PAPER[token], `PAPER.${groundToken}`, T.PAPER[groundToken]);
+
+  // -- boundaries and chart marks: 3:1 (WCAG 1.4.11, docs/VISUAL_SYSTEM.md §7)
+  //
+  // The 4.5:1 floor is for words. A control's boundary, a focus indicator and a
+  // chart mark need 3:1, and the decorative hairline (`line`, 1.28:1) can be
+  // none of them — which is why `lineControl` exists. Measured on every ground
+  // the token is drawn on, the same way the words are.
+  let worstBoundary = { ratio: Infinity, what: '' };
+  let boundaryPairs = 0;
+  const measureBoundary = (token: string, colour: string, groundName: string, ground: string) => {
+    boundaryPairs++;
+    const r = contrast(colour, ground);
+    if (r < worstBoundary.ratio) worstBoundary = { ratio: r, what: `${token} on ${groundName}` };
+    if (r < T.BOUNDARY_FLOOR) {
+      bad++;
+      console.log(
+        `  PROBLEM: ${token} (${colour}) is ${r.toFixed(2)}:1 on ${groundName} (${ground}), ` +
+          `under the ${T.BOUNDARY_FLOOR}:1 floor for a boundary or a chart mark`
+      );
+    }
+  };
+  for (const token of T.BOUNDARY_ON_DARK)
+    for (const groundToken of T.DARK_GROUNDS)
+      measureBoundary(`DARK.${token}`, T.DARK[token], `DARK.${groundToken}`, T.DARK[groundToken]);
+  for (const token of T.BOUNDARY_ON_PAPER)
+    for (const groundToken of T.PAPER_GROUNDS)
+      measureBoundary(`PAPER.${token}`, T.PAPER[token], `PAPER.${groundToken}`, T.PAPER[groundToken]);
+  for (const series of T.CHART_SERIES)
+    for (const groundToken of T.CHART_GROUNDS)
+      measureBoundary(`CHART.${series.key}`, series.colour, `DARK.${groundToken}`, T.DARK[groundToken]);
+
+  // Five series is the hard cap, and no two may share a stroke: a chart has to
+  // read in greyscale, where two lines of different colour and the same dash
+  // are the same line.
+  if (T.CHART_SERIES.length > 5) {
+    bad++;
+    console.log(`  PROBLEM: ${T.CHART_SERIES.length} chart series; five is the cap`);
+  }
+  const dashes = T.CHART_SERIES.map((x: any) => x.dash);
+  const sharedDash = dashes.filter((d: string, i: number) => d !== 'solid' && dashes.indexOf(d) !== i);
+  // Two solid series are allowed only because the second sits on its own axis
+  // with its own direct label (the Two-Axis Rule); a third would not be.
+  if (sharedDash.length || dashes.filter((d: string) => d === 'solid').length > 2) {
+    bad++;
+    console.log(`  PROBLEM: chart series share a stroke (${dashes.join(' | ')}), so they cannot be told apart in greyscale`);
+  }
+
+  // -- the sequential ramps: in order, and honest about their pale steps
+  //
+  // On the dark ground the lightest step is the largest value; on paper the
+  // darkest is. A ramp out of order encodes a value backwards, and nothing on
+  // the screen would say so. The pale steps cannot reach 3:1, so the tokens
+  // name them (`SEQUENTIAL_NEEDS_OUTLINE`) and a cell drawn in one needs an
+  // outline and a printed value; the list must be exactly the steps that fail,
+  // or a step that needs an outline would go without one.
+  const ramps: [string, readonly string[], string[], 'up' | 'down'][] = [
+    ['dark', T.SEQUENTIAL.dark, T.DARK_GROUNDS.filter((g: string) => g !== 'overlay').map((g: string) => T.DARK[g]), 'up'],
+    ['paper', T.SEQUENTIAL.paper, T.PAPER_GROUNDS.map((g: string) => T.PAPER[g]), 'down'],
+  ];
+  for (const [name, steps, grounds, direction] of ramps) {
+    for (let i = 1; i < steps.length; i++) {
+      const rising = relLum(steps[i]) > relLum(steps[i - 1]);
+      if (rising !== (direction === 'up')) {
+        bad++;
+        console.log(
+          `  PROBLEM: the ${name} sequential ramp is out of order at step ${i + 1} (${steps[i - 1]} then ${steps[i]}); ` +
+            `on ${name === 'dark' ? 'the dark ground the lightest' : 'paper the darkest'} step must be the largest value`
+        );
+      }
+    }
+    const pale = steps
+      .map((c, i) => (grounds.some((g) => contrast(c, g) < T.BOUNDARY_FLOOR) ? i : -1))
+      .filter((i) => i >= 0);
+    const declared = [...(T.SEQUENTIAL_NEEDS_OUTLINE[name] as readonly number[])];
+    if (pale.join(',') !== declared.join(',')) {
+      bad++;
+      console.log(
+        `  PROBLEM: the ${name} ramp's steps under ${T.BOUNDARY_FLOOR}:1 are [${pale.map((i) => i + 1).join(', ')}] ` +
+          `but SEQUENTIAL_NEEDS_OUTLINE.${name} names [${declared.map((i) => i + 1).join(', ')}]`
+      );
+    }
+  }
 
   // The mark is not text and is not expected to clear the floor; what it must
   // not do is stop hanging in the gutter.
@@ -1436,10 +1519,16 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     for (const s of strays.slice(0, 10)) console.log(`           ${s}`);
   }
 
-  const counted = T.TEXT_ON_DARK.length * T.DARK_GROUNDS.length + T.TEXT_ON_PAPER.length;
+  const counted = T.TEXT_ON_DARK.length * T.DARK_GROUNDS.length + T.TEXT_ON_PAPER.length * T.PAPER_GROUNDS.length;
   console.log(
-    `  ${counted} token-and-ground pairs measured, ${Object.keys(T.CSS_VARIABLES).length} custom properties compared ` +
-      `against src/index.css -- ${bad ? bad + ' PROBLEMS' : `all clear ${T.CONTRAST_FLOOR}:1, worst ${worst.ratio.toFixed(2)}:1 (${worst.what})`}`
+    `  ${counted} text-and-ground pairs and ${boundaryPairs} boundary-and-ground pairs measured, ` +
+      `2 sequential ramps checked, ${Object.keys(T.CSS_VARIABLES).length} custom properties compared ` +
+      `against src/index.css -- ${
+        bad
+          ? bad + ' PROBLEMS'
+          : `words all clear ${T.CONTRAST_FLOOR}:1, worst ${worst.ratio.toFixed(2)}:1 (${worst.what}); ` +
+            `boundaries and chart marks all clear ${T.BOUNDARY_FLOOR}:1, worst ${worstBoundary.ratio.toFixed(2)}:1 (${worstBoundary.what})`
+      }`
   );
   totalProblems += bad;
 }
