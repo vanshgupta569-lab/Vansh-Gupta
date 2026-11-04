@@ -39,3 +39,99 @@ Standing limits of this session, true for every job below:
 | 9.1 | The global header and the menu (NAV_SEARCH §2–3; LEARN_STATES §4) | Found: the other session's "One header on every screen" (merged from main) had already removed the clock, the live dot, Home, All companies and the red links, and made Search a ghost; what was left was four landing-page links instead of the seven sections, no panels, and no phone menu at all (below 1024px the links simply vanished). Now `src/data/menu.ts` holds the seven sections in their fixed order with their shipped destinations, and the "Coming" items read from the feature register (text, status, no link, then "See the roadmap →"); a section with no shipped destination is absent. Shown: Companies (Search a company with its key hint, Screener; coming: a private company) and Learn (Learn hub, Margin notes, How it works, Coverage and sources, What is being built next). From 1100px each is a trigger opening a 480px panel on the overlay ground on click, Enter, Space or ↓, never on hover; Esc or a click outside closes it and Esc gives focus back to the trigger; the current section (Learn on the notes and /learn addresses, Companies on search, a company or the screener) takes the one selected state. Below 1100px a 44×44 Menu button opens a sheet from y = 64 — rendered through a portal, because the bar's backdrop blur makes it the containing block of anything fixed inside it and the first sheet had no height — with 56px section rows, 48px links, focus held inside, Esc back to Menu, and the Reduce motion switch at its foot. Check (dashboard, new): NAV §8 items 1–5 and 7–12 on the landing page and the notes screen at 1440 and in a 390 touch context (measured: Companies · Learn; 0 selected on the landing page, 1 on the notes screen; Search 320×36 at 1392; sheet at y 64, rows 56, links 48). Proved to fail: a clock re-added beside the triggers (item 2, both screens); Companies given the selected state as well (item 4: 2 selected on the notes screen). Screenshots of the open panel and the phone sheet reviewed. **Not done:** the condensed 48px bar (§2.2, item 6) — it moves the header out of the place every clearance and focus check measures from, and is left for its own job. **PROPOSED — needs Nihar:** Research, Tools and Deals hidden until the palette (9.2) can open "Choose a company for …" (their shipped destinations all need a company in context); Markets hidden (no browse screen); Invest hidden (undefined); the landing-page link "What you can do" dropped from the header (it is the section directly under the hero). Found on the way: the first full run failed the 8.5 ⓘ hit test on the company overview — a source tooltip lay over one ⓘ. The hit test ran straight after the focus walk, so whichever element the walk ended on kept its tooltip open, and with a different number of header stops it ended on a different one; the check now clears focus and moves the mouse away before measuring (26 mouse and 29 touch readings, all hits). Full suite: tsc 0, build OK, verify:routes 0, verify to the payload stop, dashboard 0. |
 | 9.3 | The loading screen (NAV_SEARCH §5; checklist 22–30) | Found: the overlay opened at once, held every build at least 4.8 seconds (`MIN_VISIBLE_MS`), walked five stage names on a 900ms timer whatever the fetch was doing (and stopped its bar at 92%), could not be cancelled, set the belief in italic and the correction between steps, carried a shadow, and had no slow or give-up state. Now `src/data/loadingTimeline.ts` is the timeline as one pure function and `App.tsx` holds a build by it: inside the first second only a 2px rule under the header, and a build done there is not held and opens no modal; at 1,000ms the modal and the belief; the correction 2,200ms later, or at once when the filings arrive first, held until it has been up 1,200ms (never more than 1,200ms past the finish); "Taking longer than usual." at 15s; given up as an error at 90s. Cancel, and Esc from the first millisecond, drop the build (its late answer is ignored) and give focus back to the search field. The modal: flat 0.72 scrim, no shadow, "Building the model" and "Step n of 2", a 2px ink fill that moves only on a real event, the stage name, a fixed 232px card area (264 on a phone), the belief on the Section step in muted roman with curly quotes, the correction on the Title step in ink with its ⓘ, the footer line, a ghost Cancel. Checks: a new dashboard section — the timeline for 1,801 finishing times from 0 to 90s (items 22–25), a build answered at once never opening the modal, a held build reading "Step 1 of 2" with the fill at 0, no percentage, no counting seconds, the 232px area, the 15s line, Esc closing it with focus on the field and the late answer ignored, Esc at 300ms cancelling too; and the existing slow-build check now times the modal from the rule (measured in the page) and the correction from the belief, and reads the modal rather than its live region (the card is outside the live region on purpose). Its old "no card when the overlay is first read" rule is replaced by the spec's: the card now comes with the modal at one second. `MOTION_RATCHET` lowered for `motionPrimitives.tsx` (16 → 8 literals, 1 → 0 properties). Proved to fail: the modal opened at 900ms ("a build done at 900ms opens the modal"). Screenshot of the modal reviewed; the belief rendered in ink because `.font-display` sets ink, so it takes the muted token directly. **PROPOSED — needs Nihar:** two stages, not five ("Reading the filings", "Checking the filed statements"): this wait fetches the filings and builds nothing — the model is built later from the Model tab — so the spec's five names would describe work this screen does not do (decision 5 asks for the real stages); no fade-out on close (the screen is unmounted, not faded, in 168ms); "Usually about n seconds" not shown (no build-time records exist yet). Not done: the error state's own layout (§5.4) — a failure still goes to the search screen's existing error line. Measured in the full run: the page rule alone for 989ms, the belief with the modal (0ms apart), the correction 2,201ms after it. Full suite: tsc 0, build OK, verify:routes 0, verify to the payload stop (motion ratchet clean), dashboard 0. |
 | 9.9 | The company header and tab row (COMPANY_OVERVIEW §1.4–1.5; checklist §7.1) | Found: the ticker in accent text, "exch / sector / currency" as an abbreviated strip, no stamp of when the price closed or which statements are shown, the stale-figures band wedged between the header and the tabs, the tabs as tracked small labels with a filled current tab and borders between tabs, no tablist semantics or keyboard model, and the page starting 112px under the bar. Now one panel: "PAPER · NYSE" in muted 13/18 600; the name on the Title step with −0.015em and 0.04em word spacing; "Sector … Currency …" with quiet labels and read values; the stamp, top right (under the name on a phone), "Prices: close 22 Sep 2026, 20:00 UTC" and "Statements: FY2025, ended 31 Dec 2025" — three-letter months by a fixed table, since en-GB writes "Sept"; then, under a 1px divider inside the same panel, a `role=tablist` row 48px high: 15px tabs, muted at rest, the current one ink 600 on a 2px accent rule flush with the panel foot, each label reserving its 600 width, manual activation (arrows, Home and End move focus; Enter or Space selects), and on a phone a row that scrolls inside itself with the next tab clipped. The stale band moved under the panel. Content starts at y = 88 (80 on a phone). Check (dashboard, new): L2 and L9–L11 at 1440 and 390 — the panel's top, the muted ticker, the Title step (36px / 28px), no clock or live dot, the stamp's two lines, tabs 48 high (44 wide on touch), the current tab ink 600 on a 2px accent rule and no other accent in the header, → moving focus without changing the address, Enter selecting, the header not moving on a switch, the phone row scrolling with a tab clipped. The model journeys now open the Model tab by its `tab` role. A reviewer can keep the screenshots with `SHOT_DIR=<folder>`. Proved to fail: the ticker set back in accent text (4 problems: its colour and an accent besides the tab rule, at both widths). Screenshots at 1440 and 390 reviewed. Not done here: checklist L12–L14 belong to the data-freshness and sources panels (9.10 onwards), and L1/L3–L8 are already held by the type, contrast and clearance checks. The first full run failed 10 of the existing tab-address checks: the hidden copy that reserves each label's 600 width doubled the label in its text ("OverviewOverview"); it is now drawn by a CSS pseudo-element from `data-label`. Full suite: tsc 0, build OK, verify:routes 0, verify to the payload stop, dashboard 0. |
+
+## Summary, in plain English
+
+**What was done.** Fifteen jobs, one commit each, every one pushed to
+`claude/cloud-run-step5c-step8-step9`. Each new check was broken on purpose
+and seen to fail before its commit, and the suite was run after each job:
+`npm run verify` (as far as the empty payloads folder lets it go),
+`verify:dashboard`, `tsc` and the build. Two jobs needed a second full run
+because the first stopped on a timing flake; each rerun was clean, and both
+are logged above. In two others (9.1, 9.9) the first full run caught a real
+problem, which was fixed before the commit; those are logged too.
+
+- **Build step 5, part C (logic, no screen).** The valuation bridge: which
+  inputs changed between two saved versions (C1), an exact Shapley split of
+  the change in value across up to 10 of them, matching the spec's worked
+  example to the cent (C2), a seeded sampled split above 10 (C3), and, because
+  10 drivers took 3.3–4.9 seconds, a Web Worker so the page is never frozen
+  (C4).
+- **Build step 8, the landing page.** 8.6, a feature register, so the page
+  says in the present tense only what is built, prints no invented quarter
+  dates and reads its company count from the data. 8.7, the hero: the
+  particle field cut to budget (130,000 points to 12,000), a poster as the
+  first paint, three.js and the other screens loaded only when needed (entry
+  script 2,263KB to 1,671KB), and Lighthouse added (`npm run verify:landing`).
+  8.8, one WebGL context per page. 8.9, sections 1–4 restyled within the
+  accent budget. 8.11, phones and low-end devices get the poster, never WebGL,
+  and the page reflows at 320px.
+- **Build step 9.** 9.7, the Learn pages on the type system, with the header
+  and `lang="en-IN"`. 9.8, the Margin notes at their own addresses, so a note
+  can be linked to and Back works. 9.5, a not-found page, in the app and as a
+  static `404.html`, plus the missing `/screener` rewrite: a shared screener
+  link used to hit Vercel's 404. 9.1, the header's seven-section menu, its
+  panels, and a phone menu (there was none). 9.3, the loading screen on the
+  spec's timeline: nothing for the first second, Cancel and Esc, no fake
+  progress. 9.9, the company header and tab row.
+
+**What was skipped, and why.**
+- **8.10 (landing sections 5–8):** you said to skip it. That leaves the
+  Margin notes band's cards opening notes through a click handler rather than
+  as plain links (they do reach the right address).
+- **Parts of jobs, each logged in its row:** "Who it is for" (8.9); the
+  "Related margin notes" rail (9.7); the header's condensed 48px bar (9.1);
+  the loading screen's own error layout and its fade-out on close (9.3).
+- **Nothing on the do-not-touch list was edited.** One job needed something
+  that file holds: 9.3's stages would ideally come from the server, but the
+  fetch is in `autoCompany.ts`, so the screen shows only the two stages it can
+  actually observe.
+- **`KI-40` stays open.** Total Blocking Time measured 453–577ms with the
+  particle field running, against a 200ms budget. With the poster only it is
+  62ms, so most of that time is the field starting up on this machine's
+  software GPU. It needs a measurement on a real machine (see the LOCAL
+  list).
+
+**Every PROPOSED decision (each needs Nihar).**
+1. C-3: "% of total" on the bridge reads `n.m.` when the total change is
+   under 0.5% of the starting value (`docs/STEP5_BUILD_PLAN.md`).
+2. C-4: the bridge explains values rounded to the cent, because
+   `restoreFromJudgements` returns them rounded (`docs/STEP5_BUILD_PLAN.md`).
+3. The feature register's order and its mapping from VISION.md statuses
+   (header of `src/data/featureRegister.ts`).
+4. No quarter is printed until one is recorded as a decision.
+5. The particle dust was drawn ×2.6 larger and 1.5× brighter so the wordmark
+   still reads at the lower point count. Review it on a real GPU.
+6. The hero's largest paint may be the poster *or* the headline (Chrome
+   counts a full-viewport image as background), and Total Blocking Time
+   stands in for INP.
+7. "Who it is for" is not added (8.9).
+8. A 4-core or 4GB device gets the poster. That is VISUAL_SYSTEM §8 as
+   written, but it covers many ordinary laptops (8.11).
+9. The "Related margin notes" rail waits until an explainer-to-note mapping is
+   written (9.7).
+10. The static Learn header carries Screener and Learn only, plus Search
+    (9.7).
+11. On the static 404, "Search a company" goes to `/`; the site also needs
+    confirming live that Vercel serves the root `404.html` (9.5).
+12. The menu shows only Companies and Learn. Research, Tools and Deals are
+    hidden until the search palette (9.2) can open "Choose a company for …";
+    Markets and Invest are hidden; "What you can do" is dropped from the
+    header (9.1).
+13. The loading screen has two stages, not five. That wait only fetches the
+    filings; the model is built later from the Model tab (9.3).
+
+**Checks to run locally in Cursor after merging.**
+- `npm run verify` through to the end, `npm run verify:workbook`,
+  `verify:sweep` and `verify:compare` with the company payloads in
+  `verify/payloads/`. They stop at the first payload section here.
+- The landing page's company count against the real screener table
+  (`npm run screener:table` on the payload set), and `CLAIMS.historyYears`
+  (kept at 5) against the most fiscal years any payload holds (8.6).
+- `npm run build && npm run verify:landing` on a machine with a real GPU and
+  more than 4 cores. That measures the field path, so it settles `KI-40` and
+  shows whether the field still freezes there. This machine reports 4 cores
+  and a software GPU, so it only ever measures the poster (8.7, 8.11).
+- Look at the hero on a real GPU: the dust's size and brightness (8.7).
+- On the deployed site: a direct load of `/screener?…`, of
+  `/learn/notes/<key>/` and of an unknown path (9.5, 9.8).
