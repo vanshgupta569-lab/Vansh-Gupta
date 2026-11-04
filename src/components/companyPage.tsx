@@ -19,7 +19,7 @@
 // capitalisation, its multiples and its chart. The refusal belongs on the Model
 // tab, where the valuation it refuses would have been.
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { ArrowRight, ExternalLink } from 'lucide-react';
 import { COMPANY_TABS, type CompanyTab } from '../data/companyRoute';
 import { overviewStats, formatStat, filingLabel } from '../data/companyOverview';
@@ -49,6 +49,35 @@ const when = (iso: string | null): string => {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 };
 
+/** 30 Oct 2026, the one date format on the tab (COMPANY_OVERVIEW L8). */
+// Three letters for every month: en-GB writes "Sept", which is not the format.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDate = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+
+/**
+ * THE STAMP (COMPANY_OVERVIEW §1.4): when the price closed, in UTC, and which
+ * statements are shown. The only freshness text in the header — no clock,
+ * no seconds, no live dot.
+ */
+export function headerStamp(payload: any, filing: { fiscalYear: number | null; periodEnd: string | null } | null): { prices: string; statements: string } {
+  const asOf = typeof payload?.quote?.asOf === 'string' ? payload.quote.asOf : null;
+  let prices = 'not recorded';
+  if (asOf) {
+    const d = new Date(asOf.length <= 10 ? `${asOf}T00:00:00Z` : asOf);
+    if (!isNaN(d.getTime())) {
+      const time = asOf.length > 10 ? `, ${d.toISOString().slice(11, 16)} UTC` : '';
+      prices = `close ${shortDate(d)}${time}`;
+    }
+  }
+  let statements = 'not recorded';
+  if (filing && (filing.fiscalYear || filing.periodEnd)) {
+    const year = filing.fiscalYear ? `FY${filing.fiscalYear}` : 'the last filed year';
+    const end = filing.periodEnd ? new Date(`${filing.periodEnd}T00:00:00Z`) : null;
+    statements = end && !isNaN(end.getTime()) ? `${year}, ended ${shortDate(end)}` : year;
+  }
+  return { prices, statements };
+}
+
 export const CompanyPage: React.FC<Props> = ({
   ticker,
   tab,
@@ -62,57 +91,111 @@ export const CompanyPage: React.FC<Props> = ({
   const active: CompanyTab = COMPANY_TABS.find((t) => t.slug === tab) ?? COMPANY_TABS[0];
   const overview = useMemo(() => (payload ? overviewStats(payload) : null), [payload]);
   const name = payload?.name || ticker;
+  const exchange = payload?.listing?.exchangeName || payload?.listing?.exchange || payload?.quote?.exchange || '';
+  const sector = payload?.profile?.sector || payload?.sector || payload?.sicDescription || '';
+  const stamp = headerStamp(payload, overview?.filing ?? null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   return (
-    <div className="min-h-screen bg-page pt-28 sm:pt-24 lg:pt-28 pb-20">
+    <div className="min-h-screen bg-page pt-20 sm:pt-[88px] pb-16" data-company-page>
       <style>{HINT_STYLES}</style>
-      <div className="max-w-[1440px] mx-auto px-5 sm:px-6 lg:px-12">
-        {/* ---- who this is ------------------------------------------------ */}
-        <header className="border border-line bg-panel px-5 py-5 lg:px-6">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className={`${EYEBROW} text-accent-text`}>{ticker}</span>
-            <h1 className="font-display text-[var(--m-size-title)] font-semibold leading-tight tracking-[-0.02em] text-ink">
-              {name}
-            </h1>
+      <div className="max-w-[1440px] mx-auto px-6 lg:px-12">
+        {/* ---- who this is, and the tabs (COMPANY_OVERVIEW §1.4–1.5; job 9.9)
+            One panel: the ticker and its exchange in muted (never oxblood),
+            the name on the Title step, sector and currency, and the stamp;
+            then, inside the same panel under a 1px divider, the tab row. */}
+        <header data-company-header className="border border-line bg-panel">
+          <div className="px-4 py-4 sm:px-6 sm:py-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-6">
+            <div className="min-w-0">
+              <div data-company-ticker className="text-[13px] leading-[18px] font-semibold text-muted">
+                {ticker}
+                {exchange ? ` · ${exchange}` : ''}
+              </div>
+              <h1
+                className="mt-1 font-display font-semibold text-ink leading-[1.2]"
+                style={{ fontSize: 'var(--m-size-title)', letterSpacing: '-0.015em', wordSpacing: '0.04em' }}
+              >
+                {name}
+              </h1>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] leading-[18px]">
+                <span>
+                  <span className="text-quiet">Sector</span> <span className="text-read">{sector || 'not reported'}</span>
+                </span>
+                <span>
+                  <span className="text-quiet">Currency</span> <span className="text-read">{payload?.currency || 'not reported'}</span>
+                </span>
+              </div>
+            </div>
+            {payload && (
+              <div data-company-stamp className="text-[13px] leading-[18px] sm:text-right shrink-0">
+                <div>
+                  <span className="text-quiet">Prices:</span> <span className="text-read">{stamp.prices}</span>
+                </div>
+                <div>
+                  <span className="text-quiet">Statements:</span> <span className="text-read">{stamp.statements}</span>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="mt-2.5">
-            <RefStrip
-              items={[
-                ['exch', payload?.listing?.exchangeName || payload?.listing?.exchange || payload?.quote?.exchange || '—'],
-                ['sector', payload?.profile?.sector || payload?.sector || payload?.sicDescription || '—'],
-                ['currency', payload?.currency || '—'],
-              ]}
-            />
-          </div>
+
+          {/* ---- the tabs, each one an address ----------------------------
+              role=tablist with manual activation: the arrows, Home and End
+              move focus, Enter or Space selects. 48px high; the current tab
+              ink 600 with a 2px accent rule flush with the panel's foot (the
+              only accent here, uncounted); each label reserves its 600-weight
+              width so the row never shifts. On a phone the row scrolls inside
+              itself and the next tab shows clipped. */}
+          <nav aria-label="Company sections" className="border-t border-line">
+            <div
+              role="tablist"
+              aria-label="Company sections"
+              className="flex overflow-x-auto snap-x snap-proximity [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {COMPANY_TABS.map((t, i) => {
+                const current = t.slug === tab;
+                return (
+                  <button
+                    key={t.slug}
+                    type="button"
+                    role="tab"
+                    ref={(el) => { tabRefs.current[i] = el; }}
+                    data-tab={t.slug}
+                    aria-selected={current}
+                    aria-current={current ? 'page' : undefined}
+                    tabIndex={current ? 0 : -1}
+                    onClick={() => onTab(t.slug)}
+                    onKeyDown={(e) => {
+                      const n = COMPANY_TABS.length;
+                      const to =
+                        e.key === 'ArrowRight' ? (i + 1) % n :
+                        e.key === 'ArrowLeft' ? (i - 1 + n) % n :
+                        e.key === 'Home' ? 0 :
+                        e.key === 'End' ? n - 1 : null;
+                      if (to !== null) {
+                        e.preventDefault();
+                        tabRefs.current[to]?.focus();
+                      }
+                    }}
+                    className={`relative shrink-0 snap-start h-12 min-w-11 px-4 text-[15px] whitespace-nowrap cursor-pointer transition-colors duration-[110ms] ${
+                      current ? 'text-ink font-semibold' : 'text-muted hover:text-ink font-normal'
+                    }`}
+                  >
+                    {/* The 600-weight width, reserved. */}
+                    <span aria-hidden="true" data-label={t.label} className="invisible block h-0 overflow-hidden font-semibold after:content-[attr(data-label)]" />
+                    {t.label}
+                    {current && <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[2px] bg-accent" />}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
         </header>
 
         {/* ---- how old these figures are, if that needs saying ------------
-            Above the tabs on purpose: every tab below presents the same
+            Under the header on purpose: every tab below presents the same
             statements, so the warning belongs to the company and not to one
             screen of it (`KI-32`). */}
         <StaleFigures payload={payload} className="border-t-0" />
-
-        {/* ---- the tabs, each one an address ------------------------------ */}
-        <nav
-          aria-label="Company sections"
-          className="flex overflow-x-auto border-x border-b border-line bg-panel"
-        >
-          {COMPANY_TABS.map((t) => (
-            <button
-              key={t.slug}
-              type="button"
-              onClick={() => onTab(t.slug)}
-              aria-current={t.slug === tab ? 'page' : undefined}
-              className={`${EYEBROW} shrink-0 border-r border-line px-4 py-3 transition-colors cursor-pointer whitespace-nowrap ${
-                t.slug === tab
-                  ? 'bg-page text-ink shadow-[inset_0_-2px_0_var(--m-accent)]'
-                  : 'text-muted hover:text-ink hover:bg-page/40'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
 
         <main className="mt-6">
           {loading && (

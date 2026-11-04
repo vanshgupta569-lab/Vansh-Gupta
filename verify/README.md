@@ -1035,9 +1035,18 @@ with the fill at 0, no percentage, no counting seconds, a fixed 232px card
 area, "Taking longer than usual." by 15 seconds; Esc closing it with focus
 back on the field and the late answer ignored, and Esc at 300ms cancelling.
 
+**A seventeenth is the company header and tab row** (job 9.9,
+COMPANY_OVERVIEW §7.1 L2 and L9–L11), at 1440 and 390: the panel's top at
+y = 88 (80 on a phone), the ticker muted, the name on the Title step, no
+clock or live dot, the stamp's two lines in the one date format, tabs 48
+high (44 wide on touch), the current tab ink 600 on a 2px accent rule and no
+other accent in the header, → moving focus without changing the address,
+Enter selecting, the header not moving on a switch, the phone row scrolling
+inside itself. `SHOT_DIR=<folder>` keeps a screenshot of each width.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

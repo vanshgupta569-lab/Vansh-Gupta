@@ -437,7 +437,7 @@ async function openModelTab(page: Page, ticker: string): Promise<boolean> {
     return false;
   }
   ok(`a search for ${ticker} lands on its company page, at its own address`);
-  await page.getByRole('button', { name: /^model$/i }).first().click({ timeout: 30_000 });
+  await page.getByRole('tab', { name: /^model$/i }).first().click({ timeout: 30_000 });
   await page
     .getByRole('button', { name: new RegExp(`open the figures for ${ticker}`, 'i') })
     .click({ timeout: 60_000 });
@@ -5292,6 +5292,104 @@ async function checkLoadingScreen(browser: Browser) {
   if (!issues.length) ok(`the timeline holds for ${cases} finishing times (0–90s); a quick build shows the rule and no modal; a held one reads ${measured}, says "Taking longer than usual." by 15s, and Esc closes it (also at 300ms) with focus back on the field and the late answer ignored`);
 }
 
+// ---- the company header and the tab row (job 9.9) ------------------------
+//
+// COMPANY_OVERVIEW §1.4–1.5 and checklist §7.1 (L2, L9–L11). On the paper
+// company's overview at 1440 and 390: the header panel starts at y = 88
+// (80 on a phone); the ticker line is muted, never oxblood; the name is on
+// the Title step; nothing in the header is a clock, seconds or a live dot,
+// and the stamp reads "Prices: close 30 Oct 2026[, 20:00 UTC]" and
+// "Statements: FY2026, ended 25 Jan 2026"; every tab is 48 high (and 44 wide
+// on the phone); the current tab is ink 600 with a 2px accent rule, and that
+// rule is the only accent anywhere in the header at rest. Manual activation:
+// → moves focus without changing the address, Enter selects. Switching tabs
+// does not move the header. On the phone the row scrolls inside itself with
+// the next tab clipped.
+async function checkCompanyHeader(browser: Browser) {
+  console.log('\n=== the company header and the tab row ===');
+  const issues: string[] = [];
+  const notes: string[] = [];
+  for (const [width, height, touch] of [[1440, 900, false], [390, 844, true]] as const) {
+    const ctx = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', isMobile: touch, hasTouch: touch });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+    await p.waitForSelector('[data-company-stamp]', { timeout: 30_000 }).catch(() => {});
+    const h: any = await p.evaluate(`(() => {
+      const panel = document.querySelector('[data-company-header]');
+      if (!panel) return null;
+      const accent = (c) => /rgba?\\(139, 30, 30|rgba?\\(208, 94, 88/.test(c);
+      const tabs = Array.from(panel.querySelectorAll('[role=tab]'));
+      const current = panel.querySelector('[role=tab][aria-selected=true]');
+      const bar = current ? current.querySelector('span.absolute') : null;
+      const accents = [];
+      for (const el of panel.querySelectorAll('*')) {
+        if (el === bar) continue;
+        const cs = getComputedStyle(el);
+        const own = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
+        if ((own && accent(cs.color)) || accent(cs.backgroundColor) || (parseFloat(cs.borderTopWidth) > 0 && accent(cs.borderTopColor)) || (parseFloat(cs.borderBottomWidth) > 0 && accent(cs.borderBottomColor)))
+          accents.push(el.tagName + ' ' + (el.textContent || '').trim().slice(0, 20));
+      }
+      const list = panel.querySelector('[role=tablist]');
+      const lr = list.getBoundingClientRect();
+      return {
+        top: Math.round(panel.getBoundingClientRect().top + scrollY),
+        ticker: getComputedStyle(panel.querySelector('[data-company-ticker]')).color,
+        h1: getComputedStyle(panel.querySelector('h1')).fontSize,
+        title: getComputedStyle(document.documentElement).getPropertyValue('--m-size-title').trim(),
+        stamp: panel.querySelector('[data-company-stamp]')?.innerText.trim().split('\\n') ?? [],
+        text: panel.innerText,
+        pulse: panel.querySelectorAll('.animate-pulse').length,
+        tabs: tabs.map((t) => ({ slug: t.getAttribute('data-tab'), h: Math.round(t.getBoundingClientRect().height), w: Math.round(t.getBoundingClientRect().width), right: Math.round(t.getBoundingClientRect().right) })),
+        current: current ? { colour: getComputedStyle(current).color, weight: getComputedStyle(current).fontWeight, bar: bar ? Math.round(bar.getBoundingClientRect().height) + ' ' + getComputedStyle(bar).backgroundColor : null } : null,
+        accents,
+        scrolls: list.scrollWidth > list.clientWidth + 1,
+        clipped: tabs.some((t) => { const r = t.getBoundingClientRect(); return r.left < lr.right - 1 && r.right > lr.right + 1; }),
+      };
+    })()`);
+    const at = `${width}px`;
+    // For a reviewer: SHOT_DIR=<folder> keeps a screenshot of each width.
+    if (process.env.SHOT_DIR) await p.screenshot({ path: path.join(process.env.SHOT_DIR, `company-header-${width}.png`) });
+    if (!h) { issues.push(`${at}: no company header`); await ctx.close(); continue; }
+    const wantTop = width >= 640 ? 88 : 80;
+    if (h.top !== wantTop) issues.push(`${at}: the header panel starts at y = ${h.top}, not ${wantTop}`);
+    if (h.ticker !== 'rgb(168, 162, 154)') issues.push(`${at}: the ticker line is ${h.ticker}, not muted`);
+    const titlePx = width >= 1286 ? '36px' : width <= 1000 ? '28px' : null;
+    if (titlePx && h.h1 !== titlePx) issues.push(`${at}: the name is ${h.h1}, not the Title step (${titlePx})`);
+    if (/\b\d{1,2}:\d{2}:\d{2}\b/.test(h.text) || h.pulse || /\blive\b/i.test(h.text)) issues.push(`${at}: a clock, seconds or a live dot in the header`);
+    const [pr, st] = h.stamp;
+    if (!/^Prices: (close \d{1,2} [A-Z][a-z]{2} \d{4}(, \d{2}:\d{2} UTC)?|not recorded)$/.test(pr || '')) issues.push(`${at}: the stamp's first line reads "${pr}"`);
+    if (!/^Statements: (FY\d{4}|the last filed year)(, ended \d{1,2} [A-Z][a-z]{2} \d{4})?$/.test(st || '')) issues.push(`${at}: the stamp's second line reads "${st}"`);
+    const short = h.tabs.filter((t: any) => t.h !== 48 || (touch && t.w < 44));
+    if (short.length) issues.push(`${at}: tabs not 48 high${touch ? ' and 44 wide' : ''}: ${short.map((t: any) => `${t.slug} ${t.w}×${t.h}`).join(', ')}`);
+    if (!h.current || h.current.colour !== 'rgb(242, 240, 234)' || h.current.weight !== '600') issues.push(`${at}: the current tab is ${JSON.stringify(h.current)}, not ink 600`);
+    else if (!h.current.bar || !h.current.bar.startsWith('2 ') || !/139, 30, 30/.test(h.current.bar)) issues.push(`${at}: the current tab's rule is ${h.current.bar}, not 2px accent`);
+    if (h.accents.length) issues.push(`${at}: accent in the header besides the current tab's rule: ${h.accents.slice(0, 3).join(' | ')}`);
+    if (touch && !(h.scrolls && h.clipped)) issues.push(`${at}: the tab row does not scroll inside itself with the next tab clipped`);
+    // Manual activation, and a switch that does not move the header.
+    const before = p.url();
+    await p.locator('[role=tab][aria-selected=true]').focus();
+    await p.keyboard.press('ArrowRight');
+    const focused = await p.evaluate(`document.activeElement?.getAttribute('data-tab')`);
+    if (p.url() !== before) issues.push(`${at}: → changed the address (activation is manual)`);
+    if (focused !== h.tabs[1]?.slug) issues.push(`${at}: → moved focus to ${focused}, not ${h.tabs[1]?.slug}`);
+    const box = await p.locator('[data-company-header]').boundingBox();
+    await p.keyboard.press('Enter');
+    await p.waitForURL(new RegExp(`/${h.tabs[1]?.slug}$`), { timeout: 10_000 }).catch(() => {});
+    if (!p.url().endsWith(`/${h.tabs[1]?.slug}`)) issues.push(`${at}: Enter on ${h.tabs[1]?.slug} did not select it (${p.url()})`);
+    await p.waitForTimeout(300);
+    const after = await p.locator('[data-company-header]').boundingBox();
+    if (box && after && (Math.abs(box.y - after.y) > 0.5 || Math.abs(box.height - after.height) > 0.5)) issues.push(`${at}: switching tabs moved the header (${Math.round(box.y)}/${Math.round(box.height)} → ${Math.round(after.y)}/${Math.round(after.height)})`);
+    notes.push(`${at}: top ${h.top}, name ${h.h1}, "${pr}" / "${st}"`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${notes.join('; ')}; tabs 48 high, the current one ink 600 on a 2px accent rule, the only accent in the header; → moves focus, Enter selects, the header stays put`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5378,6 +5476,7 @@ try {
     notfound: () => checkInAppNotFound(browser as Browser),
     header: () => checkHeaderAndMenu(browser as Browser),
     loading: () => checkLoadingScreen(browser as Browser),
+    company: () => checkCompanyHeader(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5510,6 +5609,7 @@ try {
   await checkInAppNotFound(browser);
   await checkHeaderAndMenu(browser);
   await checkLoadingScreen(browser);
+  await checkCompanyHeader(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
