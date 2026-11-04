@@ -126,6 +126,11 @@ nowhere better to put them and each is cheap:
   the parts sum to the total exactly, repeat on the seed, change on another
   seed, and every part is within 1% of the total of the exact answer (worst
   0.089%, measured 4 November 2026).
+  C4: ten drivers on the paper company, timed (1,024 runs, about 3–5 seconds
+  here); in `verify:dashboard` the same bridge goes through
+  `bridgeInWorker` in the real browser and must come back once and whole —
+  every part, adding up, equal to the Node bridge part for part — while a
+  50ms timer on the page keeps at least half its own idle rate.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in

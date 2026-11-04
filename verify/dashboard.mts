@@ -4368,6 +4368,77 @@ async function checkFocusAndTargets(browser: Browser) {
   }
 }
 
+// ---- the valuation bridge in a worker (build step 5, job C4) -------------
+//
+// Ten drivers are 1,024 engine runs, 3–4 seconds, so a screen asks for the
+// bridge through `bridgeInWorker` (`src/data/bridgeRunner.ts`), which runs it
+// in a Web Worker and answers once, with the finished bridge. This loads the
+// runner in the real browser, sends it the ten-driver paper fixture, and
+// checks that what comes back is the whole bridge — every driver, parts equal
+// to the total to the cent — and the same, part for part, as the bridge the
+// same code gives in Node: what is under test is the trip through the worker,
+// not the arithmetic, which `npm run verify` checks.
+async function checkBridgeWorker(browser: Browser) {
+  console.log('\n=== the valuation bridge, in a worker ===');
+  const BRM: any = await import(`file:///${REPO}/verify/bridge.mts`);
+  const BRL: any = await import(`file:///${REPO}/src/data/bridge.ts`);
+  const { A, B } = BRM.tenDriverVersions();
+  const inNode = BRL.bridgeBetween(A, B);
+  // A quiet page: the company overview, with reduced motion so nothing on it
+  // animates. The landing page's particle canvas keeps the main thread busy
+  // on its own, which is not what this measures.
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1000);
+  const r: any = await p.evaluate(`(async () => {
+    const m = await import('/src/data/bridgeRunner.ts');
+    // The page's own rate first: how often a 50ms timer gets the thread back
+    // when nothing is being asked of it.
+    let idle = 0;
+    const idleTimer = setInterval(() => { idle++; }, 50);
+    await new Promise((r) => setTimeout(r, 1000));
+    clearInterval(idleTimer);
+    const started = performance.now();
+    // The page must stay free while the worker runs: a 50ms timer counts how
+    // often it got the main thread back. Run on the page instead, the bridge
+    // would hold the thread for seconds and the timer would barely tick.
+    let ticks = 0;
+    const timer = setInterval(() => { ticks++; }, 50);
+    const result = await m.bridgeInWorker(${JSON.stringify(A)}, ${JSON.stringify(B)});
+    clearInterval(timer);
+    const ms = performance.now() - started;
+    return { result, ms, ticks, idlePerSecond: idle, workerAvailable: typeof Worker !== 'undefined' };
+  })()`);
+  await ctx.close();
+  const res = r.result;
+  const cents = (res.parts || []).reduce((t: number, x: any) => t + Math.round(x.rounded * 100), 0);
+  const issues: string[] = [];
+  if (!r.workerAvailable) issues.push('the browser has no Worker, so the bridge ran on the page');
+  // Half the page's own idle rate, over the time the bridge took.
+  const expectedTicks = (r.idlePerSecond * r.ms) / 1000;
+  if (r.ticks < expectedTicks * 0.5)
+    issues.push(
+      `the page's 50ms timer ticked ${r.ticks} times in ${Math.round(r.ms)}ms against ${r.idlePerSecond} a second when idle ` +
+        `(${Math.round(expectedTicks)} expected), so the bridge held the main thread`
+    );
+  if (!res.ok) issues.push(`the worker returned no bridge (${(res.refused || []).map((x: any) => x.refusal).join('; ')})`);
+  if ((res.parts || []).length !== inNode.parts.length) issues.push(`the worker returned ${(res.parts || []).length} parts, not ${inNode.parts.length}`);
+  if (cents !== Math.round(res.totalRounded * 100)) issues.push(`its parts sum to ${cents / 100}, not its total ${res.totalRounded}`);
+  const differ = (res.parts || []).filter((x: any, i: number) => !inNode.parts[i] || x.key !== inNode.parts[i].key || x.rounded !== inNode.parts[i].rounded);
+  if (differ.length) issues.push(`${differ.length} parts differ from the same bridge in Node (e.g. ${differ[0].key} ${differ[0].rounded})`);
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: the bridge in a worker: ${issue}`);
+  }
+  if (!issues.length)
+    ok(
+      `10 drivers, ${res.runs} runs in a Web Worker, ${Math.round(r.ms)}ms in the browser with the page's timer ticking ${r.ticks} of ~${Math.round(expectedTicks)} times, answered once and whole: ` +
+        `${res.parts.length} parts summing to ${res.totalRounded.toFixed(2)}, each equal to the Node bridge`
+    );
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4546,6 +4617,7 @@ try {
   // 7. Nothing anywhere on any of those screens is below WCAG AA.
   await checkReducedMotion(browser);
   await checkFocusAndTargets(browser);
+  await checkBridgeWorker(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

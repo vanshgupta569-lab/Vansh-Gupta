@@ -61,6 +61,23 @@ export function fixtureVersions() {
   return { A, B, expected, lastYear };
 }
 
+/**
+ * Ten drivers on the paper company: the six of `fixtureVersions` plus tax,
+ * capital spending, the exit multiple and a second correction. The largest
+ * bridge still computed exactly (2^10 = 1,024 runs), and the one C4 times.
+ */
+export function tenDriverVersions() {
+  const { A, B, lastYear } = fixtureVersions();
+  const base: any = R.restoreFromJudgements(A.fetched, A.judgements).drivers;
+  const last = B.fetched.statements[B.fetched.statements.length - 1];
+  const j: any = clone(B.judgements);
+  j.drivers.taxRatePct = base.taxRatePct + 2;
+  j.drivers.capexPctOfRev = base.capexPctOfRev + 1;
+  j.drivers.exitMultipleX = (base.exitMultipleX ?? 10) + 1;
+  j.corrections[lastYear].operatingIncome = last.operatingIncome * 0.97;
+  return { A, B: { fetched: B.fetched, judgements: j } };
+}
+
 export async function checkBridge(): Promise<BridgeReport> {
   const problems: string[] = [];
   const lines: string[] = [];
@@ -235,6 +252,20 @@ export async function checkBridge(): Promise<BridgeReport> {
       `C3: ${n} drivers, ${BR.SAMPLED_ORDERS} orders from seed ${BR.SAMPLE_SEED}, ${sampled.runs} runs: parts sum to the total exactly, ` +
         `repeatable on the seed, different on another; worst part ${worst.toFixed(4)} from the exact (${exact.runs} runs), ` +
         `${(share * 100).toFixed(3)}% of the ${exact.total.toFixed(2)} total, inside the ${TOLERANCE * 100}% tolerance`
+    );
+  }
+
+  // ---- C4. HOW LONG TEN DRIVERS TAKE ------------------------------------
+  {
+    const { A, B } = tenDriverVersions();
+    const r = BR.bridgeBetween(A, B);
+    if (!r.ok || r.drivers.length !== 10 || r.runs !== 1024)
+      problems.push(`C4: the ten-driver fixture ran ${r.drivers.length} drivers in ${r.runs} runs (ok ${r.ok}), not 10 in 1,024`);
+    const cents = r.parts.reduce((t: number, p: any) => t + Math.round(p.rounded * 100), 0);
+    if (r.ok && cents !== Math.round(r.totalRounded * 100)) problems.push(`C4: the ten-driver parts sum to ${cents / 100}, not ${r.totalRounded}`);
+    lines.push(
+      `C4: 10 drivers, ${r.runs} runs, ${r.ms}ms on this machine (${(r.ms / r.runs).toFixed(2)}ms a run), ` +
+        `${r.ms > 2000 ? 'over' : 'under'} the 2-second line (C-2): the screen runs it in a Web Worker (bridgeRunner.ts), checked in the browser by verify:dashboard`
     );
   }
 
