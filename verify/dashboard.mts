@@ -4634,6 +4634,47 @@ async function checkHeroField(browser: Browser) {
     ok(`at most ${budget} points at ≤ 1.5 device pixels a pixel; the poster gives way to the first frame; pause holds the frame; settled after five seconds with no frames asked for; a scroll wakes it; a hidden tab stops it; reduced motion shows only the poster`);
 }
 
+// ---- one WebGL context on the page (build step 8, job 8.8) ---------------
+//
+// VISUAL_SYSTEM §6: one WebGL context per page. A second scene — the hexagon
+// in an early screenshot — must reuse the hero's canvas or be a still SVG.
+// Every getContext call for WebGL is counted from before the page's first
+// script runs, while the whole landing page is scrolled through, at desktop
+// and phone widths.
+async function checkOneWebglContext(browser: Browser) {
+  console.log('\n=== one WebGL context on the landing page ===');
+  const issues: string[] = [];
+  const counted: string[] = [];
+  for (const width of [1440, 390]) {
+    const ctx = await browser.newContext({ viewport: { width, height: width > 600 ? 900 : 844 } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(`(() => {
+      window.__webgl = 0;
+      const original = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+        const made = original.call(this, kind, ...rest);
+        if (made && /webgl/i.test(String(kind))) {
+          // One canvas asking twice is one context; count canvases.
+          if (!this.__counted) { this.__counted = true; window.__webgl++; }
+        }
+        return made;
+      };
+    })()`);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await revealWholePage(p);
+    const n = (await p.evaluate('window.__webgl')) as number;
+    counted.push(`${n} at ${width}`);
+    if (n > 1) issues.push(`${n} WebGL contexts at ${width}px, over the one the page may have`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`WebGL contexts made while the whole landing page is scrolled: ${counted.join(', ')} — never more than one`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4702,7 +4743,7 @@ try {
 
   await installFixtureRoutes(context);
 
-  // ONE SECTION AT A TIME, FOR PROVING A CHECK FAILS. `DASHBOARD_ONLY=hero,features
+  // ONE SECTION AT A TIME, FOR PROVING A CHECK FAILS. `DASHBOARD_ONLY=hero,webgl
   // npm run verify:dashboard` runs just those self-contained sections and
   // stops, so a deliberate break is reported by the check it was made for
   // rather than by whichever earlier journey it happened to slow down. The
@@ -4713,6 +4754,7 @@ try {
     bridge: () => checkBridgeWorker(browser as Browser),
     features: () => checkFeatureGate(browser as Browser),
     hero: () => checkHeroField(browser as Browser),
+    webgl: () => checkOneWebglContext(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -4838,6 +4880,7 @@ try {
   await checkBridgeWorker(browser);
   await checkFeatureGate(browser);
   await checkHeroField(browser);
+  await checkOneWebglContext(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
