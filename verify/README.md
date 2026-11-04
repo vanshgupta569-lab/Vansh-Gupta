@@ -435,6 +435,29 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### One price per valuation
+
+Four arms, over every payload. **The summary says which price it was struck
+at**; **every premium reconciles with that one price**, recomputed here as
+`(price − value) ÷ value` from the price and the value the summary itself
+publishes rather than read back from the function under test; **the price is
+what moves it**, so a premium that does not change when the price does is a
+premium that is not measured against it; and **nothing in the component takes
+the live quote into a valuation** — the quote's price may be read only inside
+the newer-quote declaration, counted rather than eyeballed, because the defect
+was never in the arithmetic but in which price was handed to it. Its change on
+the day and its 52-week range are the market's own figures and stay live.
+
+60 companies price a premium; a day's move changes it on 57 and by more than a
+point on 40, worst Reliance 204% → 243.6%.
+
+Proved by breaking, five ways: the premium's sign flipped (**120 faults**); the
+perpetuity premium measured against the exit value, which is the shape of a
+fallback from one method into another's cell (**60**); the summary reporting a
+price 1% from the one it was struck at (**174**); the live quote put back into
+the valuation, which is the defect itself (**1**); and the struck price
+re-priced on the quote's arrival rather than on the reader's ask (**2**).
+
 ### Every column adds up, from revenue to operating income
 
 The statement printed revenue, cost of sales, gross profit, research, selling

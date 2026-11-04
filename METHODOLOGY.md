@@ -4106,6 +4106,50 @@ payload contains.**
 
 ---
 
+## 23a1. One price per valuation
+
+`src/data/valuationSummary.ts`, `src/components/TerminalDashboard.tsx`, 2026-11-04.
+
+**The share price is a valuation input.** The cost of capital weights equity at
+market capitalisation, so the price moves the WACC and with it every value per
+share on the screen.
+
+The valuation screen held **two** of them until this was fixed: the stored price
+the record carries, and a live quote fetched a moment after the page loaded. The
+bands, the premiums, the reverse DCF and the football field were struck at the
+live quote; the sensitivity shading and the upside figure were measured against
+the stored one. **A premium could be measured against a price the value was not
+computed at**, and nothing on the screen said which price anything used
+(`docs/STUDIO_SPEC.md` conflict 4, severity H).
+
+**There is now one struck price, and it is the record's own** until the reader
+asks for the newer one. A quote that arrives while the page is open is shown as
+a fact beside the figure — *Latest 1,468.51; this valuation uses 1,307.90* —
+with a `Rebuild at the latest price` action. Re-pricing the model as the market
+moves would change every value on the screen with no judgement made and nothing
+saying it had happened (decision S3, approved by Nihar 4 November 2026).
+
+**What it was worth, measured over the payload set.** 60 companies price a
+premium. A single day's move in the price — each company's own last day —
+changes that premium on **57** of them, and by more than a percentage point on
+**40**. The worst is Reliance: a 12.28% move takes the premium from 204% to
+243.6% while the value per share moves from 430.19 to 427.42. The value barely
+moves because the price only enters through the equity weight; **the premium
+moves a great deal, because it is measured against the price** — which is
+exactly why the two had to be the same price.
+
+**The valuation summary is one pure function.** `valuationBands`,
+`terminalMethods`, `premiumAgainst` and `fieldBands` were four `useMemo`s inside
+the dashboard component, so a tearsheet or a workbook could only have them by
+computing them again — a second answer nobody compares with the first. They are
+`valuationSummary(source, drivers, struckPrice, market, asset)` now, and the
+screen reads it (build step 5 job B1, which is also `docs/TEARSHEET_SPEC.md`
+job 1). One definition of a premium serves every premium on the screen; it was
+written out four times before, twice as `(price − value) / value` and twice as
+`price / value − 1`.
+
+---
+
 ## 23b. What each figure records about where it came from
 
 `api/company.js`, `src/data/financials.ts`, payload version 11.

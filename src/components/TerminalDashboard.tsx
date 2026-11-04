@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CompanyData, ValuationDrivers, DCFResult, ForecastRow, NewsItem } from '../types';
 import { calculateDCFFor, COMPANIES_DATA, AAPL_SOURCE, defaultDriversFor, financialsFromStatements, valuationBandsFor, buildModelFor, buildFullModel, isIntegrityRefusal } from '../data/companies';
+import { valuationSummary, premiumOf } from '../data/valuationSummary';
 import { payloadQuery } from '../data/payloadVersion';
 import { FootballField, RatioBand } from './valuationSections';
 import type { FieldBand } from './valuationSections';
@@ -393,7 +394,37 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     };
   }, [company.ticker]);
 
-  const displayPrice = liveQuote?.price ?? company.price;
+  // ---- ONE PRICE PER VALUATION (`docs/STUDIO_SPEC.md` S3) ---------------
+  //
+  // THE SHARE PRICE IS A VALUATION INPUT. The cost of capital weights equity at
+  // market capitalisation, so the price moves the WACC and with it every value
+  // per share on this screen.
+  //
+  // This screen held TWO prices until 2026-11-04 (conflict 4, severity H): the
+  // stored one the record carries, and a live quote fetched a moment after the
+  // page loaded. The bands, the premiums, the reverse DCF and the football
+  // field were struck at the live quote; the sensitivity shading and the upside
+  // figure were measured against the stored one. A premium could be measured
+  // against a price the value was not computed at, and nothing on the screen
+  // said which price anything used.
+  //
+  // So there is ONE struck price, and it is the record's own until the reader
+  // asks for the newer one. A live quote arriving while the page is open is a
+  // FACT SHOWN BESIDE IT, never silently swapped in: re-pricing a model under
+  // the reader as the market moves would change the answer without a judgement.
+  const [rebuiltAtPrice, setRebuiltAtPrice] = useState<number | null>(null);
+  const struckPrice = rebuiltAtPrice ?? company.price;
+  /** The newer quote, only where it is genuinely newer and genuinely different. */
+  const newerQuote =
+    isNum(liveQuote?.price) &&
+    (liveQuote?.price as number) > 0 &&
+    Math.abs((liveQuote?.price as number) - struckPrice) > 0.005
+      ? (liveQuote?.price as number)
+      : null;
+  // Everything that is not the valuation — the ticker's own price line, the
+  // 52-week range, the change on the day — is the market's figure and shows the
+  // latest. Only the VALUATION uses the struck price.
+  const displayPrice = struckPrice;
 
   // A slim bar that appears once the full ticker header has scrolled away,
   // keeping the ticker, live price and implied value in view while reading the
@@ -681,49 +712,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   };
 
 
-  // The bars for the football field: the two valuation methods, each widened
-  // by the sensitivity steps the grid already uses.
-  const valuationBands = useMemo(() => {
-    if (!activeSource) return [];
-    return valuationBandsFor(activeSource, drivers, displayPrice);
-  }, [activeSource, drivers, displayPrice]);
-
-  // THE HEADLINE IS TWO NUMBERS, NOT ONE.
-  //
-  // A discounted cash flow ends with two answers: the perpetuity value, built
-  // from this company's own cash flows, and the exit multiple, built from what
-  // the market pays for businesses like it. They used to be averaged into a
-  // single headline. That produced a figure that is neither method's answer
-  // and buried the disagreement, which is the most useful thing on the page: a
-  // company whose methods land 128% apart (BP) is a different proposition from
-  // one where they agree to within 5%.
-  //
-  // So both stand, side by side, with the gap between them stated - the same
-  // treatment the income, market and asset approaches already get.
-  const terminalMethods = useMemo(() => {
-    const find = (needle: string) =>
-      valuationBands.find(
-        (band: any) =>
-          typeof band.point === 'number' &&
-          isFinite(band.point) &&
-          band.point > 0 &&
-          String(band.label).toLowerCase().includes(needle)
-      )?.point ?? null;
-    const perpetuity = find('perpetuity');
-    const exit = find('exit');
-    return { perpetuity, exit, split: terminalSpread(perpetuity, exit) };
-  }, [valuationBands]);
-
-  // Premium or discount against each method, since there is no single value
-  // to measure it against any more.
-  const premiumAgainst = useMemo(() => {
-    const at = (value: number | null) =>
-      isNum(value) && value > 0
-        ? Number((((displayPrice - value) / value) * 100).toFixed(1))
-        : null;
-    return { perpetuity: at(terminalMethods.perpetuity), exit: at(terminalMethods.exit) };
-  }, [terminalMethods, displayPrice]);
-
 
 
   // A figure the filing does not give us is an absence, not a zero.
@@ -890,9 +878,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
   // Calculate Upside %
   const potentialUpsidePct = useMemo(() => {
-    const diff = dcfResult.targetPrice - company.price;
-    return Number(((diff / company.price) * 100).toFixed(1));
-  }, [dcfResult.targetPrice, company.price]);
+    const diff = dcfResult.targetPrice - struckPrice;
+    return Number(((diff / struckPrice) * 100).toFixed(1));
+  }, [dcfResult.targetPrice, struckPrice]);
 
   // A bank the discounted cash flow refuses, but the residual income model
   // can value. The two are never blended: they answer different questions and
@@ -1001,60 +989,31 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
     company.residualIncome,
   ]);
 
-  // The chart shows more than the headline does. The market approach is a bar
-  // on the football field but is deliberately NOT folded into the headline
-  // value: a discounted cash flow and a peer multiple answer different
-  // questions, and averaging them would produce a number that means neither.
-  const fieldBands: FieldBand[] = useMemo(() => {
-    const income: FieldBand[] = valuationBands.map((band) => ({
-      ...band,
-      variant: 'income' as const,
-    }));
-    const isNumber = (v: any): v is number => typeof v === 'number' && isFinite(v);
-    if (
-      marketApproach?.available &&
-      isNumber(marketApproach.low) &&
-      isNumber(marketApproach.high) &&
-      isNumber(marketApproach.mid)
-    ) {
-      const used = marketApproach.usable.length;
-      income.push({
-        label: 'Market — peer multiples',
-        low: marketApproach.low,
-        high: marketApproach.high,
-        point: marketApproach.mid,
-        detail: `${used} peer multiple${used === 1 ? '' : 's'} on reported figures`,
-        variant: 'market',
-      });
-    }
-    // The asset approach is drawn as a floor rather than an estimate, which is
-    // what it is. Where only one measure survives the bar has no width, and
-    // that is honest: there is one figure, not a range.
-    if (
-      assetApproach?.available &&
-      isNumber(assetApproach.low) &&
-      isNumber(assetApproach.high) &&
-      isNumber(assetApproach.mid)
-    ) {
-      const count = assetApproach.usable.length;
-      income.push({
-        label: 'Asset — what it owns',
-        low: assetApproach.low,
-        high: assetApproach.high,
-        point: assetApproach.mid,
-        detail: `${count} balance sheet measure${count === 1 ? '' : 's'}${
-          assetApproach.informative ? '' : ', shown as a floor rather than a valuation'
-        }`,
-        variant: 'asset',
-      });
-    }
-    return income;
-  }, [valuationBands, marketApproach, assetApproach]);
+  // ---- THE VALUATION SUMMARY (build step 5, job B1) ---------------------
+  //
+  // `valuationBands`, `terminalMethods`, `premiumAgainst` and `fieldBands` were
+  // four `useMemo`s in this component, which meant the tearsheet and the
+  // workbook could only have them by computing them again. They are one pure
+  // function now (`src/data/valuationSummary.ts`), struck at one price, and
+  // this screen reads it.
+  const summary = useMemo(
+    () => valuationSummary(activeSource, drivers, struckPrice, marketApproach, assetApproach),
+    [activeSource, drivers, struckPrice, marketApproach, assetApproach]
+  );
+  const valuationBands = summary.bands;
+
+  // The headline is two numbers and the premium against each, both from the
+  // summary above. Why they are never averaged is in `valuationSummary.ts`.
+  const terminalMethods = summary.terminalMethods;
+  const premiumAgainst = summary.premiumAgainst;
+
+  // Every approach as a bar, from the summary above.
+  const fieldBands: FieldBand[] = summary.fieldBands as FieldBand[];
 
   const bankPremiumPct = useMemo(() => {
     if (!bankModel || !(bankModel.valuePerShare > 0)) return null;
-    return Number(((displayPrice / bankModel.valuePerShare - 1) * 100).toFixed(1));
-  }, [bankModel, displayPrice]);
+    return premiumOf(struckPrice, bankModel.valuePerShare);
+  }, [bankModel, struckPrice]);
 
   // ---- THE SAME FIGURES IN THE CURRENCY THE SHARE TRADES IN -------------
   //
@@ -1304,6 +1263,34 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           )}
         </div>
 
+        {/* ---- THE NEWER QUOTE, AND THE ONE ACTION THAT TAKES IT ----------
+            A quote that arrived after this model was struck is shown as a fact
+            with the action beside it (`docs/STUDIO_SPEC.md` S3, approved 4
+            November 2026). It is never swapped in: the price sets the equity
+            weight in the cost of capital, so re-pricing the model as the
+            market moves would change every value on the screen with no
+            judgement made and nothing saying it had happened. */}
+        {newerQuote !== null && (
+          <div
+            data-newer-quote={newerQuote}
+            className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border border-line bg-panel px-4 py-3"
+          >
+            <span className="text-[13px] text-muted">
+              Latest quote {company.currencySymbol}
+              {newerQuote.toFixed(2)}. This valuation is struck at {company.currencySymbol}
+              {struckPrice.toFixed(2)}, which is the price its cost of capital weighs equity at.
+            </span>
+            <button
+              type="button"
+              data-rebuild-at-latest
+              onClick={() => setRebuiltAtPrice(newerQuote)}
+              className="cursor-pointer border border-line px-3 py-1.5 text-[13px] text-muted transition-colors hover:border-accent hover:text-ink"
+            >
+              Rebuild at the latest price
+            </button>
+          </div>
+        )}
+
         {/* The figures. A hairline grid — one background with the gaps let
             through — so the columns divide without three more borders. */}
         {bankModel ? (
@@ -1334,9 +1321,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
             <div className="bg-panel px-5 py-5 lg:px-6">
               <Figure
-                eyebrow={`${liveQuote ? 'Live price' : 'Last stored price'} · ${company.currency}`}
-                value={`${company.currencySymbol}${displayPrice.toFixed(2)}`}
-                foot={inTrading.price ? `${inTrading.price.text} as quoted` : undefined}
+                eyebrow={`Price the valuation is struck at · ${company.currency}`}
+                value={`${company.currencySymbol}${struckPrice.toFixed(2)}`}
+                foot={
+                  /* ONE PRICE PER VALUATION (S3). A newer quote is a fact
+                     beside the figure, never swapped into it: the price sets
+                     the equity weight in the cost of capital, so re-pricing
+                     the model under the reader would change the answer with
+                     no judgement made. */
+                  newerQuote
+                    ? `Latest ${company.currencySymbol}${newerQuote.toFixed(2)}; this valuation uses ${company.currencySymbol}${struckPrice.toFixed(2)}`
+                    : inTrading.price
+                      ? `${inTrading.price.text} as quoted`
+                      : undefined
+                }
                 pill={
                   <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
                     {displayChangePct >= 0 ? '+' : ''}
@@ -1405,9 +1403,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
 
             <div className="bg-panel px-5 py-5 lg:px-6">
               <Figure
-                eyebrow={`${liveQuote ? 'Live price' : 'Last stored price'} · ${company.currency}`}
-                value={`${company.currencySymbol}${displayPrice.toFixed(2)}`}
-                foot={inTrading.price ? `${inTrading.price.text} as quoted` : undefined}
+                eyebrow={`Price the valuation is struck at · ${company.currency}`}
+                value={`${company.currencySymbol}${struckPrice.toFixed(2)}`}
+                foot={
+                  /* ONE PRICE PER VALUATION (S3). A newer quote is a fact
+                     beside the figure, never swapped into it: the price sets
+                     the equity weight in the cost of capital, so re-pricing
+                     the model under the reader would change the answer with
+                     no judgement made. */
+                  newerQuote
+                    ? `Latest ${company.currencySymbol}${newerQuote.toFixed(2)}; this valuation uses ${company.currencySymbol}${struckPrice.toFixed(2)}`
+                    : inTrading.price
+                      ? `${inTrading.price.text} as quoted`
+                      : undefined
+                }
                 pill={
                   <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
                     {displayChangePct >= 0 ? '+' : ''}
@@ -1864,7 +1873,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   // That is an undefined figure, not a very large one, so it
                   // reads as a dash rather than printing infinity.
                   const usable = typeof val === 'number' && isFinite(val) && val > 0;
-                  const ratio = usable ? val / company.price : 0;
+                  // SHADED AGAINST THE PRICE THE GRID'S OWN FIGURES WERE
+                  // STRUCK AT, which is the price the whole screen uses (S3).
+                  const ratio = usable && struckPrice > 0 ? val / struckPrice : 0;
                   let cellBg = 'bg-[#1c1110]';
                   if (ratio > 1.2) cellBg = 'bg-[#8B1E1E]';
                   else if (ratio > 1.05) cellBg = 'bg-[#8B1E1E]/70';

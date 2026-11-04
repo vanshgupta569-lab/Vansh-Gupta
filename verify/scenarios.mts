@@ -6518,6 +6518,173 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// ONE PRICE PER VALUATION
+// ---------------------------------------------------------------------------
+//
+// THE SHARE PRICE IS A VALUATION INPUT (`CLAUDE.md`): the cost of capital
+// weights equity at market capitalisation, so the price moves the WACC and with
+// it every value per share. The valuation screen held TWO of them until
+// 2026-11-04 — the stored price the record carries and a live quote fetched a
+// moment after the page loaded — and used them in different places: the bands,
+// the premiums, the reverse DCF and the football field at the live quote, the
+// sensitivity shading and the upside figure at the stored one. A premium could
+// be measured against a price the value was not computed at, and nothing on the
+// screen said which price anything used (`docs/STUDIO_SPEC.md` conflict 4,
+// severity H; decision S3, approved 4 November 2026).
+//
+// Four arms.
+{
+  console.log('\n=== one price per valuation ===');
+  const { valuationSummary, premiumOf } = await import(`file:///${REPO}/src/data/valuationSummary.ts`);
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor } = await import(`file:///${REPO}/src/data/companies.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let priced = 0;
+  let movedByADay = 0;
+  let movedOverAPoint = 0;
+  let worstGap = 0;
+  let worstWhere = '';
+
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    const stored = payload?.quote?.price;
+    if (!isNum(stored) || stored <= 0) continue;
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+    const at = (price: number) => {
+      try {
+        return valuationSummary(rec.modelData, drivers, price);
+      } catch {
+        return null;
+      }
+    };
+    const summary: any = at(stored);
+    if (!summary) continue;
+    const where = `${payload.ticker}`;
+
+    // ---- 1. THE SUMMARY SAYS WHICH PRICE IT USED ----------------------
+    if (summary.struckPrice !== stored) {
+      faults.push(`${where}: struck at ${stored} and the summary says ${summary.struckPrice}`);
+    }
+
+    // ---- 2. EVERY PREMIUM RECONCILES WITH THAT ONE PRICE --------------
+    //
+    // Recomputed here from the price and the value the summary itself
+    // publishes, which is the arithmetic the screen prints beside them — not
+    // read back from `premiumOf`, which is the thing under test.
+    for (const method of ['perpetuity', 'exit'] as const) {
+      const value = summary.terminalMethods[method];
+      const shown = summary.premiumAgainst[method];
+      if (!isNum(value) || value <= 0) {
+        if (shown !== null) {
+          faults.push(`${where}: a ${method} premium of ${shown}% against no ${method} value`);
+        }
+        continue;
+      }
+      const expected = Number((((stored - value) / value) * 100).toFixed(1));
+      if (!isNum(shown) || Math.abs(shown - expected) > 0.051) {
+        faults.push(
+          `${where}: the ${method} premium reads ${shown}% where the price ${stored} against the value ` +
+            `${value.toFixed(2)} is ${expected}%`
+        );
+      }
+    }
+    if (isNum(summary.premiumAgainst.perpetuity)) priced++;
+
+    // ---- 3. AND IT IS THE PRICE THAT MOVES THEM -----------------------
+    //
+    // A premium struck at a different price must BE different, or the screen
+    // would be printing a figure that does not depend on the price it names —
+    // which is what two prices on one screen looked like from the reader's
+    // side. The move used is this company's own last day.
+    const move = isNum(payload?.quote?.changePct) ? payload.quote.changePct : 1;
+    if (Math.abs(move) > 0.01) {
+      const later: any = at(stored * (1 + move / 100));
+      const a = summary.premiumAgainst.perpetuity;
+      const b = later?.premiumAgainst?.perpetuity;
+      if (isNum(a) && isNum(b)) {
+        const gap = Math.abs(b - a);
+        if (gap > 0.05) movedByADay++;
+        if (gap > 1) movedOverAPoint++;
+        if (gap > worstGap) {
+          worstGap = gap;
+          worstWhere = `${where} ${a}% -> ${b}% on a ${move.toFixed(2)}% move`;
+        }
+        if (gap < 1e-9 && Math.abs(move) > 1) {
+          faults.push(
+            `${where}: a ${move.toFixed(2)}% move in the price left the premium at ${a}% — a premium that ` +
+              'does not move with the price is not measured against it'
+          );
+        }
+      }
+    }
+  }
+
+  // ---- 4. NOTHING ON THE SCREEN TAKES THE LIVE QUOTE INTO A VALUATION ---
+  //
+  // The arms above hold the function. This holds the CALL SITES, because the
+  // defect was never in the arithmetic — it was in which price was handed to
+  // it. `liveQuote` may reach the newer-quote line and the button that asks
+  // for it, and nothing else; every valuation call takes `struckPrice`, or
+  // `displayPrice`, which is its alias.
+  const dashboard = fs.readFileSync(path.join(REPO, 'src/components/TerminalDashboard.tsx'), 'utf8');
+  // THE QUOTE'S PRICE, which is the only field of it that is a valuation
+  // input. Its change on the day and its 52-week range are the market's own
+  // figures and are shown live on purpose; the PRICE is what the cost of
+  // capital weighs equity at, so it is the one that may not be read twice.
+  const priceRead = /liveQuote\s*\??\.\s*price/g;
+  const priceReads = (dashboard.match(priceRead) || []).length;
+  const declaration = /const newerQuote =[\s\S]*?: null;/.exec(dashboard)?.[0] || '';
+  const inDeclaration = (declaration.match(priceRead) || []).length;
+  if (!declaration) {
+    faults.push('TerminalDashboard.tsx no longer settles the newer quote in one declaration');
+  } else if (priceReads !== inDeclaration) {
+    faults.push(
+      `TerminalDashboard.tsx reads the live quote's price ${priceReads} times and only ${inDeclaration} of ` +
+        'them are inside the newer-quote line — a valuation is taking the live price again'
+    );
+  }
+  // AND THE STRUCK PRICE IS THE RECORD'S UNTIL THE READER ASKS, which is the
+  // whole of S3: a live quote that re-priced the model on arrival would be the
+  // defect put back with a different variable name.
+  if (!/const struckPrice = rebuiltAtPrice \?\? company\.price;/.test(dashboard)) {
+    faults.push('the struck price is no longer the record\'s own until the reader rebuilds at the latest');
+  }
+
+  console.log(
+    `  ${priced} companies price a premium, and every one of them reconciles with the single price it ` +
+      'names: (price − value) ÷ value, recomputed here'
+  );
+  console.log(
+    `  the price is what moves it: a day's move changes the premium on ${movedByADay} of them and by more ` +
+      `than a point on ${movedOverAPoint}; the worst is ${worstWhere || 'none'}`
+  );
+  console.log(
+    '  and the live quote reaches the line that reports it and the button that asks for it, and nothing else'
+  );
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the price a valuation is struck at:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // EVERY COLUMN ADDS UP, FROM REVENUE TO OPERATING INCOME
 // ---------------------------------------------------------------------------
 //
