@@ -1,0 +1,129 @@
+// FILE: verify/bridge.mts
+//
+// The valuation bridge (`src/data/bridge.ts`, build step 5 part C), checked on
+// the paper company in `verify/fixtures/paperCompany.mts`, so it needs no
+// payloads and runs in `npm run verify` wherever that runs.
+//
+// Each block is one job of `docs/STEP5_BUILD_PLAN.md` and was proved to fail
+// by breaking the thing it guards (see the commit that added it).
+
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
+
+const BR: any = await import(`file:///${REPO}/src/data/bridge.ts`);
+const SM: any = await import(`file:///${REPO}/src/data/savedModels.ts`);
+const R: any = await import(`file:///${REPO}/src/data/restoreModel.ts`);
+const FX: any = await import(`file:///${REPO}/verify/fixtures/paperCompany.mts`);
+
+export interface BridgeReport {
+  problems: string[];
+  lines: string[];
+}
+
+const clone = (v: any) => JSON.parse(JSON.stringify(v));
+
+/**
+ * Two versions of the paper company's model that differ in a known set of
+ * inputs, listed by hand here — not read from `driversBetween`, so the check
+ * compares the bridge's grouping against an independent account of what was
+ * changed (CLAUDE.md: never compare a figure against itself).
+ */
+export function fixtureVersions() {
+  const fetched = FX.paperPayload('valued');
+  const A = { fetched, judgements: { ...SM.emptyJudgements(), sharePrice: 22.5 } };
+  const base: any = R.restoreFromJudgements(fetched, A.judgements).drivers;
+  const lastYear = String(fetched.statements[fetched.statements.length - 1].fiscalYear);
+  const lastRevenue = fetched.statements[fetched.statements.length - 1].revenue;
+  const bj: any = clone(A.judgements);
+  bj.sharePrice = 25;
+  bj.drivers = {
+    revenueGrowthPct: base.revenueGrowthPct + 2,
+    operatingMarginPct: base.operatingMarginPct + 1,
+    waccPct: base.waccPct - 0.5,
+    terminalGrowthPct: base.terminalGrowthPct + 0.25,
+  };
+  bj.corrections = { [lastYear]: { revenue: lastRevenue * 1.05 } };
+  bj.correctionReasons = { revenue: 'fixture: restated revenue' };
+  const B = { fetched, judgements: bj };
+  // What was changed, by hand: one driver per input, the cost of capital as
+  // one, the correction as one per field.
+  const expected = [
+    'sharePrice',
+    'costOfCapital',
+    'forecast:operatingMarginPct',
+    'forecast:revenueGrowthPct',
+    'forecast:terminalGrowthPct',
+    'correction:revenue',
+  ].sort();
+  return { A, B, expected, lastYear };
+}
+
+export async function checkBridge(): Promise<BridgeReport> {
+  const problems: string[] = [];
+  const lines: string[] = [];
+  const { A, B, expected } = fixtureVersions();
+  const near = (x: number | null, y: number | null) =>
+    x !== null && y !== null && Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(y));
+
+  // ---- C1. THE DRIVERS, AND EVERY MIX RUNNABLE ---------------------------
+  {
+    const { drivers, notBridged } = BR.driversBetween(A, B);
+    const keys = drivers.map((d: any) => d.key).sort();
+    const missing = expected.filter((k) => !keys.includes(k));
+    const extra = keys.filter((k: string) => !expected.includes(k));
+    if (missing.length || extra.length)
+      problems.push(
+        `C1: the drivers between the two fixture versions are [${keys.join(', ')}]; ` +
+          `expected exactly [${expected.join(', ')}]` +
+          (missing.length ? `, missing ${missing.join(', ')}` : '') +
+          (extra.length ? `, not expected ${extra.join(', ')}` : '')
+      );
+    if (new Set(keys).size !== keys.length) problems.push(`C1: a driver key appears twice: [${keys.join(', ')}]`);
+    if (notBridged.length) problems.push(`C1: ${notBridged.length} inputs reported as not bridged where none differ`);
+
+    const before = JSON.stringify(A.judgements);
+    const vA = BR.valueOfVersion(A).value;
+    const vB = BR.valueOfVersion(B).value;
+    const none = BR.valueOfVersion(BR.mixVersion(A, B, [])).value;
+    const all = BR.valueOfVersion(BR.mixVersion(A, B, keys)).value;
+    if (vA === null || vB === null) problems.push('C1: a fixture version has no perpetuity value');
+    if (!near(none, vA)) problems.push(`C1: A with nothing taken from B is ${none}, not A's ${vA}`);
+    if (!near(all, vB)) problems.push(`C1: A with every driver taken from B is ${all}, not B's ${vB}`);
+    if (JSON.stringify(A.judgements) !== before) problems.push('C1: mixing changed version A itself');
+
+    // Each driver on its own moves the value (every one of these was chosen to
+    // move it), so a driver whose mix does nothing has lost its input.
+    const inert = keys.filter((k: string) => {
+      const v = BR.valueOfVersion(BR.mixVersion(A, B, [k])).value;
+      return near(v, vA);
+    });
+    if (inert.length) problems.push(`C1: taking only ${inert.join(', ')} from B leaves A's value unchanged`);
+
+    // A mix the engine refuses is reported with the engine's sentence, not
+    // skipped and not thrown.
+    const refusedFetched = FX.paperPayload('refused');
+    const R2 = { fetched: refusedFetched, judgements: clone(B.judgements) };
+    const d2 = BR.driversBetween(A, R2).drivers.map((d: any) => d.key);
+    const refused = BR.valueOfVersion(BR.mixVersion(A, R2, ['newFilings']));
+    if (!d2.includes('newFilings')) problems.push('C1: different filings are not listed as the "New filings" driver');
+    if (refused.value !== null || !refused.refusal) problems.push('C1: a mix on filings the engine refuses was not reported as a refusal with a reason');
+
+    // Peers and recovery rates differ without moving the income value: listed
+    // as not bridged, never silently dropped.
+    const P = { fetched: A.fetched, judgements: { ...clone(A.judgements), peers: ['AAA', 'BBB'] } };
+    const p = BR.driversBetween(A, P);
+    if (p.drivers.length || p.notBridged.length !== 1 || p.notBridged[0].input !== 'peers')
+      problems.push('C1: a changed peer set is not reported as not bridged');
+
+    lines.push(
+      `C1: ${keys.length} drivers between the fixture versions, exactly the ${expected.length} changed by hand; ` +
+        `A with none of B is A (${vA?.toFixed(4)}), with all of B is B (${vB?.toFixed(4)}); each driver moves the value alone; ` +
+        `a refused mix reports "${String(refused.refusal).slice(0, 60)}…"; a changed peer set is listed as not bridged`
+    );
+  }
+
+  return { problems, lines };
+}

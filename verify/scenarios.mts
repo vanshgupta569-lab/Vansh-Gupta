@@ -1703,6 +1703,19 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
   totalProblems += bad;
 }
 
+// ---- the valuation bridge (build step 5, part C) --------------------------
+//
+// The checks live in `verify/bridge.mts` and run on the paper company fixture,
+// so they need no payloads and sit before the first section that does.
+{
+  console.log('\n=== the valuation bridge: drivers, mixing and attribution ===');
+  const { checkBridge } = await import(`file:///${REPO}/verify/bridge.mts`);
+  const report = await checkBridge();
+  for (const line of report.lines) console.log(`  ${line}`);
+  for (const problem of report.problems) console.log(`  PROBLEM: ${problem}`);
+  totalProblems += report.problems.length;
+}
+
 // ---------------------------------------------------------------------------
 // ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE
 // ---------------------------------------------------------------------------
