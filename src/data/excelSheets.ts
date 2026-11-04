@@ -1989,7 +1989,7 @@ function buildEbitdaBridgeSheet(ctx: SupportingSheetsContext) {
   r++;
 
   // ---- the adjustments ---------------------------------------------------
-  const every: any[] = [...(B.corrections || []), ...(B.oneOffs || [])];
+  const every: any[] = [...(B.corrections || []), ...(B.oneOffs || []), ...(B.belowTheLine || [])];
   heading(
     every.length
       ? `Your adjustments (${every.length})`

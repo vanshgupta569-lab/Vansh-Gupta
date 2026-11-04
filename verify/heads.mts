@@ -327,10 +327,16 @@ export async function checkHeads(ticker = 'RELIANCE.NS'): Promise<HeadsReport> {
   // A HEAD THE ENGINE CANNOT HONOUR IS NEVER APPLIED, however it got into the
   // record — a stale saved model, a hand-edited export.
   for (const [field, head] of [
-    ['sga', 'otherIncome'],
-    ['sga', 'financeCost'],
-    ['cash', 'debt'],
+    // THE HEADS THE ENGINE STILL CANNOT HONOUR. `otherIncome`, `financeCost`
+    // and `debt` were here until 2026-11-04 and are drop targets now, which is
+    // what the two hooks built in that commit are; what is left is revenue (a
+    // cost moved there would be modelled as a sale), tax (a cost is not tax)
+    // and equity (derived from the two totals, so nothing assigned to it would
+    // reach the model).
+    ['sga', 'revenue'],
+    ['sga', 'tax'],
     ['cash', 'equity'],
+    ['ppeNet', 'equity'],
   ] as [string, string][]) {
     if (H.applyHeads(probe, { [field]: { head } }) !== probe) {
       problems.push(`${field} assigned to the non-target head ${head} reached the engine`);
@@ -757,6 +763,218 @@ export async function checkHeads(ticker = 'RELIANCE.NS'): Promise<HeadsReport> {
       }
     });
     if (!said) problems.push('a move with no reason leaves the reason cell blank rather than saying so');
+  }
+
+  // ====================================================================
+  // 8. THE BELOW-THE-LINE HOOK: OUT OF THE OPERATING BASE, AND INTO WHAT
+  //    IS BELOW IT
+  // ====================================================================
+  //
+  // Until 2026-11-04 the other-income and finance-cost heads were shown and
+  // refused, because a cost moved below the operating line could not change the
+  // forecast: the engine ties built operating profit to the filed figure by
+  // carrying the difference on its reconciling line, so the money left SG&A and
+  // reappeared in that residual and the forecast operating margin was exactly
+  // what it had been.
+  //
+  // THE HOOK HAS TWO HALVES AND EACH IS ASSERTED SEPARATELY, because one of
+  // them without the other is a worse answer than no control: the amount leaves
+  // the FORECAST OPERATING BASE, and the amount is CHARGED BELOW THE LINE. A
+  // hook that only did the first would value the company as though the cost had
+  // vanished.
+  for (const head of ['otherIncome', 'financeCost'] as const) {
+    const movable = lines.filter((l: any) => l.movableTo.includes(head) && !l.derived);
+    if (!movable.length) {
+      problems.push(`${ticker} has no line that can go under ${head}, so the hook ships untested`);
+      continue;
+    }
+    const line = movable[0];
+    const assignment = { [line.field]: { head, reason: 'not an operating cost, for verification' } };
+    const after = valueUnder(payload, {}, assignment);
+    if (after.refusal) {
+      problems.push(`${line.field} under ${head} refused the model: ${after.refusal}`);
+      continue;
+    }
+    const rec: any = buildCompanyFrom(payload, {}, assignment);
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+    const { model: M }: any = buildFullModel(rec.modelData, drivers);
+
+    // ---- half one: the forecast operating base loses it ----------------
+    //
+    // EBIT in the first forecast year must rise by the amount moved, as a
+    // SHARE OF THAT YEAR'S REVENUE rather than in money, because the forecast
+    // grows revenue: the cost was being carried at its share of the last
+    // reported year's revenue and that share is what has gone.
+    const t = M.nH;
+    const amount = line.amounts[line.amounts.length - 1];
+    const lastRevenue = payload.statements[payload.statements.length - 1]?.revenue;
+    if (isNum(amount) && isNum(lastRevenue) && lastRevenue !== 0 && isNum(M.revenue?.[t])) {
+      const expectedRise = (amount / lastRevenue) * M.revenue[t];
+      const actualRise = (isNum(M.ebit?.[t]) ? M.ebit[t] : 0) - (isNum(P.ebit?.[t]) ? P.ebit[t] : 0);
+      const off = Math.abs(actualRise - expectedRise) / Math.max(1, Math.abs(expectedRise));
+      if (off > 0.02) {
+        problems.push(
+          `${line.field} under ${head}: forecast EBIT rose by ${Math.round(actualRise)} where the cost ` +
+            `moved out of the operating base comes to ${Math.round(expectedRise)} in that year — the ` +
+            'amount did not leave the forecast operating base, or more than it left'
+        );
+      }
+      if (!(actualRise > 0)) {
+        problems.push(
+          `${line.field} under ${head}: forecast EBIT did not rise at all, so the cost is still inside ` +
+            'operating profit and the move changed nothing'
+        );
+      }
+    }
+
+    // ---- half two: it is charged below the line ------------------------
+    //
+    // The cost is still there, one line further down, so FORECAST PRETAX
+    // PROFIT must be close to what it was. Not identical: the engine's
+    // other-income line is forecast at its share of revenue and the median
+    // rule can bite, so what is asserted is that the pretax profit did not
+    // move by anything like the amount — a hook that forgot the second half
+    // would move it by the whole of it.
+    const pretaxBefore = isNum(P.pretaxProfit?.[t]) ? P.pretaxProfit[t] : null;
+    const pretaxAfter = isNum(M.pretaxProfit?.[t]) ? M.pretaxProfit[t] : null;
+    if (isNum(amount) && isNum(lastRevenue) && lastRevenue !== 0 && pretaxBefore !== null && pretaxAfter !== null) {
+      const moved = (amount / lastRevenue) * (isNum(M.revenue?.[t]) ? M.revenue[t] : 0);
+      const pretaxMoved = Math.abs(pretaxAfter - pretaxBefore);
+      if (moved > 0 && pretaxMoved > 0.5 * Math.abs(moved)) {
+        problems.push(
+          `${line.field} under ${head}: forecast pretax profit moved by ${Math.round(pretaxMoved)} against ` +
+            `a cost of ${Math.round(moved)} — the cost left operating profit without being charged below it`
+        );
+      }
+    }
+
+    // ---- and the reported years are the filing -------------------------
+    if (reportedEbitGap(payload, assignment) > 1e-6) {
+      problems.push(`${line.field} under ${head} restated reported operating profit`);
+    }
+
+    // ---- the engine says what it did, with the reason ------------------
+    const note = String(rec.modelData?.provenance?.[line.field] ?? '');
+    if (!/head by you/.test(note) || !/for verification/.test(note)) {
+      problems.push(
+        `${line.field} under ${head} is not stated in the engine's provenance with the reader's reason: ` +
+          `${note.slice(0, 110)}`
+      );
+    }
+
+    // ---- and the EBITDA bridge shows it --------------------------------
+    //
+    // A cost outside operating profit is outside EBITDA, so the bridge has to
+    // carry it or it would publish an adjusted EBITDA the forecast does not
+    // use. The bridge's own tie is checked in `verify/ebitdaBridge.mts`.
+    const bridge: any = rec.modelData?.meta?.ebitdaBridge;
+    const onBridge = (bridge?.belowTheLine || []).find((a: any) => a.key === `belowTheLine:${line.field}`);
+    if (!onBridge) {
+      problems.push(`${line.field} under ${head} does not appear on the adjusted EBITDA bridge`);
+    } else if (onBridge.reason !== assignment[line.field].reason) {
+      problems.push(`the bridge line for ${line.field} carries the reason ${JSON.stringify(onBridge.reason)}`);
+    }
+  }
+
+  // ====================================================================
+  // 9. THE DEBT HOOK: THE BALANCE THE READER SETTLES, AT THE RATE THE
+  //    FILING IMPLIES
+  // ====================================================================
+  //
+  // The debt total is built from up to fourteen overlapping filed fields with
+  // separate GAAP and IFRS paths, which is why the head was shown and refused:
+  // a move cannot be honoured by writing one of them. The amount is carried per
+  // fiscal year and added to the total those fields produce, and three things
+  // have to hold.
+  const debtLine = lines.find((l: any) => l.movableTo.includes('debt'));
+  const offDebt = lines.find((l: any) => l.defaultHead === 'debt' && l.movableTo.length);
+  for (const [line, head, direction] of [
+    [debtLine, 'debt', 'onto'],
+    [offDebt, offDebt?.movableTo?.[0], 'off'],
+  ] as [any, string, string][]) {
+    if (!line || !head) {
+      problems.push(`${ticker} has no line to move ${direction} the debt head, so the hook ships untested`);
+      continue;
+    }
+    const assignment = { [line.field]: { head, reason: `${direction} borrowings, for verification` } };
+    const rec: any = buildCompanyFrom(payload, {}, assignment);
+    const amount = line.amounts[line.amounts.length - 1];
+    const was = plain.modelData?.meta?.debt?.total;
+    const now = rec.modelData?.meta?.debt?.total;
+
+    // 1. THE TOTAL MOVES BY THE FIGURE BESIDE THE LINE, and by nothing else.
+    if (isNum(amount) && isNum(was) && isNum(now)) {
+      const expected = direction === 'onto' ? was + amount : was - amount;
+      if (Math.abs(now - expected) > 1e-6) {
+        problems.push(
+          `${line.field} moved ${direction} borrowings: the debt total went ${was} -> ${now} where the ` +
+            `figure beside the line is ${amount}, so ${expected} was due`
+        );
+      }
+    }
+
+    // 2. THE RATE IS NOT RE-MEASURED ON THE NEW TOTAL. The filing's interest
+    //    is the interest on the borrowings the filing calls borrowings, so
+    //    dividing it by a balance the reader has added a lease to would move
+    //    the implied RATE instead of the thing the reader moved.
+    const rateOf = (source: any) => {
+      const said = String(source?.provenance?.costOfDebt ?? source?.provenance?.interest ?? '');
+      const found = /(\d+\.\d+)%/.exec(said);
+      return found ? Number(found[1]) : null;
+    };
+    const rateBefore = rateOf(plain.modelData);
+    const rateAfter = rateOf(rec.modelData);
+    if (rateBefore !== null && rateAfter !== null && Math.abs(rateBefore - rateAfter) > 1e-9) {
+      problems.push(
+        `${line.field} moved ${direction} borrowings changed the implied borrowing rate from ${rateBefore}% ` +
+          `to ${rateAfter}% — the rate is measured on the filing's own borrowings, not on the reader's total`
+      );
+    }
+
+    // 3. THE VALUE MOVES, AND IN THE RIGHT DIRECTION. More debt is less
+    //    equity: net debt comes off enterprise value.
+    const after = valueUnder(payload, {}, assignment);
+    if (!after.refusal && isNum(base.perpetuity) && isNum(after.perpetuity) && isNum(amount) && amount !== 0) {
+      const movedDown = (after.perpetuity as number) < (base.perpetuity as number);
+      if (direction === 'onto' && !movedDown) {
+        problems.push(
+          `${line.field} moved onto borrowings did not lower the value (${base.perpetuity} -> ${after.perpetuity})`
+        );
+      }
+      if (direction === 'off' && movedDown) {
+        problems.push(
+          `${line.field} moved off borrowings did not raise the value (${base.perpetuity} -> ${after.perpetuity})`
+        );
+      }
+    }
+
+    // 4. AND THE READER'S REASON REACHES THE ASSUMPTIONS SHEET, through the
+    //    provenance sentence that sheet prints as the basis for net debt.
+    const netDebtNote = String(rec.modelData?.provenance?.netDebt ?? '');
+    if (!new RegExp(`${direction} borrowings, for verification`).test(netDebtNote)) {
+      problems.push(
+        `the reason for moving ${line.field} ${direction} borrowings is not in the net debt provenance: ` +
+          `${netDebtNote.slice(-160)}`
+      );
+    }
+  }
+
+  // AND THE AMOUNTS ARE KEYED BY FISCAL YEAR, for the reason the one-offs
+  // amounts are: a dropped period would otherwise take one year's lease out of
+  // another year's debt.
+  {
+    const toDebt = lines.find((l: any) => l.movableTo.includes('debt'));
+    if (toDebt) {
+      const applied = H.applyHeads(payload, { [toDebt.field]: { head: 'debt' } });
+      const keys = Object.keys(applied.heads?.debtMoved || {});
+      const expected = payload.statements.map((s: any) => String(s.fiscalYear));
+      if (keys.length !== expected.length || !expected.every((y: string) => keys.includes(y))) {
+        problems.push(
+          `the debt amounts the engine reads are keyed ${JSON.stringify(keys)} rather than by the fiscal ` +
+            `years ${JSON.stringify(expected)}`
+        );
+      }
+    }
   }
 
   return {

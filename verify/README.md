@@ -343,6 +343,53 @@ every filing address in a payload (**15**); and the line's first candidate
 printed instead of the figure's own, which is what recording the preference
 list's head would look like (**24,180**, and 1 in the browser).
 
+### The two judgement-layer hooks: below the line, and debt
+
+`verify/heads.mts`. Both hooks exist because the engine ties built operating
+profit to the filed figure by carrying the difference on a reconciling line, so
+money taken out of a named cost reappears in that residual and the forecast is
+unchanged. Three heads were shown and refused for that reason until 2026-11-04.
+
+**The below-the-line hook has two halves and each is asserted separately**,
+because one without the other is worse than no control at all: a hook that takes
+a cost out of the forecast operating base and forgets to charge it below the line
+values the company as though the cost had vanished. So the first forecast year's
+EBIT must rise by the amount moved — as a share of that year's revenue, because
+the forecast grows revenue — and forecast PRETAX profit must not, because the
+cost is still there one line down. The reported years must still tie to the
+filing, the engine's own provenance must say what was done and carry the reader's
+reason, and the adjusted EBITDA bridge must show the line, because a cost outside
+operating profit is outside EBITDA.
+
+**The debt hook** is checked on four things: the debt total moves by the figure
+printed beside the line and by nothing else; the IMPLIED BORROWING RATE does not
+move at all, because the filing's interest is the interest on the borrowings the
+filing calls borrowings; the value moves in the right direction (more debt is
+less equity); and the reader's reason reaches the net-debt provenance, which is
+what the Assumptions sheet prints as the basis for it. The amounts are keyed by
+fiscal year rather than by index, for the reason the one-offs amounts are: a
+dropped period would otherwise take one year's lease out of another year's debt.
+
+**And the screen's own tie still closes.** Revenue less every head must come to
+filed operating profit under every assignment, which means subtracting what the
+reader moved below the line — the filing charged it above the line, and this site
+does not restate a filing. Checked over every single move of every movable line
+on six companies.
+
+**Nothing moves until a reader moves something.** `verify:sweep` either side of
+the change: 178 payloads, 74 valued on both sides, **0 moved at all**, and the
+two snapshots byte-identical — not a value, not a refusal, not a provenance
+sentence.
+
+Proved by breaking, seven ways: the amount never leaving the forecast operating
+base, which is the state before this job (**6 faults**); nothing charged below
+the line for other income (**1**); nothing charged below the line for finance
+cost (**1**); the debt move never reaching the total (**2**); the borrowing rate
+re-measured on the balance the reader settled rather than on the filing's own
+(**2**, and it moves it a long way — 6.28% to 5.01% one way and to 17.21% the
+other); the screen's tie forgetting what was moved below the line (**16**); and
+the EBITDA bridge dropping the third kind of adjustment (**8**).
+
 ### Every column adds up, from revenue to operating income
 
 The statement printed revenue, cost of sales, gross profit, research, selling

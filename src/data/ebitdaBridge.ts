@@ -69,11 +69,17 @@ import {
 
 const num = (v: any): number | null => (typeof v === 'number' && isFinite(v) ? v : null);
 
-export type AdjustmentKind = 'correction' | 'oneOff';
+// A THIRD KIND, with the below-the-line hook (ROADMAP.md §19b): a cost the
+// reader has moved to other income or to finance cost. It is not a one-off —
+// the cost is still there, one line further down, and every forecast year
+// carries it — but it is outside EBITDA from the moment it moves, so adjusted
+// EBITDA has to show it or the bridge would publish a figure the forecast does
+// not use.
+export type AdjustmentKind = 'correction' | 'oneOff' | 'belowTheLine';
 
 export interface Adjustment {
   kind: AdjustmentKind;
-  /** `correction:<field>` or `oneOff:<field>`. Stable, for a reason input. */
+  /** `correction:<field>`, `oneOff:<field>` or `belowTheLine:<field>`. Stable, for a reason input. */
   key: string;
   label: string;
   /** The reader's one line. Empty where they gave none. */
@@ -100,6 +106,12 @@ export interface EbitdaBridge {
   afterCorrections: (number | null)[];
   /** The lines put under the one-offs head, which is what an adjustment is. */
   oneOffs: Adjustment[];
+  /**
+   * The lines moved below the operating line — to other income, or to finance
+   * cost. Outside EBITDA from the moment they move, so they belong on this
+   * bridge; unlike a one-off the cost is still in the model, one line down.
+   */
+  belowTheLine: Adjustment[];
   adjustedEbitda: (number | null)[];
   /** adjusted − (reported + every adjustment). Nil in every year, or it is broken. */
   tie: (number | null)[];
@@ -237,11 +249,44 @@ export function buildEbitdaBridge(
     });
   }
 
+  // ---- the lines moved below the operating line -------------------------
+  //
+  // The same arithmetic as a one-off and a different meaning, which the line
+  // says: a one-off is gone from the forecast, and this is charged below EBIT
+  // in every forecast year. Both are outside EBITDA, which is what this bridge
+  // is about.
+  const belowTheLine: Adjustment[] = [];
+  for (const line of LINES) {
+    if (!line.movable) continue;
+    const head = headOf(line.field, heads);
+    if (head !== 'otherIncome' && head !== 'financeCost') continue;
+    const byYear =
+      line.field === RECONCILING_LINE
+        ? residual.slice()
+        : (corrected as any[]).map((r) => num(r?.[line.field]));
+    const moves = byYear.filter((v) => v !== null && Math.abs(v) > 1e-6).length;
+    belowTheLine.push({
+      kind: 'belowTheLine',
+      key: `belowTheLine:${line.field}`,
+      label: LINE_BY_FIELD[line.field]?.label || line.field,
+      reason: reasonOf(line.field, heads).trim(),
+      byYear,
+      yearsMoved: moves,
+      detail:
+        head === 'otherIncome'
+          ? 'under the other income and expense head: outside operating profit and outside EBITDA, and ' +
+            'charged below the operating line in every forecast year'
+          : 'under the finance cost head: outside operating profit and outside EBITDA, and charged beside ' +
+            "the debt schedule's interest in every forecast year",
+    });
+  }
+
   let adjustedEbitda = afterCorrections.slice();
   for (const e of oneOffs) adjustedEbitda = addInto(adjustedEbitda, e.byYear);
+  for (const e of belowTheLine) adjustedEbitda = addInto(adjustedEbitda, e.byYear);
 
   // ---- the tie ----------------------------------------------------------
-  const every = [...corrs, ...oneOffs];
+  const every = [...corrs, ...oneOffs, ...belowTheLine];
   const tie = adjustedEbitda.map((adj, i) => {
     if (adj === null || reportedEbitda[i] === null) return null;
     let sum = reportedEbitda[i] as number;
@@ -261,6 +306,7 @@ export function buildEbitdaBridge(
     corrections: corrs,
     afterCorrections,
     oneOffs,
+    belowTheLine,
     adjustedEbitda,
     tie,
     neutral,
@@ -270,6 +316,6 @@ export function buildEbitdaBridge(
 
 /** The lines a reason can be attached to, for a screen to render inputs for. */
 export const adjustmentKeys = (b: EbitdaBridge): string[] =>
-  [...b.corrections, ...b.oneOffs].map((a) => a.key);
+  [...b.corrections, ...b.oneOffs, ...b.belowTheLine].map((a) => a.key);
 
 export default { buildEbitdaBridge, ebitdaOf, adjustmentKeys };

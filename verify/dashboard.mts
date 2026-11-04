@@ -1090,19 +1090,40 @@ async function checkHeadsOnScreen(page: Page) {
   if (bandCount >= 6) ok(`${bandCount} heads on the statement in view`);
   else fail('heads', 'at least 6', String(bandCount));
 
-  // A HEAD THE ENGINE CANNOT HONOUR SAYS SO, in its own ⓘ. Both are on the
-  // balance sheet, so the tab is switched.
-  await page.getByRole('tab', { name: /balance sheet/i }).click();
-  await page.waitForTimeout(500);
-  const debtBand = page.locator('[data-head-band="debt"]');
-  if (await debtBand.count()) {
-    const said = await readHint(page, debtBand, 0);
+  // A HEAD THE ENGINE CANNOT HONOUR SAYS SO, in its own ⓘ.
+  //
+  // READ ON TAX, which is a head the engine will never honour: the effective
+  // rate every forecast year is taxed at is measured on the filed charge, so a
+  // cost moved there would be read as tax the company paid. The debt head was
+  // this check's subject until 2026-11-04, when the debt hook made it a drop
+  // target (ROADMAP.md §19b), and the balance sheet's other refused head —
+  // equity — carries only an anchor, so it renders no band of its own.
+  const taxBand = page.locator('[data-head-band="tax"]');
+  if (await taxBand.count()) {
+    const said = await readHint(page, taxBand, 0);
     if (/not a drop target/i.test(said)) ok('a head the engine cannot honour says so in its hint');
-    else fail('the not-a-drop-target note', 'in the debt head hint', said.slice(0, 80) || '(not there)');
+    else fail('the not-a-drop-target note', 'in the tax head hint', said.slice(0, 80) || '(not there)');
     if (said.replace(/.*Not a drop target\./i, '').trim().length > 60) {
       ok('and gives the reason with it');
     } else {
       fail('the reason a head is not a drop target', 'stated in the hint', '(too short or absent)');
+    }
+  } else {
+    fail('the tax head', 'on the profit and loss', '(not there)');
+  }
+  await page.getByRole('tab', { name: /balance sheet/i }).click();
+  await page.waitForTimeout(500);
+  // AND THE DEBT HEAD IS NOW ONE, which is what the hook built: a reader can
+  // put a lease on it, and the hint says what that does to the valuation.
+  const debtBand = page.locator('[data-head-band="debt"]');
+  if (await debtBand.count()) {
+    const said = await readHint(page, debtBand, 0);
+    if (/not a drop target/i.test(said)) {
+      fail('the debt head', 'a drop target, since the debt hook', 'still refused in its hint');
+    } else if (/net debt reads it/i.test(said)) {
+      ok('the debt head is a drop target and its hint says what a move does to the equity value');
+    } else {
+      fail('the debt head hint', 'what a move here does', said.slice(0, 80) || '(not there)');
     }
   } else {
     fail('the debt head', 'on the balance sheet', '(not there)');

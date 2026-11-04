@@ -267,31 +267,32 @@ export const HEADS: readonly Head[] = Object.freeze([
     definition:
       'Everything between operating profit and pretax profit except interest: investment income, ' +
       'equity-method results, currency.',
-    forecast: 'Its share of revenue. Below operating profit, so what sits here is outside EBIT and EBITDA.',
+    forecast:
+      'Its share of revenue, below operating profit — so a cost moved here LEAVES the forecast operating ' +
+      'base and is charged below EBIT instead. Operating profit and EBITDA rise by the amount, every year of ' +
+      'the forecast; pretax profit does not, because the cost is still there, one line further down.',
     row: 'other',
     field: null,
-    dropTarget: false,
-    notYetBecause:
-      'MEASURED: an operating cost moved below the operating line cannot change the forecast today. The engine ' +
-      'ties built operating profit to the filed figure by carrying the difference on its reconciling line, so ' +
-      'the money leaves SG&A and reappears in that residual, and the forecast operating margin is exactly what ' +
-      'it was. Honouring this head needs the engine to take the amount out of the forecast operating base and ' +
-      'add it below the line — the hook is recorded in ROADMAP.md §19b, beside the debt hook.',
+    dropTarget: true,
   },
   {
     key: 'financeCost',
     label: 'Finance cost',
     statement: 'income',
     definition: 'Interest and other costs of borrowing.',
-    forecast: 'Charged on the forecast debt balance. Below operating profit, so what sits here is outside EBIT.',
+    forecast:
+      'The debt schedule charges interest on the forecast borrowings; a cost moved here is charged BESIDE ' +
+      'that, held flat at the amount of the last reported year, and leaves the forecast operating base. ' +
+      'Operating profit and EBITDA rise by the amount and pretax profit does not.',
     row: 'intExp',
-    field: 'interestExpense',
-    dropTarget: false,
-    notYetBecause:
-      'MEASURED, and for two reasons. The reconciling line absorbs an operating cost moved below the line, as ' +
-      'with other income; and the forecast charge comes off the debt schedule rather than the filed figure, so ' +
-      'inflating the filed interest would move the implied cost of debt instead of the cost it was meant to ' +
-      'move. The hook is recorded in ROADMAP.md §19b.',
+    // NOT `interestExpense`. A move here must not be written into the filed
+    // interest: the cost of debt is measured as filed interest over borrowings
+    // (`deriveModel`, THE RATE IS THE COMPANY'S OWN), so adding to that field
+    // would move the implied borrowing rate instead of the cost it was meant to
+    // move, and would restate a filed line on the reported column. The amount is
+    // carried on `heads.belowTheLine` and charged in the forecast years only.
+    field: null,
+    dropTarget: true,
   },
   {
     key: 'oneOffs',
@@ -401,17 +402,19 @@ export const HEADS: readonly Head[] = Object.freeze([
     key: 'debt',
     label: 'Debt, including leases',
     statement: 'balance',
-    definition: 'Borrowings of every maturity, and lease obligations.',
-    forecast: 'The debt schedule, and net debt reads it.',
+    definition: 'Borrowings of every maturity, and the lease obligations the reader counts as borrowing.',
+    forecast:
+      'The debt schedule, and net debt reads it — so a move here comes off the equity value directly, and a ' +
+      'move away from it adds to the equity value. The interest rate is NOT re-measured on the new total: it ' +
+      'is the rate the filing implies on the borrowings the filing calls borrowings, charged on the balance ' +
+      'the reader settles.',
     row: 'bsDebt',
+    // The debt total is built from up to fourteen overlapping filed fields with
+    // separate US GAAP and IFRS paths, so a move cannot be honoured by writing
+    // one of them: the amount is carried on `heads.debtMoved` and added to the
+    // total the filing's own fields produce (`deriveModel`, THE DEBT HOOK).
     field: null,
-    dropTarget: false,
-    notYetBecause:
-      'The engine builds the debt total from thirteen filed fields with separate US GAAP and IFRS paths — ' +
-      'combined debt-and-lease figures where a filing publishes them, debt-only where it does not, finance ' +
-      'leases netted and operating leases never netted. A move cannot be honoured by rewriting one field, and ' +
-      'a control that moved a line without changing a number would be worse than none. The engine hook this ' +
-      'needs is the next job in ROADMAP.md §19b.',
+    dropTarget: true,
   },
   {
     key: 'equity',
@@ -539,6 +542,13 @@ export interface LineSpec {
  * cannot see total assets on a screen headed "as filed" will wonder what else
  * is missing, and a reader who could drag it would silently double count.
  */
+/**
+ * The balance-sheet heads a BORROWING may never be moved to (see the five debt
+ * lines below). Written once: five copies of a list like this drift, and the
+ * one that drifts is the one nobody reads again.
+ */
+const NOT_A_BORROWING: HeadKey[] = ['cash', 'receivables', 'inventory', 'payables', 'fixedAssets'];
+
 export const LINES: readonly LineSpec[] = Object.freeze([
   // ---- income statement ----
   {
@@ -569,12 +579,21 @@ export const LINES: readonly LineSpec[] = Object.freeze([
     // 565,937 of cost on Reliance in the first forecast year. The old feature
     // refused to let cost of sales be excluded for the same reason, and the
     // reason has not changed.
-    notTo: ['oneOffs'],
+    // AND NOR BELOW THE OPERATING LINE, for the same reason and with its own
+    // measurement. The two below-the-line heads take a cost out of the forecast
+    // operating base by its own amount, and cost of sales is the one line whose
+    // amount the forecast does not carry: the engine derives it from the GROSS
+    // MARGIN, and depreciation and share-based pay are taken out of it at the
+    // share they took. Measured on Apple on 2026-11-04: moving it to other
+    // income raised the first forecast year's EBIT by 7,857,921 where the line
+    // itself comes to 8,423,859 of that year's revenue. A control that moves a
+    // line by a figure other than the one printed beside it is worse than none.
+    notTo: ['oneOffs', 'otherIncome', 'financeCost'],
     basis:
       'The source returns this as cost of sales or cost of revenue, which is a cost of the units sold by its ' +
-      'own description. It cannot be set aside as a one-off: it is the balancing line the gross margin is ' +
-      'derived from, so there is no margin to take to nil, and a one-off inside it is a correction to the ' +
-      'figure in this row.'
+      'own description. It cannot be set aside as a one-off, nor moved below the operating line: it is the ' +
+      'balancing line the gross margin is derived from, so there is no margin to take to nil, and a one-off ' +
+      'inside it is a correction to the figure in this row.'
   },
   {
     field: 'rnd',
@@ -802,6 +821,14 @@ export const LINES: readonly LineSpec[] = Object.freeze([
   },
   // THE DEBT LINES ARE THE FIELDS THE SOURCE ACTUALLY RETURNS, which is not the
   // same as the fields the engine's debt total is built from. The sources
+  // THE HEADS A BORROWING MAY NOT BE MOVED TO. A liability is either debt or an
+  // ordinary liability; it is never cash, a receivable, a stock of goods or a
+  // fixed asset. Without this the machinery would offer a reader the chance to
+  // move a bond onto the inventory head, and `other` — the liability residual
+  // the filed totals plug — is the only honest destination.
+  //
+  // One list for the five lines, because five copies of it would drift.
+  //
   // publish up to fourteen overlapping debt and lease tags — a combined
   // debt-and-lease figure, a debt-only figure, a total that is the sum of its
   // own current and non-current parts — and the engine resolves which to read
@@ -815,68 +842,90 @@ export const LINES: readonly LineSpec[] = Object.freeze([
     label: 'Borrowings due beyond a year',
     statement: 'balance',
     defaultHead: 'debt',
-    ownField: 'longTermDebt',
-    movable: false,
+    // NULL, AND NOT `longTermDebt`. The engine does not read this field on
+    // every filing — it resolves which of up to fourteen overlapping debt and
+    // lease tags to use per filing and per standard — so zeroing it would
+    // change the total on some companies and nothing at all on others. The
+    // amount travels on `heads.debtMoved` instead and the filing's own figure
+    // stays on the screen as filed, which is what this line claims to be.
+    ownField: null,
+    movable: true,
+    notTo: NOT_A_BORROWING,
     negative: true,
-    fixedBecause:
-      'The debt total is built from up to fourteen filed fields with separate GAAP and IFRS paths, so a move ' +
-      'cannot yet be honoured. See the debt head.',
-    basis: 'Borrowings due beyond a year. Net debt reads it.',
+    basis:
+      'Borrowings due beyond a year, and net debt reads it. Moving it off the debt head says this is not a ' +
+      'borrowing the equity value should bear — a liability of the business rather than a claim financing ' +
+      'it — and the money lands in the liability residual the filed total plugs.',
   },
   {
     field: 'longTermDebtCurrent',
     label: 'Borrowings due within a year',
     statement: 'balance',
     defaultHead: 'debt',
-    ownField: 'longTermDebtCurrent',
-    movable: false,
+    ownField: null,
+    movable: true,
+    notTo: NOT_A_BORROWING,
     negative: true,
-    fixedBecause:
-      'The debt total is built from up to fourteen filed fields with separate GAAP and IFRS paths, so a move ' +
-      'cannot yet be honoured. See the debt head.',
-    basis: 'The part of long-term borrowings repayable within the year. Net debt reads it.',
+    basis:
+      'The part of long-term borrowings repayable within the year, and net debt reads it. Moving it off the ' +
+      'debt head takes it out of net debt and leaves it in the liability residual.',
   },
   {
     field: 'shortTermBorrowings',
     label: 'Short-term borrowings',
     statement: 'balance',
     defaultHead: 'debt',
-    ownField: 'shortTermBorrowings',
-    movable: false,
+    ownField: null,
+    movable: true,
+    notTo: NOT_A_BORROWING,
     negative: true,
-    fixedBecause:
-      'The debt total is built from up to fourteen filed fields with separate GAAP and IFRS paths, so a move ' +
-      'cannot yet be honoured. See the debt head.',
-    basis: 'Commercial paper and other borrowing that was never long-term. Net debt reads it.',
+    basis:
+      'Commercial paper and other borrowing that was never long-term, and net debt reads it. A reader who ' +
+      'treats a revolver drawn every year as working capital rather than as borrowing moves it off this head.',
   },
   {
     field: 'financeLeaseTotal',
     label: 'Finance lease obligations',
     statement: 'balance',
     defaultHead: 'debt',
-    ownField: 'financeLeaseTotal',
-    movable: false,
+    ownField: null,
+    movable: true,
+    notTo: NOT_A_BORROWING,
     negative: true,
-    fixedBecause:
-      'Whether a lease is debt is its own judgement in the plan (ROADMAP.md §2) and cannot be made here ' +
-      'yet: the engine reads a combined debt-and-lease figure wherever a filing publishes one, so zeroing this ' +
-      'line would change nothing.',
-    basis: 'A finance lease is a financing of an asset the company controls, so the engine counts it as debt.',
+    basis:
+      'A finance lease reaches profit as depreciation plus interest, and operating profit carries only the ' +
+      'depreciation — so the financing half is outside the cash flow the enterprise value is built from and ' +
+      'the engine counts the liability as debt. WHETHER A LEASE IS DEBT is the judgement (ROADMAP.md §2): a ' +
+      'reader who holds that a leased asset is rented rather than bought moves this off the debt head, and ' +
+      'net debt loses it.',
   },
   {
     field: 'operatingLeaseTotal',
     label: 'Operating lease obligations',
+    // THE HEAD THE ENGINE ACTUALLY PUTS IT UNDER, which until 2026-11-04 this
+    // said was debt while the engine was not netting it. A line shown under a
+    // head whose total the engine does not read it into is a screen stating a
+    // treatment the model does not use, and with the debt hook built it would
+    // be worse than wrong: moving the line "off" debt would subtract from net
+    // debt an amount net debt never contained.
+    //
+    // No figure changes with this. The engine's treatment is exactly what it
+    // was, and it is the DEFAULT here too — what changes is that the screen now
+    // says so, and that the reader can disagree.
     statement: 'balance',
-    defaultHead: 'debt',
-    ownField: 'operatingLeaseTotal',
-    movable: false,
+    defaultHead: 'other',
+    ownField: null,
+    movable: true,
+    notTo: NOT_A_BORROWING,
     negative: true,
-    fixedBecause:
-      'Whether an operating lease is debt is its own judgement in the plan (ROADMAP.md §2) and cannot be ' +
-      'made here yet. The engine never nets an operating lease against cash, which a move could not express.',
     basis:
-      'The lease liability the filing reports. The engine counts it as debt and never nets it against cash, ' +
-      'because the rent is already outside the cash flow the enterprise value is built from.',
+      'An operating lease under ASC 842 reaches profit as a single operating lease cost, inside operating ' +
+      'profit, so the rent is ALREADY charged in full against the cash flow the enterprise value is built ' +
+      'from. Taking the liability off as well would charge the shareholder twice for the same leases, so the ' +
+      'engine reports it and does not net it. WHETHER A LEASE IS DEBT is the judgement (ROADMAP.md §2): a ' +
+      'reader who holds that a lease is a borrowing against an asset moves this onto the debt head, and net ' +
+      'debt gains it. Under IFRS 16 there is no operating lease — every lease is depreciation plus interest — ' +
+      'and the engine already counts the whole liability as debt.',
   },
   {
     field: 'minorityInterest',
@@ -1124,6 +1173,58 @@ export function pruneAssignment(a: HeadAssignment | undefined): HeadAssignment {
 // ---------------------------------------------------------------------------
 
 /**
+ * The lines a reader has put under one head, in the order `LINES` declares them.
+ */
+const movedToHead = (a: HeadAssignment | undefined, head: HeadKey): string[] =>
+  LINES.filter((l) => isMoved(l.field, a) && a?.[l.field]?.head === head).map((l) => l.field);
+
+/**
+ * What a set of lines comes to, per fiscal year, off the statements as they
+ * were FILED — keyed by year because `deriveModel` drops a year that is not
+ * comparable and its row array is then shorter than this one.
+ */
+function amountsByYear(
+  rows: any[],
+  residual: (number | null)[],
+  fields: string[]
+): Record<string, number> {
+  return Object.fromEntries(
+    rows.map((row, i) => [
+      String(row?.fiscalYear),
+      fields.reduce(
+        (sum, field) =>
+          sum + (field === RECONCILING_LINE ? residual[i] ?? 0 : num(rows[i]?.[field]) ?? 0),
+        0
+      ),
+    ])
+  );
+}
+
+/**
+ * THE NET MOVE INTO BORROWINGS, per fiscal year.
+ *
+ * Positive where the reader has made something debt that the engine does not —
+ * an operating lease, a supplier balance — and negative where they have taken
+ * a borrowing out of it. The amount is the FILED figure beside the line on the
+ * screen, which is the figure the reader is looking at when they decide.
+ */
+function debtMovedByYear(rows: any[], a: HeadAssignment | undefined): Record<string, number> {
+  const onto = movedToHead(a, 'debt');
+  const off = LINES.filter(
+    (l) => l.defaultHead === 'debt' && isMoved(l.field, a) && a?.[l.field]?.head !== 'debt'
+  ).map((l) => l.field);
+  if (!onto.length && !off.length) return {};
+  const out: Record<string, number> = {};
+  for (const row of rows) {
+    const year = String(row?.fiscalYear);
+    const add = onto.reduce((sum, f) => sum + (num(row?.[f]) ?? 0), 0);
+    const take = off.reduce((sum, f) => sum + (num(row?.[f]) ?? 0), 0);
+    out[year] = add - take;
+  }
+  return out;
+}
+
+/**
  * A copy of the payload with every move applied as a TRANSFER.
  *
  * For each moved line: its amount is subtracted from its own field and added to
@@ -1212,6 +1313,47 @@ export function applyHeads(fetched: any, assignment: HeadAssignment | undefined)
      * from, so the base is nil rather than a difference.
      */
     oneOffReconcilingLine: oneOffs.includes(RECONCILING_LINE),
+
+    // ---- THE BELOW-THE-LINE HOOK (ROADMAP.md §19b) ---------------------
+    //
+    // A cost moved to other income or to finance cost has left its own field
+    // above, and the reconciling line has absorbed it — which is what keeps
+    // reported operating profit tied to the filing, and is also why the move
+    // changed nothing before this. The forecast operating base has to lose the
+    // amount AND the amount has to be charged below the line, so both halves
+    // are carried here and `deriveModel` does both.
+    //
+    // BY FISCAL YEAR, not by index, for the reason `oneOffNamedCosts` gives.
+    belowTheLine: {
+      otherIncome: amountsByYear(rows, residual, movedToHead(assignment, 'otherIncome')),
+      financeCost: amountsByYear(rows, residual, movedToHead(assignment, 'financeCost')),
+    },
+
+    // ---- THE DEBT HOOK (ROADMAP.md §19b) -------------------------------
+    //
+    // The NET amount the reader has moved into borrowings, by fiscal year:
+    // every line put onto the debt head, less every line the engine counts as
+    // debt that has been taken off it. The debt total is built from up to
+    // fourteen overlapping filed fields with separate GAAP and IFRS paths, so
+    // this cannot be honoured by writing one of them — which is why the five
+    // debt lines have no `ownField` and nothing above has moved their money.
+    // `deriveModel` adds this to the total those fields produce.
+    debtMoved: debtMovedByYear(rows, assignment),
+    /**
+     * The lines behind that figure, with the reader's own reason, for the
+     * Assumptions sheet to print as the basis for net debt. Resolved here
+     * because this file is where "which lines the engine counts as debt" is
+     * written down; working it out again downstream would be a second copy.
+     */
+    debtMovedLines: LINES.filter(
+      (l) => isMoved(l.field, assignment) && (l.defaultHead === 'debt' || assignment?.[l.field]?.head === 'debt')
+    ).map((l) => ({
+      field: l.field,
+      label: l.label,
+      head: assignment?.[l.field]?.head as HeadKey,
+      reason: String(assignment?.[l.field]?.reason || '').trim(),
+    })),
+
     assignment: pruneAssignment(assignment),
   };
 
@@ -1291,7 +1433,29 @@ export function groupByHead(statements: any[], assignment: HeadAssignment | unde
   const at = (key: HeadKey, i: number): number => byKey.get(key)?.totals[i] ?? 0;
 
   const filedOp = rows.map((r) => num(r?.operatingIncome));
-  const operatingProfitUnderlying = filedOp.map((v, i) => (v === null ? null : v + at('oneOffs', i)));
+
+  // WHAT THE READER HAS MOVED BELOW THE OPERATING LINE, per year.
+  //
+  // NOT the totals of those two heads: the finance cost head already holds the
+  // filed interest expense and the other-income head the filed non-operating
+  // items, and neither of those is inside filed operating profit. Only the
+  // lines the reader MOVED there are, because the filing charged them above the
+  // line and this site does not restate a filing.
+  const movedBelowTheLine = (i: number): number =>
+    lines
+      .filter((l) => l.statement === 'income' && !l.anchor && !l.componentOf && isMoved(l.field, assignment))
+      .filter((l) => {
+        const head = headOf(l.field, assignment);
+        return head === 'otherIncome' || head === 'financeCost';
+      })
+      .reduce((total, l) => total + (l.amounts[i] ?? 0), 0);
+
+  // The forecast base: filed operating profit, plus what has left it. A one-off
+  // is gone from the forecast and a line moved below the line is charged below
+  // it, and either way the operating base no longer carries it.
+  const operatingProfitUnderlying = filedOp.map((v, i) =>
+    v === null ? null : v + at('oneOffs', i) + movedBelowTheLine(i)
+  );
 
   // Revenue less every operating cost head, against the filed figure. The
   // reconciling line is a head here, so this closes exactly for every
@@ -1306,7 +1470,11 @@ export function groupByHead(statements: any[], assignment: HeadAssignment | unde
       at('sga', i) -
       at('da', i) -
       at('otherOperating', i) -
-      at('oneOffs', i);
+      at('oneOffs', i) -
+      // A COST MOVED BELOW THE LINE IS STILL INSIDE THE FILING'S OPERATING
+      // PROFIT, so it has to be subtracted here or the tie would break by the
+      // amount the reader moved — which is what it did for a day.
+      movedBelowTheLine(i);
     return filed - built;
   });
 

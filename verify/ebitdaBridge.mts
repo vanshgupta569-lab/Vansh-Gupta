@@ -129,6 +129,25 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
       reasons: {},
     },
     {
+      // THE THIRD KIND, with the below-the-line hook (ROADMAP.md §19b). A cost
+      // moved to other income or to finance cost is outside EBITDA from the
+      // moment it moves, so it belongs on this bridge: without it the sheet
+      // would publish an adjusted EBITDA the forecast does not use.
+      label: 'SG&A moved below the operating line',
+      corrections: {},
+      heads: { sga: { head: 'otherIncome', reason: 'a holding-company cost, not an operating one' } },
+      reasons: {},
+    },
+    {
+      label: 'one of each: a correction, a one-off and a move below the line',
+      corrections: { 2025: { operatingIncome: 1_000_000 } },
+      heads: {
+        otherOperatingCosts: { head: 'oneOffs', reason: 'a port write-down' },
+        sga: { head: 'financeCost', reason: 'the interest inside the lease charge' },
+      },
+      reasons: { operatingIncome: 'the filing restated this' },
+    },
+    {
       label: 'two corrections and two one-offs together',
       corrections: {
         [lastYear]: { operatingIncome: last.operatingIncome + 50_000, sga: (last.sga ?? 0) + 9_000 },
@@ -207,14 +226,35 @@ export async function checkEbitdaBridge(ticker = 'RELIANCE.NS'): Promise<BridgeR
         problems.push(`${combo.label}: FY${B.years[i]} does not say whether D&A was filed`);
       }
     }
-    for (const a of [...B.corrections, ...B.oneOffs]) {
-      if (!/^(correction|oneOff):/.test(a.key)) {
-        problems.push(`${combo.label}: the adjustment ${a.key} is not keyed as a correction or a one-off`);
+    for (const a of [...B.corrections, ...B.oneOffs, ...B.belowTheLine]) {
+      if (!/^(correction|oneOff|belowTheLine):/.test(a.key)) {
+        problems.push(`${combo.label}: the adjustment ${a.key} is not keyed as one of the three kinds`);
       }
       if (a.yearsMoved < 1) problems.push(`${combo.label}: ${a.key} is listed as an adjustment but moves nothing`);
       if (!a.detail || a.detail.length < 20) problems.push(`${combo.label}: ${a.key} does not say what moved it`);
-      if (a.kind !== 'correction' && a.kind !== 'oneOff') {
-        problems.push(`${combo.label}: ${a.key} is neither a correction nor a one-off`);
+      if (a.kind !== 'correction' && a.kind !== 'oneOff' && a.kind !== 'belowTheLine') {
+        problems.push(`${combo.label}: ${a.key} is none of the three kinds of adjustment`);
+      }
+    }
+    // A LINE MOVED BELOW THE OPERATING LINE IS ON THE BRIDGE, with the
+    // reader's reason, and it raises adjusted EBITDA by its own amount.
+    for (const [key, choice] of Object.entries(combo.heads as Record<string, any>)) {
+      if (choice.head !== 'otherIncome' && choice.head !== 'financeCost') continue;
+      const line = B.belowTheLine.find((a: any) => a.key === `belowTheLine:${key}`);
+      if (!line) {
+        problems.push(`${combo.label}: ${key} was moved below the operating line and is not on the bridge`);
+        continue;
+      }
+      if (choice.reason && line.reason !== choice.reason) {
+        problems.push(`${combo.label}: the reason for moving ${key} reads ${JSON.stringify(line.reason)}`);
+      }
+      for (let i = 0; i < B.years.length; i++) {
+        const filedLine = (filed[i] as any)?.[key];
+        if (isNum(filedLine) && isNum(line.byYear[i]) && Math.abs(line.byYear[i] - filedLine) > 1e-6) {
+          problems.push(
+            `${combo.label}: FY${B.years[i]} adds back ${line.byYear[i]} for ${key}, filed is ${filedLine}`
+          );
+        }
       }
     }
     // A reason given reaches the line it belongs to.

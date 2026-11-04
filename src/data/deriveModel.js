@@ -319,9 +319,35 @@ function debtLines(rows, source) {
   });
 }
 
-function deriveBalanceSheet(rows, source) {
+/**
+ * THE DEBT HOOK (ROADMAP.md §19b, `heads.ts`).
+ *
+ * A reader can put a line onto the debt head or take one off it — an operating
+ * lease counted as borrowing, a finance lease counted as rent, a revolver
+ * treated as working capital. The total is built from up to fourteen
+ * overlapping filed fields with separate GAAP and IFRS paths, so the move
+ * cannot be honoured by writing one of them: `applyHeads` carries the NET
+ * amount per fiscal year and it is added here, to the total those fields
+ * produce.
+ *
+ * It goes on the NON-CURRENT side, which is not arbitrary: the current part of
+ * borrowings comes out of the accrued-and-other plug and the rest out of other
+ * non-current liabilities, so adding here takes the money out of the residual
+ * the filed total closes over — and the balance sheet still ties, in total and
+ * in every year, whatever the reader decides.
+ *
+ * THE FILED TOTAL IS KEPT BESIDE IT. The cost of debt is measured as filed
+ * interest over borrowings, and the filing's interest is the interest on the
+ * borrowings the filing calls borrowings; measuring it over a balance the
+ * reader has added a lease to would quietly move the implied rate instead of
+ * the thing the reader moved. So `debtFiled` is what the rate is measured on
+ * and `debt` is what the rate is charged on.
+ */
+function deriveBalanceSheet(rows, source, debtMovedByYear) {
   const out = {
     debt: [],
+    debtFiled: [],
+    debtMoved: [],
     debtSource: [],
     operatingLease: [],
     leaseUnreadableYears: [],
@@ -360,6 +386,28 @@ function deriveBalanceSheet(rows, source) {
     // liabilities, so what the debt line gains, a plug gives up: the balance
     // sheet is unchanged in total.
     const d = debt[i];
+    const movedOntoDebt = isNum(debtMovedByYear?.[String(fy)]) ? debtMovedByYear[String(fy)] : 0;
+    out.debtFiled.push(d.total);
+    out.debtMoved.push(movedOntoDebt);
+    if (movedOntoDebt) {
+      d.noncurrent += movedOntoDebt;
+      d.total += movedOntoDebt;
+      const words = `${Math.abs(movedOntoDebt).toLocaleString('en-US', { maximumFractionDigits: 0 })} you ${
+        movedOntoDebt > 0 ? 'moved onto borrowings' : 'took off borrowings'
+      }`;
+      d.source = `${d.source}, ${movedOntoDebt > 0 ? 'plus' : 'less'} ${words}`;
+      // GROSS BORROWINGS CANNOT BE NEGATIVE. A judgement that takes more out
+      // of the total than the filing's own fields put in is not arithmetic the
+      // engine can carry quietly, so it is said rather than clamped: the
+      // figure stands and the note names it.
+      if (d.total < 0) {
+        note(
+          `the lines taken off borrowings come to more than the borrowings the filing reports, so the ` +
+            `total is ${Math.round(d.total).toLocaleString('en-US')}`,
+          fy
+        );
+      }
+    }
     out.debt.push(d.total);
     out.debtSource.push(d.source);
     out.operatingLease.push(d.operatingLease);
@@ -1013,6 +1061,8 @@ export function deriveModel(fetched) {
   // null, and the engine refuses a model whose balance sheet does not balance.
   const {
     debt: debtByYear,
+    debtFiled: debtFiledByYear,
+    debtMoved: debtMovedPerYear,
     debtSource,
     operatingLease,
     leaseUnreadableYears,
@@ -1026,7 +1076,7 @@ export function deriveModel(fetched) {
     equity: equityLine,
     notes: balanceSheetNotes,
     gaps: balanceSheetGaps,
-  } = deriveBalanceSheet(rows, fetched.source);
+  } = deriveBalanceSheet(rows, fetched.source, fetched?.heads?.debtMoved);
   if (balanceSheetNotes.length) provenance.balanceSheet = balanceSheetNotes.join('; ');
 
   // Inputs the forecast is built from that the filing never reports at all.
@@ -1397,11 +1447,61 @@ export function deriveModel(fetched) {
     return isNum(v) ? v : 0;
   };
   const residualIsOneOff = !!headsIn?.oneOffReconcilingLine;
+
+  // THE BELOW-THE-LINE HOOK (ROADMAP.md §19b), which is the one-offs hook's
+  // sibling and needed for the same reason: the reconciling line hands the
+  // money straight back. A cost the reader moves to other income or to finance
+  // cost has left its own field, the residual has absorbed it, and before this
+  // hook the forecast operating margin was exactly what it had been — measured,
+  // and the reason those two heads were shown and refused.
+  //
+  // IT HAS TWO HALVES AND BOTH ARE NEEDED. The amount comes OUT of the
+  // forecast operating base, here, and is charged BELOW THE LINE further down —
+  // on the other non-operating line for other income, and beside the debt
+  // schedule's interest for finance cost. One half without the other would
+  // either lose the cost altogether or move nothing.
+  //
+  // THE REPORTED YEARS ARE UNTOUCHED, as with one-offs: filed operating profit
+  // is filed operating profit under every judgement, and a judgement about the
+  // future is not a restatement of a filing.
+  const belowAt = (row, which) => {
+    const v = headsIn?.belowTheLine?.[which]?.[String(row?.fiscalYear)];
+    return isNum(v) ? v : 0;
+  };
+  const belowTheLineAt = (row) => belowAt(row, 'otherIncome') + belowAt(row, 'financeCost');
+  const movedBelowTheLine = rows.some((r) => belowTheLineAt(r) !== 0);
+
   /** The residual the FORECAST is struck on, which is not the reported residual. */
   const residualForecastBasis = rows.map((r, i) =>
-    residualIsOneOff ? 0 : unexplainedOperatingCosts[i] - oneOffNamed(r)
+    residualIsOneOff ? 0 : unexplainedOperatingCosts[i] - oneOffNamed(r) - belowTheLineAt(r)
   );
   const oneOffHead = (field) => assignment?.[field]?.head === 'oneOffs';
+  // THE TWO HEADS BELOW THE OPERATING LINE, which take a cost out of the
+  // forecast operating base and charge it below EBIT instead.
+  const BELOW_LABEL = { otherIncome: 'other income and expense', financeCost: 'finance cost' };
+  const belowHead = (field) => {
+    const head = assignment?.[field]?.head;
+    return head === 'otherIncome' || head === 'financeCost' ? head : null;
+  };
+  const belowNote = (field, label) => {
+    const head = belowHead(field);
+    const reason = String(assignment?.[field]?.reason || '').trim();
+    const amount =
+      field === 'otherOperatingCosts'
+        ? unexplainedOperatingCosts[rows.length - 1] ?? 0
+        : isNum(lastRow[field])
+          ? lastRow[field]
+          : 0;
+    return (
+      `${label} is under the ${BELOW_LABEL[head]} head by you, so it is outside operating profit in every ` +
+      `forecast year and charged below the line instead${
+        head === 'financeCost' ? ', beside the interest the debt schedule charges' : ''
+      }. FY${lastRow.fiscalYear} reported ${Math.round(amount).toLocaleString('en-US')}, which is still ` +
+      'inside operating profit in the reported years exactly as filed, so reported operating profit still ' +
+      'ties to the filing. ' +
+      (reason ? `Your reason: ${reason}` : 'No reason was given.')
+    );
+  };
   const headNote = (field, label) => {
     const reason = String(assignment?.[field]?.reason || '').trim();
     const amount = field === 'otherOperatingCosts'
@@ -1439,11 +1539,17 @@ export function deriveModel(fetched) {
   // Assumptions sheet can give each row its own basis.
   provenance.rnd = oneOffHead('rnd')
     ? headNote('rnd', 'Research and development')
-    : `${marginText('R&D', 'rnd', rndMargin, 0.5)}${isNum(lastRow.rnd) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
+    : belowHead('rnd')
+      ? belowNote('rnd', 'Research and development')
+      : `${marginText('R&D', 'rnd', rndMargin, 0.5)}${isNum(lastRow.rnd) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
   provenance.sga = oneOffHead('sga')
     ? headNote('sga', 'Selling, general and administrative')
-    : `${marginText('SG&A', 'sga', sgaMargin, 0.6)}${isNum(lastRow.sga) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
-  provenance.otherOperatingCosts = residualIsOneOff
+    : belowHead('sga')
+      ? belowNote('sga', 'Selling, general and administrative')
+      : `${marginText('SG&A', 'sga', sgaMargin, 0.6)}${isNum(lastRow.sga) ? ` of revenue — FY${lastRow.fiscalYear}, the last reported year, held flat` : ''}`;
+  provenance.otherOperatingCosts = belowHead('otherOperatingCosts')
+    ? belowNote('otherOperatingCosts', 'Other operating costs')
+    : residualIsOneOff
     ? `Other operating costs are under the one-offs head by you, so they are nil in every forecast year. ` +
       `FY${lastRow.fiscalYear} carried ${Math.round(unexplainedOperatingCosts[rows.length - 1] ?? 0).toLocaleString('en-US')}, ` +
       'which is still in the reported years exactly as filed and still ties reported operating profit to the filing. ' +
@@ -1475,10 +1581,18 @@ export function deriveModel(fetched) {
   // it shows INCOME, the smaller of that year's and the median across the
   // reported years is forecast, so a single large gain is not carried forward
   // while an income that recurs every year is.
+  //
+  // AND WHAT THE READER HAS MOVED BELOW THE LINE IS CHARGED HERE. A cost moved
+  // to the other-income head is a cost: it comes off this line, which is
+  // positive for income, in the year it was reported — so the share of revenue
+  // the forecast carries is struck on the line AFTER the move, while the
+  // reported years below show the filing. That is the second half of the hook;
+  // the first took the same amount out of the operating base above.
+  const otherNonOpBasis = rows.map((r, i) => otherNonOperating[i] - belowAt(r, 'otherIncome'));
   const otherNonOpShares = rows
-    .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 ? otherNonOperating[i] / r.revenue : null))
+    .map((r, i) => (isNum(r.revenue) && r.revenue !== 0 ? otherNonOpBasis[i] / r.revenue : null))
     .filter(isNum);
-  const lastOtherNonOpShare = shareOfLastRevenue(otherNonOperating[rows.length - 1]) ?? 0;
+  const lastOtherNonOpShare = shareOfLastRevenue(otherNonOpBasis[rows.length - 1]) ?? 0;
   const medianOtherNonOpShare = median(otherNonOpShares) ?? 0;
   // Whichever of the two is closer to nil, in either direction. The median
   // follows what recurs and the last reported year is the anchor every other
@@ -1491,13 +1605,20 @@ export function deriveModel(fetched) {
     Math.abs(lastOtherNonOpShare) <= Math.abs(medianOtherNonOpShare)
       ? lastOtherNonOpShare
       : medianOtherNonOpShare;
+  const movedToOtherIncome = belowAt(lastRow, 'otherIncome');
+  const movedOntoOtherIncomeNote = movedToOtherIncome
+    ? `. ${Math.round(movedToOtherIncome).toLocaleString('en-US')} of cost you moved to this head in ` +
+      `FY${lastRow.fiscalYear} is inside that share and outside operating profit; the reported years show ` +
+      'the filing'
+    : '';
   provenance.otherIncome =
-    otherNonOperatingMargin === 0
+    (otherNonOperatingMargin === 0
       ? 'no other non-operating income is forecast: the reported years show none'
       : `${(Math.abs(otherNonOperatingMargin) * 100).toFixed(1)}% of revenue as ` +
         `${otherNonOperatingMargin < 0 ? 'a cost' : 'income'} — the smaller in size of the last reported year ` +
         `(${(lastOtherNonOpShare * 100).toFixed(1)}%) and the median across the reported years ` +
-        `(${(medianOtherNonOpShare * 100).toFixed(1)}%), so a single large charge or gain is not carried forward`;
+        `(${(medianOtherNonOpShare * 100).toFixed(1)}%), so a single large charge or gain is not carried forward`) +
+    movedOntoOtherIncomeNote;
 
   // TAXES — the cheat sheet is explicit: apply the last actual year's effective
   // rate. Previously this averaged the first and last years, which let a year
@@ -1697,6 +1818,12 @@ export function deriveModel(fetched) {
   // which the cheat sheet says is the safer treatment in any case.
   const debtBalances = debtByYear.map((v) => (isNum(v) ? v : null));
   const averageDebt = mean(debtBalances) ?? 0;
+  // THE RATE IS MEASURED ON THE BORROWINGS THE FILING CALLS BORROWINGS. Where
+  // the reader has moved a lease onto the debt head (the debt hook above), the
+  // filed interest is still the interest on the filed debt, so dividing it by a
+  // larger balance would quietly move the implied RATE instead of the thing the
+  // reader moved. Measured on `debtFiled`, charged on `debt`.
+  const debtBalancesFiled = debtFiledByYear.map((v) => (isNum(v) ? v : null));
 
   // THE RATE IS THE COMPANY'S OWN, not a flat 4.5%.
   //
@@ -1724,8 +1851,8 @@ export function deriveModel(fetched) {
   const yearRates = [];
   for (let i = 1; i < rows.length; i++) {
     const filed = isNum(rows[i].interestExpense) ? Math.abs(rows[i].interestExpense) : null;
-    const opening = debtBalances[i - 1];
-    const closing = debtBalances[i];
+    const opening = debtBalancesFiled[i - 1];
+    const closing = debtBalancesFiled[i];
     if (filed === null || !isNum(opening) || !isNum(closing)) continue;
     const average = (opening + closing) / 2;
     if (!(average > 0)) continue;
@@ -1748,10 +1875,26 @@ export function deriveModel(fetched) {
   const forecastDebt = isNum(debtBalances[debtBalances.length - 1])
     ? debtBalances[debtBalances.length - 1]
     : averageDebt;
-  const interestExpense = Math.round(forecastDebt * costOfDebtRate);
-  provenance.interest = `borrowings of ${Math.round(
-    forecastDebt
-  ).toLocaleString()} at ${costOfDebtSource}`;
+  const interestOnDebt = Math.round(forecastDebt * costOfDebtRate);
+  // A COST MOVED TO THE FINANCE-COST HEAD IS CHARGED BESIDE THE SCHEDULE'S OWN
+  // INTEREST, held flat at the amount of the last reported year, because the
+  // debt the schedule charges interest on is held flat too. It is not added to
+  // the filed interest and it does not touch the rate: the reader moved a cost,
+  // not a borrowing.
+  const movedFinanceCost = Math.round(belowAt(lastRow, 'financeCost'));
+  const interestExpense = interestOnDebt + movedFinanceCost;
+  const movedDebt = debtMovedPerYear[debtMovedPerYear.length - 1] || 0;
+  provenance.interest =
+    `borrowings of ${Math.round(forecastDebt).toLocaleString()} at ${costOfDebtSource}` +
+    (movedDebt
+      ? `. The borrowings include ${Math.abs(movedDebt).toLocaleString('en-US', { maximumFractionDigits: 0 })} ` +
+        `you ${movedDebt > 0 ? 'moved onto' : 'took off'} the debt head; the rate is measured on the ` +
+        'borrowings the filing reports and charged on the balance you settled'
+      : '') +
+    (movedFinanceCost
+      ? `. Plus ${movedFinanceCost.toLocaleString('en-US')} you moved to the finance-cost head, held flat ` +
+        `at FY${lastRow.fiscalYear} and outside operating profit`
+      : '');
 
   // STOCK COMPENSATION — a share of REVENUE, whatever the engine's field is
   // called. The basis moved from operating expense to revenue on 2026-09-25
@@ -2073,6 +2216,12 @@ export function deriveModel(fetched) {
   const lastLongTermSecurities = isNum(lastRow.longTermInvestments) ? lastRow.longTermInvestments : null;
   const lastDebt = debtByYear[debtByYear.length - 1];
   const lastOperatingLease = operatingLease[operatingLease.length - 1];
+  // EVERY REASON THE READER GAVE FOR A DEBT MOVE. The Assumptions sheet prints
+  // this sentence as the basis for net debt, and a judgement with no recorded
+  // reason is the silent judgement this layer exists to remove. The lines come
+  // from `applyHeads`, which already knows which of them the engine counts as
+  // debt; working that out again here would be the second copy of a rule.
+  const debtMoves = Array.isArray(headsIn?.debtMovedLines) ? headsIn.debtMovedLines : [];
   provenance.netDebt =
     `borrowings ${isNum(lastDebt) ? lastDebt.toLocaleString('en-US', { maximumFractionDigits: 0 }) : 'not reported'} ` +
     `(${debtSource[debtSource.length - 1]}) ` +
@@ -2084,6 +2233,15 @@ export function deriveModel(fetched) {
         : 'no short-term marketable securities: the filing reports none') +
     (isNum(lastLongTermSecurities) && lastLongTermSecurities > 0
       ? `. Long-term investments of ${lastLongTermSecurities.toLocaleString('en-US', { maximumFractionDigits: 0 })} are reported but not netted off`
+      : '') +
+    (debtMoves.length
+      ? `. You ${debtMoves
+          .map(
+            (m) =>
+              `moved ${m.label.toLowerCase()} ${m.head === 'debt' ? 'onto' : 'off'} borrowings` +
+              (String(m.reason || '').trim() ? ` (${String(m.reason).trim()})` : ' (no reason given)')
+          )
+          .join(', and ')}`
       : '') +
     (isNum(lastOperatingLease) && lastOperatingLease > 0
       ? `. Operating lease liabilities of ${lastOperatingLease.toLocaleString('en-US', { maximumFractionDigits: 0 })} are reported but not netted off: their rent is already charged inside operating profit, so the cash flow carries them`

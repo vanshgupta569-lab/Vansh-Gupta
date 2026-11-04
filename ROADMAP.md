@@ -206,11 +206,11 @@ Financial modelling resists automation because it is a chain of judgements, not 
 |---|---|---|
 | Expense classification — direct, indirect, selling and distribution, administrative, excluded | **LIVE** | The example that started this. On the figures screen, between reported and modelled. Four lines classifiable, typically three per company; the default for each states where it came from, and the engine's treatment stays beside the user's. Moving a line between the four operating categories moves no figure (nil drift, measured); excluding one is the choice with arithmetic in it (Reliance 706.52 → 1,683.09). Reported operating profit ties to the filing under every classification. Carried into the workbook's two reserved Assumptions columns. `METHODOLOGY.md` §22d. |
 | What counts as non-recurring | QUEUED | Currently a median rule, plus a whole-line exclusion from expense classification. Still needs the per-item, per-year choice: a line excluded today is excluded in every reported year, which suits a cost the business no longer carries and not a settlement paid once. |
-| Operating versus non-operating | QUEUED | |
+| **Operating versus non-operating** | **LIVE** | The below-the-line hook, 4 November 2026 (§19b). A cost moved to other income and expense or to finance cost leaves the forecast operating base and is charged below the line; operating profit and EBITDA rise by the amount and pretax profit does not. Cost of sales is refused, measured: the forecast derives it from the gross margin rather than carrying its own amount. `METHODOLOGY.md` §22d. |
 | Capitalise or expense | QUEUED | |
 | Which working-capital line follows revenue and which follows cost of sales | QUEUED | The engine already declares its rule (`c60cb3a`); this exposes it. |
-| Whether a lease is debt | QUEUED | The engine's rule is in `METHODOLOGY.md`; make it a choice with that rule as the default. |
-| What else is debt-like — pensions, provisions, contingent consideration | QUEUED | A tick list in the equity bridge. |
+| Whether a lease is debt | **LIVE** | The debt hook, 4 November 2026 (§19b). The engine's rule is the default and is stated on the line: a finance lease is debt because operating profit carries only its depreciation, and a US GAAP operating lease is not, because the rent is already charged in full against the cash flow the enterprise value is built from. Either can be moved onto or off the debt head, and net debt follows. `METHODOLOGY.md` §22d. |
+| What else is debt-like — pensions, provisions, contingent consideration | QUEUED | **The machinery is built** (the debt hook, §19b): any balance-sheet line can be moved onto the debt head and net debt follows, and payables already can be. What is missing is the DATA — neither free source returns a pension deficit, a provision or contingent consideration as its own field, so there is no line to offer. It arrives with the primary-filings data layer (§1). |
 | How much cash is surplus rather than operating | QUEUED | Default is the company's own lowest filed cash-to-revenue ratio (`a061abc`). |
 | Effective or marginal tax rate | QUEUED | |
 | Useful lives | QUEUED | |
@@ -835,23 +835,46 @@ evidence that removing the old feature lost nothing.
   categories become nothing, because they changed no number in any model, and
   the record says so in words rather than dropping a field silently.
 
-**The two hooks this job did not do, which are the next job:**
+**The two hooks this job did not do — BUILT 4 November 2026** (build step 5,
+part A). `METHODOLOGY.md` §22d carries the method; the headline is that the
+figures screen went from twelve drop-target heads to fifteen, and that **nothing
+moves until a reader moves something**: 178 payloads swept either side of the
+change, 74 valued on both sides, **0 moved at all**, and the two snapshots are
+byte-identical.
 
-1. **The debt hook.** The engine builds the debt total from up to fourteen
-   overlapping filed fields with separate US GAAP and IFRS paths — combined
-   debt-and-lease figures where a filing publishes them, debt-only where it does
-   not, finance leases netted and operating leases never netted. A move cannot
-   be honoured by rewriting one field. Until it exists the debt head is shown
-   with its filed lines and is not a drop target.
-2. **The below-the-line hook.** Moving an operating cost to other income or to
-   finance cost cannot change the forecast today, because the reconciling line
-   absorbs it. Honouring it needs the engine to take the amount out of the
-   forecast operating base *and* add it below the line. Revenue needs the same
-   shape of hook before a one-off sale can be set aside.
+1. **The debt hook — BUILT.** The engine builds the debt total from up to
+   fourteen overlapping filed fields with separate US GAAP and IFRS paths —
+   combined debt-and-lease figures where a filing publishes them, debt-only
+   where it does not, finance leases netted and operating leases never netted.
+   A move cannot be honoured by rewriting one field, so the net amount is
+   carried per fiscal year and added to the total those fields produce. The five
+   borrowing lines have no `ownField` at all: the screen shows the filing as
+   filed and the whole effect goes through the hook. **The rate is not
+   re-measured on the new total** — it is measured on the filing's own
+   borrowings and charged on the balance the reader settles. This is the
+   judgement "whether a lease is debt" in §2, and the operating lease line's
+   default head moved from `debt` to `other` with it, which is what the engine
+   has always done with it and what the screen was not saying.
+2. **The below-the-line hook — BUILT.** A cost moved to other income or to
+   finance cost now leaves the forecast operating base AND is charged below the
+   line: on the other-income line at its share of revenue, or beside the debt
+   schedule's interest, held flat. Both halves are needed and each is checked
+   separately, because a hook with only the first would value the company as
+   though the cost had vanished. It is **not** written into the filed interest
+   expense, which would move the implied cost of debt instead of the cost the
+   reader moved. This is "operating versus non-operating" in §2.
 
-Both are recorded here rather than built, because each touches engine code that
-this job was already replacing a live feature in, and because a control that
-moves a line and changes no number is worse than no control.
+**What is still not built**, and is recorded rather than attempted: the same
+shape of hook for REVENUE, which a one-off sale needs. The forecast grows the
+top line rather than reading a margin off it, so a figure moved there would be
+modelled as a sale and compounded for every forecast year.
+
+**And one line is refused where its head is not.** Cost of sales may not go
+below the operating line, for the same reason it may not be a one-off: the
+forecast does not carry its own amount but derives it from the gross margin.
+Measured on Apple — moving it to other income raised the first forecast year's
+EBIT by 7,857,921 where the line itself comes to 8,423,859 of that year's
+revenue.
 
 ### 19c. The loading screen — the card is BUILT, the live progress is NEXT
 
@@ -960,6 +983,7 @@ trusting a status.
 
 | Commit | What |
 |---|---|
+| `PENDING3` | **Build step 5, part A: the two judgement-layer hooks (§19b, §2).** Three heads were shown and refused because a move onto them could not change a number: the engine ties built operating profit to the filed figure by carrying the difference on a reconciling line, so money taken out of a named cost reappeared in that residual and the forecast was exactly what it had been. **The below-the-line hook** (other income and expense, finance cost) takes the amount OUT of the forecast operating base and CHARGES it below the line — on the other-income line at its share of revenue, or beside the debt schedule's interest, held flat. Both halves are needed and each is checked on its own, because a hook with only the first values the company as though the cost had vanished. It is never written into the filed interest expense, which would move the implied cost of debt instead of the cost the reader moved. **The debt hook** carries the net amount moved onto or off borrowings per fiscal year and adds it to the total the filing's own fourteen overlapping debt and lease fields produce; the five borrowing lines have no `ownField` at all, so the screen shows the filing as filed and the whole effect goes through the hook, and the BORROWING RATE is measured on the filing's own borrowings and charged on the balance the reader settles. This delivers two §2 judgements — **whether a lease is debt** and **operating versus non-operating** — and the operating lease line's default head moved from `debt` to `other` with it, which is what the engine has always done with it and what the screen was not saying; no figure moved with that. Twelve drop-target heads became fifteen, 414 single moves checked field by field, and the adjusted EBITDA bridge gained a third kind of adjustment because a cost outside operating profit is outside EBITDA. **Nothing moves under the defaults**: 178 payloads swept either side, 74 valued on both sides, 0 moved at all, and the two snapshots byte-identical. Cost of sales is refused below the line, measured: the forecast derives it from the gross margin, so moving it to other income raised Apple's first forecast year EBIT by 7,857,921 where the line comes to 8,423,859. **Proved by breaking, seven ways**: the amount never leaving the operating base (6 faults), nothing charged below the line for other income (1) and for finance cost (1), the debt move never reaching the total (2), the rate re-measured on the reader's balance (2), the screen's tie forgetting the move (16), and the bridge dropping the third kind (8). `METHODOLOGY.md` §22d. |
 | `4ec3409` | **Every column of the income statement adds up, from revenue to operating income.** The Financials tab printed revenue, cost of sales, gross profit, research and development, selling general and administrative, and operating income — and on **1,267 of its 2,025 columns those figures did not add up to each other**, with nothing on the screen saying why. The difference is an impairment, a restructuring charge, a gain on a disposal, other operating income: real lines of the company's own statement that this template has no row for, because neither source tags them in a shape that maps to one row across 180 companies. **`Other operating items`** is now that row, derived, between the named costs and operating income, with the statement's own sign so a charge is negative and the column reads downwards. What makes the check a tie rather than a restatement of its own formula is that **operating income is the filed figure** and nothing in the bridge touches it: the worst gap across 2,025 columns is **4.08e-15**. A named line the source does not report for a column is INSIDE the bridge rather than missing from it and rather than a nil — 1,146 named lines across the set — and the row says so on its own face. 518 columns have no gross profit or no operating income to bridge between and carry no figure at all; 240 need no bridge and read nil; a bank has no row for it, because it has no gross profit to bridge from. In the browser the PRINTED figures are added up with the screen's own minus sign, which is the arithmetic a reader can do. **What it made visible is `KI-39`**: Enbridge's FY2021 bridge is +23,787 on revenue of 19,432, because the revenue being shown is read from a tag that covers part of its top line — 59% short of the 47,071 its own 10-K files. **Proved by breaking, five ways**: the sign flipped so a charge reads as income (1,267 faults), selling costs dropped from the formula (1,417), the row taken out of the template, which is the state before this job (271), the optional inputs made required so a column reporting no research line stops adding up (41, every one a trailing-twelve-month column), and the state written as reported rather than derived (1,395). `METHODOLOGY.md` §5. |
 | `2096811` | **`KI-36` fixed: a quarterly figure comes from the statement it was reported in.** The annual path has taken 10-K facts and nothing else since the beginning. The quarterly path filtered facts by PERIOD and not by form at all, and its rule that the most recently filed point wins — which is there so a restatement supersedes what it restated — then let any later document that happened to tag the same period supersede the 10-Q the figure was reported in. A proxy statement does tag financial facts, and a proxy filed in April 2026 is more recent than every filing it reports on: **126 figures across 34 companies** were cited to a `DEF 14A` (82), an `8-K` (41) or a `DEF 14C` (3), 85 of them net income. **Payload version 13** reads a quarterly fact only from a form a statement is filed on — `10-K`, `10-Q` and their amendments — with an amendment counting, because a restatement filed in a 10-K/A has to be readable, and a fact whose form the SEC leaves blank not counting, because a figure that cannot name its form cannot be cited to one. **All 126 now cite the 10-K or the 10-Q that reports them and not one figure was lost**: a fourth quarter is the year less the nine months and both are in the statements. **On 15 the figure moved as well as the citation** — every one a fourth-quarter net income, because the superseding document's figure for the YEAR was not the 10-K's and the whole difference landed in the quarter that is a subtraction: JPMorgan's fourth quarter of 2023 read 9,355 against the 10-K's 9,307, the proxy's year being 49,600 where the 10-K files 49,552. So on those fifteen it was not only a citation. No annual figure and no valuation was ever affected, because the annual path never read those documents. 37,239 quarterly figures now cite 31,206 10-Qs, 6,015 10-Ks and 18 10-Q/As. **Proved by breaking, five ways**: the filter taken out (8 faults), narrowed to reject an amendment (2), the 126 citations put back on disk from the capture before the fix (127 — the 126, and the archive arm's guard reporting that nothing moved), a figure cited to a filing the payload does not hold (1), and a document dated before the period it is the source of (27). `METHODOLOGY.md` §23c. |
 | `52efd27` | **The reporting currency is the one the main statements are presented in (`KI-38`).** It was read off every monetary tag the facts carried, so a single stray unit left it unestablished and refused the company outright — **PepsiCo, Enbridge and Welltower**, each of which files a borrowing or a subsidiary’s balances in a second currency. That is not what a second currency in a filing means: a US filer with a euro bond tags that bond in euros, and that is a fact about the bond. It is now the currency of the **main statement totals** — revenue, total assets and net income, the primary statements in miniature — and every other monetary figure is read in that currency and in no other. **Measured**: 85 of the 85 SEC filers in the set settle a currency this way, 3 of them while filing something in another currency, and **0 have main totals that genuinely disagree**. **One company regains a valuation — PepsiCo at 103.47 a share**; all three regain a cost of equity (PepsiCo 9.68%, Enbridge 9.82%, Welltower 9.29%), and Enbridge and Welltower are then refused by refusals they had never reached: no cost of sales in the last reported year, and no filed operating income for FY2021–FY2025. **Enbridge was also being shown in the wrong currency** — it presents in Canadian dollars and the payload said US dollars, because with nothing established the label fell back to a default. **A latent defect fixed with it (`KI-38`)**: the unit a figure was READ IN was whichever currency came first in the XBRL JSON, so a euro figure could have been divided into millions as a dollar one. 610 annual figures across the three were compared before and after and not one moved — the ordering happened to favour us — but key order in a JSON object is not a property anything should depend on. **Proved by breaking, five ways**: the fetcher twice, asked directly and writing nothing, because a capture built by a broken fetcher would be kept for ever — the old rule put back (all three lose their currency), and `longTermDebt` added to the main totals, which takes Enbridge’s currency away because its FY2023 long-term debt is tagged in euros; and the check three times by mutating a payload on disk — figures taken in two currencies, a currency its own filing does not present in, and a currency settled on revenue alone. Payload version 12. |

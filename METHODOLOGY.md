@@ -3467,8 +3467,8 @@ and changes nothing is worse than no control.
 
 | Statement | Drop target | Shown, and not a drop target |
 |---|---|---|
-| Profit and loss | cost of sales, research and development, selling general and administrative, depreciation and amortisation, other operating costs, one-offs | revenue, other income, finance cost, tax |
-| Balance sheet | cash and investments, receivables, inventory, payables, fixed assets, other | debt including leases, equity |
+| Profit and loss | cost of sales, research and development, selling general and administrative, depreciation and amortisation, other operating costs, one-offs, **other income and expense**, **finance cost** | revenue, tax |
+| Balance sheet | cash and investments, receivables, inventory, payables, fixed assets, other, **debt including leases** | equity |
 
 **What decides it is the reconciling line.** The engine ties its built operating
 profit to the filed figure by carrying the difference on its own line (§4,
@@ -3476,27 +3476,79 @@ profit to the filed figure by carrying the difference on its own line (§4,
 reappears in that residual, pound for pound, and the forecast margin is
 unchanged — in the reported years by design, because the filing is not restated,
 and in the forecast years too, because the residual is forecast at its own share
-of revenue.
+of revenue. **Three of the heads in the bold type above needed an engine hook
+for exactly that reason, and got one on 2026-11-04** (below).
 
-Four heads are shown and refused, each saying why on screen:
+Two heads are shown and refused, each saying why on screen:
 
 - **Revenue** — the forecast grows the top line rather than reading a margin off
   it, so a cost moved here would be modelled as a sale and compounded for every
   forecast year.
-- **Other income** and **finance cost** — measured: an operating cost moved
-  below the operating line cannot change the forecast, because the residual
-  absorbs it. Honouring them needs the engine to take the amount out of the
-  forecast operating base *and* put it below the line. Recorded in `ROADMAP.md`
-  §19b beside the debt hook.
 - **Tax** — the effective rate every forecast year is taxed at is measured on
   the filed charge against filed pretax profit, so a cost moved here would be
   read as tax the company paid. A cost is not tax.
-- **Debt including leases** — the total is built from up to fourteen overlapping
-  filed fields with separate US GAAP and IFRS paths. The engine hook is the next
-  job.
-- **Equity** — derived as total assets less total liabilities, which is what
-  makes the balance sheet tie in every year. Nothing assigned to it would reach
-  the model.
+- **Equity** is refused too, and renders no band of its own, because the only
+  line under it is a filed anchor: the engine derives equity as total assets
+  less total liabilities, which is what makes the balance sheet tie in every
+  year, so nothing assigned to it would reach the model.
+
+**And one line is refused where its head is not.** Cost of sales may not go
+under one-offs, nor below the operating line, and for one reason: the forecast
+does not carry its own amount. The engine derives it from the **gross margin**,
+and depreciation and share-based pay come out of it at the share they took.
+Measured on Apple: moving it to other income raised the first forecast year's
+EBIT by 7,857,921 where the line itself comes to 8,423,859 of that year's
+revenue. A control that moves a line by a figure other than the one printed
+beside it is worse than none.
+
+### The two engine hooks, built 2026-11-04
+
+**THE BELOW-THE-LINE HOOK** (other income and expense, finance cost). A cost
+moved below the operating line has two halves to it and **each is needed**: the
+amount comes OUT of the forecast operating base, and the amount is CHARGED below
+the line. A hook with only the first half would value the company as though the
+cost had vanished.
+
+    forecast residual base = residual − one-offs − what was moved below the line
+    forecast other income  = (residual below the line − what was moved onto it) ÷ revenue
+    forecast finance cost  = the debt schedule's interest + what was moved onto it
+
+The finance-cost half is charged **beside** the debt schedule's own interest and
+held flat at the last reported year, because the debt the schedule charges
+interest on is held flat too. It is **not** added to the filed interest expense:
+the cost of debt is measured as filed interest over borrowings, so writing into
+that field would move the implied borrowing rate instead of the cost the reader
+moved — and would restate a filed line in the reported column.
+
+**THE DEBT HOOK** (debt including leases). The total is built from up to
+fourteen overlapping filed fields with separate GAAP and IFRS paths — a combined
+debt-and-lease figure where a filing publishes one, debt-only where it does not,
+finance leases netted and operating leases never netted — so a move cannot be
+honoured by writing one of them. The net amount the reader has moved is carried
+per fiscal year and **added to the total those fields produce**, on the
+non-current side, so the money comes out of the residual the filed total closes
+over and the balance sheet still ties in every year.
+
+The five borrowing lines therefore have **no `ownField`**: nothing above moves
+their money, the screen shows the filing as filed, and the whole effect goes
+through the hook. **The rate is not re-measured on the new total**: the filing's
+interest is the interest on the borrowings the filing calls borrowings, so it is
+measured on `debtFiled` and charged on `debt`. Gross borrowings cannot be
+negative, and a judgement that takes out more than the filing put in is said in
+a note rather than clamped.
+
+**The operating lease line's default head changed with it, and no figure moved.**
+It said `debt` while the engine was not netting it — a screen stating a treatment
+the model does not use, and with the hook built it would have been worse than
+wrong, because moving the line "off" debt would have subtracted from net debt an
+amount net debt never contained. Its default head is now `other`, which is
+exactly what the engine does with it (§4, LEASES), and moving it ONTO debt is
+the judgement "a lease is a borrowing" — which the hook now honours.
+
+**Nothing moves until a reader moves something.** Measured on 2026-11-04 with
+`verify:sweep` either side of the change: 178 payloads, 74 valued on both sides,
+**0 moved at all**, and the two snapshots are byte-identical — not a value, not
+a refusal, not a provenance sentence.
 
 ### The re-aggregation is a transfer, not a re-sum
 

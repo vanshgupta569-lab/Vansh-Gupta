@@ -939,7 +939,9 @@ export const FiguresEditor: React.FC<Props> = ({
           {[
             { key: 'rest', title: 'Cash flow and the share count', note: `${FIELDS.filter((f) => f.group === 'cash' || f.group === 'shares').length} more lines you can change` },
             { key: 'checks', title: 'What the figures say about themselves', note: 'two subtractions on the filing' },
-            { key: 'bridge', title: 'The adjusted EBITDA bridge', note: bridge.adjusted ? `${bridge.corrections.length + bridge.oneOffs.length} adjustments` : 'nothing adjusted yet' },
+            { key: 'bridge', title: 'The adjusted EBITDA bridge', note: bridge.adjusted
+              ? `${bridge.corrections.length + bridge.oneOffs.length + bridge.belowTheLine.length} adjustments`
+              : 'nothing adjusted yet' },
           ].map((s) => {
             const open = openSection === s.key;
             return (
@@ -1183,12 +1185,17 @@ export const FiguresEditor: React.FC<Props> = ({
                             </td>
                           ))}
                         </tr>
-                        {[...bridge.corrections, ...bridge.oneOffs].map((a) => (
+                        {[...bridge.corrections, ...bridge.oneOffs, ...bridge.belowTheLine].map((a) => (
                           <React.Fragment key={a.key}>
                             <tr className="mg-row">
                               <td className="mg-name">
                                 <span className="flex items-center" style={{ color: RED_TEXT }}>
-                                  {a.kind === 'correction' ? 'Correction' : 'One-off'} · {a.label}
+                                  {a.kind === 'correction'
+                                    ? 'Correction'
+                                    : a.kind === 'oneOff'
+                                      ? 'One-off'
+                                      : 'Below the operating line'}{' '}
+                                  · {a.label}
                                   <Hint label={`What ${a.label} did`}>
                                     <p>
                                       {a.detail}.{' '}
