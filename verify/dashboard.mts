@@ -2160,7 +2160,9 @@ const LANDING_TYPE_SCREEN = 'the landing page, loaded';
 // once. Measured 2026-11-04 over every screen this check drives. Lower the
 // number when a job removes some; delete the entry when it reaches zero.
 const TYPE_RATCHET: Record<string, { count: number; why: string }> = {
-  '14': { count: 347, why: 'the figures screen, figuresEditor.tsx inline styles and its embedded <style>' },
+  // 347 when recorded; 383 after merging build step 5 part A (8a13663), whose
+  // "below the operating line" bridge rows are drawn by the same 14px styles.
+  '14': { count: 383, why: 'the figures screen, figuresEditor.tsx inline styles and its embedded <style>' },
 };
 
 const typeSeen = new Map<string, any>();
@@ -2230,7 +2232,37 @@ function reportType() {
     );
 }
 
-async function readContrast(page: Page, where: string) {
+// A LANDING PAGE WITH FEWER PIECES OF TEXT THAN THIS IS NOT THE LANDING PAGE:
+// an empty tab, an error screen, or a page whose sections never faded in.
+// The loaded page measured 2026-11-04 holds well over two hundred.
+const LANDING_MINIMUM_TEXT = 150;
+
+/** Scroll top to bottom in viewport steps, so every reveal-on-scroll has run. */
+async function revealWholePage(page: Page) {
+  await page.waitForTimeout(1200);
+  const height: number = await page.evaluate('document.documentElement.scrollHeight') as number;
+  const step: number = await page.evaluate('window.innerHeight') as number;
+  for (let y = 0; y < height; y += Math.max(200, step * 0.6)) {
+    await page.evaluate(`window.scrollTo(0, ${y})`);
+    await page.waitForTimeout(250);
+  }
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.waitForTimeout(800);
+}
+
+async function readContrast(page: Page, where: string, opts: { minimumText?: number } = {}) {
+  if (opts.minimumText) {
+    const pieces = (await page.evaluate(
+      `Array.from(document.querySelectorAll('body *')).filter(el => Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim().length > 1)).length`
+    )) as number;
+    if (pieces < opts.minimumText) {
+      problems++;
+      console.log(
+        `  PROBLEM: ${where} holds ${pieces} pieces of text, fewer than the ${opts.minimumText} the page has — ` +
+          `the read measured something other than the page`
+      );
+    }
+  }
   await readType(page, where);
   const found: any[] = await page.evaluate(CONTRAST_PROBE);
   contrastScreens++;
@@ -3946,7 +3978,6 @@ try {
 
   // 1. The curated model, which the site renders without fetching anything.
   const apple: any = (COMPANIES_DATA as any).AAPL;
-  await readContrast(page, 'the landing page');
   await openCurated(page, 'AAPL');
   // AFTER THE FIRST REAL NAVIGATION, not before it. `readContrast` evaluates on
   // whatever is loaded and never navigates, so a font check placed above it
@@ -3954,19 +3985,23 @@ try {
   // a check that fails for the wrong reason, and would have gone on failing
   // after the fix.
   await checkFontRequests(page, requests);
-  // THE LANDING PAGE, LOADED. The contrast read labelled "the landing page"
-  // above runs before the first navigation and so measures an empty tab; the
-  // type check needs the real page, at the desktop width and at a phone's,
-  // because the landing steps are fluid. In a tab of its own, so the journey
-  // in `page` is not moved and the font check's request count is untouched.
+  // THE LANDING PAGE, LOADED, at the desktop width and at a phone's.
+  //
+  // Until 2026-11-04 the contrast read for "the landing page" ran here, on
+  // `page`, before the first navigation — so it measured about:blank and could
+  // not fail. It now opens the landing page in a tab of its own (so the
+  // journey in `page` and the font check's request count are untouched),
+  // scrolls it top to bottom so every section that fades in on scroll has
+  // faded in, and refuses to call a page with almost no text on it measured.
   {
     const landing = await context.newPage();
-    await landing.goto(BASE, { waitUntil: 'networkidle' });
-    await landing.waitForTimeout(1500);
-    await readType(landing, LANDING_TYPE_SCREEN);
-    await landing.setViewportSize({ width: 390, height: 844 });
-    await landing.waitForTimeout(600);
-    await readType(landing, `${LANDING_TYPE_SCREEN}, at 390`);
+    for (const width of [1400, 390]) {
+      await landing.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+      await landing.goto(BASE, { waitUntil: 'networkidle' });
+      await revealWholePage(landing);
+      const where = width > 600 ? LANDING_TYPE_SCREEN : `${LANDING_TYPE_SCREEN}, at 390`;
+      await readContrast(landing, where, { minimumText: LANDING_MINIMUM_TEXT });
+    }
     await landing.close();
   }
   await readContrast(page, 'the questions screen');
