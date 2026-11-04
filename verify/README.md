@@ -868,6 +868,20 @@ inline styles in `figuresEditor.tsx` no stylesheet can overrule. Its count
 (347) may fall and never rise; any other off-step size fails at once.
 Measured on 2026-11-04: 21 screens, 3,493 pieces of type.
 
+**A seventh is motion, reduced** (build step 8, job 8.4). Four passes, each
+in a context of its own on the landing page and the company overview: motion
+on (the control); the operating system asking for reduced motion, at 1440 and
+at 360; and the site's stored setting (`marginalia:motion` = `reduced`) with
+the operating system silent. Each pass checks that `<html data-motion>` says
+what both sources say; samples every element's transform and opacity after
+each scroll step and after opening the first closed disclosure, failing on
+anything still changing between 150, 400 and 700ms; reports every running
+animation longer than 110ms; and asks a 400ms transition the check puts on
+the page how long it will run — 400ms with motion on, which proves the probe
+can see motion, and at most 110ms under reduced motion. The 1440 pass also
+checks the scroll-progress rule: on the header's bottom edge, the accent, no
+`box-shadow`.
+
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it
 waits. It must carry one of the notes from `didYouKnow.ts` — matched against the

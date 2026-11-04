@@ -165,16 +165,34 @@
   transition-duration: var(--m-dur-fast);
   transition-timing-function: var(--m-ease-standard);
 }
+/* REDUCED MOTION (VISUAL_SYSTEM section 7; build step 8, job 8.4).
+   Two sources: the operating system's `prefers-reduced-motion`, and the
+   site's own stored setting, which `src/design/motion.ts` writes onto
+   `<html data-motion>` together with the system's answer. The media query
+   covers the moment before JavaScript runs; the attribute covers the stored
+   setting, in either direction (a stored "full" leaves motion on). Nothing
+   travels: animations and transitions finish at once, so no fade is longer
+   than --m-dur-fast. JavaScript motion is stopped by the same answer through
+   the root MotionConfig in App.tsx. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
+  :root:not([data-motion="full"]) *,
+  :root:not([data-motion="full"]) *::before,
+  :root:not([data-motion="full"]) *::after {
+    animation-duration: var(--m-dur-instant) !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: var(--m-dur-instant) !important;
     scroll-behavior: auto !important;
   }
 }
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: var(--m-dur-instant) !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: var(--m-dur-instant) !important;
+  scroll-behavior: auto !important;
+}
+:root[data-motion="reduced"] { scroll-behavior: auto; }
 
 /* ---------------------------------------------------------------------------
    THE SURFACES NOBODY DRAWS
@@ -457,6 +475,7 @@ textarea,
   --m-ease-enter: cubic-bezier(0, 0, 0.38, 0.9);
   --m-ease-exit: cubic-bezier(0.2, 0, 1, 0.9);
   --m-ease-expr: cubic-bezier(0.4, 0.14, 0.3, 1);
+  --m-dur-instant: 0.01ms;
   --m-dur-press: 70ms;
   --m-dur-fast: 110ms;
   --m-dur-page-out: 120ms;

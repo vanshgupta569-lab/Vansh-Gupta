@@ -1,6 +1,6 @@
 // FILE: src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useScroll } from 'motion/react';
+import { motion, useScroll, MotionConfig } from 'motion/react';
 import { Analytics } from '@vercel/analytics/react';
 import { Header } from './components/Header';
 import { LandingPage } from './components/landingPage';
@@ -24,22 +24,57 @@ import type { CorrectionReasons } from './data/corrections';
 import { CompanyData } from './types';
 import { ScreenType } from './types';
 import { ScreenerScreen } from './components/screenerScreen';
+import { installMotionAttribute, useReducedMotion } from './design/motion';
 
-// Scroll Progress Bar Component
+// `<html data-motion>` follows the operating system and the stored setting
+// from before the first render, so nothing animates for one frame first.
+installMotionAttribute();
+
+// THE SCROLL-PROGRESS RULE (`docs/VISUAL_BUILD_PLAN.md` C26, job 8.4).
+//
+// It sat at a fixed 80px from the top whatever the header measured, so it
+// floated below a 64px header or ran under a taller one, and it carried an
+// oxblood glow (`box-shadow`), the one shadow on a site that has none. It now
+// sits on the header's bottom edge, measured rather than assumed, so it stays
+// there when the header changes height (it will be 64 / 48px after job 9.1).
+// It moves by `transform: scaleX` only, 1:1 with the scroll, which is a
+// position indicator rather than an animation, so it is not stopped by
+// reduced motion. Oxblood, as the mark is; VISUAL_SYSTEM §3.1 does not count
+// it against the accent budget.
 const ScrollProgressBar: React.FC = () => {
   const { scrollYProgress } = useScroll();
+  const [top, setTop] = useState(0);
+
+  useEffect(() => {
+    const header = document.querySelector('header');
+    if (!header) return;
+    const measure = () => setTop(Math.round(header.getBoundingClientRect().bottom));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
 
   return (
-    <div className="fixed top-20 left-0 right-0 h-[2px] bg-transparent z-50 pointer-events-none">
-      <motion.div
-        style={{ scaleX: scrollYProgress }}
-        className="h-full bg-[#8B1E1E] origin-left shadow-[0_0_10px_rgba(139,30,30,0.8)]"
-      />
+    <div
+      data-progress-rule
+      aria-hidden="true"
+      className="fixed left-0 right-0 h-[2px] z-50 pointer-events-none"
+      style={{ top }}
+    >
+      <motion.div style={{ scaleX: scrollYProgress }} className="h-full bg-accent origin-left" />
     </div>
   );
 };
 
 export default function App() {
+  // One answer to "may things move", handed to the animation library below so
+  // every motion.* element follows the operating system and the stored setting.
+  const reducedMotion = useReducedMotion();
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('HOME');
 
   // THE COMPANY PAGE IS THE ONE PART OF THIS SITE WITH REAL ADDRESSES
@@ -409,6 +444,7 @@ export default function App() {
   };
 
   return (
+    <MotionConfig reducedMotion={reducedMotion ? 'always' : 'never'}>
     <div className="min-h-screen bg-[#0B0B0D] text-[#F2F0EA] font-sans antialiased flex flex-col selection:bg-[#8B1E1E] selection:text-white">
       {/* Universal Top Navigation Header */}
       <Header
@@ -555,5 +591,6 @@ export default function App() {
       {/* Vercel Analytics Tracker */}
       <Analytics />
     </div>
+    </MotionConfig>
   );
 }

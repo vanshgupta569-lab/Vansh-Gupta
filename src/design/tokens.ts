@@ -256,6 +256,9 @@ export const EASE = {
 
 /** Durations in milliseconds. */
 export const DURATION_MS = {
+  /** Under reduced motion: finish at once (a duration of zero is ignored by
+   *  some engines, so a hundredth of a millisecond). */
+  instant: 0.01,
   press: 70,
   fast: 110,
   pageOut: 120,

@@ -1607,7 +1607,7 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     'src/components/instrument.tsx': { literal: 3 },
     'src/components/landingPage.tsx': { all: 1, literal: 1 },
     'src/components/motionPrimitives.tsx': { literal: 16, property: 1 },
-    'src/index.css': { literal: 3 },
+    'src/index.css': { literal: 1 },
   };
 
   const ALLOWED_CSS = new Set([

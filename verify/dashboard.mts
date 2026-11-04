@@ -3904,27 +3904,195 @@ async function checkCompanyTabsOnScreen(page: Page) {
   else fail('an unknown tab', 'the Overview', fellBack || '(nothing current)');
 }
 
-// ------------------------------------------------------------------------ run
-let server: ChildProcess | null = null;
-let browser: Browser | null = null;
-try {
-  console.log(`starting the site on ${BASE} …`);
-  server = await startServer();
-  try {
-    browser = await chromium.launch({ headless: !HEADED });
-  } catch (error: any) {
-    // The browser binary is downloaded separately from the npm package, so a
-    // clean checkout has the library and not the browser. Say which command
-    // fixes it rather than printing a stack trace about a missing executable.
-    throw new Error(
-      'Chromium is not installed for Playwright. Run:  npx playwright install chromium  ' +
-        `(${String(error?.message || error).split('\n')[0]})`
-    );
+// ---- reduced motion: nothing travels, and the progress rule ---------------
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.4, VISUAL_SYSTEM §7 and §12.6. Under
+// reduced motion — the operating system's, or the site's own stored setting —
+// no transform may run and no fade may last longer than --m-dur-fast (110ms).
+// A CSS override cannot see motion driven from JavaScript, so this does not
+// read the stylesheet: it samples every element's computed transform and
+// opacity after a scroll, at 150, 400 and 700ms, and anything still changing
+// between samples is motion that outlived the rule. Every running Web
+// Animation longer than 110ms is reported too.
+//
+// THE CONTROL PASS. The same probe runs once with motion ON and must see
+// something move; if it sees nothing, it could not have seen anything in the
+// reduced passes either, and says so rather than passing.
+const MOTION_SAMPLE = `(() => {
+  const ids = (window.__mgIds = window.__mgIds || new WeakMap());
+  let next = window.__mgNext || 0;
+  const out = {};
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('[data-progress-rule]')) continue;
+    if (!ids.has(el)) ids.set(el, next++);
+    const st = getComputedStyle(el);
+    if (st.display === 'none') continue;
+    out[ids.get(el)] = { t: st.transform, o: st.opacity, d: (el.getAttribute('class') || el.tagName).toString().slice(0, 70) };
   }
-  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  window.__mgNext = next;
+  return out;
+})()`;
 
+const LONG_ANIMATIONS = `(() => document.getAnimations()
+  .filter(a => a.playState === 'running')
+  .map(a => ({ d: Number(a.effect && a.effect.getComputedTiming().duration) || 0, i: a.effect && a.effect.getComputedTiming().iterations, t: (a.effect && a.effect.target && (a.effect.target.getAttribute('class') || a.effect.target.tagName)) || '?' }))
+  .filter(x => x.d > 110 || x.i === Infinity)
+  .map(x => ({ ...x, t: String(x.t).slice(0, 70) })))()`;
+
+// A KNOWN MOVER. Neither screen this pass visits animates anything after it
+// has loaded (measured 2026-11-04: no running animation and no changing
+// transform on either, with motion on), so the real screens alone cannot show
+// that the probe sees motion. This element is put on the page by the check: a
+// 400ms transform and opacity transition, started, and asked how long it will
+// run. With motion on it is 400ms; under reduced motion the stylesheet must
+// have cut it to at most --m-dur-fast. The duration is read from the running
+// transition rather than inferred from where the element is after a wait:
+// on the landing page at 1440 the particle canvas keeps the main thread busy
+// enough that the animation clock had not ticked when it was read, so a
+// position read called a finished transition "part-way".
+const KNOWN_MOVER = `(() => {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;left:0;top:0;width:8px;height:8px;opacity:1;transform:none;transition:transform 400ms linear, opacity 400ms linear;pointer-events:none';
+  document.body.appendChild(el);
+  el.getBoundingClientRect();
+  el.style.transform = 'translateX(200px)';
+  el.style.opacity = '0.2';
+  el.getBoundingClientRect();
+  const longest = Math.max(0, ...el.getAnimations().map(a => Number(a.effect.getComputedTiming().duration) || 0));
+  el.remove();
+  return longest;
+})()`;
+
+async function knownMoverIsMoving(page: Page): Promise<boolean> {
+  const longest = (await page.evaluate(KNOWN_MOVER)) as number;
+  return longest > 110;
+}
+
+async function movingAfterScroll(page: Page): Promise<{ moved: string[]; long: any[] }> {
+  const moved = new Set<string>();
+  const long: any[] = [];
+  const height = (await page.evaluate('document.documentElement.scrollHeight')) as number;
+  const step = (await page.evaluate('window.innerHeight')) as number;
+  for (let y = 0; y < Math.min(height, step * 6); y += step * 0.8) {
+    await page.evaluate(`window.scrollTo(0, ${Math.round(y)})`);
+    await page.waitForTimeout(150);
+    const a: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(250);
+    const b: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(300);
+    const c: any = await page.evaluate(MOTION_SAMPLE);
+    for (const [first, second] of [[a, b], [b, c]] as any[])
+      for (const id of Object.keys(second))
+        if (first[id] && (first[id].t !== second[id].t || first[id].o !== second[id].o)) moved.add(second[id].d);
+    long.push(...((await page.evaluate(LONG_ANIMATIONS)) as any[]));
+  }
+  // AND AN INTERACTION: the first closed disclosure on the page, opened. A
+  // disclosure is the one element VISUAL_SYSTEM gives a 200ms movement, and
+  // under reduced motion it must snap open.
+  await page.evaluate('window.scrollTo(0, 0)');
+  const disclose = page.locator('button[aria-expanded="false"][aria-controls]').first();
+  if (await disclose.count()) {
+    await disclose.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    const before: any = await page.evaluate(MOTION_SAMPLE);
+    await disclose.click();
+    await page.waitForTimeout(60);
+    const a: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(90);
+    const b: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(300);
+    const c: any = await page.evaluate(MOTION_SAMPLE);
+    void before;
+    for (const [first, second] of [[a, b], [b, c]] as any[])
+      for (const id of Object.keys(second))
+        if (first[id] && (first[id].t !== second[id].t || first[id].o !== second[id].o)) moved.add(`${second[id].d} (opening a disclosure)`);
+    long.push(...((await page.evaluate(LONG_ANIMATIONS)) as any[]));
+  }
+  return { moved: [...moved], long };
+}
+
+async function checkReducedMotion(browser: Browser) {
+  console.log('\n=== reduced motion: nothing travels, and the progress rule ===');
+  const passes: { name: string; width: number; media: 'reduce' | 'no-preference'; stored: string | null; expectStill: boolean }[] = [
+    { name: 'motion on (control)', width: 1440, media: 'no-preference', stored: null, expectStill: false },
+    { name: 'the system asks for reduced motion, 1440', width: 1440, media: 'reduce', stored: null, expectStill: true },
+    { name: 'the system asks for reduced motion, 360', width: 360, media: 'reduce', stored: null, expectStill: true },
+    { name: 'the stored setting asks for it, 1440', width: 1440, media: 'no-preference', stored: 'reduced', expectStill: true },
+  ];
+  for (const pass of passes) {
+    const ctx = await browser.newContext({ viewport: { width: pass.width, height: pass.width > 600 ? 900 : 740 }, reducedMotion: pass.media });
+    await installFixtureRoutes(ctx);
+    if (pass.stored) await ctx.addInitScript(`try { localStorage.setItem('marginalia:motion', '${pass.stored}'); } catch (e) {}`);
+    const p = await ctx.newPage();
+    let controlSaw = 0;
+    for (const route of ['/', `/company/${PAPER_TICKER}/overview`]) {
+      await p.goto(BASE + route, { waitUntil: 'networkidle' });
+      await p.waitForTimeout(1200);
+      const attribute = await p.evaluate('document.documentElement.dataset.motion');
+      const want = pass.expectStill ? 'reduced' : 'full';
+      if (attribute !== want) {
+        problems++;
+        console.log(`  PROBLEM: ${pass.name}, ${route}: <html data-motion> is "${attribute}", not "${want}"`);
+      }
+      const { moved, long } = await movingAfterScroll(p);
+      const mover = await knownMoverIsMoving(p);
+      if (pass.expectStill && mover) moved.push('the check\'s own 400ms transition, still set to run for longer than 110ms');
+      if (!pass.expectStill && mover) moved.push('the check\'s own 400ms transition');
+      if (pass.expectStill) {
+        if (moved.length || long.length) {
+          problems++;
+          console.log(
+            `  PROBLEM: ${pass.name}, ${route}: ${moved.length} element${moved.length === 1 ? '' : 's'} still moving or fading after 150ms` +
+              `${long.length ? ` and ${long.length} animation${long.length === 1 ? '' : 's'} longer than 110ms` : ''}` +
+              ` — e.g. ${[...moved.slice(0, 3), ...long.slice(0, 2).map((x) => `${x.t} (${x.d}ms)`)].join(' | ')}`
+          );
+        } else ok(`${pass.name}, ${route}: nothing moves or fades for longer than 110ms`);
+      } else {
+        controlSaw += moved.length + long.length;
+        ok(`${pass.name}, ${route}: ${moved.length + long.length} moving or fading things seen with motion on`);
+      }
+    }
+    if (!pass.expectStill && !controlSaw) {
+      problems++;
+      console.log(`  PROBLEM: ${pass.name}: nothing moved on either screen with motion on, so the probe cannot see motion at all`);
+    }
+
+    // THE PROGRESS RULE: on the header's bottom edge, oxblood, no shadow.
+    if (pass.name.startsWith('the system') && pass.width === 1440) {
+      await p.goto(BASE, { waitUntil: 'networkidle' });
+      await p.waitForTimeout(800);
+      const rule: any = await p.evaluate(`(() => {
+        const r = document.querySelector('[data-progress-rule]');
+        const h = document.querySelector('header');
+        if (!r || !h) return null;
+        const bar = r.firstElementChild;
+        const shadows = [r, bar].map(el => getComputedStyle(el).boxShadow);
+        return { top: r.getBoundingClientRect().top, header: h.getBoundingClientRect().bottom, shadows, colour: getComputedStyle(bar).backgroundColor, height: r.getBoundingClientRect().height };
+      })()`);
+      if (!rule) {
+        problems++;
+        console.log('  PROBLEM: no [data-progress-rule] element, or no header, on the landing page');
+      } else {
+        const issues: string[] = [];
+        if (Math.abs(rule.top - rule.header) > 1) issues.push(`its top is at ${rule.top}px and the header ends at ${rule.header}px`);
+        if (rule.shadows.some((x: string) => x !== 'none')) issues.push(`it carries a box-shadow (${rule.shadows.join(' / ')})`);
+        if (rule.colour !== 'rgb(139, 30, 30)') issues.push(`its colour is ${rule.colour}, not the accent`);
+        if (issues.length) {
+          problems++;
+          console.log(`  PROBLEM: the scroll-progress rule: ${issues.join('; ')}`);
+        } else ok(`the scroll-progress rule sits on the header's bottom edge (${rule.header}px), ${rule.height}px tall, accent, no shadow`);
+      }
+    }
+    await ctx.close();
+  }
+}
+
+// NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
+// fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
+// 8.5) are answered exactly as the main one is.
+async function installFixtureRoutes(ctx: BrowserContext) {
   // NOTHING LEAVES THE MACHINE. Every call the site makes is answered here.
-  await context.route('**/api/company*', async (route) => {
+  await ctx.route('**/api/company*', async (route) => {
     const url = new URL(route.request().url());
     const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
     // Only the paper company exists here. A curated company also asks for its
@@ -3946,24 +4114,46 @@ try {
       body: JSON.stringify(payload),
     });
   });
-  await context.route('**/api/news*', (route) =>
+  await ctx.route('**/api/news*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' })
   );
-  await context.route('**/api/search*', (route) =>
+  await ctx.route('**/api/search*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[]}' })
   );
-  await context.route('**/api/comps*', (route) =>
+  await ctx.route('**/api/comps*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"comparables":[]}' })
   );
   // The index a beta is measured against, answered from the fixture: a series
   // built so the regression's answer is known before it runs.
-  await context.route('**/api/marketIndex*', (route) =>
+  await ctx.route('**/api/marketIndex*', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(paperIndexSeries()),
     })
   );
+}
+
+// ------------------------------------------------------------------------ run
+let server: ChildProcess | null = null;
+let browser: Browser | null = null;
+try {
+  console.log(`starting the site on ${BASE} …`);
+  server = await startServer();
+  try {
+    browser = await chromium.launch({ headless: !HEADED });
+  } catch (error: any) {
+    // The browser binary is downloaded separately from the npm package, so a
+    // clean checkout has the library and not the browser. Say which command
+    // fixes it rather than printing a stack trace about a missing executable.
+    throw new Error(
+      'Chromium is not installed for Playwright. Run:  npx playwright install chromium  ' +
+        `(${String(error?.message || error).split('\n')[0]})`
+    );
+  }
+  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+
+  await installFixtureRoutes(context);
   const page = await context.newPage();
   page.on('pageerror', (error) => {
     problems++;
@@ -4073,6 +4263,7 @@ try {
   await checkSlowBuild(context, page);
 
   // 7. Nothing anywhere on any of those screens is below WCAG AA.
+  await checkReducedMotion(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
