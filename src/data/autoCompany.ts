@@ -10,8 +10,8 @@ import { deriveModel } from './deriveModel.js';
 // @ts-ignore
 import { buildModel, buildDCF, filedBalanceSheetRefusal, listingRefusal } from '../engine/model.js';
 // @ts-ignore
-import { computeHealthScore, toRadarMetrics } from './healthScore.js';
-import { CompanyData, HealthScoreMetrics, ValuationDrivers } from '../types';
+import { computePlainRatios } from './plainRatios.js';
+import { CompanyData, ValuationDrivers } from '../types';
 import { financialsFromStatements, defaultDriversFor, buildFullModel } from './companies';
 
 /** A figure, or not a figure. A ratio the filing cannot support is not nought. */
@@ -78,7 +78,7 @@ export async function fetchCompanyPayload(ticker: string): Promise<any> {
  * THE WHOLE OF FEATURE 11a IS THESE FOUR LINES. Every number the site shows is
  * downstream of one array — the statements the fetcher returned — so patching
  * that array and running exactly the same derivation corrects the forecast, the
- * discounted cash flow, the health score, the asset approach and the residual
+ * discounted cash flow, the five ratios, the asset approach and the residual
  * income model together. A correction needing its own path through the engine
  * would have meant the design was wrong.
  */
@@ -231,11 +231,12 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
     sharesOutstandingBillion: r((modelData.dcf.dilutedSharesCount ?? 0) / 1000, 3),
   };
 
-  // Health score: five named ratios against stated thresholds. See
-  // src/data/healthScore.js — every input is a reported figure and every
-  // threshold is written down, so the number can be defended line by line.
-  const healthDetail = computeHealthScore(fetched.statements);
-  const health: HealthScoreMetrics = toRadarMetrics(healthDetail);
+  // THE FIVE RATIOS, AS RATIOS. The score, its radar and its badge were
+  // removed on 4 November 2026 (`docs/STUDIO_SPEC.md` S2): a score is a
+  // verdict, not a fact, and `src/data/plainRatios.js` carries the whole
+  // reasoning. Every input is a reported figure and every ratio shows the
+  // formula it was struck by; nothing here uses the share price.
+  const plainRatios = computePlainRatios(fetched.statements);
 
   const price = fetched.quote?.price ?? 0;
   const shares = modelData.dcf.dilutedSharesCount ?? 0;
@@ -334,8 +335,7 @@ dataSource: fetched.source,
       : null,
 
     defaultDrivers,
-    healthMetrics: health,
-    healthDetail,
+    plainRatios,
     recentNews: [],
 
     // Carried so the dashboard can re-run the engine on every slider move,

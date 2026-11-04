@@ -4225,6 +4225,46 @@ whose filing cannot support a ratio will show an em dash instead of a nought.
 
 ---
 
+## 23a4. Five ratios, and no score
+
+`src/data/plainRatios.js`, 2026-11-04. It replaces `src/data/healthScore.js`,
+deleted in the same commit.
+
+A composite **financial health score** took five ratios, scored each 0-100
+against thresholds of our own, averaged them, and printed the result as an
+oxblood `{n}/100` beside a radar polygon. It is gone (`docs/STUDIO_SPEC.md` S2,
+approved by Nihar 4 November 2026; `ROADMAP.md` section 12 carries the reason).
+Three things were wrong with it, each severity H:
+
+- **A score is a verdict, not a fact.** Standing decision 6 is to explain
+  mechanics, not merit, and the score's own text characterised numbers: "below
+  1.0x is a warning", "above 4.0x is heavily geared", "2% is thin, 25% is
+  strong", "the classic warning sign in accounting fraud". The thresholds behind
+  the arithmetic were ours and unsourced (standing decision 2).
+- **The radar's axes were mislabelled.** `toRadarMetrics` mapped leverage onto
+  `cashFlowCoverage`, profitability onto `accrualRisk` and return on assets onto
+  `valuationMoat`, so the figure under each label was not that label's figure.
+  The fallback grid printed "Moat Rating: {return-on-assets score}%".
+- **Missing data scored as zero.** `score ?? 0` and `overall ?? 0` drew a ratio
+  the filing cannot support as the worst possible score (standing decision 3).
+
+**What is left is the part a reader can check**: the five ratios, each with the
+figures it was struck from and **its formula in words**. The formula and not the
+reading — the old `basis` ran the two together in one string, and only the first
+sentence of "Current assets ÷ current liabilities. Below 1.0x is a warning;
+2.0x is comfortable." is a fact. The definitions moved to the Margin notes,
+without the threshold words.
+
+A ratio the filing cannot support is **null with a reason**, never nought.
+Nothing here uses the share price: this is the business as reported, not the
+market's opinion of it.
+
+**Measured on 2026-11-04**: 174 records each carry the five, 722 figures and 148
+absences, every absence with its reason and every figure equal to the filing
+divided. No valuation moves — nothing downstream of the score ever read it.
+
+---
+
 ## 23b. What each figure records about where it came from
 
 `api/company.js`, `src/data/financials.ts`, payload version 11.

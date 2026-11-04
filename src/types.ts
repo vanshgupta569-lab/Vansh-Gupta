@@ -93,13 +93,26 @@ export interface DCFResult {
   forecastRows: ForecastRow[];
 }
 
-export interface HealthScoreMetrics {
-  balanceSheetStrength: number;   // 0-100
-  earningsQuality: number;        // 0-100
-  accrualRisk: number;            // 0-100
-  cashFlowCoverage: number;       // 0-100
-  valuationMoat: number;          // 0-100
-  overallScore: number;
+export interface PlainRatio {
+  key: string;
+  label: string;
+  /** The figure, or null where the filing cannot support it. Never nought. */
+  value: number | null;
+  /** `x` for a multiple, `%` for a percentage. A plain string, because the
+   *  calculator is JavaScript and a literal union there is not enforceable. */
+  unit: string;
+  /** How it is struck, in words. A formula, never a reading of it. */
+  formula: string;
+  /** The figures it was struck from, where it could be struck. */
+  inputs: Record<string, number> | null;
+  /** Why there is no figure. */
+  reason: string | null;
+}
+
+export interface PlainRatios {
+  ratios: PlainRatio[];
+  revenueTrend: number | null;
+  asOfYear: number | null;
 }
 
 export interface NewsItem {
@@ -154,7 +167,14 @@ export interface CompanyData {
   description: string;
   financials: CompanyFinancials;
   defaultDrivers: ValuationDrivers;
-  healthMetrics: HealthScoreMetrics;
+  /**
+   * THE FIVE RATIOS, AS RATIOS. The score, its radar and its badge were removed
+   * on 4 November 2026 (`docs/STUDIO_SPEC.md` S2): a score is a verdict, not a
+   * fact, its thresholds were ours and unsourced, the radar's axes were
+   * mislabelled, and a ratio the filing could not support was drawn as the
+   * worst possible score. `src/data/plainRatios.js` says all of it.
+   */
+  plainRatios: PlainRatios;
   recentNews: NewsItem[];
   // Engine-sourced flag — true for companies with a real data file
   engineBacked: boolean;
@@ -188,9 +208,12 @@ export interface CompanyData {
     pair: string | null;
     rateAsOf: string | null;
   } | null;
-  // The reasoning behind the health score: each ratio, its value, and the
-  // threshold it was judged against.
-  healthDetail?: any;
+  // REMOVED WITH THE HEALTH SCORE (S2, 4 November 2026). It held each ratio,
+  // its value and the threshold it was judged against; the thresholds were ours
+  // and unsourced, and what a reader should make of a current ratio is a
+  // judgement rather than a figure. The five ratios are on `plainRatios` above,
+  // with their formulas and without the thresholds, and the definitions moved
+  // to the Margin notes.
   // Downloadable Excel workbooks, for companies modelled by hand.
   excelModels?: { label: string; url: string }[];
   // Where the reported history came from, e.g. 'SEC EDGAR'. Shown on the

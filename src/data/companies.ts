@@ -4,7 +4,7 @@ import AAPL_DATA from './AAPL.js';
 // @ts-ignore
 import { buildModel, buildDCF, INTEGRITY_REFUSAL_CODES } from '../engine/model.js';
 // @ts-ignore
-import { computeHealthScore, toRadarMetrics } from './healthScore.js';
+import { computePlainRatios } from './plainRatios.js';
 
 import { CompanyData, CompanyFinancials, ValuationDrivers, DCFResult, ForecastRow } from '../types';
 
@@ -703,8 +703,10 @@ const AAPL_DEFAULT_DRIVERS: ValuationDrivers = {
   sharesOutstandingBillion: r((AAPL_DATA.dcf.dilutedSharesCount ?? 14714.676) / 1000, 3),
 };
 
-// Health score — the same five-ratio calculation every company gets, fed from
-// Apple's reported years so the curated and derived views are comparable.
+// THE FIVE RATIOS — the same calculation every company gets, fed from Apple's
+// reported years so the curated and derived views are comparable. The score,
+// its radar and its badge were removed on 4 November 2026 (S2); the ratios are
+// the part a reader can check.
 const _healthRows = _M.years.slice(0, _nH).map((year: number, i: number) => ({
   fiscalYear: year,
   revenue: _M.revenue[i],
@@ -725,8 +727,7 @@ const _healthRows = _M.years.slice(0, _nH).map((year: number, i: number) => ({
   operatingCashFlow: _histOCF[i],
 }));
 
-const _aaplHealthDetail = computeHealthScore(_healthRows);
-const AAPL_HEALTH: import('../types').HealthScoreMetrics = toRadarMetrics(_aaplHealthDetail);
+const AAPL_RATIOS = computePlainRatios(_healthRows);
 
 // ---------------------------------------------------------------------------
 // COMPANY RECORDS
@@ -779,8 +780,7 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
     },
     dataSource:      'SEC EDGAR',
     defaultDrivers:  AAPL_DEFAULT_DRIVERS,
-    healthMetrics:   AAPL_HEALTH,
-    healthDetail:    _aaplHealthDetail,
+    plainRatios:     AAPL_RATIOS,
     excelModels: [
       {
         label: '3-Statement Model',

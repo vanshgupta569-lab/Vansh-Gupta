@@ -435,6 +435,26 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### Five ratios, and no score
+
+Three arms. **Every record carries the five**, each reconciled against the
+filing divided — recomputed in the check, not read back — with a formula, and
+with a reason wherever there is no figure: 722 figures and 148 absences across
+174 records. **The score, its radar and its badge are gone from the source**, in
+three parts, because a removal is only a removal if it cannot grow back: the
+calculator file, the five mislabelled axis names, the `{n}/100` and the words it
+printed, scanned over 99 source files with comments stripped so an explanation of
+the removal is allowed and a line of code is not. **And the ratios print their
+formula and no reading of it**, scanned on what reaches the screen rather than on
+the module's text, since its own header quotes those words as the thing it
+removed — driven on a filing that reports every figure and on one that reports
+none.
+
+Proved by breaking, five ways: a score put back on each ratio (**174 faults**);
+a threshold word back in a ratio's own words (**1**); a ratio the filing cannot
+support drawn as nought (**35**); a mislabelled radar axis back in the component
+(**1**); and the calculator itself back on disk (**2**).
+
 ### No displayed ratio falls back to nought
 
 `roePct`, `roaPct` and `opMarginPct` used `?? 0`, so a ratio the filing cannot

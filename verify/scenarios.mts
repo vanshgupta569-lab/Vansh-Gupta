@@ -6518,6 +6518,229 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// FIVE RATIOS, AND NO SCORE
+// ---------------------------------------------------------------------------
+//
+// A composite "financial health score" took these five ratios, scored each
+// 0–100 against thresholds of our own, averaged them, and printed the result as
+// an oxblood `{n}/100` beside a radar polygon. Removed on 4 November 2026
+// (`docs/STUDIO_SPEC.md` S2, approved by Nihar; `ROADMAP.md` section 12 carries
+// the reason). Three things were wrong with it, each severity H: a score is a
+// VERDICT rather than a fact, and its thresholds were ours and unsourced; the
+// radar's axes were MISLABELLED, so the figure under each label was not that
+// label's figure; and a ratio the filing could not support was drawn as the
+// WORST possible score.
+//
+// What is checked is what replaced it, and that what went cannot come back.
+{
+  console.log('\n=== five ratios, and no score ===');
+  const { computePlainRatios } = await import(`file:///${REPO}/src/data/plainRatios.js`);
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let records = 0;
+  let figures = 0;
+  let absent = 0;
+  const seen = new Set<string>();
+
+  // ---- 1. EVERY RECORD CARRIES THE FIVE, AND EACH RECONCILES -------------
+  //
+  // Recomputed in the check from the statements, so a ratio that stopped being
+  // what its formula says would fail rather than being read back.
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    records++;
+    const ticker = payload.ticker || file;
+    const held = rec.plainRatios;
+    if (!held || !Array.isArray(held.ratios)) {
+      faults.push(`${ticker}: no five ratios on the record at all`);
+      continue;
+    }
+    if (held.ratios.length !== 5) {
+      faults.push(`${ticker}: ${held.ratios.length} ratios where there are five`);
+    }
+    const rows: any[] = payload.statements || [];
+    const y = rows[rows.length - 1] || {};
+    const want: Record<string, number | null> = {
+      liquidity:
+        isNum(y.currentAssets) && isNum(y.currentLiabilities) && y.currentLiabilities !== 0
+          ? y.currentAssets / y.currentLiabilities
+          : null,
+      profitability:
+        isNum(y.operatingIncome) && isNum(y.revenue) && y.revenue !== 0
+          ? (y.operatingIncome / y.revenue) * 100
+          : null,
+      returns:
+        isNum(y.netIncome) && isNum(y.totalAssets) && y.totalAssets !== 0
+          ? (y.netIncome / y.totalAssets) * 100
+          : null,
+    };
+    for (const ratio of held.ratios) {
+      seen.add(ratio.key);
+      if (!ratio.formula || ratio.formula.length < 12) {
+        faults.push(`${ticker} ${ratio.key}: no formula, which is the part that replaced the score`);
+      }
+      // A SCORE MAY NOT COME BACK ON THE RATIO EITHER.
+      for (const banned of ['score', 'overall', 'rating', 'grade']) {
+        if (banned in ratio) {
+          faults.push(`${ticker} ${ratio.key}: carries a "${banned}" — the score is back on the ratio`);
+        }
+      }
+      if (ratio.value === null) {
+        absent++;
+        if (!ratio.reason) faults.push(`${ticker} ${ratio.key}: absent with no reason`);
+      } else {
+        figures++;
+        if (!isNum(ratio.value)) faults.push(`${ticker} ${ratio.key}: holds ${ratio.value}`);
+      }
+      const expected = want[ratio.key];
+      if (expected === undefined) continue;
+      if (expected === null) {
+        if (ratio.value !== null) {
+          faults.push(
+            `${ticker} ${ratio.key}: holds ${ratio.value} and the filing has nothing to compute it from`
+          );
+        }
+      } else if (ratio.value === null) {
+        faults.push(`${ticker} ${ratio.key}: absent, and the filing gives ${expected.toFixed(2)}`);
+      } else {
+        const dp = ratio.unit === '%' ? 1 : 2;
+        if (Math.abs(ratio.value - Number(expected.toFixed(dp))) > 10 ** -dp / 1.9) {
+          faults.push(
+            `${ticker} ${ratio.key}: holds ${ratio.value} and the filing gives ${expected.toFixed(dp)}`
+          );
+        }
+      }
+    }
+  }
+  for (const key of ['liquidity', 'leverage', 'profitability', 'cashConversion', 'returns']) {
+    if (!seen.has(key)) faults.push(`the ${key} ratio is on no record in the set`);
+  }
+
+  // ---- 2. THE SCORE, THE RADAR AND THE BADGE ARE GONE FROM THE SOURCE ----
+  //
+  // A removal is only a removal if it cannot grow back, and this one has three
+  // parts: the calculator, the shape and the words.
+  if (fs.existsSync(path.join(REPO, 'src/data/healthScore.js'))) {
+    faults.push('src/data/healthScore.js is back');
+  }
+  const SOURCES = ['src', 'api'];
+  const walk = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const entry of fs.readdirSync(path.join(REPO, dir), { withFileTypes: true })) {
+      const at = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) out.push(...walk(at));
+      else if (/\.(ts|tsx|js|jsx)$/.test(entry.name)) out.push(at);
+    }
+    return out;
+  };
+  const files = SOURCES.flatMap((d) => walk(d));
+  // The words the score itself printed, and the names it was built from. A
+  // comment saying where it went is allowed; a line of code is not.
+  const BANNED: [RegExp, string][] = [
+    [/healthMetrics/, 'the radar metrics'],
+    [/toRadarMetrics/, 'the radar mapping'],
+    [/computeHealthScore/, 'the score calculator'],
+    [/overallScore/, 'the score itself'],
+    [/FINANCIAL HEALTH SCORE/i, 'the badge'],
+    [/balanceSheetStrength|earningsQuality|cashFlowCoverage|accrualRisk|valuationMoat/, 'a mislabelled radar axis'],
+  ];
+  for (const file of files) {
+    const text = fs.readFileSync(path.join(REPO, file), 'utf8');
+    text.split(/\r?\n/).forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, '');
+      for (const [pattern, what] of BANNED) {
+        if (pattern.test(code)) {
+          faults.push(`${file}:${i + 1} still carries ${what}: ${line.trim().slice(0, 70)}`);
+        }
+      }
+    });
+  }
+
+  // ---- 3. AND NO THRESHOLD WORDS CAME WITH THE RATIOS --------------------
+  //
+  // The old `basis` ran the formula and a judgement together in one string —
+  // "Current assets ÷ current liabilities. Below 1.0x is a warning; 2.0x is
+  // comfortable." Only the first sentence is a fact, and what a reader should
+  // make of a current ratio belongs in the Margin notes. So the ratios' own
+  // words are scanned for the readings that used to travel with them.
+  // SCANNED ON WHAT REACHES THE SCREEN, not on the source text: the module's
+  // own header quotes those very words as the thing it removed, and a check
+  // that read the file would fail on the explanation.
+  const READINGS = /\b(is a warning|comfortable|heavily geared|is thin|is strong|warning sign|full marks)\b/i;
+  const filled = computePlainRatios([
+    {
+      fiscalYear: 2025,
+      revenue: 1000,
+      operatingIncome: 100,
+      netIncome: 80,
+      depreciation: 50,
+      cash: 200,
+      currentAssets: 400,
+      currentLiabilities: 200,
+      longTermDebt: 300,
+      totalAssets: 2000,
+      operatingCashFlow: 120,
+    },
+  ]);
+  for (const ratio of filled.ratios) {
+    for (const said of [ratio.formula, ratio.reason, ratio.label]) {
+      if (said && READINGS.test(String(said))) {
+        faults.push(`the ${ratio.key} ratio prints a reading rather than a fact: ${String(said).slice(0, 70)}`);
+      }
+    }
+    if (ratio.value === null) {
+      faults.push(`the ${ratio.key} ratio is absent on a filing that reports every figure it needs`);
+    }
+  }
+  // And on a filing with nothing in it, which is where the reasons are and
+  // where a threshold word would most easily hide.
+  for (const ratio of computePlainRatios([{ fiscalYear: 2025 }]).ratios) {
+    if (ratio.value !== null) {
+      faults.push(`the ${ratio.key} ratio holds ${ratio.value} on a filing with nothing in it`);
+    }
+    if (!ratio.reason) {
+      faults.push(`the ${ratio.key} ratio has no reason on a filing with nothing in it`);
+    } else if (READINGS.test(ratio.reason)) {
+      faults.push(`the ${ratio.key} ratio's reason reads as a judgement: ${ratio.reason.slice(0, 70)}`);
+    }
+  }
+
+  console.log(
+    `  ${records} records each carry the five ratios: ${figures} figures and ${absent} absences, every ` +
+      'absence with its reason, every figure equal to the filing divided'
+  );
+  console.log(
+    `  the score, its radar and its badge are gone from ${files.length} source files — the calculator, ` +
+      'the five mislabelled axes, the `{n}/100` and the words it printed'
+  );
+  console.log(
+    '  and the ratios carry their formula and no reading of it: what a current ratio is worth is a ' +
+      'judgement, which belongs in the Margin notes'
+  );
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the five ratios:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // NO DISPLAYED RATIO FALLS BACK TO NOUGHT
 // ---------------------------------------------------------------------------
 //

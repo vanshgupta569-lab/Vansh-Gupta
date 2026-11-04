@@ -2004,99 +2004,59 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Health Score Radar Chart */}
-        <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
-                FINANCIAL HEALTH SCORE
-              </span>
-              <span className="font-figure text-[12px] text-[#8B1E1E] font-bold border border-[#8B1E1E] px-2 py-0.5 bg-[#8B1E1E]/5">
-                {company.healthMetrics.overallScore}/100
-              </span>
-            </div>
+        {/* Card 3: the five ratios, as ratios.
 
-            {/* SVG Geometric Radar Polygon Chart */}
-            <div className="h-52 flex items-center justify-center relative my-1">
-              <svg className="w-48 h-48 overflow-visible" viewBox="0 0 200 200">
-                {/* Concentric pentagon/rings */}
-                <polygon points="100,20 176,60 147,150 53,150 24,60" fill="none" stroke="#222228" strokeWidth="1" />
-                <polygon points="100,50 145,75 128,130 72,130 55,75" fill="none" stroke="#222228" strokeWidth="1" />
-                <polygon points="100,80 115,90 109,110 91,110 85,90" fill="none" stroke="#222228" strokeWidth="1" />
+            THE SCORE, ITS RADAR AND ITS BADGE WERE HERE (`docs/STUDIO_SPEC.md`
+            S2, approved 4 November 2026). Five ratios went in, one shape and
+            one oxblood `{n}/100` came out, and three things were wrong with it:
+            a score is a verdict rather than a fact (standing decision 6) and
+            its thresholds were ours and unsourced; the radar's axes were
+            MISLABELLED, so the figure under each label was not that label's
+            figure; and a ratio the filing could not support was drawn as the
+            worst possible score (standing decision 3).
 
-                {/* Radar Axis lines */}
-                <line x1="100" y1="100" x2="100" y2="20" stroke="#222228" strokeWidth="1" />
-                <line x1="100" y1="100" x2="176" y2="60" stroke="#222228" strokeWidth="1" />
-                <line x1="100" y1="100" x2="147" y2="150" stroke="#222228" strokeWidth="1" />
-                <line x1="100" y1="100" x2="53" y2="150" stroke="#222228" strokeWidth="1" />
-                <line x1="100" y1="100" x2="24" y2="60" stroke="#222228" strokeWidth="1" />
-
-                {/* Calculated Polygon points based on metrics */}
-                {(() => {
-                  const m = company.healthMetrics;
-                  const p1 = [100, 100 - (80 * m.balanceSheetStrength) / 100];
-                  const p2 = [100 + (76 * m.earningsQuality) / 100, 100 - (40 * m.earningsQuality) / 100];
-                  const p3 = [100 + (47 * m.cashFlowCoverage) / 100, 100 + (50 * m.cashFlowCoverage) / 100];
-                  const p4 = [100 - (47 * m.accrualRisk) / 100, 100 + (50 * m.accrualRisk) / 100];
-                  const p5 = [100 - (76 * m.valuationMoat) / 100, 100 - (40 * m.valuationMoat) / 100];
-
-                  const pts = `${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]} ${p4[0]},${p4[1]} ${p5[0]},${p5[1]}`;
-
-                  // The polygon morphs between shapes when the company or the
-                  // model view changes, rather than snapping to the new one.
-                  return (
-                    <motion.polygon
-                      animate={{ points: pts }}
-                      initial={{ points: '100,100 100,100 100,100 100,100 100,100' }}
-                      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-                      fill="rgba(139, 30, 30, 0.4)"
-                      stroke="#8B1E1E"
-                      strokeWidth="2"
-                    />
-                  );
-                })()}
-              </svg>
-            </div>
+            What is left is the part a reader can check: each ratio, the figures
+            it was struck from, and the formula in words. What a reader should
+            make of a current ratio is in the Margin notes. */}
+        <div className="bg-panel border border-line p-6 flex flex-col min-h-[360px]">
+          <div className="mb-3 flex items-baseline justify-between">
+            <span className="text-[13px] font-medium text-muted">Five ratios, as reported</span>
+            <span className="text-[13px] text-quiet">
+              {company.plainRatios?.asOfYear ? `FY${company.plainRatios.asOfYear}` : 'last reported year'}
+            </span>
           </div>
 
-          {/* The score is only worth showing if the reasoning is shown with it:
-              each ratio, its actual value, and the threshold it was judged on. */}
-          {company.healthDetail ? (
-            <div className="pt-3 border-t hairline-border-t space-y-1.5">
-              {Object.values(company.healthDetail.components).map((c: any) => (
-                <div
-                  key={c.label}
-                  className="flex items-baseline justify-between gap-3 font-figure text-[10px]"
-                  title={c.basis}
+          <div className="flex flex-col gap-px bg-line" data-plain-ratios>
+            {(company.plainRatios?.ratios || []).map((ratio) => (
+              <div
+                key={ratio.key}
+                data-plain-ratio={ratio.key}
+                className="flex items-baseline justify-between gap-3 bg-panel py-2"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] text-ink">{ratio.label}</span>
+                  {/* THE FORMULA, AND NOT A READING OF IT. */}
+                  <span className="block truncate text-[13px] text-quiet">{ratio.formula}</span>
+                </span>
+                <span
+                  className="shrink-0 font-figure text-[15px] text-ink"
+                  title={ratio.value === null ? ratio.reason ?? undefined : undefined}
                 >
-                  <span className="text-[#8A8A8F] uppercase tracking-widest truncate">
-                    {c.label}
-                  </span>
-                  <span className="flex items-baseline gap-2 shrink-0">
-                    <span className="text-[#A1A1AA]">
-                      {c.ratio == null ? '—' : c.ratio}
-                      {c.unit.startsWith('%') ? '%' : ''}
-                    </span>
-                    <span className="text-[#F2F0EA] font-semibold w-8 text-right">
-                      {c.score == null ? 'n/a' : Math.round(c.score)}
-                    </span>
-                  </span>
-                </div>
-              ))}
-              <div className="font-figure text-[9px] text-[#8A8A8F] pt-2 leading-relaxed">
-                Five reported ratios scored against fixed thresholds, then
-                averaged. Hover any line for its basis. Nothing here uses the
-                share price.
+                  {ratio.value === null
+                    ? NOT_REPORTED
+                    : ratio.unit === '%'
+                      ? `${ratio.value.toFixed(1)}%`
+                      : `${ratio.value.toFixed(2)}x`}
+                </span>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-figure text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-3 border-t hairline-border-t">
-              <div>Bal Sheet: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.balanceSheetStrength}%</span></div>
-              <div>Earnings Quality: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.earningsQuality}%</span></div>
-              <div>Cash Flow: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.cashFlowCoverage}%</span></div>
-              <div>Moat Rating: <span className="text-[#F2F0EA] font-semibold">{company.healthMetrics.valuationMoat}%</span></div>
-            </div>
-          )}
+            ))}
+          </div>
+
+          <div className="mt-auto pt-3 text-[13px] leading-relaxed text-quiet">
+            Each is the company's own reported figures, divided. Nothing here uses the share price, and
+            nothing here is scored: what a ratio is worth depends on the business, which is a judgement
+            rather than a figure.
+          </div>
         </div>
 
       </div>
