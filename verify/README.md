@@ -152,6 +152,15 @@ nowhere better to put them and each is cheap:
   the index — and the pages are checked to carry no script at all, which is the
   whole point of them. Run before `npm run build`, it says so and checks the
   sources only.
+- **direct loads, routed as Vercel routes them** (build step 9, job 9.5;
+  `npm run build && npm run verify:routes`). `vite preview` answers every
+  path with the app, so it cannot show what the deployed site does. This
+  serves `dist/` as Vercel routes this project — a file, a folder's
+  index.html, else the first rewrite in `vercel.json` that matches, else
+  `404.html` with status 404 — and loads `/screener?exchange=NSE`,
+  `/learn/notes/<key>/`, `/learn/notes`, `/learn/`, a company address and an
+  unknown path in a browser, each expected on its own screen, the unknown one
+  at 404 with its path printed.
 - **the /learn/ pages on the type system** (build step 9, job 9.7;
   `verify/learnPages.mts`, run at the end of `npm run build`, which fails on
   it, and on its own with `npx tsx verify/learnPages.mts`). The static pages
@@ -1000,9 +1009,14 @@ from the code that orders it) and "previous" must walk it back; Back returns
 to the note before; an unknown key lands on `/learn/notes/`; at 390 the index
 is one closed "All n notes" disclosure with no note link showing.
 
+**A fourteenth is page not found, in the app** (job 9.5): an unknown path
+must show "This page does not exist" with that path printed, not the landing
+page at the wrong address; Home must go to `/`, which is still the landing
+page.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

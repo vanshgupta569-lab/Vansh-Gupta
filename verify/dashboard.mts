@@ -4964,6 +4964,47 @@ async function checkNotesAddresses(browser: Browser) {
   if (!issues.length) ok(`all ${direct} notes open at /learn/notes/<key>/; next walks the ${indexOrder.length} in index order and previous walks them back; Back returns; an unknown key lands on /learn/notes/; at 390 the index is a closed "${ph.label}" with the note at y ${ph.articleTop}`);
 }
 
+// ---- page not found, in the app (job 9.5) --------------------------------
+//
+// LEARN_STATES §3.6. The dev server sends every unknown path to the app, as
+// a rewrite would, and the app must answer with its not-found screen and the
+// path printed — not with the landing page at the wrong address. `/` must
+// still be the landing page, and "Home" must take the reader there.
+// (`verify:routes` checks the deployed routing: the static 404.html and the
+// rewrites in vercel.json.)
+async function checkInAppNotFound(browser: Browser) {
+  console.log('\n=== page not found, in the app ===');
+  const issues: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/definitely-not-a-page`, { waitUntil: 'domcontentloaded' });
+  const shown = await p.waitForSelector('[data-not-found]', { timeout: 15_000 }).then(() => true).catch(() => false);
+  const v: any = await p.evaluate(`(() => ({
+    path: document.querySelector('[data-not-found-path]')?.textContent || null,
+    h1: document.querySelector('[data-not-found] h1')?.textContent || null,
+    landing: !!document.getElementById('routes'),
+  }))()`);
+  if (!shown) issues.push(`/definitely-not-a-page shows no not-found screen${v.landing ? ' — the landing page renders at the wrong address' : ''}`);
+  else {
+    if (v.path !== '/definitely-not-a-page') issues.push(`the not-found screen prints "${v.path}", not the path asked for`);
+    if (!/^This page does not exist/.test(v.h1 || '')) issues.push(`the not-found title reads "${v.h1}"`);
+    if (v.landing) issues.push('the landing page renders under the not-found screen');
+    await p.getByRole('link', { name: 'Home' }).click();
+    const home = await p.waitForSelector('#routes', { timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!home || new URL(p.url()).pathname !== '/') issues.push(`"Home" from the not-found screen lands on ${new URL(p.url()).pathname}${home ? '' : ' without the landing page'}`);
+  }
+  await p.goto(BASE, { waitUntil: 'domcontentloaded' });
+  const landing = await p.waitForSelector('#routes', { timeout: 15_000 }).then(() => true).catch(() => false);
+  if (!landing || (await p.locator('[data-not-found]').count())) issues.push('/ no longer shows the landing page');
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok('an unknown path shows "This page does not exist" with the path printed; Home goes to the landing page; / is still the landing page');
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5047,6 +5088,7 @@ try {
     accent: () => checkLandingAccentBudget(browser as Browser),
     lowend: () => checkPhoneAndLowEnd(browser as Browser),
     notes: () => checkNotesAddresses(browser as Browser),
+    notfound: () => checkInAppNotFound(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5176,6 +5218,7 @@ try {
   await checkLandingAccentBudget(browser);
   await checkPhoneAndLowEnd(browser);
   await checkNotesAddresses(browser);
+  await checkInAppNotFound(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

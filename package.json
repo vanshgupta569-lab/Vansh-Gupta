@@ -18,6 +18,7 @@
     "verify:dashboard": "tsx verify/dashboard.mts",
     "verify:indices": "tsx verify/fetch-indices.mts",
     "verify:landing": "tsx verify/landing.mts",
+    "verify:routes": "tsx verify/routes.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts"
   },
   "dependencies": {
