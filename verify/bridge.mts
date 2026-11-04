@@ -190,5 +190,53 @@ export async function checkBridge(): Promise<BridgeReport> {
       problems.push('C2: a bridge with a refused mix was not reported as refused, with the mix and the reason');
   }
 
+  // ---- C3. ABOVE TEN DRIVERS: SAMPLED ORDERS, A FIXED SEED -------------
+  {
+    // Fourteen drivers with interactions, cheap enough that the exact answer
+    // can be computed too (2^14 runs) to measure the sampled one against.
+    const n = 14;
+    const keys = Array.from({ length: n }, (_, i) => `d${i + 1}`);
+    const a = keys.map((_, i) => 1 + ((i * 7) % 5));
+    const b = keys.map((_, i) => 0.05 + ((i * 3) % 4) / 40);
+    const value = (take: string[]) => {
+      const on = new Set(take);
+      let lin = 10;
+      let prod = 1;
+      keys.forEach((k, i) => {
+        if (on.has(k)) {
+          lin += a[i];
+          prod *= 1 + b[i];
+        }
+      });
+      return { value: lin * lin * 0.01 + 40 * prod, refusal: null };
+    };
+    const sampled = BR.shapley(keys, value);
+    const again = BR.shapley(keys, value);
+    const otherSeed = BR.shapley(keys, value, { seed: BR.SAMPLE_SEED + 1 });
+    const exact = BR.shapley(keys, value, { exactLimit: n });
+    if (sampled.method !== 'sampled') problems.push(`C3: ${n} drivers ran as ${sampled.method}, not sampled`);
+    if (sampled.seed !== BR.SAMPLE_SEED || sampled.orders !== BR.SAMPLED_ORDERS)
+      problems.push(`C3: the sampled run did not record the fixed seed and order count (${sampled.seed}, ${sampled.orders})`);
+    const rawSum = sampled.parts.reduce((t: number, p: any) => t + p.raw, 0);
+    const cents = sampled.parts.reduce((t: number, p: any) => t + Math.round(p.rounded * 100), 0);
+    if (Math.abs(rawSum - sampled.total) > 1e-9 * Math.max(1, Math.abs(sampled.total)))
+      problems.push(`C3: sampled parts sum to ${rawSum}, not the total ${sampled.total}`);
+    if (cents !== Math.round(sampled.totalRounded * 100)) problems.push(`C3: sampled parts round to ${cents / 100}, not ${sampled.totalRounded}`);
+    if (JSON.stringify(sampled.parts) !== JSON.stringify(again.parts)) problems.push('C3: the same seed gave different parts');
+    if (JSON.stringify(sampled.parts) === JSON.stringify(otherSeed.parts)) problems.push('C3: a different seed gave identical parts, so the seed is not used');
+    // How close sampling comes, measured and bounded: the largest gap between
+    // a sampled part and the exact part, as a share of the total change.
+    const worst = Math.max(...sampled.parts.map((p: any, i: number) => Math.abs(p.raw - exact.parts[i].raw)));
+    const share = worst / Math.abs(exact.total);
+    const TOLERANCE = 0.01;
+    if (share > TOLERANCE)
+      problems.push(`C3: a sampled part is ${worst.toFixed(4)} from the exact one, ${(share * 100).toFixed(2)}% of the total, over the ${TOLERANCE * 100}% recorded`);
+    lines.push(
+      `C3: ${n} drivers, ${BR.SAMPLED_ORDERS} orders from seed ${BR.SAMPLE_SEED}, ${sampled.runs} runs: parts sum to the total exactly, ` +
+        `repeatable on the seed, different on another; worst part ${worst.toFixed(4)} from the exact (${exact.runs} runs), ` +
+        `${(share * 100).toFixed(3)}% of the ${exact.total.toFixed(2)} total, inside the ${TOLERANCE * 100}% tolerance`
+    );
+  }
+
   return { problems, lines };
 }

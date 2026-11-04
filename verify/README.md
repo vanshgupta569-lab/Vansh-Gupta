@@ -121,7 +121,11 @@ nowhere better to put them and each is cheap:
   its reason. C2: the spec's worked example to the cent (FCF 161.64, WACC
   272.20, growth 137.59 after largest-remainder rounding, total 571.43, in
   2^3 runs), and on the fixture the parts sum to the total to the cent, with a
-  driver that changes nothing at exactly zero.
+  driver that changes nothing at exactly zero. C3: above ten drivers, 2,000
+  orders drawn from a fixed seed: on a 14-driver function with interactions
+  the parts sum to the total exactly, repeat on the seed, change on another
+  seed, and every part is within 1% of the total of the exact answer (worst
+  0.089%, measured 4 November 2026).
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in

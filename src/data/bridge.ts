@@ -12,9 +12,9 @@
 //   driversBetween(A, B)  every input that differs, grouped into drivers the
 //                         way rule 15 asks (C1)
 //   mixVersion(A, B, S)   version A with the drivers in S taken from B (C1)
-//   bridgeBetween(A, B)   the Shapley attribution of B − A to the drivers,
-//                         exact up to 10 drivers (C2; sampled orders above
-//                         that are job C3)
+//   bridgeBetween(A, B)   the Shapley attribution of B − A to the drivers:
+//                         exact up to 10 drivers (C2), sampled orders with a
+//                         fixed seed above that (C3)
 //   shapley(keys, value)  the attribution itself, for any value function, so
 //                         the spec's worked example can be checked on its own
 //
@@ -392,8 +392,27 @@ export function shapley(
       }
     }
   } else {
-    // Sampled orders above the exact limit are job C3.
-    return fail('sampled');
+    method = 'sampled';
+    orders = opts.orders ?? SAMPLED_ORDERS;
+    seed = opts.seed ?? SAMPLE_SEED;
+    const rand = mulberry32(seed);
+    const order = keys.map((_, i) => i);
+    for (let n = 0; n < orders; n++) {
+      for (let i = k - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      let mask = 0;
+      let prev = start;
+      for (const i of order) {
+        mask |= 1 << i;
+        const next = v(mask);
+        if (next === null) return fail('sampled');
+        raw[i] += next - prev;
+        prev = next;
+      }
+    }
+    for (let i = 0; i < k; i++) raw[i] /= orders;
   }
 
   const total = end - start;
