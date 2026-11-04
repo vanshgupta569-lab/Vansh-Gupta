@@ -4675,6 +4675,87 @@ async function checkOneWebglContext(browser: Browser) {
   if (!issues.length) ok(`WebGL contexts made while the whole landing page is scrolled: ${counted.join(', ')} — never more than one`);
 }
 
+// ---- the accent budget, sections 1–4 of the landing page (job 8.9) -------
+//
+// LANDING §9 items 14 and 23 and §3.1. At every scroll position, in 100px
+// steps from the top of the page to the end of "Being built next", at 1440×900
+// and 390×844, the viewport may hold at most one oxblood-washed primary, at
+// most three oxblood fills or washes (rules of 2px or less and the heading
+// mark are not fills), and at most five words set in the accent text colour.
+// No text in those sections may be uppercased by CSS, and their copy holds
+// none of LANDING §2.3's banned words. Reduced motion, so every block is
+// visible as it is reached and the field does not draw.
+const ACCENT_BUDGET = { washedPrimary: 1, fills: 3, accentWords: 5 };
+async function checkLandingAccentBudget(browser: Browser) {
+  console.log('\n=== the accent budget on landing sections 1–4 ===');
+  const FR: any = await import(`file:///${REPO}/src/data/featureRegister.ts`);
+  const issues: string[] = [];
+  const worst: string[] = [];
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    const ctx = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce' });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    const end = (await p.evaluate(`(() => { const b = document.getElementById('beyond'); return b ? b.getBoundingClientRect().bottom + scrollY - innerHeight : -1; })()`)) as number;
+    if (end < 0) { issues.push(`no #beyond section at ${width}px: the range to scan is unknown`); await ctx.close(); continue; }
+    let most = { washed: 0, fills: 0, words: 0 };
+    const seenUpper = new Set<string>();
+    const reported = new Set<string>();
+    for (let y = 0; y <= end + 99; y += 100) {
+      await p.evaluate(`window.scrollTo(0, ${Math.min(y, end)})`);
+      await p.waitForTimeout(30);
+      const v: any = await p.evaluate(`(() => {
+        const vh = innerHeight, vw = innerWidth;
+        const ox = (c) => {
+          const m = /rgba?\\(([^)]+)\\)/.exec(c);
+          if (!m) return 0;
+          const [r, g, b, a] = m[1].split(',').map(Number);
+          return r === 139 && g === 30 && b === 30 ? (a === undefined || isNaN(a) ? 1 : a) : 0;
+        };
+        const ACCENT_TEXT = ['rgb(208, 94, 88)'];
+        let washed = 0, fills = 0, words = 0;
+        const fillWhere = [], wordWhere = [], upper = [];
+        for (const el of document.querySelectorAll('body *')) {
+          const r = el.getBoundingClientRect();
+          if (!(r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw && r.width > 0 && r.height > 0)) continue;
+          if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          const cs = getComputedStyle(el);
+          const a = ox(cs.backgroundColor);
+          if (a > 0 && r.width > 2 && r.height > 2 && !el.hasAttribute('data-mark')) {
+            fills++;
+            fillWhere.push((el.tagName + ' ' + (el.textContent || '').trim()).slice(0, 40));
+            if (a < 1 && el.matches('button, a, [role=button]')) washed++;
+          }
+          const own = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim();
+          if (own) {
+            if (ACCENT_TEXT.includes(cs.color)) { const n = own.split(/\\s+/).length; words += n; wordWhere.push(own.slice(0, 40)); }
+            if (cs.textTransform === 'uppercase') upper.push(own.slice(0, 40));
+          }
+        }
+        return { washed, fills, words, fillWhere, wordWhere, upper };
+      })()`);
+      most = { washed: Math.max(most.washed, v.washed), fills: Math.max(most.fills, v.fills), words: Math.max(most.words, v.words) };
+      const at = `at ${width}px, scrolled to ${Math.min(y, end)}`;
+      const once = (key: string, line: string) => { if (!reported.has(key)) { reported.add(key); issues.push(line); } };
+      if (v.washed > ACCENT_BUDGET.washedPrimary) once('w', `${v.washed} oxblood-washed primaries in one viewport ${at}, over ${ACCENT_BUDGET.washedPrimary}: ${v.fillWhere.join(' | ')}`);
+      if (v.fills > ACCENT_BUDGET.fills) once('f', `${v.fills} oxblood fills in one viewport ${at}, over ${ACCENT_BUDGET.fills}: ${v.fillWhere.join(' | ')}`);
+      if (v.words > ACCENT_BUDGET.accentWords) once('t', `${v.words} accent-text words in one viewport ${at}, over ${ACCENT_BUDGET.accentWords}: ${v.wordWhere.join(' | ')}`);
+      for (const u of v.upper) seenUpper.add(u);
+    }
+    for (const u of seenUpper) issues.push(`uppercase set by CSS at ${width}px: "${u}"`);
+    const copy = (await p.evaluate(`(() => ['hero','routes','filings','forecast','cash','discount','answers','workbench','beyond'].map((id) => { const el = document.getElementById(id); return el ? el.textContent : ''; }).join(' '))()`)) as string;
+    const banned = FR.landingBannedIn(copy);
+    if (banned.length && width === 1440) issues.push(`LANDING §2.3 banned words in sections 1–4: ${banned.join(', ')}`);
+    worst.push(`${width}px: at most ${most.washed} washed primary, ${most.fills} fills, ${most.words} accent words`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`landing sections 1–4 in 100px steps — ${worst.join('; ')}; no CSS uppercase; no banned words`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4755,6 +4836,7 @@ try {
     features: () => checkFeatureGate(browser as Browser),
     hero: () => checkHeroField(browser as Browser),
     webgl: () => checkOneWebglContext(browser as Browser),
+    accent: () => checkLandingAccentBudget(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -4881,6 +4963,7 @@ try {
   await checkFeatureGate(browser);
   await checkHeroField(browser);
   await checkOneWebglContext(browser);
+  await checkLandingAccentBudget(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

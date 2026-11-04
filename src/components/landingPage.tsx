@@ -56,7 +56,7 @@ const OBJECT_SECTIONS = [
 
 // Colours come from the one palette. They used to be six local constants at
 // the top of this file, and six more at the top of four of its neighbours.
-const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, line: LINE } = DARK;
+const { accent: RED, ink: INK, read: READ, muted: MUTED, quiet: QUIET, line: LINE } = DARK;
 
 const DISPLAY: React.CSSProperties = {
   fontFamily: TYPE.display,
@@ -69,9 +69,10 @@ const DISPLAY: React.CSSProperties = {
 /* Furniture                                                           */
 /* ------------------------------------------------------------------ */
 
-const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
+const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean; n?: string }> = ({
   children,
   centred,
+  n,
 }) => (
   <p
     /* NO RED LABEL TEXT. The red stays on the rule beside the words rather
@@ -85,7 +86,14 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
     style={{ color: MUTED }}
   >
     <span className="h-px w-8 shrink-0" style={{ background: RED }} />
-    {children}
+    {/* LANDING §3.1: the number in an eyebrow is in quiet, never in the
+        accent, and the words are muted. */}
+    {n && (
+      <span data-eyebrow-number style={{ color: QUIET }}>
+        {n}&nbsp;&middot;
+      </span>
+    )}
+    <span>{children}</span>
   </p>
 );
 
@@ -178,7 +186,7 @@ const Readout: React.FC<{ rows: [string, string][]; centred?: boolean }> = ({ ro
   >
     {rows.map(([k, v]) => (
       <div key={k}>
-        <span style={{ color: RED_TEXT }}>{k}</span>
+        <span style={{ color: MUTED }}>{k}</span>
         &nbsp;&nbsp;
         <span style={{ color: INK, fontWeight: 500 }}>{v}</span>
       </div>
@@ -368,7 +376,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
       source: 'Fiscal years read from each company\u2019s own filings',
     },
     ...(isShipped('three-approaches')
-      ? [{ key: 'approaches', to: 3, suffix: '', text: null, label: 'Valuation approaches', detail: 'Income · Market · Asset', source: 'Shown side by side, never averaged' }]
+      ? [{ key: 'approaches', to: 3, suffix: '', text: null, label: 'Valuation approaches', detail: 'Income · Market · Asset', source: 'Shown side by side, not averaged' }]
       : []),
   ];
   const [activeMargin, setActiveMargin] = useState(0);
@@ -496,8 +504,9 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <button
               type="button"
               onClick={launch}
-              className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border transition-colors"
-              style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
+              data-primary
+              className="font-figure text-[15px] font-medium h-12 px-5 border transition-colors"
+              style={{ borderColor: RED, background: 'rgba(139,30,30,0.2)', color: INK }}
             >
               Value a listed company
             </button>
@@ -506,7 +515,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 type="button"
                 onClick={launch}
                 data-feature="private-company"
-                className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent transition-colors hover:border-[#8B1E1E]"
+                className="font-figure text-[15px] font-medium h-12 px-5 border bg-transparent transition-colors hover:border-ink"
                 style={{ borderColor: LINE, color: MUTED }}
               >
                 Value a private company
@@ -517,17 +526,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               <button
                 type="button"
                 onClick={() => onScrollTo('beyond')}
-                className="font-figure text-[13px] px-2 py-3.5 bg-transparent underline underline-offset-4 transition-colors"
+                className="font-figure text-[15px] h-12 px-2 bg-transparent underline underline-offset-4 transition-colors hover:text-ink"
                 style={{ color: MUTED }}
               >
                 What is being built next &darr;
               </button>
             )}
           </div>
-          <p
-            className="font-figure text-[12px] tracking-[0.16em] uppercase mt-8"
-            style={{ color: MUTED }}
-          >
+          <p className="font-figure text-[13px] mt-8" style={{ color: MUTED }}>
             Scroll to see how it works
           </p>
           {fieldOn && (
@@ -551,7 +557,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 01 — what you can do */}
         <Block id="routes" side="right">
-          <Eyebrow>01 &middot; What you can do</Eyebrow>
+          <Eyebrow n="01">What you can do</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
             Four ways in
             <Mark />
@@ -571,10 +577,10 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 className={`text-left ${opens ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <div className="flex items-baseline gap-4">
-                  <span className="font-figure text-[13px] tracking-[0.2em] shrink-0" style={{ color: RED_TEXT }}>
+                  <span className="font-figure text-[13px] shrink-0 w-6" style={{ color: QUIET }}>
                     {r.n}
                   </span>
-                  <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
+                  <span className="text-[20px] leading-[1.2]" style={{ fontFamily: TYPE.display, fontWeight: 600, color: INK }}>
                     {r.feature.title}
                   </span>
                   {!shipped && (
@@ -583,7 +589,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                     </span>
                   )}
                 </div>
-                <p className="text-[15px] leading-[1.55] mt-1.5 pl-10" style={{ color: MUTED }}>
+                <p className="text-[15px] leading-[1.65] mt-2 pl-10" style={{ color: READ }}>
                   {claimFor(r.feature)}
                 </p>
               </button>
@@ -594,7 +600,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 02 — the filings arrive */}
         <Block id="filings" side="left">
-          <Eyebrow>02 &middot; Where the numbers come from</Eyebrow>
+          <Eyebrow n="02">Where the numbers come from</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Five years of accounts, exactly as filed
             <Mark />
@@ -616,7 +622,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 03 — the forecast is built */}
         <Block id="forecast" side="right">
-          <Eyebrow>03 &middot; The forecast</Eyebrow>
+          <Eyebrow n="03">The forecast</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every forecast line is one assumption you can move
             <Mark />
@@ -637,7 +643,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 04 — profit becomes cash */}
         <Block id="cash" side="left">
-          <Eyebrow>04 &middot; Profit becomes cash</Eyebrow>
+          <Eyebrow n="04">Profit becomes cash</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Profit and cash are not the same number
             <Mark />
@@ -660,7 +666,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 05 — the discount */}
         <Block id="discount" side="right">
-          <Eyebrow>05 &middot; What it is worth today</Eyebrow>
+          <Eyebrow n="05">What it is worth today</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every future year, collapsed into one number
             <Mark />
@@ -682,7 +688,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 06 — three approaches */}
         <Block id="answers" side="left">
-          <Eyebrow>06 &middot; Three approaches</Eyebrow>
+          <Eyebrow n="06">Three approaches</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             They do not agree, and they are not supposed to
             <Mark />
@@ -695,7 +701,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 ? 'All three are run and all three are shown.'
                 : 'All three are run; showing them side by side on one chart is being built.'}
             </span>{' '}
-            They are never averaged into one tidy
+            They are not averaged into one tidy
             number, because an average of three different questions answers none
             of them.
           </p>
@@ -710,7 +716,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 07 — edit it, then take it away */}
         <Block id="workbench" side="right">
-          <Eyebrow>07 &middot; The model is yours</Eyebrow>
+          <Eyebrow n="07">The model is yours</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Change anything on the page, then take the model with you
             <Mark />
@@ -733,7 +739,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 08 — what is being built, said as a plan and not as a claim */}
         <Block id="beyond" side="left">
-          <Eyebrow>08 &middot; Being built next</Eyebrow>
+          <Eyebrow n="08">Being built next</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
             Three more things, and where each one has got to
             <Mark />
@@ -742,14 +748,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             {NEXT.map((item) => (
               <div key={item.id} data-feature={item.id} data-feature-status={item.status}>
                 <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
+                  <span className="text-[20px] leading-[1.2]" style={{ fontFamily: TYPE.display, fontWeight: 600, color: INK }}>
                     {item.title}
                   </span>
                   <span
-                    className="font-figure text-[10px] tracking-[0.18em] uppercase px-2 py-1 border"
+                    className="font-figure text-[13px]"
                     style={{
-                      color: item.status === 'in_build' ? RED_TEXT : MUTED,
-                      borderColor: item.status === 'in_build' ? 'rgba(139,30,30,0.55)' : LINE,
+                      color: item.status === 'in_build' ? INK : MUTED,
+                      fontWeight: item.status === 'in_build' ? 600 : 400,
                     }}
                   >
                     {statusLabel(item)}

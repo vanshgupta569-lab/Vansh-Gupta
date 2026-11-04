@@ -951,7 +951,7 @@ around its centre with a mouse, and of a 44px square in a touch context
 land on that ⓘ.
 
 **A ninth is the hero's particle field** (build step 8, job 8.7). On a 2x
-screen with the page's clock slowed to a quarter (this browser's software GPU
+screen with the page's clock slowed to 0.15 of real time (this browser's software GPU
 cannot keep a frame under 20ms, and would otherwise freeze the field, which is
 checked separately): at most 12,000 points, at most 1.5 device pixels a CSS
 pixel, the poster gone once the first frame is drawn, a 24×24 pause control
@@ -960,6 +960,24 @@ input with no frames asked for afterwards, a scroll waking it, a hidden tab
 stopping it. On the real clock, if the field freezes the poster must be back.
 Under reduced motion there is no canvas and no pause control, only the
 poster.
+
+**A tenth counts WebGL contexts** (job 8.8): every `getContext('webgl…')` is
+counted per canvas from before the first script, while the landing page is
+scrolled top to bottom at 1440 and 390. More than one fails.
+
+**An eleventh is the accent budget on landing sections 1–4** (job 8.9). From
+the top of the page to the end of `#beyond`, in 100px steps at 1440×900 and
+390×844 under reduced motion, each viewport may hold at most one
+oxblood-washed primary, three oxblood fills (a rule of 2px or less and the
+heading mark, `data-mark`, are not fills) and five words in the accent text
+colour. No text there may be uppercased by CSS, and the copy of those sections
+holds none of LANDING §2.3's banned words.
+
+**One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
+run verify:dashboard` runs only the named self-contained sections (motion,
+focus, bridge, features, hero, webgl, accent) and stops, so a deliberate break
+is reported by the check it was made for. The run a commit quotes is the full
+one, without the variable.
 
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it

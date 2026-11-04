@@ -39,6 +39,7 @@ export const Mark: React.FC<Props> = ({ on = 'dark', className = '' }) => (
   <>
     {'⁠'}
     <span
+      data-mark
       className={`inline-block align-baseline ${className}`.trim()}
       style={{
         width: MARK.size,
