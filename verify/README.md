@@ -1014,9 +1014,20 @@ must show "This page does not exist" with that path printed, not the landing
 page at the wrong address; Home must go to `/`, which is still the landing
 page.
 
+**A fifteenth is the global header and the menu** (job 9.1, NAV_SEARCH §8
+items 1–5 and 7–12). On the landing page and the notes screen at 1440: the
+bar 64px; wordmark, section triggers, then Search 320×36 with its right edge
+at 1392; no clock, "live" or `animate-pulse`; triggers #A8A29A at rest; at
+most one selected item; the section names in the fixed order. Each panel
+opens on click, Enter and ↓ and not on hover, closes on Esc with focus back
+on its trigger, holds at most 8 links in 36px rows on the overlay ground with
+no shadow, and its "Coming" items carry no link. At 390 with touch: Search
+and Menu 44×44, the sheet's top at y = 64, rows 56px, links 48px, no target
+under 44, Esc closes it with focus back on Menu.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend, notes, notfound) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 

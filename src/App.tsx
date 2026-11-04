@@ -483,6 +483,8 @@ export default function App() {
         corrected={allCompanies[selectedTicker]?.correctedInputs}
         reclassified={allCompanies[selectedTicker]?.reclassified}
         onReviewFigures={figuresAvailable ? reopenFigures : undefined}
+        path={nav.path}
+        onGo={(next) => nav.go(next)}
       />
 
       {/* Scroll Progress Indicator Line */}

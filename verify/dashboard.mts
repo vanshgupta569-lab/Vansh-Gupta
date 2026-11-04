@@ -4345,6 +4345,13 @@ async function checkFocusAndTargets(browser: Browser) {
   }
   if (!found.size) ok(`focus walked forward 45 and back 30 on each screen (${counts.join(', ')} focused): every ring 2px solid, 2px off, ink or paper-ink, none under the header`);
 
+  // Measured from rest: the walk above leaves focus on whatever it reached
+  // last, and a focused ⓘ or source opens its tooltip over its neighbours.
+  // Which element that is depends on how many stops the header has, so
+  // without this the reading changed with the menu (job 9.1).
+  await p.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+  await p.mouse.move(1, 1);
+  await p.waitForTimeout(200);
   const fine = await hintHitAreas(p, 24);
   await ctx.close();
 
@@ -5005,6 +5012,153 @@ async function checkInAppNotFound(browser: Browser) {
   if (!issues.length) ok('an unknown path shows "This page does not exist" with the path printed; Home goes to the landing page; / is still the landing page');
 }
 
+// ---- the global header and the menu (job 9.1) ----------------------------
+//
+// NAV_SEARCH §8 items 1–12, on the landing page and the notes screen. At
+// 1440: the bar 64px; in order the wordmark, the section triggers and the
+// Search trigger, 320×36 with its right edge at 1392; no clock, no live dot,
+// no animate-pulse anywhere in the header; every trigger muted at rest
+// (#A8A29A) and none oxblood; at most one selected item; the triggers' names
+// a subsequence of the seven in their fixed order, each with a shipped link.
+// A panel opens on click, on Enter and on ↓, never on hover; Esc closes it and
+// gives focus back to its trigger; at most 8 links, rows 36px, the overlay
+// ground, no shadow; every "Coming" item is text with no link. At 390 (touch):
+// the bar 64px, Search and Menu 44×44, the sheet's top at y = 64, section rows
+// 56px, link rows 48px, every target in it at least 44 tall, Esc closes it
+// and returns focus to Menu.
+async function checkHeaderAndMenu(browser: Browser) {
+  console.log('\n=== the global header and the menu ===');
+  const SEVEN = ['Companies', 'Research', 'Markets', 'Invest', 'Tools', 'Learn', 'Deals'];
+  const issues: string[] = [];
+  const notes: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  for (const [where, address] of [['the landing page', '/'], ['the notes screen', '/learn/notes/']] as const) {
+    await p.goto(`${BASE}${address}`, { waitUntil: 'networkidle' });
+    await p.waitForSelector('header [data-menu-trigger]', { timeout: 15_000 }).catch(() => {});
+    const h: any = await p.evaluate(`(() => {
+      const header = document.querySelector('header');
+      const r = header.getBoundingClientRect();
+      const kids = Array.from(header.querySelectorAll('[aria-label="Marginalia home"], [data-menu-trigger], [aria-label="Search companies"]'))
+        .filter((e) => e.getBoundingClientRect().width > 0)
+        .map((e) => { const b = e.getBoundingClientRect(); return { what: e.getAttribute('data-menu-trigger') || e.getAttribute('aria-label'), x: Math.round(b.left), right: Math.round(b.right), w: Math.round(b.width), h: Math.round(b.height), colour: getComputedStyle(e).color, current: e.getAttribute('aria-current') }; });
+      const text = header.innerText;
+      return {
+        height: Math.round(r.height), kids,
+        clock: /\\b\\d{1,2}:\\d{2}(:\\d{2})?\\b/.test(text),
+        pulse: header.querySelectorAll('.animate-pulse').length,
+        live: /\\blive\\b/i.test(text),
+        selected: Array.from(header.querySelectorAll('[aria-current]')).filter((e) => e.getBoundingClientRect().width > 0).length,
+        banned: ['Home', 'All companies', 'Check the figures'].filter((w) => Array.from(header.querySelectorAll('a, button')).some((e) => e.getBoundingClientRect().width > 0 && e.textContent.trim() === w)),
+      };
+    })()`);
+    if (h.height !== 64) issues.push(`${where}: the header is ${h.height}px, not 64`);
+    if (h.clock) issues.push(`${where}: the header shows a clock`);
+    if (h.pulse) issues.push(`${where}: ${h.pulse} animate-pulse element(s) in the header`);
+    if (h.live) issues.push(`${where}: the header says "live"`);
+    if (h.banned.length) issues.push(`${where}: the header carries ${h.banned.join(', ')}`);
+    if (h.selected > 1) issues.push(`${where}: ${h.selected} header items in the selected state, over 1`);
+    const order = h.kids.map((k: any) => k.what);
+    const names = order.filter((w: string) => SEVEN.includes(w));
+    if (order[0] !== 'Marginalia home' || order[order.length - 1] !== 'Search companies') issues.push(`${where}: header order is ${order.join(' · ')}`);
+    if (!names.length) issues.push(`${where}: no section triggers`);
+    if (names.join() !== SEVEN.filter((n) => names.includes(n)).join()) issues.push(`${where}: sections out of the fixed order: ${names.join(', ')}`);
+    const search = h.kids.find((k: any) => k.what === 'Search companies');
+    if (search && (search.w !== 320 || search.h !== 36 || search.right !== 1392)) issues.push(`${where}: the Search trigger is ${search.w}×${search.h} with its right edge at ${search.right}, not 320×36 at 1392`);
+    for (const k of h.kids.filter((k: any) => SEVEN.includes(k.what) && !k.current))
+      if (k.colour !== 'rgb(168, 162, 154)') issues.push(`${where}: ${k.what} at rest is ${k.colour}, not #A8A29A`);
+    notes.push(`${where}: ${names.join(' · ')}, ${h.selected} selected`);
+  }
+  // Panels: hover opens nothing; click, Enter and ↓ open; Esc closes and returns focus.
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  const names: string[] = await p.evaluate(`Array.from(document.querySelectorAll('header [data-menu-trigger]')).map((e) => e.getAttribute('data-menu-trigger'))`);
+  for (const name of names) {
+    const trigger = p.locator(`header [data-menu-trigger="${name}"]`);
+    const panel = p.locator(`[data-menu-panel="${name}"]`);
+    await trigger.hover();
+    await p.waitForTimeout(250);
+    if (await panel.count()) issues.push(`${name}: the panel opens on hover`);
+    for (const how of ['click', 'Enter', 'ArrowDown'] as const) {
+      if (how === 'click') await trigger.click();
+      else { await trigger.focus(); await p.keyboard.press(how); }
+      await p.waitForTimeout(80);
+      if (!(await panel.count())) { issues.push(`${name}: ${how} does not open the panel`); continue; }
+      if (how === 'click') {
+        const d: any = await p.evaluate(`(() => {
+          const el = document.querySelector('[data-menu-panel="${name}"]');
+          const cs = getComputedStyle(el);
+          const links = Array.from(el.querySelectorAll('[data-menu-link]'));
+          const coming = Array.from(el.querySelectorAll('[data-menu-coming] [data-feature]'));
+          return {
+            links: links.length - el.querySelectorAll('[data-menu-coming] [data-menu-link]').length,
+            heights: [...new Set(links.map((l) => Math.round(l.getBoundingClientRect().height)))],
+            ground: cs.backgroundColor, shadow: cs.boxShadow,
+            comingLinked: coming.filter((c) => c.closest('a') || c.querySelector('a, button')).length,
+          };
+        })()`);
+        if (d.links > 8) issues.push(`${name}: ${d.links} links in the panel, over 8`);
+        if (d.heights.some((x: number) => x !== 36)) issues.push(`${name}: panel rows are ${d.heights.join('/')}px, not 36`);
+        if (d.ground !== 'rgb(22, 22, 26)') issues.push(`${name}: the panel ground is ${d.ground}, not the overlay`);
+        if (d.shadow && d.shadow !== 'none') issues.push(`${name}: the panel has a shadow`);
+        if (d.comingLinked) issues.push(`${name}: ${d.comingLinked} coming item(s) carry a link`);
+      }
+      await p.keyboard.press('Escape');
+      await p.waitForTimeout(80);
+      const back: any = await p.evaluate(`({ open: !!document.querySelector('[data-menu-panel]'), focus: document.activeElement?.getAttribute('data-menu-trigger') })`);
+      if (back.open) issues.push(`${name}: Esc does not close the panel`);
+      else if (back.focus !== name) issues.push(`${name}: after Esc focus is on ${back.focus ?? 'nothing'}, not the trigger`);
+    }
+  }
+  await ctx.close();
+  // The phone.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  await installFixtureRoutes(phone);
+  const q = await phone.newPage();
+  await q.goto(BASE, { waitUntil: 'networkidle' });
+  const bar: any = await q.evaluate(`(() => {
+    const box = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.width), Math.round(b.height)]; };
+    return { height: Math.round(document.querySelector('header').getBoundingClientRect().height), search: box('header [aria-label="Search companies"]'), menu: box('header [data-menu-button]') };
+  })()`);
+  if (bar.height !== 64) issues.push(`390: the header is ${bar.height}px, not 64`);
+  for (const [what, b] of [['Search', bar.search], ['Menu', bar.menu]] as const)
+    if (!b || b[0] < 44 || b[1] < 44) issues.push(`390: ${what} is ${b ? b.join('×') : 'missing'}, under 44×44`);
+  if (bar.menu) {
+    await q.locator('header [data-menu-button]').click();
+    await q.waitForSelector('[data-menu-sheet]', { timeout: 5000 }).catch(() => {});
+    const first = await q.locator('[data-sheet-section]').first();
+    if (await first.count()) await first.click();
+    await q.waitForTimeout(100);
+    const sh: any = await q.evaluate(`(() => {
+      const s = document.querySelector('[data-menu-sheet]');
+      if (!s) return null;
+      const rows = Array.from(s.querySelectorAll('[data-sheet-section]')).map((e) => Math.round(e.getBoundingClientRect().height));
+      const links = Array.from(s.querySelectorAll('[data-menu-link]')).map((e) => Math.round(e.getBoundingClientRect().height));
+      const small = Array.from(s.querySelectorAll('a, button')).filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim().slice(0, 30));
+      return { top: Math.round(s.getBoundingClientRect().top), rows: [...new Set(rows)], links: [...new Set(links)], small };
+    })()`);
+    if (!sh) issues.push('390: Menu opens no sheet');
+    else {
+      if (sh.top !== 64) issues.push(`390: the sheet's top is at y = ${sh.top}, not 64`);
+      if (sh.rows.some((x: number) => x !== 56)) issues.push(`390: sheet section rows are ${sh.rows.join('/')}px, not 56`);
+      if (!sh.links.length || sh.links.some((x: number) => x < 48)) issues.push(`390: sheet link rows are ${sh.links.join('/') || 'absent'}px, under 48`);
+      if (sh.small.length) issues.push(`390: targets under 44px in the sheet: ${sh.small.join(', ')}`);
+      await q.keyboard.press('Escape');
+      await q.waitForTimeout(80);
+      const after: any = await q.evaluate(`({ open: !!document.querySelector('[data-menu-sheet]'), menu: document.activeElement?.hasAttribute('data-menu-button') })`);
+      if (after.open) issues.push('390: Esc does not close the sheet');
+      else if (!after.menu) issues.push('390: after Esc focus is not on Menu');
+      notes.push(`390: sheet at y ${sh.top}, rows ${sh.rows.join('/')}, links ${sh.links.join('/')}`);
+    }
+  }
+  await phone.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${notes.join('; ')}; panels open by click, Enter and ↓, not hover, and Esc returns focus; no clock, live dot or pulse`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -5089,6 +5243,7 @@ try {
     lowend: () => checkPhoneAndLowEnd(browser as Browser),
     notes: () => checkNotesAddresses(browser as Browser),
     notfound: () => checkInAppNotFound(browser as Browser),
+    header: () => checkHeaderAndMenu(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5219,6 +5374,7 @@ try {
   await checkPhoneAndLowEnd(browser);
   await checkNotesAddresses(browser);
   await checkInAppNotFound(browser);
+  await checkHeaderAndMenu(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
