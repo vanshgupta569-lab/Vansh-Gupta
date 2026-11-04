@@ -226,6 +226,63 @@ export const HERO_FIGURE_SIZE = SIZE.title;
 export const SIZE_STEPS_EVERYWHERE: (keyof typeof SIZE)[] = ['title', 'section', 'body', 'small', 'tile'];
 export const SIZE_STEPS_LANDING_ONLY: (keyof typeof SIZE)[] = ['lead', 'display'];
 
+// ---------------------------------------------------------------------------
+// MOTION (`docs/VISUAL_SYSTEM.md` §4, with `docs/VISUAL_BUILD_PLAN.md` C6, C7)
+//
+// The curves are Carbon's productive set, so they are tested rather than
+// invented. Motion exists only to explain a state change; nothing on a product
+// screen lasts longer than `slow` on an interaction, and no number ever moves.
+//
+// Two values differ from the VISUAL_SYSTEM table, both by the build plan:
+// `chart` is 400ms, not 640ms, because 640ms broke the system's own 600ms
+// page-load cap (C6, matching COMPANY_OVERVIEW D7's 400ms draw-in plus a 200ms
+// fill); and `pageOut` is 120ms, the page transition's exit as the table gives
+// it, which is shorter than the "exit = 70% of enter" rule would make it (C7).
+//
+// Mirrored in `src/index.css` as `--m-ease-*` and `--m-dur-*`; the palette
+// check compares the two halves. `MOTION_JS` is the same values in the units a
+// JavaScript animation library takes (seconds, and a curve as four numbers),
+// so a component never writes a duration of its own.
+export const EASE = {
+  /** A state change in place. */
+  standard: 'cubic-bezier(0.2, 0, 0.38, 0.9)',
+  /** Things arriving. */
+  enter: 'cubic-bezier(0, 0, 0.38, 0.9)',
+  /** Things leaving. */
+  exit: 'cubic-bezier(0.2, 0, 1, 0.9)',
+  /** The landing hero only. */
+  expressive: 'cubic-bezier(0.4, 0.14, 0.3, 1)',
+} as const;
+
+/** Durations in milliseconds. */
+export const DURATION_MS = {
+  press: 70,
+  fast: 110,
+  pageOut: 120,
+  base: 200,
+  mod: 240,
+  slow: 280,
+  reveal: 400,
+  chart: 400,
+  count: 600,
+  hero: 700,
+} as const;
+
+const curve = (css: string): [number, number, number, number] =>
+  css.replace(/^cubic-bezier\(|\)$/g, '').split(',').map(Number) as [number, number, number, number];
+
+/** The same tokens for a JavaScript animation: seconds, and curves as arrays. */
+export const MOTION_JS = {
+  ease: Object.fromEntries(Object.entries(EASE).map(([k, v]) => [k, curve(v)])) as Record<
+    keyof typeof EASE,
+    [number, number, number, number]
+  >,
+  duration: Object.fromEntries(Object.entries(DURATION_MS).map(([k, v]) => [k, v / 1000])) as Record<
+    keyof typeof DURATION_MS,
+    number
+  >,
+} as const;
+
 /** A display heading, as both reading screens set one. */
 export const DISPLAY_HEADING = {
   fontFamily: TYPE.display,
@@ -274,6 +331,14 @@ export const CSS_VARIABLES: Record<string, string> = {
   '--m-div-negative': DIVERGING.negative,
   '--m-div-midpoint': DIVERGING.midpoint,
   '--m-div-positive': DIVERGING.positive,
+
+  '--m-ease-standard': EASE.standard,
+  '--m-ease-enter': EASE.enter,
+  '--m-ease-exit': EASE.exit,
+  '--m-ease-expr': EASE.expressive,
+  ...Object.fromEntries(
+    Object.entries(DURATION_MS).map(([k, v]) => [`--m-dur-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`, `${v}ms`])
+  ),
 };
 
 // ---------------------------------------------------------------------------

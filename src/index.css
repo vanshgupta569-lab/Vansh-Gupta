@@ -151,18 +151,19 @@
    there, 700ms on the flash -- and a hover that takes half a second to resolve
    reads as lag rather than as polish.
 
-   Every state change on a control now runs on one curve at 160ms: fast enough
-   to feel immediate, slow enough not to flicker. `tailwind`'s default easing is
-   a symmetric ease, which looks mechanical on a colour change; this is an
-   ease-out, so the change leaves quickly and settles.
+   Every state change on a control now runs on one curve, on the motion
+   tokens: `--m-dur-fast` (110ms) on `--m-ease-standard`, VISUAL_SYSTEM's hover
+   row (build step 8, job 8.3; it was 160ms on an ease-out of its own).
+   `tailwind`'s default easing is a symmetric ease, which looks mechanical on
+   a colour change; the standard curve leaves quickly and settles.
 
    Deliberately NOT applied to: the disclosure's height animation (a reveal is
    a movement and needs its own 200ms), and the did-you-know crossfade (a
    reading moment, 350ms). Both are stated where they are written.
    --------------------------------------------------------------------------- */
 :where(a, button, [role='button'], summary, input, select, textarea, .transition-colors) {
-  transition-duration: 160ms;
-  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  transition-duration: var(--m-dur-fast);
+  transition-timing-function: var(--m-ease-standard);
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -448,6 +449,24 @@ textarea,
   --m-div-negative: #D05E58;
   --m-div-midpoint: #50504F;
   --m-div-positive: #5FA37B;
+
+  /* Motion. Mirrors EASE and DURATION_MS in src/design/tokens.ts; every
+     duration and curve on the site is one of these (VISUAL_SYSTEM section 4;
+     chart 400ms and page-out 120ms by VISUAL_BUILD_PLAN C6 and C7). */
+  --m-ease-standard: cubic-bezier(0.2, 0, 0.38, 0.9);
+  --m-ease-enter: cubic-bezier(0, 0, 0.38, 0.9);
+  --m-ease-exit: cubic-bezier(0.2, 0, 1, 0.9);
+  --m-ease-expr: cubic-bezier(0.4, 0.14, 0.3, 1);
+  --m-dur-press: 70ms;
+  --m-dur-fast: 110ms;
+  --m-dur-page-out: 120ms;
+  --m-dur-base: 200ms;
+  --m-dur-mod: 240ms;
+  --m-dur-slow: 280ms;
+  --m-dur-reveal: 400ms;
+  --m-dur-chart: 400ms;
+  --m-dur-count: 600ms;
+  --m-dur-hero: 700ms;
 
   /* One green, wherever a gain is shown. Three shades of emerald were in use;
      the tone of a positive number should not depend on which screen it is on. */

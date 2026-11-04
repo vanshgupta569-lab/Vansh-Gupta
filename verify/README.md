@@ -101,7 +101,19 @@ nowhere better to put them and each is cheap:
   paper) and every chart series; the five series must not share a stroke; and
   each sequential ramp must run in order (lightest largest on dark, darkest
   largest on paper) with its pale steps — those under 3:1 — named exactly in
-  `SEQUENTIAL_NEEDS_OUTLINE`, because a cell in one needs an outline.
+  `SEQUENTIAL_NEEDS_OUTLINE`, because a cell in one needs an outline. Since
+  job 8.2 the seven type steps in `SIZE` are compared with `--m-size-*`, and
+  the hero figure must be the title step; since job 8.3 the motion tokens
+  (`--m-ease-*`, `--m-dur-*`) are part of the same mirror.
+- **motion runs on the tokens** (build step 8, job 8.3). Every source file
+  under `src/` except the tokens is scanned, comments removed, for
+  `transition: all`, for a duration, delay or curve written out instead of
+  taken from a token, and for anything animated outside transform, opacity,
+  clip-path, the hover colours and the disclosure's height. Today's code
+  breaks these in twelve files, so the check is a ratchet (decision V4):
+  `MOTION_RATCHET` holds each file's count per category as measured on
+  2026-11-04 — 3, 99 and 7 in total — and a file may fall below its number
+  and never rise above it; a file not listed must be zero.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in

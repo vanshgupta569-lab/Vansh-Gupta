@@ -1567,6 +1567,142 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 }
 
 
+// ---- motion runs on the tokens, and only on the properties that may move ----
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.3, VISUAL_SYSTEM §12.2–12.4. Every
+// duration and curve is meant to be an `--m-*` token (`EASE`, `DURATION_MS`,
+// `MOTION_JS` in tokens.ts); nothing animates `all`; and only transform,
+// opacity, the chart's clip-path, the colours a hover changes and the
+// disclosure's height may move. The source is scanned, comments removed, for
+// three things:
+//
+//   all       `transition-all`, `transition: all`
+//   literal   a duration, delay or curve written out rather than taken from a
+//             token: Tailwind `duration-500` / `delay-100` / `ease-out`; a
+//             CSS transition or animation with `ms`, `s`, `cubic-bezier(` or a
+//             keyword curve; a motion `duration:` / `delay:` number or an
+//             `ease:` array or string
+//   property  something animated outside the allowed set: a bare Tailwind
+//             `transition` or `transition-shadow` / `transition-[…]`, a CSS
+//             transition on another property, a motion `animate` / `initial`
+//             / `exit` / `while…` key outside the set
+//
+// THE RATCHET (decision V4). Today's code breaks these in many files, and
+// fixing every component belongs to step 9, not to the job that writes the
+// tokens. So each file's count per category is recorded below and may FALL but
+// never RISE; a file not listed must be zero. Lower a number when a job
+// removes some; delete the file's entry when it reaches zero. Measured on
+// 2026-11-04.
+{
+  console.log('\n=== motion: one set of tokens, and only properties that may move ===');
+  const MOTION_RATCHET: Record<string, { all?: number; literal?: number; property?: number }> = {
+    'src/components/CoverageStatsSection.tsx': { literal: 2 },
+    'src/components/EtymologySection.tsx': { literal: 22, property: 2 },
+    'src/components/HeroSection.tsx': { all: 1, literal: 19, property: 2 },
+    'src/components/MechanismSection.tsx': { literal: 17 },
+    'src/components/MethodologyGrid.tsx': { all: 1, literal: 4 },
+    'src/components/TerminalDashboard.tsx': { literal: 9, property: 2 },
+    'src/components/figuresEditor.tsx': { literal: 1 },
+    'src/components/figuresHint.tsx': { literal: 2 },
+    'src/components/instrument.tsx': { literal: 3 },
+    'src/components/landingPage.tsx': { all: 1, literal: 1 },
+    'src/components/motionPrimitives.tsx': { literal: 16, property: 1 },
+    'src/index.css': { literal: 3 },
+  };
+
+  const ALLOWED_CSS = new Set([
+    'transform', 'translate', 'scale', 'rotate', 'opacity', 'clip-path',
+    'color', 'background-color', 'border-color', 'outline-color', 'height', 'none',
+  ]);
+  const ALLOWED_MOTION = new Set([
+    'opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotate', 'clipPath',
+    'translateX', 'translateY', 'transform', 'color', 'backgroundColor', 'borderColor', 'transition',
+    // The disclosure's height is the one height animation VISUAL_SYSTEM §4
+    // allows. A scan cannot tell a disclosure from a bar growing, so height is
+    // allowed everywhere and the bars are left to the step-9 review.
+    'height',
+  ]);
+  const count = (text: string, re: RegExp) => (text.match(re) || []).length;
+  const scan = (raw: string) => {
+    const text = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const all = count(text, /\btransition-all\b|\btransition(?:-property)?\s*:\s*['"`]?\s*all\b/g);
+    let literal =
+      count(text, /(?<![\w-])(?:duration|delay)-\d+\b/g) +
+      count(text, /(?<![\w-])ease-(?:in-out|in|out|linear)\b/g) +
+      // Not after a hyphen: `animation-duration:` is CSS, counted below, once.
+      count(text, /(?<![\w-])(?:duration|delay|repeatDelay)\s*:\s*(?:reduced\s*\?\s*0\s*:\s*)?\d*\.?\d/g) +
+      count(text, /(?<![\w-])ease\s*:\s*(?:\[|['"])/g);
+    // A bare Tailwind `transition` (which moves box-shadow and filter among
+    // others) only counts inside a class list: a quoted string of several
+    // words, at least one of them shaped like a utility (`px-3`, `hover:…`).
+    // A label such as the Financials tab's "11M transition" column is not one.
+    let property = 0;
+    for (const q of text.matchAll(/(["'`])([^"'`\n]*?)\1/g))
+      if (/\s/.test(q[2].trim()) && /(?:^|\s)[a-z0-9]+(?::[\w-]+)*-[\w\[\]#./%-]+/.test(q[2]))
+        property += count(q[2], /(?<![\w-])transition(?:-shadow|-\[[^\]]*\])?(?![\w-])/g);
+    for (const m of text.matchAll(/\b(transition|animation)(-duration|-delay|-timing-function|-property)?\s*:\s*([^;}\n]*)/g)) {
+      const value = m[3].replace(/var\(--m-[a-z-]+\)/g, '');
+      if (m[2] !== '-property' && /\d*\.?\d+m?s\b|cubic-bezier\(|\b(?:ease|ease-in|ease-out|ease-in-out|linear|step-start|step-end)\b/.test(value))
+        literal++;
+      if (m[1] === 'transition' && (!m[2] || m[2] === '-property')) {
+        for (const part of value.split(',')) {
+          const prop = part.trim().replace(/^['"`]/, '').split(/\s+/)[0];
+          if (prop && /^[a-z-]+$/.test(prop) && prop !== 'all' && !ALLOWED_CSS.has(prop)) property++;
+        }
+      }
+    }
+    for (const m of text.matchAll(/\b(?:animate|initial|exit|whileHover|whileTap|whileInView|whileFocus)\s*=\s*\{\{([^}]*)\}\}/g))
+      for (const k of m[1].matchAll(/(\w+)\s*:/g)) if (!ALLOWED_MOTION.has(k[1])) property++;
+    return { all, literal, property };
+  };
+
+  const SRC = path.join(REPO, 'src');
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(tsx?|css)$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(SRC);
+
+  let bad = 0;
+  const totals = { all: 0, literal: 0, property: 0 };
+  const recorded = { all: 0, literal: 0, property: 0 };
+  const found: Record<string, { all: number; literal: number; property: number }> = {};
+  for (const file of files) {
+    const rel = path.relative(REPO, file).split(path.sep).join('/');
+    // The tokens are where the values are SUPPOSED to be written.
+    if (rel === 'src/design/tokens.ts') continue;
+    const got = scan(fs.readFileSync(file, 'utf8'));
+    if (got.all || got.literal || got.property) found[rel] = got;
+    for (const k of ['all', 'literal', 'property'] as const) {
+      totals[k] += got[k];
+      const limit = MOTION_RATCHET[rel]?.[k] ?? 0;
+      if (got[k] > limit) {
+        bad++;
+        console.log(
+          `  PROBLEM: ${rel} has ${got[k]} ${k === 'all' ? '"transition: all"' : k === 'literal' ? 'duration or curve literal' : 'animated property outside the allowed set'}` +
+            `${got[k] === 1 ? '' : 's'}, more than the ${limit} recorded; the ratchet only falls`
+        );
+      } else if (got[k] < limit) {
+        console.log(`  NOTE: ${rel} is down to ${got[k]} ${k}, from ${limit}: lower MOTION_RATCHET to match`);
+      }
+    }
+  }
+  for (const entry of Object.values(MOTION_RATCHET))
+    for (const k of ['all', 'literal', 'property'] as const) recorded[k] += entry[k] ?? 0;
+  if (process.env.MOTION_MEASURE) console.log('  MEASURED ' + JSON.stringify(found));
+
+  console.log(
+    `  ${files.length - 1} source files scanned: ${totals.all} "transition: all", ${totals.literal} duration or curve literals, ` +
+      `${totals.property} animated properties outside the allowed set (recorded ${recorded.all} / ${recorded.literal} / ${recorded.property}) -- ` +
+      `${bad ? bad + ' PROBLEMS' : 'none above the ratchet'}`
+  );
+  totalProblems += bad;
+}
+
 // ---------------------------------------------------------------------------
 // ONE CURRENCY THROUGHOUT: THE STATEMENTS, THE DISCOUNT RATE AND THE PRICE
 // ---------------------------------------------------------------------------
