@@ -19,6 +19,7 @@ const MarginNotesScreen = lazy(() => import('./components/marginNotes').then((m)
 const CompanyPage = lazy(() => import('./components/companyPage').then((m) => ({ default: m.CompanyPage })));
 import { useNavigation } from './data/router';
 import { parseCompanyPath, companyPath, DEFAULT_TAB } from './data/companyRoute';
+import { parseNotesPath, notePath, NOTES_PATH } from './data/notesRoute';
 import type { Verdict } from './data/qualitativeFactors';
 import { Footer } from './components/Footer';
 import { COMPANIES_DATA } from './data/companies';
@@ -90,6 +91,13 @@ export default function App() {
   // happens to hold — so Back out of the model flow lands where it should.
   const nav = useNavigation();
   const route = useMemo(() => parseCompanyPath(nav.path), [nav.path]);
+  // THE MARGIN NOTES HAVE ADDRESSES (LEARN_STATES §2.2, L1; job 9.8):
+  // /learn/notes/ and /learn/notes/<key>/. A key no note has goes to the
+  // screen's own address rather than opening some other note under it.
+  const notesRoute = useMemo(() => parseNotesPath(nav.path), [nav.path]);
+  useEffect(() => {
+    if (notesRoute?.unknown) nav.replace(NOTES_PATH);
+  }, [notesRoute?.unknown]);
   const [hubState, setHubState] = useState<{ loading: boolean; error: string | null }>({
     loading: false,
     error: null,
@@ -114,7 +122,6 @@ export default function App() {
   const [selectedTicker, setSelectedTicker] = useState<string>('AAPL');
   const [activeSection, setActiveSection] = useState<string>('hero');
   // Which margin note the reader clicked into. Null simply opens the first.
-  const [noteKey, setNoteKey] = useState<string | null>(null);
 
   // Companies fetched and modelled on demand this session. They sit alongside
   // the curated ones and are discarded on refresh — nothing is stored.
@@ -425,12 +432,15 @@ export default function App() {
   // Opening the notes. A key sends the reader to the note they clicked; no
   // key opens the screen at the top of the list.
   const openNotes = (key?: string) => {
-    setNoteKey(key ?? null);
-    setCurrentScreen('NOTES');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    nav.go(key ? notePath(key) : NOTES_PATH);
+    window.scrollTo({ top: 0 });
   };
 
   const handleNavigateToScreen = (screen: ScreenType) => {
+    // The notes are an address now, not a screen value.
+    if (screen === 'NOTES') { openNotes(); return; }
+    // From a notes address, every other screen lives at `/`.
+    if (notesRoute) nav.go('/');
     setCurrentScreen(screen);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -438,6 +448,14 @@ export default function App() {
   const scrollToSection = (id: string) => {
     if (id === 'platform' || id === 'methodology' || id === 'model') id = 'filings';
     setActiveSection(id);
+    // The header's section links name landing sections; from the notes they
+    // go to the landing page first and scroll once it has rendered.
+    if (notesRoute) {
+      nav.go('/');
+      setCurrentScreen('HOME');
+      window.setTimeout(() => document.getElementById(id)?.scrollIntoView(), 120);
+      return;
+    }
     const element = document.getElementById(id);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
@@ -453,7 +471,7 @@ export default function App() {
     <div className="min-h-screen bg-[#0B0B0D] text-[#F2F0EA] font-sans antialiased flex flex-col selection:bg-[#8B1E1E] selection:text-white">
       {/* Universal Top Navigation Header */}
       <Header
-        currentScreen={route ? 'COMPANY' : currentScreen}
+        currentScreen={route ? 'COMPANY' : notesRoute ? 'NOTES' : currentScreen}
         onNavigateToScreen={handleNavigateToScreen}
         onScrollToSection={scrollToSection}
         activeSection={activeSection}
@@ -503,7 +521,7 @@ export default function App() {
           />
         )}
         {/* SCREEN 1: BASIC INTRO & PHILOSOPHY */}
-        {!route && nav.path !== '/screener' && currentScreen === 'HOME' && (
+        {!route && !notesRoute && nav.path !== '/screener' && currentScreen === 'HOME' && (
           <LandingPage
             onOpenCompany={() => handleNavigateToScreen('DIRECTORY')}
             onScrollTo={scrollToSection}
@@ -517,15 +535,18 @@ export default function App() {
         {/* THE MARGIN NOTES.
             A reading screen rather than an instrument one, which is why it is
             paper rather than the dark ground the model screens use. */}
-        {!route && nav.path !== '/screener' && currentScreen === 'NOTES' && (
+        {notesRoute && (
           <MarginNotesScreen
-            initialKey={noteKey}
-            onBack={() => handleNavigateToScreen('HOME')}
+            activeKey={notesRoute.unknown ? null : notesRoute.key}
+            onOpen={(key) => {
+              nav.go(notePath(key));
+              window.scrollTo({ top: 0 });
+            }}
           />
         )}
 
         {/* SCREEN 2: COMPANY SEARCH DIRECTORY */}
-        {!route && nav.path !== '/screener' && currentScreen === 'DIRECTORY' && (
+        {!route && !notesRoute && nav.path !== '/screener' && currentScreen === 'DIRECTORY' && (
           <DirectoryScreen
             companies={allCompanies}
             selectedTicker={selectedTicker}
@@ -541,7 +562,7 @@ export default function App() {
             is on screen it becomes an anchor, and a reader who has seen a
             number is far less likely to go back and question the figures it
             came from. */}
-        {!route && nav.path !== '/screener' && currentScreen === 'FIGURES' && payload && (
+        {!route && !notesRoute && nav.path !== '/screener' && currentScreen === 'FIGURES' && payload && (
           <FiguresEditor
             ticker={payload.ticker || selectedTicker}
             name={payload.name || selectedTicker}
@@ -567,7 +588,7 @@ export default function App() {
         {/* SCREEN 2b: WHAT THE FILINGS CANNOT SAY — asked before the value
             appears, because a number on screen becomes an anchor and every
             judgement made afterwards bends towards it. */}
-        {!route && nav.path !== '/screener' && currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
+        {!route && !notesRoute && nav.path !== '/screener' && currentScreen === 'QUESTIONS' && allCompanies[selectedTicker] && (
           <QualitativeIntro
             company={allCompanies[selectedTicker]}
             onContinue={(verdicts) => goToAnalysis(verdicts)}
@@ -577,7 +598,7 @@ export default function App() {
         )}
 
         {/* SCREEN 3: FINANCIAL ANALYSIS & DYNAMIC DCF TERMINAL */}
-        {!route && nav.path !== '/screener' && currentScreen === 'ANALYSIS' && (
+        {!route && !notesRoute && nav.path !== '/screener' && currentScreen === 'ANALYSIS' && (
           <TerminalDashboard
             companies={allCompanies}
             selectedTicker={selectedTicker}

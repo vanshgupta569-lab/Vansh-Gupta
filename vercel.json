@@ -27,6 +27,10 @@
     {
       "source": "/company/:path*",
       "destination": "/"
+    },
+    {
+      "source": "/learn/notes/:path*",
+      "destination": "/"
     }
   ]
 }

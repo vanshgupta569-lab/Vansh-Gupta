@@ -4861,6 +4861,109 @@ async function checkPhoneAndLowEnd(browser: Browser) {
   if (!issues.length) ok(`${seen.join('; ')}; sideways scroll ${wide.join(', ')}`);
 }
 
+// ---- the Margin notes at their own addresses (job 9.8) -------------------
+//
+// LEARN_STATES §2.2 (L1) and §2.5. Every note is loaded directly at
+// /learn/notes/<key>/ and must open that note, by its title; /learn/notes/
+// opens the first note of the index. Back returns to the note before. Walking
+// "next" from the first note of the index must visit every note in the
+// index's own printed order, and "previous" from the last must walk it back
+// — the expected order is read from the rendered index, not from the code
+// that orders it. On a phone the index is one closed disclosure. A key no
+// note has lands on /learn/notes/. The landing page's "All n notes" goes to
+// /learn/notes/.
+async function checkNotesAddresses(browser: Browser) {
+  console.log('\n=== the Margin notes at their own addresses ===');
+  const MN: any = await import(`file:///${REPO}/src/data/marginNotes.ts`);
+  const notes: { key: string; title: string }[] = MN.MARGIN_NOTES;
+  const issues: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  const shown = async () =>
+    (await p.evaluate(`(() => { const a = document.querySelector('article[data-note]'); return a ? { key: a.getAttribute('data-note'), title: (a.querySelector('h2')?.textContent || '').trim() } : null; })()`)) as { key: string; title: string } | null;
+  const path = () => new URL(p.url()).pathname;
+  const waitNote = async (key?: string) =>
+    p.waitForFunction(key ? `document.querySelector('article[data-note="${key}"]') !== null` : `document.querySelector('article[data-note]') !== null`, null, { timeout: 15_000 }).catch(() => {});
+
+  // 1. Every note by its own address.
+  let direct = 0;
+  for (const n of notes) {
+    await p.goto(`${BASE}/learn/notes/${n.key}/`, { waitUntil: 'domcontentloaded' });
+    await waitNote(n.key);
+    const s = await shown();
+    if (!s || s.key !== n.key || s.title !== n.title) issues.push(`/learn/notes/${n.key}/ opens ${s ? `"${s.title}" (${s.key})` : 'no note'}, not "${n.title}"`);
+    else direct++;
+  }
+  // 2. The screen's own address, and the order its index prints.
+  await p.goto(`${BASE}/learn/notes/`, { waitUntil: 'domcontentloaded' });
+  await waitNote();
+  const indexOrder = (await p.evaluate(`Array.from(document.querySelectorAll('nav[data-notes-index] a[data-note-link]')).map((a) => a.getAttribute('data-note-link'))`)) as string[];
+  const first = await shown();
+  if (!indexOrder.length) issues.push('the notes index prints no note links');
+  if (indexOrder.length !== notes.length) issues.push(`the index prints ${indexOrder.length} notes, the data holds ${notes.length}`);
+  if (!first || first.key !== indexOrder[0]) issues.push(`/learn/notes/ opens ${first?.key ?? 'nothing'}, not the index's first note (${indexOrder[0]})`);
+  // 3. Next, all the way down, then previous all the way back, by clicking.
+  const walk = async (rel: 'next' | 'prev') => {
+    const seen: string[] = [(await shown())?.key ?? '?'];
+    for (let i = 0; i < notes.length + 2; i++) {
+      const link = p.locator(`article a[rel="${rel}"]`);
+      if (!(await link.count())) break;
+      const to = await link.getAttribute('data-note-link');
+      await link.click();
+      await waitNote(to || undefined);
+      seen.push((await shown())?.key ?? '?');
+    }
+    return seen;
+  };
+  const down = await walk('next');
+  if (down.join(',') !== indexOrder.join(',')) issues.push(`"next" from the first note walks ${down.length} notes in an order other than the index's (first difference at ${down.findIndex((k, i) => k !== indexOrder[i]) + 1}: ${down.find((k, i) => k !== indexOrder[i])})`);
+  const up = await walk('prev');
+  if (up.join(',') !== [...indexOrder].reverse().join(',')) issues.push(`"previous" from the last note does not walk the index back in order`);
+  // 4. Back.
+  await p.goto(`${BASE}/learn/notes/${indexOrder[0]}/`, { waitUntil: 'domcontentloaded' });
+  await waitNote(indexOrder[0]);
+  await p.locator('article a[rel="next"]').click();
+  await waitNote(indexOrder[1]);
+  const afterNext = path();
+  await p.goBack();
+  await waitNote(indexOrder[0]);
+  const afterBack = { path: path(), note: (await shown())?.key };
+  if (afterNext !== `/learn/notes/${indexOrder[1]}/`) issues.push(`"next" moved the address to ${afterNext}, not /learn/notes/${indexOrder[1]}/`);
+  if (afterBack.path !== `/learn/notes/${indexOrder[0]}/` || afterBack.note !== indexOrder[0]) issues.push(`Back from ${indexOrder[1]} lands on ${afterBack.path} showing ${afterBack.note}, not ${indexOrder[0]}`);
+  // 5. A key no note has.
+  await p.goto(`${BASE}/learn/notes/no-such-note/`, { waitUntil: 'domcontentloaded' });
+  await p.waitForFunction(`location.pathname === '/learn/notes/'`, null, { timeout: 10_000 }).catch(() => {});
+  if (path() !== '/learn/notes/') issues.push(`/learn/notes/no-such-note/ stays at ${path()}, not /learn/notes/`);
+  // 6. From the landing page.
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.getByRole('button', { name: /^All \d+ notes$/ }).first().click();
+  await waitNote();
+  if (path() !== '/learn/notes/') issues.push(`the landing page's "All notes" goes to ${path()}, not /learn/notes/`);
+  await ctx.close();
+  // 7. On a phone, the index is one closed disclosure.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(phone);
+  const q = await phone.newPage();
+  await q.goto(`${BASE}/learn/notes/${notes[3].key}/`, { waitUntil: 'domcontentloaded' });
+  await q.waitForSelector('article[data-note]', { timeout: 15_000 }).catch(() => {});
+  const ph: any = await q.evaluate(`(() => {
+    const b = document.querySelector('[data-notes-disclose]');
+    const links = Array.from(document.querySelectorAll('nav[data-notes-index] a[data-note-link]')).filter((a) => a.getBoundingClientRect().height > 0);
+    const art = document.querySelector('article[data-note]');
+    return { button: b ? b.getAttribute('aria-expanded') : null, label: b ? b.textContent.trim() : null, links: links.length, articleTop: art ? Math.round(art.getBoundingClientRect().top + scrollY) : null };
+  })()`);
+  if (ph.button !== 'false') issues.push(`at 390 the notes index is not a closed disclosure (aria-expanded ${ph.button})`);
+  if (ph.links) issues.push(`at 390 ${ph.links} note links show before the index is opened`);
+  if (ph.label !== `All ${notes.length} notes`) issues.push(`the phone index is labelled "${ph.label}", not "All ${notes.length} notes"`);
+  await phone.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`all ${direct} notes open at /learn/notes/<key>/; next walks the ${indexOrder.length} in index order and previous walks them back; Back returns; an unknown key lands on /learn/notes/; at 390 the index is a closed "${ph.label}" with the note at y ${ph.articleTop}`);
+}
+
 // NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
 // fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
 // 8.5) are answered exactly as the main one is.
@@ -4943,6 +5046,7 @@ try {
     webgl: () => checkOneWebglContext(browser as Browser),
     accent: () => checkLandingAccentBudget(browser as Browser),
     lowend: () => checkPhoneAndLowEnd(browser as Browser),
+    notes: () => checkNotesAddresses(browser as Browser),
   };
   const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
   if (only.length) {
@@ -5071,6 +5175,7 @@ try {
   await checkOneWebglContext(browser);
   await checkLandingAccentBudget(browser);
   await checkPhoneAndLowEnd(browser);
+  await checkNotesAddresses(browser);
   reportContrast();
   reportType();
 } catch (error: any) {

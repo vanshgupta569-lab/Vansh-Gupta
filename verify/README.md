@@ -992,9 +992,17 @@ the capable desktop itself must get the field, so the check cannot pass on a
 page that never draws it. Then the landing page at 390 and 320 wide, scrolled
 top to bottom, must never scroll sideways.
 
+**A thirteenth is the Margin notes at their own addresses** (job 9.8). Every
+note loaded directly at `/learn/notes/<key>/` must show its own title;
+`/learn/notes/` opens the index's first note; walking "next" from the first
+must visit every note in the index's printed order (read from the page, not
+from the code that orders it) and "previous" must walk it back; Back returns
+to the note before; an unknown key lands on `/learn/notes/`; at 390 the index
+is one closed "All n notes" disclosure with no note link showing.
+
 **One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
 run verify:dashboard` runs only the named self-contained sections (motion,
-focus, bridge, features, hero, webgl, accent, lowend) and stops, so a deliberate break
+focus, bridge, features, hero, webgl, accent, lowend, notes) and stops, so a deliberate break
 is reported by the check it was made for. The run a commit quotes is the full
 one, without the variable.
 
