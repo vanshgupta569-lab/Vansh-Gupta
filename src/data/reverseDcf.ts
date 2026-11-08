@@ -46,6 +46,21 @@ export interface ImpliedFigure {
   question: string;
   /** Set when the search found no answer inside a defensible range. */
   outOfRange?: boolean;
+  /**
+   * THE RANGE THAT WAS SEARCHED, and whether the answer is its own edge.
+   *
+   * `docs/STUDIO_SPEC_ADDENDUM.md` D8b: a screenshot showed the reverse DCF
+   * reporting terminal growth of EXACTLY 5.0%, which is a suspicious figure —
+   * either the price really implies 5.0% or the search ran into the ceiling and
+   * printed the ceiling. A limit shown as a solved value is the worst kind of
+   * wrong figure, because it is the one a reader would quote.
+   *
+   * So the range travels with the figure and `atLimit` says when the answer sits
+   * on one end of it. The screen then reads "at the limit of the range searched
+   * (−3.0% to 7.6%)" rather than a value.
+   */
+  searched?: { low: number; high: number };
+  atLimit?: 'low' | 'high' | null;
 }
 
 export interface ReverseDcfResult {
@@ -126,6 +141,28 @@ function snapToBase(value: number | null, base: number | null): number | null {
   return Math.abs(value - base) <= 0.0501 ? base : value;
 }
 
+/**
+ * WHETHER A SOLVED FIGURE IS REALLY THE EDGE OF THE RANGE IT WAS SEARCHED IN
+ * (D8b).
+ *
+ * Bisection returns one of the ends when the target is met exactly there, and
+ * walks arbitrarily close to it when the crossing sits just outside. Either way
+ * the honest answer is "the search ran out of room", not a value — so anything
+ * within a rounding tick of either end is the limit rather than a solution. The
+ * tick is the engine's own resolution, one decimal place, which is also what
+ * `snapToBase` uses.
+ */
+function limitOf(
+  value: number | null,
+  low: number,
+  high: number
+): 'low' | 'high' | null {
+  if (value === null) return null;
+  if (Math.abs(value - low) <= 0.0501) return 'low';
+  if (Math.abs(value - high) <= 0.0501) return 'high';
+  return null;
+}
+
 export function reverseDcf(
   source: any,
   drivers: ValuationDrivers,
@@ -185,7 +222,8 @@ export function reverseDcf(
   //    value, and it is still solved for rather than assumed: if the override
   //    ever stops being an exact shift, this keeps the two columns comparing
   //    like with like instead of silently showing a gap that is not there.
-  const growth = bisect(-30, 40, gap('revenueGrowthPct', 'perpetuity'));
+  const GROWTH_RANGE = { low: -30, high: 40 };
+  const growth = bisect(GROWTH_RANGE.low, GROWTH_RANGE.high, gap('revenueGrowthPct', 'perpetuity'));
   const baseFlatGrowth =
     modelValue === null
       ? baseRevenueGrowthPct
@@ -203,12 +241,15 @@ export function reverseDcf(
     question:
       "the model's own growth path moved up or down as a whole, margins unchanged — the figure shown is the first forecast year",
     outOfRange: growth === null,
+    searched: GROWTH_RANGE,
+    atLimit: limitOf(growth, GROWTH_RANGE.low, GROWTH_RANGE.high),
   });
 
   // 2. Terminal growth, against the perpetuity method alone. The upper bound
   //    stops short of the discount rate, where the perpetuity formula breaks.
   const terminalCeiling = baseWaccPct === null ? 8 : Math.min(baseWaccPct - 0.4, 12);
-  const terminal = bisect(-3, terminalCeiling, gap('terminalGrowthPct', 'perpetuity'));
+  const TERMINAL_RANGE = { low: -3, high: terminalCeiling };
+  const terminal = bisect(TERMINAL_RANGE.low, TERMINAL_RANGE.high, gap('terminalGrowthPct', 'perpetuity'));
   figures.push({
     key: 'terminalGrowth',
     label: 'Growth for ever, after year five',
@@ -218,10 +259,13 @@ export function reverseDcf(
     method: 'solved against the perpetuity method',
     question: 'the exit multiple method has no terminal growth rate to solve for',
     outOfRange: terminal === null,
+    searched: TERMINAL_RANGE,
+    atLimit: limitOf(terminal, TERMINAL_RANGE.low, TERMINAL_RANGE.high),
   });
 
   // 3. Exit multiple, against the exit multiple method alone.
-  const multiple = bisect(0.5, 60, gap('exitMultipleX', 'exit'));
+  const MULTIPLE_RANGE = { low: 0.5, high: 60 };
+  const multiple = bisect(MULTIPLE_RANGE.low, MULTIPLE_RANGE.high, gap('exitMultipleX', 'exit'));
   figures.push({
     key: 'exitMultiple',
     label: 'EV / EBITDA on exit',
@@ -231,6 +275,8 @@ export function reverseDcf(
     method: 'solved against the exit multiple method',
     question: 'what the business would have to be sold for in year five',
     outOfRange: multiple === null,
+    searched: MULTIPLE_RANGE,
+    atLimit: limitOf(multiple, MULTIPLE_RANGE.low, MULTIPLE_RANGE.high),
   });
 
   // 4. The discount rate that makes the model agree with the price. Read it as
@@ -239,7 +285,8 @@ export function reverseDcf(
   // using during this solve, which is the base rate, not the implied one found
   // above. At or below it the perpetuity formula has no meaning.
   const waccFloor = Math.max((baseTerminalPct ?? 0) + 0.5, 1);
-  const wacc = bisect(waccFloor, 40, gap('waccPct', 'perpetuity'));
+  const WACC_RANGE = { low: waccFloor, high: 40 };
+  const wacc = bisect(WACC_RANGE.low, WACC_RANGE.high, gap('waccPct', 'perpetuity'));
   figures.push({
     key: 'wacc',
     label: 'Cost of capital',
@@ -249,6 +296,8 @@ export function reverseDcf(
     method: 'solved against the perpetuity value',
     question: 'the discount rate at which the model agrees with the price',
     outOfRange: wacc === null,
+    searched: WACC_RANGE,
+    atLimit: limitOf(wacc, WACC_RANGE.low, WACC_RANGE.high),
   });
 
   return {

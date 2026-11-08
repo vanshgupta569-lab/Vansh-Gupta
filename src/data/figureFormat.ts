@@ -75,3 +75,26 @@ export function asPerShare(v: unknown, locale = 'en-US'): string {
 export function asPercent(v: unknown, locale = 'en-US'): string {
   return isNum(v) ? `${signed(v * 100, 1, locale)}%` : NOT_REPORTED;
 }
+
+/**
+ * A MULTIPLE, SIGNED, WITH ONE DECIMAL RULE FOR THE WHOLE ROW.
+ *
+ * `docs/STUDIO_SPEC_ADDENDUM.md` G10: the ratios table read `0.8x`, `1.09x`,
+ * `0.03x`, `0x net cash`, `0.02x net cash` — mixed decimals inside one row, and
+ * some cells saying "net cash" in words while others printed a bare ratio, so
+ * THE SIGN WAS UNCLEAR. A reader could not tell `0.02x net cash` from `0.02x`
+ * without reading the words, and the words were only on some of them.
+ *
+ * One rule instead: two decimals on every cell of the row, a real minus sign
+ * (U+2212) where net debt is negative, and the multiplication sign (U+00D7)
+ * rather than a lower-case `x`. Net cash is then simply a negative multiple,
+ * which is what it is.
+ */
+export function asMultiple(value: number | null | undefined, dp = 2): string {
+  if (typeof value !== 'number' || !isFinite(value)) return NOT_REPORTED;
+  const rounded = Math.abs(value).toFixed(dp);
+  // −0.00× is not a sign, it is rounding. A value that rounds to nothing takes
+  // no sign at all.
+  const signed = Number(rounded) === 0 ? '' : value < 0 ? MINUS : '';
+  return `${signed}${rounded}×`;
+}

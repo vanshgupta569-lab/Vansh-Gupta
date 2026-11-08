@@ -6518,6 +6518,340 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// THE SEVEN FINDINGS THE SCREENSHOT REVIEW LEFT AS DATA ERRORS
+// ---------------------------------------------------------------------------
+//
+// `docs/STUDIO_SPEC_ADDENDUM.md` separates what is a figure being wrong from
+// what is a screen being ugly, and keeps seven of the first kind for now rather
+// than for build step 9. Six are checked here; G4's chart geometry is measured
+// in a browser by `verify:dashboard`, because a bar's height is a rendered
+// fact and nothing else can see it.
+{
+  console.log('\n=== the addendum\'s data errors: currency words, bases, units, limits ===');
+  const { currencyWords, perHundred, CURRENCIES_WITH_WORDS } = await import(
+    `file:///${REPO}/src/data/currencyWords.ts`
+  );
+  const { asMultiple, MINUS, NOT_REPORTED } = await import(`file:///${REPO}/src/data/figureFormat.ts`);
+  const { reverseDcf } = await import(`file:///${REPO}/src/data/reverseDcf.ts`);
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor } = await import(`file:///${REPO}/src/data/companies.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+
+  // ---- G7: THE CURRENCY WORD COMES FROM THE COMPANY --------------------
+  //
+  // A reader of NVIDIA, which reports in dollars, was told what it keeps from
+  // "every hundred RUPEES of sales". The word was hard-coded when every company
+  // on the site was Indian.
+  const currencies = new Set<string>();
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    try {
+      const payload = readPayload(file);
+      if (payload?.currency) currencies.add(String(payload.currency));
+    } catch {
+      /* the payload survey reports an unreadable payload */
+    }
+  }
+  const unworded = [...currencies].filter((c) => !CURRENCIES_WITH_WORDS.includes(c));
+  if (unworded.length) {
+    faults.push(
+      `${unworded.length} currencies in the set have no word for their unit (${unworded.join(', ')}), so a ` +
+        'sentence about them would name a code'
+    );
+  }
+  // AND NO SCREEN WRITES ITS OWN. The words that were hard-coded, looked for in
+  // every component: a currency unit in prose must come from the company.
+  const UNITS = /\b(rupees|dollars|euros|pounds|yen|rupee|dollar|euro|pound)\b/i;
+  // The one sentence that names a currency as a fact about a named company.
+  const allowed = ['HSBC reports in dollars'];
+  let exempt = 0;
+  const componentFiles = fs
+    .readdirSync(path.join(REPO, 'src/components'))
+    .filter((f) => /\.tsx?$/.test(f));
+  let prose = 0;
+  for (const file of componentFiles) {
+    const text = fs.readFileSync(path.join(REPO, 'src/components', file), 'utf8');
+    // COMMENTS EXPLAIN THE RULE AND CODE MUST NOT RESTATE THE WORD, so the
+    // comments come out first — and properly: a block comment runs over several
+    // lines, and this check's first version reported its own explanation of the
+    // fix as the fault.
+    const withoutComments = text
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\r\n]/g, ' '))
+      .replace(/(^|[^:])\/\/[^\r\n]*/g, (m, p1) => p1 + ' '.repeat(Math.max(0, m.length - p1.length)));
+    withoutComments.split(/\r?\n/).forEach((line, i) => {
+      if (!UNITS.test(line)) return;
+      // A sentence built FROM the company's currency is the fix, not the fault.
+      if (/currencyWords|perHundred/.test(line)) return;
+      // AND A CURRENCY NAMED AS A FACT ABOUT A NAMED COMPANY IS A FACT. The
+      // screener explains which listing it keeps by naming what HSBC actually
+      // reports in; that is not a unit standing in for the reader's company. One
+      // sentence, named here with its own words, so the exemption cannot outlive
+      // the sentence it was granted for.
+      if (allowed.some((text) => line.includes(text))) {
+        exempt++;
+        return;
+      }
+      prose++;
+      faults.push(
+        `src/components/${file}:${i + 1} names a currency unit in its own words: ${line.trim().slice(0, 70)}`
+      );
+    });
+  }
+
+  // ---- G10: ONE DECIMAL RULE, A REAL MINUS SIGN, AND × ------------------
+  //
+  // The ratios read `0.8x`, `1.09x`, `0.03x`, `0x net cash`, `0.02x net cash`:
+  // mixed decimals inside one row, and words on some cells and a bare ratio on
+  // others, so the sign was unclear.
+  const MULTIPLES: [number | null, string][] = [
+    [0.8, '0.80×'],
+    [1.09, '1.09×'],
+    [0.03, '0.03×'],
+    [-0.02, `${MINUS}0.02×`],
+    [-0.004, '0.00×'],
+    [0, '0.00×'],
+    [null, NOT_REPORTED],
+  ];
+  for (const [value, want] of MULTIPLES) {
+    const got = asMultiple(value);
+    if (got !== want) {
+      faults.push(`a multiple of ${value} prints "${got}" where the rule gives "${want}"`);
+    }
+  }
+  // And no record carries the words any more.
+  let multiples = 0;
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(readPayload(file));
+    } catch {
+      continue;
+    }
+    const said = String(rec.netDebtEbitda ?? '');
+    if (!said) continue;
+    multiples++;
+    if (/net cash|\bx\b/.test(said)) {
+      faults.push(`${rec.ticker}: net debt to EBITDA reads "${said}" — words on a ratio, or a lower-case x`);
+    }
+    if (said !== NOT_REPORTED && !/^−?\d+\.\d{2}×$/.test(said)) {
+      faults.push(`${rec.ticker}: net debt to EBITDA reads "${said}", which is not one decimal rule and a sign`);
+    }
+  }
+
+  // ---- G9: A LABEL THAT SAYS LTM MUST SHOW LTM --------------------------
+  //
+  // The tiles read `ROE (LTM)` and `Op margin` and were the LAST REPORTED
+  // FISCAL YEAR. On NVIDIA the label said LTM at 76.3% while the trailing
+  // operating margin on the Financials tab was 65.2%.
+  const dashboard = fs.readFileSync(path.join(REPO, 'src/components/TerminalDashboard.tsx'), 'utf8');
+  dashboard.split(/\r?\n/).forEach((line, i) => {
+    const code = line.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+    if (/^\s*(\/\/|\*)/.test(line)) return;
+    if (/label:\s*['"`][^'"`]*\(LTM\)/.test(code)) {
+      faults.push(
+        `TerminalDashboard.tsx:${i + 1} labels a tile LTM: ${code.trim().slice(0, 70)} — these are the last ` +
+          'reported fiscal year, so the label must say which year'
+      );
+    }
+  });
+  if (!/const ratioLabel = \(name: string\)/.test(dashboard)) {
+    faults.push('the tiles no longer take their basis from the year the ratio is on');
+  }
+
+  // ---- G14: A FORECAST CELL WITH NO FIGURE IS n/a, NOT AN EM DASH -------
+  const nerd = fs.readFileSync(path.join(REPO, 'src/components/nerdViews.tsx'), 'utf8');
+  if (!/data-not-forecast/.test(nerd)) {
+    faults.push('a forecast cell with no figure no longer says it is not applicable');
+  }
+  // AND THE CONDITION, not only the attribute: a branch left in the file with
+  // its test replaced by `false` still carries every word of it.
+  if (!/\) : i >= firstForecast && !num\(row\.values\[i\]\) \? \(/.test(nerd)) {
+    faults.push('the not-applicable branch is no longer reached by a forecast cell with no figure');
+  }
+  if (!/notForecast/.test(nerd)) {
+    faults.push('a row can no longer say why it has no forecast');
+  }
+
+  // ---- G22 and D3: A HEAD SHOWS ITS OWN TOTAL, AND SAYS A NAME ONCE -----
+  const editor = fs.readFileSync(path.join(REPO, 'src/components/figuresEditor.tsx'), 'utf8');
+  if (/const sums = contributing\.length > 1;/.test(editor)) {
+    faults.push('a head with one contributing line shows no total again (G22)');
+  }
+  if (!/const sameName = contributing\.length === 1 && contributing\[0\]\.label === head\.label;/.test(editor)) {
+    faults.push('a head can repeat the name of its only line again (G22)');
+  }
+  if (!/of which \$\{line\.label/.test(editor)) {
+    faults.push("a component no longer reads as what it is — an \"of which\" of its parent (D3)");
+  }
+
+  // ---- D8b: A LIMIT IS NOT A SOLVED VALUE -------------------------------
+  //
+  // A screenshot showed the reverse DCF reporting terminal growth of exactly
+  // 5.0%, which is the ceiling of the range it searches rather than the figure
+  // the price implies. A ceiling printed as a value is the worst kind of wrong
+  // figure, because it is the one a reader would quote.
+  let solved = 0;
+  let atLimit = 0;
+  let ranges = 0;
+  const examples: string[] = [];
+  let drivenLimit = '';
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    let rec: any;
+    try {
+      payload = readPayload(file);
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    const price = payload?.quote?.price;
+    if (!isNum(price) || price <= 0) continue;
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+    let result: any;
+    try {
+      result = reverseDcf(rec.modelData, drivers, price);
+    } catch {
+      continue;
+    }
+    if (!result?.applicable) continue;
+    for (const figure of result.figures || []) {
+      if (figure.outOfRange) continue;
+      if (!figure.searched) {
+        faults.push(`${rec.ticker} ${figure.key}: solved without recording the range it was searched in`);
+        continue;
+      }
+      ranges++;
+      const { low, high } = figure.searched;
+      if (!(low < high)) {
+        faults.push(`${rec.ticker} ${figure.key}: searched a range of ${low} to ${high}`);
+      }
+      if (!isNum(figure.implied)) continue;
+      solved++;
+      const onEdge =
+        Math.abs(figure.implied - low) <= 0.0501 || Math.abs(figure.implied - high) <= 0.0501;
+      if (onEdge && !figure.atLimit) {
+        faults.push(
+          `${rec.ticker} ${figure.key}: the answer is ${figure.implied} and the range searched is ` +
+            `${low} to ${high} — a limit reported as a solved value, which is D8b itself`
+        );
+      }
+      if (!onEdge && figure.atLimit) {
+        faults.push(
+          `${rec.ticker} ${figure.key}: reported as a limit at ${figure.implied} inside a range of ` +
+            `${low} to ${high}`
+        );
+      }
+      if (figure.atLimit) {
+        atLimit++;
+        if (examples.length < 4) {
+          examples.push(
+            `${rec.ticker} ${figure.key}: ${figure.implied} at the ${figure.atLimit} of ${low} to ${high}`
+          );
+        }
+      }
+    }
+  }
+
+  if (exempt !== allowed.length) {
+    faults.push(
+      `the currency scan exempts ${allowed.length} sentence(s) and found ${exempt} of them — an exemption ` +
+        'that no longer matches a line is an exemption nobody will remove'
+    );
+  }
+  // ---- AND THE LIMIT ITSELF, DRIVEN, BECAUSE NO PRICE ON DISK REACHES ONE
+  //
+  // Every company's own price implies a terminal growth rate comfortably inside
+  // the range searched, so the branch that reports a LIMIT rather than a value —
+  // which is the whole of D8b — would ship untested. The case is reached by
+  // raising the price until the implied rate meets the ceiling: as the price
+  // rises the rate rises with it, and just past the ceiling the search finds no
+  // answer at all and says so instead.
+  {
+    let probe: any = null;
+    try {
+      probe = readPayload('AAPL.json');
+    } catch {
+      probe = null;
+    }
+    if (!probe?.quote?.price) {
+      faults.push('no payload with a price to drive the at-limit case with');
+    } else {
+      const rec: any = buildCompanyFrom(probe);
+      const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+      const terminalAt = (price: number) => {
+        try {
+          const r: any = reverseDcf(rec.modelData, drivers, price);
+          return r?.figures?.find((f: any) => f.key === 'terminalGrowth') ?? null;
+        } catch {
+          return null;
+        }
+      };
+      // Between a price that still solves and one that cannot, the answer
+      // crosses the ceiling. Twenty halvings land on it.
+      let low = probe.quote.price;
+      let high = probe.quote.price * 16;
+      let found: any = null;
+      for (let i = 0; i < 20 && !found; i++) {
+        const mid = (low + high) / 2;
+        const figure = terminalAt(mid);
+        if (figure?.atLimit) {
+          found = figure;
+          break;
+        }
+        if (figure && isNum(figure.implied)) low = mid;
+        else high = mid;
+      }
+      if (!found) {
+        faults.push(
+          'no price between this company\'s own and sixteen times it makes the implied terminal growth ' +
+            'reach the ceiling of the range searched, so the limit branch is untested'
+        );
+      } else {
+        if (found.atLimit !== 'high') {
+          faults.push(`the implied rate met the ceiling and reads as a limit at the ${found.atLimit}`);
+        }
+        if (!found.searched || !isNum(found.searched.high)) {
+          faults.push('a figure at its limit does not carry the range it was searched in');
+        } else if (Math.abs(found.implied - found.searched.high) > 0.0501) {
+          faults.push(
+            `the figure reads as a limit at ${found.implied} with a ceiling of ${found.searched.high}`
+          );
+        } else {
+          drivenLimit = `${found.implied.toFixed(2)}% against a ceiling of ${found.searched.high.toFixed(2)}%`;
+        }
+      }
+    }
+  }
+
+  console.log(
+    `  the currency word comes from the company on ${currencies.size} currencies in the set, all of them ` +
+      `worded, and ${prose} components write their own; the one exemption is a currency named as a fact ` +
+      'about a named company (HSBC)'
+  );
+  console.log(
+    `  ${multiples} records print net debt to EBITDA as one signed multiple — two decimals, a real minus ` +
+      'sign and ×, with no "net cash" words on some cells and a bare ratio on others'
+  );
+  console.log(
+    `  ${solved} reverse-DCF figures are solved inside a recorded range and ${atLimit} are reported as a ` +
+      `limit rather than a value${examples.length ? `: ${examples.join('; ')}` : ''}`
+  );
+  console.log(
+    `  the limit itself is driven by raising the price until the implied rate meets the ceiling, since no ` +
+      `price on disk reaches one: ${drivenLimit || 'NOT DRIVEN'}`
+  );
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the addendum's data errors:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // FIVE RATIOS, AND NO SCORE
 // ---------------------------------------------------------------------------
 //

@@ -32,7 +32,8 @@ import {
   DRIVER_LABELS,
   driverStepLabel,
 } from '../data/qualitativeFactors';
-import type { Verdict } from '../data/qualitativeFactors';
+import type { Verdict } from '../data/qualitativeFactors';
+import { perHundred } from '../data/currencyWords';
 
 interface Props {
   company: CompanyData;
@@ -99,7 +100,10 @@ export const QualitativeIntro: React.FC<Props> = ({ company, onContinue, onSkip,
       out.push({
         label: 'Operating margin',
         value: `${company.opMarginPct}%`,
-        note: 'what it keeps from every hundred rupees of sales, before interest and tax',
+        // G7: THE CURRENCY WORD COMES FROM THE COMPANY. This read "rupees"
+        // for every company on the site, including NVIDIA, which reports in
+        // dollars. A figure can be right and the sentence around it wrong.
+        note: `what it keeps from ${perHundred(company.currency)} of sales, before interest and tax`,
       });
     }
 

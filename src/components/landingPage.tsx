@@ -285,7 +285,10 @@ const MARGIN_LINES = [
   {
     label: 'Operating margin',
     figure: '13.8%',
-    note: 'What is left of every rupee of revenue after the costs of running the business.',
+    // G7: NO CURRENCY WORD ON A SCREEN THAT SERVES EVERY COMPANY. This read
+    // "every rupee of revenue" on a page about companies reporting in sixteen
+    // currencies; the sentence works without a unit at all.
+    note: 'What is left of revenue after the costs of running the business.',
     source: 'Computed from the income statement',
   },
   {

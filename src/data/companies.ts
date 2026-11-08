@@ -7,6 +7,7 @@ import { buildModel, buildDCF, INTEGRITY_REFUSAL_CODES } from '../engine/model.j
 import { computePlainRatios } from './plainRatios.js';
 
 import { CompanyData, CompanyFinancials, ValuationDrivers, DCFResult, ForecastRow } from '../types';
+import { asMultiple } from './figureFormat';
 
 // ---------------------------------------------------------------------------
 // HELPERS
@@ -756,9 +757,9 @@ export const COMPANIES_DATA: Record<string, CompanyData> = {
         ? r(_M.ratios.roa[_lastH] * 100, 1)
         : null,
     opMarginPct: _rev26 ? r((_ebit26 / _rev26) * 100, 1) : null,
-    netDebtEbitda:   (_netDebtM / _ebitdaLast) < 0
-      ? r(Math.abs(_netDebtM / _ebitdaLast), 2) + 'x net cash'
-      : r(_netDebtM / _ebitdaLast, 2) + 'x',
+    // G10, as for every other company: one decimal rule, a real minus sign
+    // and the multiplication sign. Apple is in net cash, so this is negative.
+    netDebtEbitda:   asMultiple(_ebitdaLast ? _netDebtM / _ebitdaLast : null),
     sector:          'Technology',
     exchange:        'NASDAQ',
     description:     'Designer and maker of iPhone, Mac, iPad, wearables, and the Services ecosystem.',

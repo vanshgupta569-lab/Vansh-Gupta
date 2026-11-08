@@ -31,6 +31,7 @@ import type { MarketApproachResult } from '../data/marketApproach';
 import type { TerminalSpread } from '../data/terminalSpread';
 import type { AssetApproachResult } from '../data/assetApproach';
 import { RECOVERY_PRESETS } from '../data/assetApproach';
+import { currencyWords } from '../data/currencyWords';
 
 interface HowCalculatedProps {
   source: any;
@@ -38,6 +39,8 @@ interface HowCalculatedProps {
   drivers: ValuationDrivers;
   defaults: ValuationDrivers;
   currencySymbol: string;
+  /** The company's own reporting currency code, for the words in the copy (G7). */
+  currency?: string | null;
   unitLabel: string;
   companyName: string;
   isDerived: boolean;
@@ -84,6 +87,7 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
   source,
   dcfResult,
   currencySymbol,
+  currency,
   companyName,
   sourceLabel,
   methods,
@@ -268,10 +272,13 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
           body: (
             <>
               <p>
-                A hundred rupees in your hand today is worth more than a hundred
-                rupees in five years, because today’s hundred can be earning
-                something in the meantime. Everyone understands this without
-                being taught it.
+                {/* G7: THE CURRENCY WORD COMES FROM THE COMPANY. This read
+                    "rupees" on every company's screen, including those that
+                    report in dollars. */}
+                A hundred {currencyWords(currency).many} in your hand today is worth
+                more than a hundred {currencyWords(currency).many} in five years,
+                because today’s hundred can be earning something in the meantime.
+                Everyone understands this without being taught it.
               </p>
               <p>
                 Valuing a company on its income means estimating the cash it
@@ -438,8 +445,8 @@ export const HowCalculated: React.FC<HowCalculatedProps> = ({
             </p>
             <p>
               This does the same thing with companies. Find businesses that are
-              genuinely alike, see what buyers are paying for each rupee of their
-              profit, and apply that to this company’s own profit.
+              genuinely alike, see what buyers are paying for each {currencyWords(currency).one} of
+              their profit, and apply that to this company’s own profit.
             </p>
           </>
         ),

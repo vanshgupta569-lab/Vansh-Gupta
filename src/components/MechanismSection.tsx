@@ -265,7 +265,8 @@ export const MechanismSection: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 mt-14">
         <div className="border hairline-border bg-[#111114] p-7 sm:p-9 shadow-lg">
           <div className="font-figure text-[11px] text-[#8B1E1E] tracking-widest uppercase mb-2">
-            A rupee later is worth less now
+            {/* G7: no currency word on a screen that serves every company. */}
+            Money later is worth less now
           </div>
           <p className="font-sans text-sm font-light text-[#A1A1AA] leading-relaxed mb-8 max-w-md">
             Forecast cash flows are pulled back to what they are worth today.

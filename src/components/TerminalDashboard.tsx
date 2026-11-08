@@ -1135,6 +1135,20 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
    * what made a return on equity nobody could compute read `0.0%`, which is a
    * claim the company reported nil (conflict 6, standing decision 3).
    */
+  /**
+   * A TILE'S LABEL NAMES THE BASIS IT IS ON (G9, conflict 17).
+   *
+   * These three read `ROE (LTM)`, `ROA (LTM)` and `Op margin` and were the LAST
+   * REPORTED FISCAL YEAR — `M.ratios.roe[last]`, not a trailing twelve months.
+   * On NVIDIA the label said LTM at 76.3% while the trailing operating margin on
+   * the Financials tab was 65.2%: two figures, one of them labelled as something
+   * it is not. A label that says LTM must show LTM, so these say which year.
+   */
+  const ratioLabel = (name: string) => {
+    const year = company.plainRatios?.asOfYear;
+    return year ? `${name} (FY${String(year).slice(-2)})` : `${name} (last reported year)`;
+  };
+
   const ratioTile = (field: 'roePct' | 'roaPct' | 'opMarginPct') => {
     const value = company[field];
     if (!isNum(value)) {
@@ -1148,7 +1162,6 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   };
 
   const [hoveredMatrixCell, setHoveredMatrixCell] = useState<{ wacc: number; g: number; val: number } | null>(null);
-  const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
 
   return (
     <section id="terminal" className="pt-24 pb-20 max-w-[1440px] mx-auto px-6 lg:px-12">
@@ -1661,8 +1674,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         {(bankModel
           ? [
               { label: 'Market cap', value: company.marketCapStr },
-              { label: 'ROE (LTM)', value: ratioTile('roePct') },
-              { label: 'ROA (LTM)', value: ratioTile('roaPct') },
+              { label: ratioLabel('Return on equity'), value: ratioTile('roePct') },
+              { label: ratioLabel('Return on assets'), value: ratioTile('roaPct') },
               {
                 label: 'Price / book',
                 value:
@@ -1680,9 +1693,9 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             ]
           : [
               { label: 'Market cap', value: company.marketCapStr },
-              { label: 'ROE (LTM)', value: ratioTile('roePct') },
-              { label: 'ROA (LTM)', value: ratioTile('roaPct') },
-              { label: 'Op margin', value: ratioTile('opMarginPct') },
+              { label: ratioLabel('Return on equity'), value: ratioTile('roePct') },
+              { label: ratioLabel('Return on assets'), value: ratioTile('roaPct') },
+              { label: ratioLabel('Operating margin'), value: ratioTile('opMarginPct') },
               { label: 'Net debt / EBITDA', value: company.netDebtEbitda },
             ]
         ).map((tile) => (
@@ -1822,86 +1835,146 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       {/* Analytics Row (3 Columns: Rev Trend Bar Chart, DCF Sensitivity Heatmap, Health Radar) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         
-        {/* Card 1: Revenue & Margin Trend Bar Chart */}
-        <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
-                REV & MARGIN TREND
-              </span>
-              <span className="font-figure text-[9px] tracking-widest text-[#8B1E1E] border border-[#8B1E1E]/40 px-2 py-0.5 uppercase bg-[#8B1E1E]/5">
-                5-YEAR GAAP
-              </span>
-            </div>
+        {/* Card 1: revenue and the margin, each on its own axis.
 
-            {/* Custom Bar Visualization */}
-            <div className="h-52 flex items-end justify-between gap-3 pt-8 pb-2 px-2 border-b hairline-border-b relative">
-              {historicals.years.map((yr, idx) => {
-                const revValues = historicals.revenue.filter(
-                  (x): x is number => typeof x === 'number'
-                );
-                const maxRev = revValues.length ? Math.max(...revValues) : 0;
-                const thisRev = historicals.revenue[idx];
-                const revHeightPct =
-                  maxRev > 0 && typeof thisRev === 'number'
-                    ? Math.round((thisRev / maxRev) * 100)
-                    : 0;
-                const margin = historicals.ebitdaMargin[idx] ?? 0;
+            FOUR THINGS WERE WRONG WITH IT (`docs/STUDIO_SPEC_ADDENDUM.md` G4,
+            severity H). The bar heights did not read as the values — FY26 was
+            1.33x FY25 on the screen against 1.65x by value, because every bar
+            animated in on its own delay and a screenshot catches them part
+            way. There were NO AXES AND NO VALUES, so a reader could only
+            compare shapes. The bars and the margin line were BOTH OXBLOOD,
+            which VISUAL_SYSTEM 3.2 reserves for the one thing a screen exists
+            for — and oxblood does not carry historical data. And the legend
+            asked a reader to tell two similar red marks apart.
 
-                return (
-                  <div
-                    key={yr}
-                    onMouseEnter={() => setHoveredBarIndex(idx)}
-                    onMouseLeave={() => setHoveredBarIndex(null)}
-                    className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative"
-                  >
-                    {/* Hover Inspect Tooltip */}
-                    {hoveredBarIndex === idx && (
-                      <div className="absolute bottom-full mb-2 bg-[#0B0B0D] border hairline-border p-3 z-20 font-figure text-[10px] text-[#A1A1AA] whitespace-nowrap shadow-xl">
-                        <div className="text-[#8B1E1E] font-bold tracking-widest uppercase mb-1">{yr} Metrics</div>
-                        <div className="tracking-wider">Rev: <span className="text-[#F2F0EA]">{typeof thisRev === 'number' ? `${company.currencySymbol}${(thisRev / 1000).toFixed(1)}B` : '—'}</span></div>
-                        <div className="tracking-wider">EBITDA Margin: <span className="text-[#F2F0EA]">{margin}%</span></div>
-                      </div>
-                    )}
+            So: one scale from zero, printed on the left; the margin on its own
+            axis, printed on the right; every bar labelled with its own figure;
+            one draw-in for the whole chart rather than a stagger per bar; the
+            bars in the panel's own ground and the margin line the chart's
+            series colour. */}
+        <div className="bg-panel border border-line p-6 flex flex-col min-h-[360px]">
+          <div className="mb-3 flex items-baseline justify-between">
+            <span className="text-[13px] font-medium text-muted">Revenue and the margin it earns</span>
+            <span className="text-[13px] text-quiet">{company.currencySymbol} bn · as filed</span>
+          </div>
 
-                    {/* Red Accent Pin line for EBITDA Margin indicator */}
-                    <div
-                      style={{ bottom: `${Math.min(95, margin * 2)}%` }}
-                      className="absolute w-full h-[2px] bg-[#8B1E1E] z-10 group-hover:scale-y-150 transition-transform"
-                    />
+          {(() => {
+            const revValues = historicals.revenue.filter((x): x is number => typeof x === 'number');
+            // ONE SCALE, FROM ZERO. A bar chart whose baseline is not zero
+            // misstates every comparison a reader makes by eye.
+            const maxRev = revValues.length ? Math.max(...revValues, 0) : 0;
+            const margins = historicals.ebitdaMargin.filter(
+              (x): x is number => typeof x === 'number'
+            );
+            const maxMargin = margins.length ? Math.max(...margins, 0) : 0;
+            // The margin axis is rounded up to a round number so its ticks are
+            // readable, and never to nothing.
+            const marginTop = Math.max(5, Math.ceil(maxMargin / 5) * 5);
+            const bn = (v: number) => `${(v / 1000).toFixed(v / 1000 >= 100 ? 0 : 1)}`;
+            return (
+              <>
+                <div className="flex gap-2" data-revenue-chart>
+                  {/* LEFT AXIS: the scale the bars are drawn on. */}
+                  <div className="flex w-10 shrink-0 flex-col justify-between py-1 text-right font-figure text-[13px] text-quiet">
+                    <span>{maxRev > 0 ? bn(maxRev) : '0'}</span>
+                    <span>{maxRev > 0 ? bn(maxRev / 2) : ''}</span>
+                    <span>0</span>
+                  </div>
 
-                    {/* Revenue Bar — grows from the baseline on first view,
-                        and eases to its new height when the company changes. */}
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${revHeightPct}%` }}
-                      transition={{
-                        duration: 0.75,
-                        delay: idx * 0.09,
-                        ease: [0.16, 1, 0.3, 1],
-                      }}
-                      className="w-full bg-[#222228] group-hover:bg-[#8B1E1E]/40 transition-colors relative"
-                    >
-                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#8B1E1E]" />
-                    </motion.div>
+                  <div className="relative h-52 flex-1 border-b border-l border-line">
+                    {/* The halfway rule, so a reader can read a height off it. */}
+                    <div className="absolute inset-x-0 top-1/2 border-t border-line/60" aria-hidden="true" />
+                    <div className="flex h-full items-end justify-between gap-3 px-2">
+                      {historicals.years.map((yr, idx) => {
+                        const thisRev = historicals.revenue[idx];
+                        const heightPct =
+                          maxRev > 0 && typeof thisRev === 'number' ? (thisRev / maxRev) * 100 : 0;
+                        const margin = historicals.ebitdaMargin[idx];
+                        return (
+                          <div
+                            key={yr}
+                            className="relative h-full flex-1"
+                            data-revenue-bar={String(yr)}
+                            data-revenue-value={typeof thisRev === 'number' ? thisRev : ''}
+                            data-revenue-height={heightPct.toFixed(4)}
+                          >
+                            {/* THE BAR AND ITS FIGURE ARE BOTH OUT OF THE FLOW,
+                                which is not a styling preference: a bar laid out
+                                as a flex child is SHRUNK to make room for the
+                                figure above it, and only the tallest bar is
+                                shrunk, so the heights stop being the values.
+                                That is G4 itself, and this check caught it a
+                                second time in the fix for it — the tallest bar
+                                measured 13.2% short of its own scale. Absolute
+                                positioning makes each height exactly its own
+                                percentage of the column. */}
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: `${heightPct}%` }}
+                              /* ONE DRAW FOR THE WHOLE CHART (C6, decision V3):
+                                 400ms, no per-bar delay. The stagger is what
+                                 made a screenshot of this chart disagree with
+                                 its own figures. */
+                              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                              className="absolute inset-x-0 bottom-0 bg-line"
+                              data-revenue-fill={String(yr)}
+                            />
+                            {/* THE FIGURE ON THE BAR, so the chart can be read
+                                without measuring it. */}
+                            <span
+                              className="absolute inset-x-0 text-center font-figure text-[13px] text-ink"
+                              style={{
+                                bottom: `calc(${heightPct}% + 2px)`,
+                                opacity: typeof thisRev === 'number' ? 1 : 0.5,
+                              }}
+                            >
+                              {typeof thisRev === 'number' ? bn(thisRev) : NOT_REPORTED}
+                            </span>
+                            {typeof margin === 'number' && marginTop > 0 && (
+                              /* The margin is a MARK ON ITS OWN AXIS, in the
+                                 chart's series colour rather than oxblood. */
+                              <div
+                                style={{ bottom: `${Math.min(100, (margin / marginTop) * 100)}%` }}
+                                className="absolute inset-x-0 h-[2px] bg-accent-text/70"
+                                data-margin-mark={String(yr)}
+                                data-margin-value={margin}
+                                aria-hidden="true"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-                    <span className="font-figure text-[10px] tracking-widest text-[#8A8A8F] mt-3 group-hover:text-[#F2F0EA] transition-colors">
+                  {/* RIGHT AXIS: the margin's own scale, so the two series are
+                      never read off one. */}
+                  <div className="flex w-8 shrink-0 flex-col justify-between py-1 font-figure text-[13px] text-quiet">
+                    <span>{marginTop}%</span>
+                    <span>{Math.round(marginTop / 2)}%</span>
+                    <span>0%</span>
+                  </div>
+                </div>
+
+                <div className="mt-1 flex justify-between gap-2 pl-12 pr-8">
+                  {historicals.years.map((yr) => (
+                    <span key={yr} className="flex-1 text-center font-figure text-[13px] text-quiet">
                       {yr}
                     </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                  ))}
+                </div>
 
-          <div className="flex justify-between items-center font-figure text-[9px] uppercase tracking-widest text-[#8A8A8F] pt-4">
-            <span className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 bg-[#222228] border border-[#8B1E1E]" /> Revenue
-            </span>
-            <span className="flex items-center gap-2">
-              <span className="w-3 h-0.5 bg-[#8B1E1E]" /> EBITDA Margin %
-            </span>
-          </div>
+                <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 pt-3 text-[13px] text-quiet">
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 bg-line" aria-hidden="true" /> Revenue, left axis
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="h-[2px] w-3 bg-accent-text/70" aria-hidden="true" /> EBITDA margin, right axis
+                  </span>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {/* Card 2: DCF Sensitivity Heatmap Matrix */}
@@ -2117,6 +2190,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             drivers={drivers}
             defaults={activeDefaults}
             currencySymbol={company.currencySymbol}
+            currency={company.currency}
             unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
             sourceLabel={
               viewMode === 'ANALYST' && company.engineBacked

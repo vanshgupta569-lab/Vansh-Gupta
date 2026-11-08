@@ -4265,6 +4265,69 @@ divided. No valuation moves — nothing downstream of the score ever read it.
 
 ---
 
+## 23a5. The seven findings the screenshot review left as data errors
+
+A separate review measured nine screenshots and separated what is a figure being
+wrong from what is a screen being ugly (`docs/STUDIO_SPEC_ADDENDUM.md`,
+committed 4 November 2026). Seven of the first kind were kept for now rather
+than for build step 9, and all seven are fixed here. 2026-11-08.
+
+**G4 — the revenue chart's bars were not its values.** FY26 measured 1.33x FY25
+on the screen against 1.65x by value, there were no axes and no figures, and the
+bars and the margin line were both oxblood, which VISUAL_SYSTEM 3.2 reserves for
+the one thing a screen exists for. Now: one scale from zero printed on the left,
+the margin on its own axis printed on the right, every bar labelled with its own
+figure, one 400ms draw for the whole chart rather than a stagger per bar, and the
+bars in the panel's own ground. **The bar and its figure are both out of the flex
+flow**, which is not a styling preference: a bar laid out as a flex child is
+SHRUNK to make room for the figure above it, and only the tallest bar is shrunk,
+so the heights stop being the values. `verify:dashboard` measures every drawn
+height against its own value: worst 0.01%.
+
+**G7 — the currency word comes from the company.** A reader of NVIDIA, which
+reports in dollars, was told what it keeps from "every hundred RUPEES of sales".
+`src/data/currencyWords.ts` holds the word for each of the 16 currencies the set
+reports in, a currency it does not know is named by its CODE rather than guessed
+at, and no component writes its own. A screen that serves every company at once
+— the landing page, the mechanism panel — names no currency at all rather than
+the wrong one.
+
+**G9 — a label that says LTM must show LTM.** The tiles read `ROE (LTM)`,
+`ROA (LTM)` and `Op margin` and were the last reported FISCAL YEAR. On NVIDIA the
+label said LTM at 76.3% while the trailing operating margin on the Financials tab
+was 65.2%. They now name the year they are on.
+
+**G10 — one decimal rule, a real minus sign, and ×.** The ratios read `0.8x`,
+`1.09x`, `0.03x`, `0x net cash`, `0.02x net cash`: mixed decimals inside one row,
+and words on some cells and a bare ratio on others, so the sign was unclear.
+`asMultiple` in `figureFormat.ts` is the one rule — two decimals, U+2212 where
+negative, U+00D7 as the unit — and **net cash is simply a negative multiple**,
+which is what it is.
+
+**G14 — `n/a` with the reason, not an em dash.** An em dash means the filing does
+not report something; a forecast year has no filing to report it. A forecast cell
+with no figure now reads `n/a` with the reason, and a row may give its own.
+
+**G22 and D3 — a head shows its own total and says a name once.** The selling,
+general and administrative head printed its own name, printed it again on the row
+beneath, and showed no total, because the total was only drawn where a head had
+more than one contributing line — and this head has one line plus a component.
+A head now shows its total wherever it has one, and a head whose single
+contributing line carries the head's own name IS that line: one row, with the
+components indented beneath it as **"of which"**, which is D3's answer for
+share-based pay.
+
+**D8b — a limit is not a solved value.** The reverse DCF reported terminal growth
+of exactly 5.0%, which was the ceiling of the range it searches. Each figure now
+carries the range it was searched in and says when the answer is that range's own
+edge: *at the limit of the range searched (−3.0% to 8.4%)*. A ceiling printed as
+a value is the worst kind of wrong figure, because it is the one a reader would
+quote.
+
+No valuation moves on any of the seven: the sweep is identical either side.
+
+---
+
 ## 23b. What each figure records about where it came from
 
 `api/company.js`, `src/data/financials.ts`, payload version 11.

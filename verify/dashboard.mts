@@ -2286,8 +2286,14 @@ const LANDING_TYPE_SCREEN = 'the landing page, loaded';
 // 36 more elements of exactly the same kind appeared in exactly the same file:
 // 383. Nothing else on any screen moved. A rise this check cannot explain is
 // still a failure, which is the whole point of it.
+//
+// RAISED A SECOND TIME, 8 November 2026, and said the same way: G22's fix
+// (`docs/STUDIO_SPEC_ADDENDUM.md`) renders a head whose only contributing line
+// carries its own name as ONE row, with its components indented beneath it as
+// "of which" — eight more cells of the same 14px in the same file, 383 to 391.
+// The figures screen is still build step 9.17's job.
 const TYPE_RATCHET: Record<string, { count: number; why: string }> = {
-  '14': { count: 383, why: 'the figures screen, figuresEditor.tsx inline styles and its embedded <style>' },
+  '14': { count: 391, why: 'the figures screen, figuresEditor.tsx inline styles and its embedded <style>' },
 };
 
 const typeSeen = new Map<string, any>();
@@ -3332,6 +3338,80 @@ async function checkCostOfCapitalOnScreen(page: Page) {
 async function checkCompanyTabsOnScreen(page: Page) {
   console.log('\n=== the company page: every tab has an address, and it loads ===');
   const { COMPANY_TABS } = await import(`file:///${REPO}/src/data/companyRoute.ts`);
+
+  // ---- G4: THE BARS ARE THE VALUES ------------------------------------
+  //
+  // `docs/STUDIO_SPEC_ADDENDUM.md` G4, severity H: the revenue chart's bar
+  // heights did not read as its values — FY26 measured 1.33x FY25 on the screen
+  // against 1.65x by value — and there were no axes and no figures, so a reader
+  // could only compare shapes. A BAR'S HEIGHT IS A RENDERED FACT, so nothing but
+  // a browser can check it: this measures the drawn height of every bar against
+  // the value it carries.
+  //
+  // It waits for the draw-in first. The old chart animated each bar on its own
+  // delay, which is why a screenshot caught them part way and disagreed with
+  // the figures; the new one draws once, in 400ms (decision V3).
+  {
+    await page.waitForTimeout(700);
+    const chart: any = await page.evaluate(`(() => {
+      const root = document.querySelector('[data-revenue-chart]');
+      if (!root) return { error: 'no revenue chart on the screen' };
+      const bars = [...root.querySelectorAll('[data-revenue-bar]')].map((el) => {
+        // THE BAR ITSELF, by its own mark. The first version of this took the
+        // first styled div inside the column, which is the MARGIN MARK on some
+        // bars — and reported the chart 13.2% out when the bars were right.
+        const drawn = el.querySelector('[data-revenue-fill]');
+        const value = el.getAttribute('data-revenue-value');
+        const marks = el.querySelectorAll('[data-margin-mark]').length;
+        return {
+          year: el.getAttribute('data-revenue-bar'),
+          value: value ? Number(value) : null,
+          declared: Number(el.getAttribute('data-revenue-height')),
+          height: drawn ? Math.round(drawn.getBoundingClientRect().height * 100) / 100 : 0,
+          printed: (el.textContent || '').trim(),
+          marks,
+        };
+      });
+      return { bars, text: (root.textContent || '').replace(/\s+/g, ' ') };
+    })()`);
+    if (chart?.error) {
+      fail('the revenue chart', 'a chart with bars and axes', String(chart.error));
+    } else {
+      const bars = (chart.bars || []).filter((b: any) => typeof b.value === 'number' && b.value > 0);
+      const tallest = bars.reduce(
+        (best: any, b: any) => (!best || b.value > best.value ? b : best),
+        null as any
+      );
+      let worst = 0;
+      let worstWhere = '';
+      for (const bar of bars) {
+        if (!tallest || !tallest.height) continue;
+        // THE RATIO OF THE HEIGHTS IS THE RATIO OF THE VALUES. Measured against
+        // the tallest bar, which is the one the scale is set by.
+        const expected = (bar.value / tallest.value) * tallest.height;
+        const off = Math.abs(bar.height - expected) / Math.max(1, expected);
+        if (off > worst) {
+          worst = off;
+          worstWhere = `${bar.year}: ${bar.height}px drawn, ${expected.toFixed(1)}px for ${bar.value}`;
+        }
+      }
+      // 2% of the tallest bar, which is the rounding a pixel height carries.
+      if (worst > 0.02) {
+        fail('the revenue bars', 'a height proportional to the value', `${(worst * 100).toFixed(1)}% out — ${worstWhere}`);
+      } else if (!bars.length) {
+        fail('the revenue chart', 'at least one bar with a value', 'no bars carry a value');
+      } else if (!bars.every((b: any) => /[0-9]/.test(b.printed))) {
+        fail('the revenue bars', 'every bar labelled with its own figure', 'a bar with no figure on it');
+      } else if (!/%/.test(chart.text)) {
+        fail('the revenue chart', 'a margin axis, labelled in per cent', 'no per-cent label anywhere');
+      } else {
+        ok(
+          `${bars.length} revenue bars are drawn in proportion to their values (worst ${(worst * 100).toFixed(2)}%), ` +
+            'each labelled with its own figure, with a left axis in money and a right axis in per cent'
+        );
+      }
+    }
+  }
 
   // THE HEADER, ON THE SCREEN A LINK LANDS ON. The valuation screen's fuller
   // bar is driven where that screen is already up, further down.

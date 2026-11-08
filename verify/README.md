@@ -435,6 +435,37 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### The addendum's data errors: currency words, bases, units, limits
+
+Six of the seven in `npm run verify`, the seventh in the browser because a bar's
+height is a rendered fact. **The currency word comes from the company** on all 16
+currencies the set reports in, with no component writing its own — scanned with
+comments stripped properly, since the first version of this check reported its
+own explanation of the fix as the fault, and with ONE named exemption (the
+screener naming what HSBC actually reports in), asserted to still match a line so
+it cannot outlive the sentence it was granted for. **Net debt to EBITDA is one
+signed multiple** on all 174 records and on seven written-out values, including
+the two that used to carry words. **No tile is labelled LTM** when it is a fiscal
+year. **A forecast cell with no figure reads `n/a`**, asserted on the condition
+and not only on the attribute, because a branch left in the file with its test
+replaced by `false` still carries every word of it. **A head shows its own
+total.** And **a reverse-DCF limit is not a solved value**: 212 figures are solved
+inside a recorded range, and the limit itself is DRIVEN by raising the price until
+the implied rate meets the ceiling, since no price on disk reaches one (8.38%
+against a ceiling of 8.40%).
+
+In `dashboard.mts`: every drawn bar height against its own value, after the
+draw-in has finished — worst 0.01% across five bars, each labelled with its
+figure, with a left axis in money and a right axis in per cent. **This arm found
+the defect a second time inside the fix for it**: a bar laid out as a flex child
+is shrunk to make room for the figure above it, and only the tallest bar is
+shrunk, so the chart was 13.2% out until both were taken out of the flow.
+
+Proved by breaking, six ways: the decimals mixed again (**20 faults**); a tile
+labelled LTM (**2**); a forecast cell back to an em dash (**1**); the head total
+drawn only where more than one line contributes (**1**); a limit printed as a
+solved value (**1**); and the currency word hard-coded again (**1**).
+
 ### Five ratios, and no score
 
 Three arms. **Every record carries the five**, each reconciled against the

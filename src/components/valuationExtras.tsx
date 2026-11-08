@@ -260,7 +260,11 @@ export const ImpliedByPrice: React.FC<ImpliedProps> = ({ result, currencySymbol 
                       <span className="block text-[13px] leading-snug text-[#8A8A8F] mt-0.5 max-w-md">
                         {f.outOfRange
                           ? `no value inside a defensible range makes the model agree with the price, ${f.method}`
-                          : `${f.question} · ${f.method}`}
+                          : f.atLimit && f.searched
+                            ? `the search ran to the ${
+                                f.atLimit === 'high' ? 'top' : 'bottom'
+                              } of its range and stopped there, so this is a limit rather than an answer · ${f.method}`
+                            : `${f.question} · ${f.method}`}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right font-figure text-[15px] text-[#A1A1AA]">
@@ -271,7 +275,20 @@ export const ImpliedByPrice: React.FC<ImpliedProps> = ({ result, currencySymbol 
                         f.outOfRange ? 'text-[#8A8A8F]' : 'text-[#F2F0EA]'
                       }`}
                     >
-                      {f.outOfRange ? 'out of range' : show(f.implied, f.unit)}
+                      {/* D8b: A LIMIT IS NOT A SOLVED VALUE. A screenshot
+                          showed terminal growth of exactly 5.0%, which was the
+                          ceiling of the range searched rather than the figure
+                          the price implies — and a ceiling printed as a value is
+                          the worst kind of wrong figure, because it is the one a
+                          reader would quote. */}
+                      {f.outOfRange
+                        ? 'out of range'
+                        : f.atLimit && f.searched
+                          ? `at the limit of the range searched (${show(f.searched.low, f.unit)} to ${show(
+                              f.searched.high,
+                              f.unit
+                            )})`
+                          : show(f.implied, f.unit)}
                     </td>
                   </tr>
                 ))}

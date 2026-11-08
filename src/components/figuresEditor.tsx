@@ -345,7 +345,15 @@ export const FiguresEditor: React.FC<Props> = ({
     // the two that did not repeat were truncated to make room. Merged, the
     // statement goes from twenty-two rows to thirteen and reads the way a
     // printed one does.
-    const label = merged ? merged.label : line.label;
+    // A COMPONENT SAYS IT IS ONE (D3). Share-based pay is already inside the
+    // filed selling and administrative figure, so under that head it reads
+    // as what it is — "of which share-based pay" — rather than as a line of
+    // its own that a reader might add to the one above it.
+    const label = merged
+      ? merged.label
+      : line.componentOf
+        ? `of which ${line.label.charAt(0).toLowerCase()}${line.label.slice(1)}`
+        : line.label;
     const alias = merged && line.label !== merged.label ? line.label : null;
     return (
       <React.Fragment key={line.field}>
@@ -776,8 +784,26 @@ export const FiguresEditor: React.FC<Props> = ({
               const active = dragging && head.dropTarget;
               const hot = active && over === head.key;
               const contributing = group.lines.filter((l) => !l.componentOf);
-              const sums = contributing.length > 1;
-              const single = group.lines.length === 1 ? group.lines[0] : null;
+              const components = group.lines.filter((l) => l.componentOf);
+              // ---- G22: A HEAD SHOWS ITS OWN TOTAL, AND DOES NOT SAY ITS
+              //      ONLY LINE'S NAME TWICE ------------------------------
+              //
+              // `docs/STUDIO_SPEC_ADDENDUM.md` G22: the selling, general and
+              // administrative head printed its own name, then printed it again
+              // on the row beneath, and showed NO TOTAL — because the total was
+              // only drawn where a head had more than one contributing line, and
+              // this head has one contributing line and one component
+              // (share-based pay, already inside the filed figure).
+              //
+              // Two rules now. A head shows its total wherever it has one, so a
+              // reader can see what is inside it (decision D3). And a head whose
+              // single contributing line carries the head's own name IS that
+              // line: it renders as one row, with the components indented
+              // beneath it as what they are — "of which".
+              const sums = contributing.length >= 1;
+              const sameName = contributing.length === 1 && contributing[0].label === head.label;
+              const single =
+                group.lines.length === 1 ? group.lines[0] : sameName ? contributing[0] : null;
               return (
                 <tbody
                   key={head.key}
@@ -796,7 +822,13 @@ export const FiguresEditor: React.FC<Props> = ({
                   }}
                 >
                   {single ? (
-                    renderRow(single, head)
+                    <>
+                      {renderRow(single, head)}
+                      {/* What is already inside that figure, named rather than
+                          hidden (D3: share-based pay is an "of which" memo
+                          where the filing presents it that way). */}
+                      {components.map((l) => renderRow(l))}
+                    </>
                   ) : (
                     <>
                       <tr className="mg-grouprow">

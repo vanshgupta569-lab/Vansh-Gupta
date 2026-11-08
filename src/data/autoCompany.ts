@@ -38,6 +38,7 @@ import {
 import { isFinancialCompany, buildResidualIncome } from './residualIncome.js';
 import { buildDataConstraints } from './dataConstraints';
 import { payloadQuery, payloadVersionProblem } from './payloadVersion';
+import { asMultiple } from './figureFormat';
 
 const r = (n: number | null | undefined, dp = 0): number => {
   if (n == null || !isFinite(n)) return 0;
@@ -290,10 +291,9 @@ export function buildCompanyRecord(fetched: any, modelData: any): CompanyData {
               : 'The filing reports no revenue for the last reported year, so there is nothing to take a margin of.',
           }),
     },
-    netDebtEbitda:
-      netDebtM / ebitdaLast < 0
-        ? r(Math.abs(netDebtM / ebitdaLast), 2) + 'x net cash'
-        : r(netDebtM / ebitdaLast, 2) + 'x',
+    // G10: ONE DECIMAL RULE AND A SIGN, not words on some cells and a bare
+    // ratio on others. Net cash is a negative multiple, which is what it is.
+    netDebtEbitda: asMultiple(isNum(ebitdaLast) && ebitdaLast !== 0 ? netDebtM / ebitdaLast : null),
     sector: modelData.meta.sector || 'Not classified',
     exchange: fetched.quote?.exchange || '',
     description: `${fetched.name || fetched.ticker} — model built automatically from ${fetched.source} filings.`,

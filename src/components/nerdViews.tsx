@@ -112,6 +112,13 @@ interface Row {
   spacer?: boolean;
   /** A reported-year blank is a line the filing does not report: say so, not "—". */
   notReported?: boolean;
+  /**
+   * Why this line has no FORECAST, where it has none (G14). A forecast cell
+   * with no figure is not the filing failing to report something — the filing
+   * has nothing to say about a year that has not happened. So it reads `n/a`
+   * with this reason rather than the em dash that means "not reported".
+   */
+  notForecast?: string;
 }
 
 /** One schedule, rendered as a table with a year per column. */
@@ -204,6 +211,20 @@ const Schedule: React.FC<{
                         ''
                       ) : row.notReported && i < firstForecast && !num(row.values[i]) ? (
                         <span className="text-[12px] text-[#8A8A8F]">not reported</span>
+                      ) : i >= firstForecast && !num(row.values[i]) ? (
+                        /* G14: NOT APPLICABLE, NOT NOT-REPORTED. An em dash
+                           means the filing does not report something; a
+                           forecast year has no filing to report it. */
+                        <span
+                          className="text-[12px] text-[#8A8A8F]"
+                          data-not-forecast
+                          title={
+                            row.notForecast ||
+                            'The model does not forecast this line, so there is no figure for this year.'
+                          }
+                        >
+                          n/a
+                        </span>
                       ) : (
                         format(row.values[i])
                       )}
