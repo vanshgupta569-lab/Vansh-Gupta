@@ -2505,6 +2505,42 @@ recomputed in the browser from whatever peers are selected rather than taken
 from the server, so it can never disagree with the list on screen — the reader
 can add and remove peers.
 
+**The range is a flex of what the peers pay** (build step 5, job B2,
+2026-11-08). Each multiple is applied three times — at the peers' **25th
+percentile**, at their **median** and at their **75th** — and the row's range is
+the **union** of those: the lowest low any usable multiple gives and the highest
+high. The median stays the point.
+
+Until this the range was the spread of the three implied values, one per
+multiple, each struck at the median. That width said how far the three
+**methods** disagreed and nothing about how far the peers do, so a company whose
+three methods happened to agree showed a bar with almost no width on a peer set
+trading between 10× and 24×. `VALUATION_SIDE_BY_SIDE` rule 2 asks each approach
+for a range from flexing a **stated** assumption, and the assumption here is what
+the market pays.
+
+- **A union, not an average.** Each multiple is a different question, and
+  standing decision 4 forbids blending the answers; the band covers them all
+  rather than averaging them into one.
+- **The percentile is interpolated** between the two neighbouring peers, which is
+  the ordinary inclusive definition: with seven peers the 25th sits half way
+  between the second and the third.
+- **Fewer than four peers on a multiple and the percentile is a pretence** —
+  with three figures both ends are interpolations between two of them, and the
+  band comes out narrower than the peers themselves (10, 12 and 24 would report
+  11 to 18 and hide the 24). That multiple uses the peers' **min and max**, and
+  the row says so.
+- **The sentence under the range names what it rests on**: `EV / EBITDA
+  11–18×, Price / Earnings 22–36×, 7 peers`. A width with no stated cause is
+  not a range, it is a number.
+
+Measured over the fetched set: **56 companies get a market range from a sector
+peer set, and all 56 ranges widened** — the widest by 11.9× at Analog Devices,
+whose three methods happened to agree while its peers traded across a wide
+spread. **No valuation moves** (0 of 73 valued on both sides), because the market
+approach is a bar beside the income approach and is never folded into the
+headline.
+
 **The bridge matches the DCF's**: enterprise value less net debt, minority
 interests and preferred stock.
 

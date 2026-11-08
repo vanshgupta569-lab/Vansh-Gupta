@@ -6532,6 +6532,460 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// THE MARKET RANGE IS A FLEX OF A STATED ASSUMPTION (build step 5, job B2)
+// ---------------------------------------------------------------------------
+//
+// The range was the spread of the three implied values — EV/EBITDA, EV/Sales
+// and P/E, each struck at the peers' MEDIAN. So its width said how far the
+// three METHODS disagreed and nothing at all about how far the peers do: a
+// company whose three methods happened to agree got a bar with almost no width
+// on a peer set trading between 10x and 24x, and a reader could not tell a
+// tight peer group from a coincidence.
+//
+// VALUATION_SIDE_BY_SIDE rule 2 asks for a range from flexing a stated
+// assumption. The assumption is what the market pays, so the band is now the
+// peers' own 25th-to-75th percentile, with the median as the point.
+//
+// FIVE ARMS, and the first is the one that matters: every bound is recomputed
+// here from the peer multiples and the subject's own figures, LONGHAND, so the
+// comparison is not the builder against itself.
+{
+  console.log('\n=== the market range is a flex of what the peers pay ===');
+  const { buildMarketApproach, spreadOf, percentileOf, trailingFiguresFrom } = await import(
+    `file:///${REPO}/src/data/marketApproach.ts`
+  );
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  const near = (a: number, b: number, tol = 1e-6) =>
+    Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
+
+  // AN INDEPENDENT PERCENTILE. Written out the long way — the rank, the two
+  // neighbours, the weight between them — rather than by calling the function
+  // under test. The two agreeing is then evidence; `percentileOf` agreeing with
+  // itself would not be.
+  const longhandPercentile = (values: number[], p: number): number => {
+    const v = [...values].sort((a, b) => a - b);
+    if (v.length === 1) return v[0];
+    const rank = p * (v.length - 1);
+    const i = Math.floor(rank);
+    const frac = rank - i;
+    const lo = v[i];
+    const hi = v[Math.min(i + 1, v.length - 1)];
+    return lo + (hi - lo) * frac;
+  };
+
+  const ebitdaRow = (r: any) => (r?.multiples || []).find((m: any) => m.key === 'evToEbitda');
+
+  // ---- 1. HAND-WORKED PEER SETS ---------------------------------------
+  //
+  // Written out so the right answer is known before the code runs. The
+  // subject's figures are round numbers for the same reason: an implied value
+  // that can be checked on paper.
+  const subject = {
+    ebitda: 1000,
+    revenue: 5000,
+    netIncome: 400,
+    netDebt: 2000,
+    otherClaims: 0,
+    dilutedShares: 100,
+    fiscalYear: 2025,
+  };
+  const peerSet = (multiples: number[]) => ({
+    candidates: multiples.map((m, i) => ({
+      symbol: `P${i}`,
+      name: `Peer ${i}`,
+      evToEbitda: m,
+      evToSales: m / 5,
+      priceToEarnings: m * 2,
+      selectedByDefault: true,
+    })),
+  });
+
+  // Seven peers at 9, 10, 12, 14, 16, 20 and 24 times EBITDA. The 25th
+  // percentile sits half way from the second peer to the third:
+  // 10 + (12 - 10) x 0.5 = 11. The 75th is 16 + (20 - 16) x 0.5 = 18.
+  const seven = [9, 10, 12, 14, 16, 20, 24];
+  const sevenResult: any = buildMarketApproach(peerSet(seven), subject, null);
+  const row = ebitdaRow(sevenResult);
+  if (!row) {
+    faults.push('the hand-worked set produced no EV/EBITDA row at all');
+  } else {
+    if (!near(row.spreadLow ?? NaN, 11)) {
+      faults.push(`seven peers 9..24: the 25th percentile should be 11 and is ${row.spreadLow}`);
+    }
+    if (!near(row.spreadHigh ?? NaN, 18)) {
+      faults.push(`seven peers 9..24: the 75th percentile should be 18 and is ${row.spreadHigh}`);
+    }
+    if (row.spreadBasis !== 'percentiles') {
+      faults.push(`seven peers should use percentiles and the row says ${row.spreadBasis}`);
+    }
+    // 11 x 1,000 = 11,000 of enterprise value, less 2,000 of net debt, over
+    // 100 shares = 90.00 a share. At 18 times: 18,000 - 2,000 = 16,000, so
+    // 160.00.
+    if (!near(row.lowPerShare ?? NaN, 90)) {
+      faults.push(
+        `11x on 1,000 of EBITDA less 2,000 of net debt over 100 shares is 90 and the row says ${row.lowPerShare}`
+      );
+    }
+    if (!near(row.highPerShare ?? NaN, 160)) {
+      faults.push(`18x the same way is 160 and the row says ${row.highPerShare}`);
+    }
+  }
+
+  // ---- 2. FEWER THAN FOUR PEERS IS MIN TO MAX, AND SAYS SO -------------
+  //
+  // With three figures the 25th and 75th percentiles are interpolations
+  // between two of them, and the band they give is NARROWER than the peers
+  // themselves: 10, 12 and 24 would report 11 to 18 and hide the 24.
+  const three: any = buildMarketApproach(peerSet([10, 12, 24]), subject, null);
+  const threeRow = ebitdaRow(three);
+  if (!threeRow) {
+    faults.push('three peers produced no EV/EBITDA row');
+  } else {
+    if (threeRow.spreadBasis !== 'min-max') {
+      faults.push(
+        `three peers should fall back to min-max and the row says ${threeRow.spreadBasis}`
+      );
+    }
+    if (!near(threeRow.spreadLow ?? NaN, 10) || !near(threeRow.spreadHigh ?? NaN, 24)) {
+      faults.push(
+        `three peers 10, 12, 24 should span 10 to 24 and the row says ${threeRow.spreadLow} to ${threeRow.spreadHigh}`
+      );
+    }
+    if (!/min to max/.test(three.detail || '')) {
+      faults.push(
+        `a min-max spread must say so on the screen; the sentence reads "${three.detail}"`
+      );
+    }
+  }
+
+  // ---- 3. CHANGING THE PEER SET MOVES THE RANGE ------------------------
+  //
+  // The whole point of computing this on the reader's selection rather than on
+  // the server: drop the two cheapest peers and the low must rise.
+  const narrower: any = buildMarketApproach(peerSet(seven), subject, [
+    'P2',
+    'P3',
+    'P4',
+    'P5',
+    'P6',
+  ]);
+  const narrowRow = ebitdaRow(narrower);
+  if (narrowRow && row && !(narrowRow.spreadLow > row.spreadLow)) {
+    faults.push(
+      `dropping the two cheapest peers left the 25th percentile at ${narrowRow.spreadLow} (was ${row.spreadLow})`
+    );
+  }
+  if (!narrower.edited) {
+    faults.push('a hand-picked peer set is not recorded as edited');
+  }
+
+  // ---- 4. THE IDENTITIES, ON EVERY COMPANY IN THE SET ------------------
+  //
+  // Built from the real payloads: each company's own trailing figures as the
+  // subject, and the other companies in its sector as the peers, with every
+  // peer multiple computed here from that peer's reported figures and its
+  // stored price. Not read from `/api/comps`, which the dashboard check serves
+  // empty.
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor } = await import(`file:///${REPO}/src/data/companies.ts`);
+  const { buildFullModel } = await import(`file:///${REPO}/src/data/companies.ts`);
+
+  type Entry = { ticker: string; sector: string | null; subject: any; multiples: any };
+  const entries: Entry[] = [];
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    const price = payload?.quote?.price;
+    if (!isNum(price) || price <= 0) continue;
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    let built: any;
+    try {
+      const drivers = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+      built = buildFullModel(rec.modelData, drivers);
+    } catch {
+      continue;
+    }
+    const subj: any = trailingFiguresFrom(built?.model, built?.dcf, rec.modelData);
+    if (!isNum(subj.dilutedShares) || subj.dilutedShares <= 0) continue;
+    const equity = price * subj.dilutedShares;
+    const ev = equity + (isNum(subj.netDebt) ? subj.netDebt : 0);
+    entries.push({
+      ticker: payload.ticker,
+      sector: payload?.profile?.sector ?? null,
+      subject: subj,
+      multiples: {
+        symbol: payload.ticker,
+        name: payload.ticker,
+        evToEbitda:
+          isNum(subj.ebitda) && subj.ebitda > 0 ? Number((ev / subj.ebitda).toFixed(2)) : null,
+        evToSales:
+          isNum(subj.revenue) && subj.revenue > 0 ? Number((ev / subj.revenue).toFixed(2)) : null,
+        priceToEarnings:
+          isNum(subj.netIncome) && subj.netIncome > 0
+            ? Number((equity / subj.netIncome).toFixed(2))
+            : null,
+        selectedByDefault: true,
+      },
+    });
+  }
+
+  let withARange = 0;
+  let widened = 0;
+  let narrowed = 0;
+  let worstWidth = 0;
+  let worstWhere = '';
+  for (const e of entries) {
+    const peers = entries
+      .filter((o) => o.ticker !== e.ticker && o.sector && o.sector === e.sector)
+      .slice(0, 5);
+    if (peers.length < 2) continue;
+    const comps = { candidates: peers.map((p) => p.multiples) };
+    let result: any;
+    try {
+      result = buildMarketApproach(comps, e.subject, null);
+    } catch (err) {
+      faults.push(`${e.ticker}: the market approach threw — ${String(err).slice(0, 60)}`);
+      continue;
+    }
+    if (!result?.available || !isNum(result.low) || !isNum(result.high) || !isNum(result.mid)) {
+      continue;
+    }
+    withARange++;
+
+    // (a) LOW <= POINT <= HIGH. A band that does not contain its own point is
+    //     the failure a reader would see first.
+    if (!(result.low <= result.mid + 1e-9 && result.mid <= result.high + 1e-9)) {
+      faults.push(
+        `${e.ticker}: the band ${result.low.toFixed(2)}-${result.high.toFixed(2)} does not contain its point ${result.mid.toFixed(2)}`
+      );
+    }
+
+    // (b) EVERY BOUND REPRODUCES FROM THE PEERS' OWN MULTIPLES AND THIS
+    //     COMPANY'S OWN FIGURE, recomputed longhand from the peer list.
+    for (const m of result.usable as any[]) {
+      const values = peers
+        .map((p) => p.multiples[m.key])
+        .filter((v: any) => isNum(v) && v > 0) as number[];
+      if (!values.length) continue;
+      if (values.length < 4) {
+        // The min-max branch, asserted in arm 2 on a set built for it.
+        if (m.spreadBasis !== 'min-max') {
+          faults.push(
+            `${e.ticker} ${m.key}: ${values.length} peers and the basis says ${m.spreadBasis}`
+          );
+        }
+      } else {
+        const wantLow = Number(longhandPercentile(values, 0.25).toFixed(2));
+        const wantHigh = Number(longhandPercentile(values, 0.75).toFixed(2));
+        if (!near(m.spreadLow ?? NaN, wantLow, 1e-9)) {
+          faults.push(
+            `${e.ticker} ${m.key}: the 25th percentile of the peers is ${wantLow} and the row says ${m.spreadLow}`
+          );
+        }
+        if (!near(m.spreadHigh ?? NaN, wantHigh, 1e-9)) {
+          faults.push(
+            `${e.ticker} ${m.key}: the 75th percentile is ${wantHigh} and the row says ${m.spreadHigh}`
+          );
+        }
+      }
+      if (m.spreadPeers !== values.length) {
+        faults.push(
+          `${e.ticker} ${m.key}: ${values.length} peers carry it and the row says ${m.spreadPeers}`
+        );
+      }
+      // And what each end implies, computed the way the screen prints it: the
+      // multiple on the company's own figure, less net debt where the multiple
+      // is an enterprise one, over diluted shares.
+      const sh = e.subject.dilutedShares as number;
+      const nd = isNum(e.subject.netDebt) ? e.subject.netDebt : 0;
+      const oc = isNum(e.subject.otherClaims) ? e.subject.otherClaims : 0;
+      const metric =
+        m.key === 'evToEbitda'
+          ? e.subject.ebitda
+          : m.key === 'evToSales'
+            ? e.subject.revenue
+            : e.subject.netIncome;
+      const impliedAt = (multiple: number | null) => {
+        if (!isNum(multiple) || !isNum(metric)) return null;
+        if (m.key === 'priceToEarnings') return multiple * (metric / sh);
+        const value = (multiple * metric - nd - oc) / sh;
+        return value > 0 ? value : null;
+      };
+      const ends: [string, number | null, number | null][] = [
+        ['low', m.spreadLow, m.lowPerShare],
+        ['high', m.spreadHigh, m.highPerShare],
+      ];
+      for (const [endLabel, multiple, shown] of ends) {
+        const want = impliedAt(multiple);
+        if (want === null || !isNum(shown)) continue;
+        if (!near(shown, want, 1e-9)) {
+          faults.push(
+            `${e.ticker} ${m.key} ${endLabel}: ${multiple}x implies ${want.toFixed(4)} and the row says ${shown.toFixed(4)}`
+          );
+        }
+      }
+    }
+
+    // (c) THE BAND IS THE UNION OF THE MULTIPLES' OWN BANDS, which is the
+    //     claim the screen makes. Recomputed here from the rows rather than
+    //     asserted as a containment: "the band contains its points" is also
+    //     true of the OLD rule, where the band WAS the points, so it would
+    //     have passed while the flex was gone.
+    const points = (result.usable as any[])
+      .map((m) => m.perShare)
+      .filter((v: any) => isNum(v)) as number[];
+    const rowLows = (result.usable as any[])
+      .map((m) => (isNum(m.lowPerShare) ? m.lowPerShare : m.perShare))
+      .filter((v: any) => isNum(v) && v > 0) as number[];
+    const rowHighs = (result.usable as any[])
+      .map((m) => (isNum(m.highPerShare) ? m.highPerShare : m.perShare))
+      .filter((v: any) => isNum(v) && v > 0) as number[];
+    if (rowLows.length && !near(result.low, Math.min(...rowLows), 1e-9)) {
+      faults.push(
+        `${e.ticker}: the band starts at ${result.low.toFixed(2)} and the lowest multiple implies ${Math.min(...rowLows).toFixed(2)}`
+      );
+    }
+    if (rowHighs.length && !near(result.high, Math.max(...rowHighs), 1e-9)) {
+      faults.push(
+        `${e.ticker}: the band ends at ${result.high.toFixed(2)} and the highest multiple implies ${Math.max(...rowHighs).toFixed(2)}`
+      );
+    }
+    // AND IT IS WIDER THAN THE POINTS ALONE wherever any multiple has a
+    // spread, which is the whole of job B2: a band equal to the spread of the
+    // three point values is the rule this replaced.
+    const hasASpread = (result.usable as any[]).some(
+      (m) => isNum(m.lowPerShare) && isNum(m.highPerShare) && m.highPerShare > m.lowPerShare
+    );
+    if (
+      hasASpread &&
+      points.length &&
+      near(result.low, Math.min(...points), 1e-9) &&
+      near(result.high, Math.max(...points), 1e-9)
+    ) {
+      faults.push(
+        `${e.ticker}: the peers have a spread and the band is still just the three point values`
+      );
+    }
+
+    // (d) THE SENTENCE NAMES EVERY MULTIPLE THE BAND RESTS ON.
+    for (const m of result.usable as any[]) {
+      if (!(result.detail || '').includes(m.label)) {
+        faults.push(`${e.ticker}: the range sentence does not name ${m.label}`);
+      }
+    }
+
+    // How much the flex changed the width, against the old rule: the spread of
+    // the three point values alone.
+    if (points.length) {
+      const oldWidth = Math.max(...points) - Math.min(...points);
+      const newWidth = result.high - result.low;
+      if (newWidth > oldWidth + 1e-9) widened++;
+      else if (newWidth < oldWidth - 1e-9) narrowed++;
+      const ratio = oldWidth > 0 ? newWidth / oldWidth : Infinity;
+      if (isFinite(ratio) && ratio > worstWidth) {
+        worstWidth = ratio;
+        worstWhere = e.ticker;
+      }
+    }
+  }
+
+  // ---- 5. THE FOOTBALL FIELD CARRIES THE SENTENCE ----------------------
+  //
+  // The band on the summary is where most readers meet this range, and it has
+  // its own `detail` line. Asserting it on `buildMarketApproach` alone leaves
+  // the handover unguarded: the builder can name every multiple while the
+  // summary prints "3 peer multiples on reported figures" and the width looks
+  // like it came from nowhere.
+  {
+    const { valuationSummary } = await import(`file:///${REPO}/src/data/valuationSummary.ts`);
+    const { buildCompanyFrom: buildOne } = await import(
+      `file:///${REPO}/src/data/autoCompany.ts`
+    );
+    let checked = 0;
+    for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+      if (checked >= 3) break;
+      let payload: any;
+      try {
+        payload = readPayload(file);
+      } catch {
+        continue;
+      }
+      const price = payload?.quote?.price;
+      if (!isNum(price) || price <= 0) continue;
+      let rec: any;
+      try {
+        rec = buildOne(payload);
+      } catch {
+        continue;
+      }
+      const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+      let summary: any;
+      try {
+        summary = valuationSummary(rec.modelData, drivers, price, sevenResult);
+      } catch {
+        continue;
+      }
+      const band = (summary?.fieldBands || []).find((b: any) => b.variant === 'market');
+      if (!band) continue;
+      checked++;
+      if (band.detail !== sevenResult.detail) {
+        faults.push(
+          `${payload.ticker}: the market band on the summary says "${band.detail}" and the approach says "${sevenResult.detail}"`
+        );
+      }
+      for (const m of sevenResult.usable as any[]) {
+        if (!(band.detail || '').includes(m.label)) {
+          faults.push(`${payload.ticker}: the summary's market band does not name ${m.label}`);
+        }
+      }
+    }
+    if (!checked) {
+      faults.push('no company produced a market band on the summary, so the handover is unchecked');
+    }
+  }
+
+  // ---- 6. THE HELPERS' OWN EDGES ---------------------------------------
+  if (percentileOf([], 0.25) !== null) faults.push('an empty peer set produced a percentile');
+  if (spreadOf([null, 0, -4]).basis !== 'none') {
+    faults.push('a peer set with no usable multiple did not say so');
+  }
+  if (spreadOf([13]).basis !== 'min-max') {
+    faults.push('one peer should be min-max and is not');
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the market range:`);
+    faults.slice(0, 15).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 15) console.log(`           ... and ${faults.length - 15} more`);
+  } else {
+    console.log(
+      '  the hand-worked set of seven peers at 9-24x gives 11x to 18x, which on 1,000 of EBITDA' +
+        ' less 2,000 of net debt over 100 shares is 90.00 to 160.00 a share'
+    );
+    console.log(
+      `  ${withARange} companies get a market range from a sector peer set; every bound reproduces` +
+        " from the peers' own multiples, recomputed longhand"
+    );
+    console.log(
+      `  ${widened} ranges widened and ${narrowed} narrowed against the old spread-of-the-methods` +
+        ` rule; widest ${worstWidth.toFixed(1)}x at ${worstWhere || 'none'}`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // EVERY COMPANY'S TOP LINE IS THE TOTAL REVENUE IT REPORTS (`KI-39`)
 // ---------------------------------------------------------------------------
 //

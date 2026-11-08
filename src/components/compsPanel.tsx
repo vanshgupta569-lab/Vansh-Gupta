@@ -243,6 +243,23 @@ export const CompsPanel: React.FC<Props> = ({
                         {m.key === 'priceToEarnings' ? money(m.metric) : bulk(m.metric)}{' '}
                         {m.metricLabel}
                         {m.key === 'priceToEarnings' ? '' : ', less net debt, ÷ diluted shares'}
+                        {/* THE FLEX THIS MULTIPLE CONTRIBUTES (job B2): the peers'
+                            own 25th-to-75th percentile spread, and what each end
+                            of it implies for this company. One line, because the
+                            point value above it is still the headline. */}
+                        {isNum(m.lowPerShare) && isNum(m.highPerShare) ? (
+                          <>
+                            <br />
+                            {mult(m.spreadLow)}
+                            {'–'}
+                            {mult(m.spreadHigh)} × across {m.spreadPeers} peer
+                            {m.spreadPeers === 1 ? '' : 's'}
+                            {m.spreadBasis === 'min-max' ? ' (min to max)' : ''} gives{' '}
+                            {money(m.lowPerShare)}
+                            {'–'}
+                            {money(m.highPerShare)}
+                          </>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="text-[13px] text-[#8A8A8F] leading-relaxed">
@@ -261,6 +278,15 @@ export const CompsPanel: React.FC<Props> = ({
                   <div className="font-figure text-[18px] text-[#F2F0EA] tabular-nums mt-0.5">
                     {money(result.low)} – {money(result.high)}
                   </div>
+                  {/* WHAT THE WIDTH IS (job B2). Without this the range is a
+                      number with no stated cause, and rule 2 of
+                      VALUATION_SIDE_BY_SIDE asks for the assumption it was
+                      flexed on. */}
+                  {result.detail ? (
+                    <div className="font-figure text-[12px] text-[#8A8A8F] mt-1 max-w-sm leading-relaxed">
+                      {result.detail}
+                    </div>
+                  ) : null}
                 </div>
                 <div>
                   <div className="font-figure text-[11px] tracking-[0.15em] text-[#8A8A8F] uppercase">

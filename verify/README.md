@@ -435,6 +435,33 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### The market range is a flex of what the peers pay
+
+Six arms. **A hand-worked peer set**: seven peers at 9, 10, 12, 14, 16, 20 and
+24 times EBITDA, whose 25th percentile is 11 and whose 75th is 18, applied to a
+subject with 1,000 of EBITDA, 2,000 of net debt and 100 shares — 90.00 to 160.00
+a share, worked out on paper before the code runs. **Three peers fall back to min
+and max and the row says so**, because 10, 12 and 24 interpolated would report 11
+to 18 and hide the 24. **A hand-picked peer set moves the range**, which is why
+this is computed on the reader's selection rather than on the server. **The
+identities on every company in the set**, with each company's own trailing
+figures as the subject and its sector as the peer group: low ≤ point ≤ high, and
+every bound recomputed in the check from the peers' own multiples and the
+company's own figure — the percentile written out longhand (the rank, the two
+neighbours, the weight between them) rather than by calling the function under
+test. **The band is the union of the multiples' own bands**, recomputed from the
+rows: asserting only that the band contains its points would have passed with
+the flex gone, because under the old rule the band WAS the points. **And the
+football field carries the sentence**, because the builder can name every
+multiple while the summary prints "3 peer multiples on reported figures" and the
+width looks like it came from nowhere.
+
+Proved by breaking, five ways: the mean instead of the percentile; the min-max
+fallback removed; the bound struck on the wrong figure; the band back to the
+spread of the three point values; and the sentence dropped on the handover to the
+summary. The fourth and fifth each found an arm that could not fail, and both
+arms were written because of it.
+
 ### Every company's top line is the total revenue it reports
 
 Four arms. **Every SEC filer settles a top line and records how**, with a basis

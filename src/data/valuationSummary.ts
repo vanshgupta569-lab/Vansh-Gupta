@@ -156,7 +156,13 @@ export function valuationSummary(
       low: market.low,
       high: market.high,
       point: market.mid,
-      detail: `${used} peer multiple${used === 1 ? '' : 's'} on reported figures`,
+      // WHICH MULTIPLES, FLEXED TO WHAT, ON HOW MANY PEERS (job B2). The band
+      // is the peers' own 25th-to-75th percentile spread, so the sentence has
+      // to name the multiples it was struck on; the count alone said nothing
+      // about where the width came from.
+      detail:
+        market.detail ||
+        `${used} peer multiple${used === 1 ? '' : 's'} on reported figures`,
       variant: 'market',
     });
   }
