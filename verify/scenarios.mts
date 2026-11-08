@@ -4814,10 +4814,20 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     const rd = payload?.revenueDefinition ?? null;
     const isSec = payload?.source === 'SEC EDGAR';
     const fin = isFinancialCompany(payload);
-    if (fin && isSec) {
-      financials++;
+    // EVERY SEC FILER SETTLES ITS OWN TOP LINE SINCE `KI-39` (2026-11-08),
+    // not only a financial one — so this arm runs on all of them, and the two
+    // rules are told apart by WHICH LIST the chosen tag comes from. A financial
+    // company's is the line on the face of its income statement
+    // (`RevenuesNetOfInterestExpense` where it is tagged, `KI-32`); every other
+    // company's is the first tag that means total revenue. Until then this arm
+    // asserted that a company outside the bank template carried NO definition,
+    // which is now true of none of them.
+    if (isSec) {
+      if (fin) financials++;
       if (!rd) {
-        faults.push(`${t} is on the bank template and carries no record of which line its top line is`);
+        faults.push(
+          `${t} is an SEC filer and carries no record of which line its top line is`
+        );
         continue;
       }
       chosen++;
@@ -4836,7 +4846,11 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
       const reaching = (rd.considered ?? []).filter((c: any) => c.reachesLatest);
       if (!reaching.length) {
         faults.push(`${t}: no candidate reaches FY${rd.latestYear} and one was chosen anyway`);
-      } else if (reaching[0].tag !== rd.tag) {
+      } else if (fin && reaching[0].tag !== rd.tag) {
+        // THE FINANCIAL LIST'S OWN ORDER (`KI-32`), which is the order
+        // `considered` is built in. An industrial company's order is the
+        // total-revenue one and is asserted by its own block, against the
+        // list the fetcher exports.
         faults.push(
           `${t}: ${rd.tag} was chosen over ${reaching[0].tag}, which also reaches FY${rd.latestYear} and ` +
             'comes first in the order'
@@ -4849,16 +4863,16 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
           faults.push(`${t}: the model carries FY${y}, which ${rd.tag} does not report`);
         }
       }
-      // A financial company must never be modelled on a contract-revenue line
-      // where it files a total: that is the measure that excludes net interest
-      // income, lease income and investment results.
+      // NO COMPANY IS MODELLED ON A CONTRACT-REVENUE LINE WHERE IT FILES A
+      // TOTAL. For a financial company that line excludes net interest income,
+      // lease income and investment results (`KI-32`); for every other company
+      // it is a component of the top line where the two differ (`KI-39`). One
+      // rule, and it now covers both.
       const contract = (rd.considered ?? []).find((c: any) => /RevenueFromContractWithCustomer/.test(c.tag));
       const total = (rd.considered ?? []).find((c: any) => /^Revenues(NetOfInterestExpense)?$/.test(c.tag) && c.reachesLatest);
       if (total && contract && rd.tag === contract.tag) {
         faults.push(`${t}: modelled on ${contract.tag} while it also files ${total.tag} for FY${rd.latestYear}`);
       }
-    } else if (rd) {
-      faults.push(`${t} is not an SEC-sourced financial company and carries a financial revenue definition`);
     }
   }
 
@@ -6513,6 +6527,165 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
           .map((k) => `${k} (${[...conceptsSeen[k]].join(', ')})`)
           .join('; ')}`
     );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// EVERY COMPANY'S TOP LINE IS THE TOTAL REVENUE IT REPORTS (`KI-39`)
+// ---------------------------------------------------------------------------
+//
+// The revenue tags were read in order of preference and the first one present
+// won. For most filers the first of them IS the top line. For a company whose
+// revenue is not all revenue from contracts with customers — a pipeline selling
+// commodities, a utility with regulated and unregulated streams — it is a
+// COMPONENT of the top line, and the filing's own total sits in `Revenues`,
+// further down the list, where nothing read it. Enbridge's FY2021 read 19,432
+// against the 47,071 its own 10-K files: 59% short.
+//
+// Four arms.
+{
+  console.log('\n=== every company\'s top line is the total revenue it reports ===');
+  const { US_TAGS, TOTAL_REVENUE_FIRST } = await import(`file:///${REPO}/api/company.js`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let filers = 0;
+  let settled = 0;
+  let byTag: Record<string, number> = {};
+  let wouldHaveBeenShort = 0;
+  let worstShort = 0;
+  let worstWhere = '';
+  const narrowed: string[] = [];
+
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    if (!/sec/i.test(String(payload?.source || ''))) continue;
+    if (!payload?.statements?.length) continue;
+    filers++;
+    const ticker = payload.ticker || file;
+    const definition = payload.revenueDefinition;
+
+    // ---- 1. EVERY SEC FILER SETTLES A TOP LINE, AND RECORDS IT ----------
+    if (!definition?.tag) {
+      faults.push(`${ticker}: no revenue definition recorded, so the top line is whichever tag came first`);
+      continue;
+    }
+    settled++;
+    byTag[definition.tag] = (byTag[definition.tag] || 0) + 1;
+    if (!definition.basis || definition.basis.length < 30) {
+      faults.push(`${ticker}: the top line names a tag and no basis for choosing it`);
+    }
+
+    // ---- 2. THE TAG CHOSEN IS THE FIRST THAT MEANS "TOTAL REVENUE" ------
+    //
+    // Recomputed here from the candidates the payload records and the ORDER the
+    // fetcher publishes, rather than read back from the choice.
+    //
+    // THE ORDER IS THE POINT, AND IT IS NOT THE SIZE OF THE FIGURE. I wrote
+    // this rule as "the largest" first, on the reasoning that a component
+    // cannot exceed the total it is part of, and the measurement disproved it:
+    // Mastercard tags its GROSS revenue under the contract-revenue tag and its
+    // NET revenue — the top line of its income statement — under `Revenues`,
+    // 29,845 against 18,884 in FY2021. The larger figure there is the line
+    // above two deductions, and "largest" would have published it.
+    const considered = definition.considered || [];
+    const atLatest = considered.filter((c: any) => c.reachesLatest);
+    if (atLatest.length) {
+      const expected =
+        (TOTAL_REVENUE_FIRST as string[]).find((tag) => atLatest.some((c: any) => c.tag === tag)) ??
+        atLatest[0].tag;
+      // A FINANCIAL COMPANY'S RULE IS ITS OWN (`KI-32`): the line on the face of
+      // its income statement, `RevenuesNetOfInterestExpense` where it is
+      // tagged, which is not in this order at all. Those are held to arm 1 and
+      // arm 4 and not to this one.
+      const financialTag = !(TOTAL_REVENUE_FIRST as string[]).includes(definition.tag);
+      if (!financialTag && definition.tag !== expected) {
+        faults.push(
+          `${ticker}: reads ${definition.tag} where ${expected} is the first tag meaning total revenue ` +
+            'that reaches its latest reported year'
+        );
+      }
+    }
+
+    // ---- 3. WHAT THE OLD RULE WOULD HAVE SHOWN, where it differs --------
+    //
+    // The payload records every candidate's figure, so the shortfall of the
+    // first-in-the-list choice is a fact it holds rather than a memory.
+    const order = US_TAGS.revenue as string[];
+    const firstPresent = order.find((tag) =>
+      considered.some((c: any) => c.tag === tag && c.reachesLatest)
+    );
+    if (firstPresent && firstPresent !== definition.tag) {
+      const was = considered.find((c: any) => c.tag === firstPresent);
+      const now = considered.find((c: any) => c.tag === definition.tag);
+      if (isNum(was?.figureAtLatest) && isNum(now?.figureAtLatest) && now.figureAtLatest > 0) {
+        const short = ((now.figureAtLatest - was.figureAtLatest) / now.figureAtLatest) * 100;
+        if (short > 0.1) {
+          wouldHaveBeenShort++;
+          narrowed.push(
+            `${ticker}: ${firstPresent} ${was.figureAtLatest} against ${definition.tag} ` +
+              `${now.figureAtLatest} (${short.toFixed(1)}% short)`
+          );
+          if (short > worstShort) {
+            worstShort = short;
+            worstWhere = ticker;
+          }
+        }
+      }
+    }
+
+    // ---- 4. AND THE FIGURES SHOWN ARE THAT TAG'S ------------------------
+    //
+    // The latest reported year's revenue on the statements must be the figure
+    // the chosen tag reports, or the definition is describing a choice the
+    // extraction did not make.
+    const latest = definition.latestYear;
+    const row = (payload.statements || []).find((r: any) => r.fiscalYear === latest);
+    const atLatestFigure = considered.find((c: any) => c.tag === definition.tag)?.figureAtLatest;
+    if (row && isNum(row.revenue) && isNum(atLatestFigure)) {
+      // The payload holds revenue in millions; the facts are absolute.
+      const inMillions = atLatestFigure / 1e6;
+      const off = Math.abs(row.revenue - inMillions) / Math.max(1, Math.abs(inMillions));
+      if (off > 0.001) {
+        faults.push(
+          `${ticker} FY${latest}: the statements show ${row.revenue} and ${definition.tag} reports ` +
+            `${inMillions.toFixed(1)} in millions`
+        );
+      }
+    }
+    if (row && isNum(row.revenue) && row.evidence?.revenue?.concept) {
+      if (row.evidence.revenue.concept !== definition.tag) {
+        faults.push(
+          `${ticker} FY${latest}: revenue is cited to ${row.evidence.revenue.concept} and the top line is ` +
+            `settled on ${definition.tag}`
+        );
+      }
+    }
+  }
+
+  console.log(
+    `  ${settled} of ${filers} SEC filers settle a top line and record how: ${Object.entries(byTag)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag, n]) => `${tag} x${n}`)
+      .join(', ')}`
+  );
+  console.log(
+    `  ${wouldHaveBeenShort} of them would have shown a COMPONENT under the old order of preference, worst ` +
+      `${worstWhere} at ${worstShort.toFixed(1)}% short`
+  );
+  for (const line of narrowed.slice(0, 6)) console.log(`    ${line}`);
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the top line:`);
+    faults.slice(0, 20).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 20) console.log(`           ... and ${faults.length - 20} more`);
   }
 }
 

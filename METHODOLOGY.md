@@ -4328,6 +4328,44 @@ No valuation moves on any of the seven: the sweep is identical either side.
 
 ---
 
+## 23a6. Every company's top line is the total revenue it reports
+
+`api/company.js`, payload version 14, 2026-11-08.
+
+The revenue tags are read in a list, and until this the FIRST ONE PRESENT won:
+`RevenueFromContractWithCustomerExcludingAssessedTax`, then the
+including-assessed-tax form, then `Revenues`, then `SalesRevenueNet`. For most
+filers the first of those IS the top line. For a company whose revenue is not
+all revenue from contracts with customers — a pipeline selling commodities, an
+oil major with commodity sales and equity earnings — it is a **component** of the
+top line, and the filing's own total sits in `Revenues`, further down the list,
+where nothing read it (`KI-39`).
+
+**The rule is the filing's own arithmetic.** Every other revenue tag is a
+component of total revenue and cannot exceed it, so among the candidates that
+cover the latest reported year the LARGEST figure is the total. Where two agree
+to within a tenth of a per cent they are the same line tagged twice and the order
+of preference decides, so nothing moves on a company that tags one revenue line —
+which is nearly all of them.
+
+`revenueDefinition` is now on every SEC filer rather than only on a financial
+one, and it carries the tag chosen, its basis, **every candidate's figure in the
+latest reported year**, and how far short of the total the old rule's choice
+was — so the question can be audited from the payload without re-reading the
+filing.
+
+**`KI-32`'s rule for financial companies is untouched.** There the answer is not
+"the largest" but "the one the filer puts on the face of its income statement"
+(`RevenuesNetOfInterestExpense` where it is tagged), because a bank's revenue net
+of interest expense is smaller than its gross revenue and is still the top line.
+Two rules, each saying which companies it is for.
+
+**Measured on 2026-11-08** by asking the fetcher for every SEC filer in the set
+and writing nothing: all 85 settle a top line, 7 of the 85 SEC filers in the set change their revenue.
+Worst: Enbridge, FY2021 19,432 -> 47,071 (+142.2%), where the contract-revenue tag is 55.0% short of the total. Of those seven, five are refused a valuation for reasons that have nothing to do with revenue — no cost of sales filed, no operating income filed — both before and after. The two that are valued both move: Walmart 51.65 to 52.46 (+1.6%) and MercadoLibre 583.89 to 581.80 (−0.4%).
+
+---
+
 ## 23b. What each figure records about where it came from
 
 `api/company.js`, `src/data/financials.ts`, payload version 11.

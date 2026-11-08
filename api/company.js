@@ -226,6 +226,144 @@ function annualYearsOf(facts, tag) {
 }
 
 /**
+ * ONE TAG'S ANNUAL FIGURES, BY YEAR, as the filer filed them.
+ *
+ * `annualYearsOf` says WHICH years a tag covers; this says WHAT it reported in
+ * each, which is what settling a top line needs. Undimensioned facts only, one
+ * figure per year, the most recently filed winning — the same three rules the
+ * extraction itself reads by, so a figure compared here is the figure that
+ * would be shown.
+ */
+function annualFiguresOf(facts, tag) {
+  const entry = facts['us-gaap']?.[tag];
+  const out = new Map();
+  if (!entry) return out;
+  const unitKey = Object.keys(entry.units || {})[0];
+  if (!unitKey) return out;
+  for (const point of entry.units[unitKey] || []) {
+    if (typeof point.val !== 'number' || !point.end) continue;
+    if (!String(point.form || '').startsWith('10-K')) continue;
+    if (point.start) {
+      const days = (new Date(point.end) - new Date(point.start)) / 86400000;
+      if (days < 300 || days > 400) continue;
+    }
+    const year = Number(point.end.slice(0, 4));
+    if (!year) continue;
+    const held = out.get(year);
+    if (!held || String(point.filed || '') >= String(held.filed || '')) {
+      out.set(year, { val: point.val, filed: point.filed || null });
+    }
+  }
+  return out;
+}
+
+/**
+ * WHICH TAG IS THIS COMPANY'S TOP LINE (`KI-39`).
+ *
+ * The revenue tags were read in order of preference and the first one present
+ * won: `RevenueFromContractWithCustomerExcludingAssessedTax`, then the
+ * including-assessed-tax form, then `Revenues`, then `SalesRevenueNet`. For
+ * most filers the first of those IS the top line. For a company whose revenue
+ * is not all revenue from contracts with customers — a pipeline selling
+ * commodities, a utility with regulated and unregulated streams — it is a
+ * COMPONENT of the top line, and the filing's own total sits in `Revenues`,
+ * further down the list, where nothing read it.
+ *
+ * Measured on 2026-11-04: Enbridge's FY2021 revenue read **19,432** where its
+ * own 10-K files `Revenues` of **47,071** — 59% short. It was found by the new
+ * "other operating items" row, because the cost of sales alone then exceeded
+ * the revenue being shown.
+ *
+ * THE RULE IS THE TAG THAT MEANS "TOTAL REVENUE", not the largest figure.
+ *
+ * I WROTE IT AS THE LARGEST FIRST, on the reasoning that a component cannot
+ * exceed the total it is part of, and the measurement disproved it on the same
+ * afternoon. Mastercard tags its GROSS revenue — before the rebates and
+ * incentives it pays out — under the contract-revenue tag, and its NET revenue,
+ * which is the top line of its income statement, under `Revenues`: 29,845
+ * against 18,884 in FY2021. The larger figure there is not the top line, it is
+ * the line above two deductions. "Largest" would have published it.
+ *
+ * So the order is the one US GAAP's own definitions give. `Revenues` is the
+ * total revenue line as presented; `SalesRevenueNet` is what a filer that has
+ * not moved to ASC 606 calls the same thing; the two contract-revenue tags are
+ * revenue FROM CONTRACTS WITH CUSTOMERS, which is the whole of the top line for
+ * most companies and a component of it for a pipeline selling commodities. The
+ * first of those a filer tags, and that reaches its latest reported year, is its
+ * top line — and every candidate's figure is recorded beside it so the choice
+ * can be read rather than trusted.
+ *
+ * `KI-32` settled this question for FINANCIAL companies on 2026-11-01, where the
+ * answer is `RevenuesNetOfInterestExpense` where it is tagged, for the same
+ * reason: it is the line the filer puts on the face of its income statement,
+ * and it is SMALLER than the gross revenue above it. That path is untouched;
+ * this one is every other company.
+ */
+// EXPORTED so `npm run verify` reads this order rather than keeping a second
+// copy of it. A check with its own list stops checking the rule the day the
+// rule changes.
+export const TOTAL_REVENUE_FIRST = [
+  // The total revenue line as presented, and what a filer that has not moved to
+  // ASC 606 calls the same thing.
+  'Revenues',
+  'SalesRevenueNet',
+  // Revenue from contracts with customers: the whole of the top line for most
+  // companies, a component of it for some, and GROSS of rebates for a few.
+  'RevenueFromContractWithCustomerExcludingAssessedTax',
+  'RevenueFromContractWithCustomerIncludingAssessedTax',
+];
+
+function topLineTag(facts, candidates) {
+  const considered = candidates
+    .map((tag) => ({ tag, figures: annualFiguresOf(facts, tag) }))
+    .filter((c) => c.figures.size > 0);
+  if (!considered.length) return null;
+
+  const latest = Math.max(...considered.flatMap((c) => [...c.figures.keys()]));
+  const atLatest = considered.filter((c) => c.figures.has(latest));
+  if (!atLatest.length) return null;
+
+  // THE FIRST TAG THAT MEANS "TOTAL REVENUE" AND REACHES THE LATEST YEAR. The
+  // order is `TOTAL_REVENUE_FIRST`, not the order the extraction reads fields
+  // in, and not the size of the figure.
+  const chosen =
+    TOTAL_REVENUE_FIRST.map((tag) => atLatest.find((c) => c.tag === tag)).find(Boolean) || atLatest[0];
+
+  const figureOf = (c) => c.figures.get(latest)?.val ?? null;
+  const total = figureOf(chosen);
+  // HOW EVERY OTHER CANDIDATE DIFFERS FROM THE ONE CHOSEN, in the latest year.
+  // Positive where the other tag is SMALLER — a component of the top line;
+  // negative where it is LARGER — a gross figure above a deduction. Both are
+  // facts about the filing, and the payload carries them so the choice can be
+  // read rather than trusted.
+  const shortfall = atLatest
+    .filter((c) => c.tag !== chosen.tag && total)
+    .map((c) => ({
+      tag: c.tag,
+      figure: figureOf(c),
+      shortOfTotalPct: Number((((total - figureOf(c)) / total) * 100).toFixed(2)),
+    }));
+
+  return {
+    tag: chosen.tag,
+    latestYear: latest,
+    years: [...chosen.figures.keys()].sort((a, b) => a - b),
+    basis:
+      'total revenue as the filer reports it: `Revenues` where it is tagged, `SalesRevenueNet` for a ' +
+      'filer that has not moved to ASC 606, and revenue from contracts with customers otherwise — one ' +
+      'tag for the whole series, chosen by what the tag MEANS rather than by the size of the figure ' +
+      '(`KI-39`)',
+    considered: considered.map((c) => ({
+      tag: c.tag,
+      years: c.figures.size,
+      reachesLatest: c.figures.has(latest),
+      figureAtLatest: figureOf(c),
+    })),
+    shortfall,
+  };
+}
+
+/**
  * Which revenue tag a financial company’s top line is read from, and the
  * record of how that was decided. Returns null where no candidate carries an
  * annual figure at all, and the caller then falls back to the ordinary list.
@@ -1595,7 +1733,12 @@ async function fetchFromSEC(ticker) {
   // financial company it is chosen rather than taken in order, and the choice
   // is recorded, because the tag decides which fiscal years exist at all.
   const financial = filerIsFinancial(sicCode, sicDescription);
-  const revenueDefinition = financial ? financialRevenueTag(facts) : null;
+  // EVERY COMPANY SETTLES ITS OWN TOP LINE. A financial company by the rule
+  // `KI-32` established (the line on the face of its income statement); every
+  // other by the filing's own arithmetic (`KI-39`, `topLineTag` above).
+  const revenueDefinition = financial
+    ? financialRevenueTag(facts)
+    : topLineTag(facts, US_TAGS.revenue);
   const revenueTags = revenueDefinition ? [revenueDefinition.tag] : US_TAGS.revenue;
   const tagsFor = (field) => (field === 'revenue' ? revenueTags : US_TAGS[field]);
 
@@ -3208,7 +3351,7 @@ function seriesFrom(result) {
 // bump it. The two are separate constants on purpose: each file in this
 // directory is packaged on its own by the host, and a shared import that fails
 // to bundle takes the whole route down. They are compared at runtime instead.
-const FETCHER_VERSION = 13;
+const FETCHER_VERSION = 14;
 
 export default async function handler(req, res) {
   if (!guardRequest(req, res)) return;

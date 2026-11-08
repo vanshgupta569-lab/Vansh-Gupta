@@ -86,13 +86,21 @@
 //      (`KI-36`). Nothing in the shape changes; what changes is which document
 //      a quarterly figure comes from, and for a few periods whether the figure
 //      exists at all
+//  14  EVERY COMPANY SETTLES ITS OWN TOP LINE, not only a financial one. The
+//      revenue tags were read in order of preference and the first one present
+//      won, so a company whose revenue is not all revenue from contracts with
+//      customers had a COMPONENT of its top line shown as the top line:
+//      Enbridge's FY2021 read 19,432 where its own 10-K files `Revenues` of
+//      47,071, 59% short (`KI-39`). `revenueDefinition` is now on every SEC
+//      filer, carrying the tag chosen, every candidate's figure in the latest
+//      reported year, and how far short of the total the old rule's choice was
 //
 // `api/company.js` carries the same number in its own FETCHER_VERSION. The two
 // are deliberately not imported from one place: each file in `api/` is packaged
 // on its own by the host, and a missing shared import there takes the route
 // down. Two constants that must agree are checked at runtime instead — which is
 // the whole point of this file.
-export const PAYLOAD_VERSION = 13;
+export const PAYLOAD_VERSION = 14;
 
 /** The query the browser sends, so a cache cannot answer for another shape. */
 export const payloadQuery = (ticker: string) =>

@@ -435,6 +435,29 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### Every company's top line is the total revenue it reports
+
+Four arms. **Every SEC filer settles a top line and records how**, with a basis
+long enough to be a reason. **The tag chosen is the largest figure it
+considered**, recomputed in the check from the candidates' own figures as the
+payload records them — every other revenue tag is a component of the total and
+cannot exceed it, so the largest in the latest reported year IS the total. A
+financial company is exempt from that arm by `KI-32`'s own rule, which is the
+line on the face of the income statement rather than the largest. **What the old
+order of preference would have shown**, company by company and as a percentage
+short of the total, which is the measurement this fix exists for. And **the
+figures shown are that tag's**: the latest year's revenue on the statements must
+be the figure the chosen tag reports, and the concept cited beside it must be
+that tag.
+
+Proved by breaking, four ways: the old rule put back, so the first tag in the
+list wins again; the comparison inverted, so the SMALLEST candidate is taken as
+the total; a payload whose definition names a tag smaller than one it considered;
+and a definition with no basis for its choice. The two fetcher breaks are asked
+directly by a driver that writes nothing — no payload and no capture — because a
+capture built by a deliberately broken fetcher would be kept for ever by the rule
+that exists to keep every fetch.
+
 ### The addendum's data errors: currency words, bases, units, limits
 
 Six of the seven in `npm run verify`, the seventh in the browser because a bar's
