@@ -6532,6 +6532,479 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// REFUSALS, THE CAPTION AND THE OVERLAP SENTENCE (build step 5, job B4)
+// ---------------------------------------------------------------------------
+//
+// Rules 6 to 8 of `docs/VALUATION_SIDE_BY_SIDE_SPEC.md`.
+//
+// A refused approach used to be ABSENT. The income approach returned no bands
+// and the reason was thrown away by `valuationBandsFor`; an asset approach
+// whose every measure came out negative simply did not appear. So a company
+// where two approaches happened to agree showed two bars in agreement and said
+// nothing at all about the third — the most misleading shape this screen can
+// take, because the reader counts the rows and infers a consensus.
+//
+// Five arms.
+{
+  console.log('\n=== every approach is shown or says why not ===');
+  const { valuationSummary, SIDE_BY_SIDE_CAPTION, NO_OVERLAP_NOTE } = await import(
+    `file:///${REPO}/src/data/valuationSummary.ts`
+  );
+  const { buildAssetApproach, DEFAULT_RECOVERY } = await import(
+    `file:///${REPO}/src/data/assetApproach.ts`
+  );
+  const { buildMarketApproach, trailingFiguresFrom } = await import(
+    `file:///${REPO}/src/data/marketApproach.ts`
+  );
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor, buildFullModel } = await import(
+    `file:///${REPO}/src/data/companies.ts`
+  );
+  // D4'S ALLOW-LIST, from the file that owns it: the fixed phrases `exit
+  // multiple` and `exit-multiple` are removed before the scan, so `exit` on
+  // its own anywhere else still fails. Excusing the word here instead would
+  // have let a real "exit" through on every row that happens to mention the
+  // terminal method.
+  const { bannedWordsInCopy } = await import(`file:///${REPO}/src/data/screener.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let companies = 0;
+  let refusedRows = 0;
+  let disjoint = 0;
+  let overlapping = 0;
+  let oneApproachOnly = 0;
+  const byReason: Record<string, number> = {};
+
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    const price = payload?.quote?.price;
+    if (!isNum(price) || price <= 0) continue;
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+
+    // THE ASSET APPROACH, built the way the screen builds it.
+    let asset: any;
+    const raw = rec.modelData?.rawStatements;
+    if (Array.isArray(raw) && raw.length) {
+      const lastReported = raw[raw.length - 1];
+      const rawShares =
+        typeof lastReported?.dilutedShares === 'number' ? lastReported.dilutedShares : null;
+      const shares = isNum(rawShares) && rawShares > 0 ? rawShares / 1e6 : null;
+      if (isNum(shares)) {
+        try {
+          asset = buildAssetApproach(lastReported, shares, DEFAULT_RECOVERY, false);
+        } catch {
+          asset = undefined;
+        }
+      }
+    }
+
+    // AND THE MARKET APPROACH, on a sector peer set built here.
+    let market: any;
+    try {
+      const built = buildFullModel(rec.modelData, drivers);
+      const subj: any = trailingFiguresFrom(built?.model, built?.dcf, rec.modelData);
+      if (isNum(subj?.dilutedShares) && subj.dilutedShares > 0) {
+        // A deliberately thin peer set: two peers at known multiples. The
+        // point of this arm is the COUNTING, not the multiples.
+        market = buildMarketApproach(
+          {
+            candidates: [
+              { symbol: 'A', name: 'A', evToEbitda: 10, evToSales: 2, priceToEarnings: 18, selectedByDefault: true },
+              { symbol: 'B', name: 'B', evToEbitda: 14, evToSales: 3, priceToEarnings: 24, selectedByDefault: true },
+            ],
+          },
+          subj,
+          null
+        );
+      }
+    } catch {
+      market = undefined;
+    }
+
+    let summary: any;
+    try {
+      summary = valuationSummary(rec.modelData, drivers, price, market, asset);
+    } catch (err) {
+      faults.push(`${payload.ticker}: the summary threw — ${String(err).slice(0, 60)}`);
+      continue;
+    }
+    companies++;
+    const where = payload.ticker;
+    const A = summary.approaches;
+    if (!A) {
+      faults.push(`${where}: the summary carries no record of which approaches were attempted`);
+      continue;
+    }
+
+    // ---- 1. SHOWN + REFUSED = ATTEMPTED --------------------------------
+    //
+    // Counted from the BANDS rather than from the block's own `shown`, so the
+    // identity is between what the chart draws and what the block claims.
+    const drawn = new Set(
+      (summary.fieldBands || [])
+        .filter((b: any) => isNum(b.low) && isNum(b.high))
+        .map((b: any) => b.variant)
+    );
+    if (A.shown !== drawn.size) {
+      faults.push(`${where}: ${drawn.size} approaches are drawn and the block says ${A.shown}`);
+    }
+    if (A.shown + A.refused.length !== A.attempted) {
+      faults.push(
+        `${where}: ${A.shown} shown plus ${A.refused.length} refused is not the ${A.attempted} attempted`
+      );
+    }
+    if (A.attempted !== 3) {
+      faults.push(`${where}: ${A.attempted} approaches attempted, and there are three`);
+    }
+    // AND EVERY REFUSED APPROACH IS ONE THAT REALLY HAS NO ROW.
+    for (const r of A.refused) {
+      refusedRows++;
+      if (drawn.has(r.variant)) {
+        faults.push(`${where}: ${r.variant} is drawn and listed as refused`);
+      }
+      // ---- 2. THE REASON IS A SENTENCE, NOT A BLANK ------------------
+      if (!r.reason || r.reason.trim().length < 20) {
+        faults.push(`${where}: ${r.variant} is refused with no reason worth reading — "${r.reason}"`);
+      }
+      const key = r.reason.slice(0, 44);
+      byReason[key] = (byReason[key] ?? 0) + 1;
+    }
+    for (const variant of ['income', 'market', 'asset']) {
+      if (!drawn.has(variant) && !A.refused.some((r: any) => r.variant === variant)) {
+        faults.push(`${where}: ${variant} has neither a row nor a reason — it has vanished`);
+      }
+    }
+
+    // ---- 3. THE OVERLAP SENTENCE APPEARS EXACTLY WHEN IT IS TRUE -------
+    //
+    // The spans are recomputed here from the bands, one per approach, with the
+    // income approach's several bands unioned — they are one approach, and two
+    // bands of the SAME approach failing to intersect says nothing about
+    // approaches disagreeing.
+    const spans: { low: number; high: number }[] = [];
+    for (const variant of ['income', 'market', 'asset']) {
+      const mine = (summary.fieldBands || []).filter(
+        (b: any) => b.variant === variant && isNum(b.low) && isNum(b.high)
+      );
+      if (!mine.length) continue;
+      spans.push({
+        low: Math.min(...mine.map((b: any) => b.low)),
+        high: Math.max(...mine.map((b: any) => b.high)),
+      });
+    }
+    let overlaps = false;
+    for (let i = 0; i < spans.length; i++) {
+      for (let j = i + 1; j < spans.length; j++) {
+        if (spans[i].low <= spans[j].high && spans[j].low <= spans[i].high) overlaps = true;
+      }
+    }
+    const shouldSay = spans.length >= 2 && !overlaps;
+    if (spans.length < 2) oneApproachOnly++;
+    else if (overlaps) overlapping++;
+    else disjoint++;
+    if (shouldSay && A.overlapNote !== NO_OVERLAP_NOTE) {
+      faults.push(
+        `${where}: ${spans.length} ranges and none of them intersect, and the sentence is ${A.overlapNote === null ? 'absent' : `"${A.overlapNote}"`}`
+      );
+    }
+    if (!shouldSay && A.overlapNote !== null) {
+      faults.push(
+        `${where}: the sentence "${A.overlapNote}" is printed where ${spans.length} range(s) ${overlaps ? 'DO overlap' : 'cannot be compared'}`
+      );
+    }
+
+    // ---- 4. THE CAPTION IS THE FIXED WORDING ---------------------------
+    if (A.caption !== SIDE_BY_SIDE_CAPTION) {
+      faults.push(`${where}: the caption reads "${A.caption}"`);
+    }
+    if (!/not combined/i.test(A.caption)) {
+      faults.push(`${where}: the caption does not say the approaches are not combined`);
+    }
+
+    // ---- 5. NO BANNED WORD IN ANY ROW STRING ---------------------------
+    //
+    // Rule 6's sentences are the engine's, and the engine is allowed to say
+    // what is missing — never what it means for the security. The exit
+    // multiple's allow-list is TEARSHEET D4's.
+    const strings: string[] = [
+      A.caption,
+      A.overlapNote || '',
+      ...A.refused.map((r: any) => `${r.label} ${r.reason}`),
+      ...(summary.fieldBands || []).map((b: any) => `${b.label} ${b.detail || ''}`),
+    ];
+    for (const text of strings) {
+      if (!text) continue;
+      let banned: string[] = [];
+      try {
+        banned = bannedWordsInCopy(text) || [];
+      } catch {
+        banned = [];
+      }
+      if (banned.length) {
+        faults.push(`${where}: "${text.slice(0, 40)}" uses ${banned.join(', ')}`);
+      }
+    }
+  }
+
+  // ---- 6. THE EXEMPTION ITSELF, NOT ONLY ITS EFFECT ON THE ROWS -------
+  //
+  // Widening the allow-list to excuse the bare word `exit` — which is what D4
+  // explicitly refused — passed every arm above, because no live row contains
+  // a bare `exit` any more: the thing the allow-list would hide is the thing
+  // this job removed. So the exemption is asserted on its own behaviour, with
+  // sentences written here, which is the only place the widening shows.
+  const allowList: [string, string[]][] = [
+    // The method's name, which is the whole point of the exemption.
+    ['Income — DCF, EV / EBITDA exit multiple', []],
+    ['an exit-multiple terminal value', []],
+    // A bare `exit` in the same sentence as the allowed phrase still fails:
+    // removing the phrase must not remove the word everywhere.
+    ['exit multiple, and then exit', ['exit']],
+    ['time to exit', ['exit']],
+    // And nothing else on the list is excused by accident.
+    ['a strong buy', ['buy', 'strong']],
+    ['undervalued against its target', ['target', 'undervalued']],
+  ];
+  for (const [text, want] of allowList) {
+    let got: string[] = [];
+    try {
+      got = (bannedWordsInCopy(text) || []).slice().sort();
+    } catch (err) {
+      faults.push(`the banned-word scan threw on "${text}" — ${String(err).slice(0, 40)}`);
+      continue;
+    }
+    const expected = want.slice().sort();
+    if (got.join(',') !== expected.join(',')) {
+      faults.push(
+        `the allow-list reads "${text}" as [${got.join(', ')}] and it should be [${expected.join(', ')}]`
+      );
+    }
+  }
+
+  if (!companies) faults.push('no company reached the approach block, so nothing above was checked');
+  if (!refusedRows) {
+    faults.push('not one approach was refused anywhere in the set, so rule 6 is unchecked');
+  }
+  if (!disjoint && !overlapping) {
+    faults.push('no company has two approaches to compare, so rule 7 is unchecked');
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the approaches shown:`);
+    faults.slice(0, 15).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 15) console.log(`           ... and ${faults.length - 15} more`);
+  } else {
+    console.log(
+      `  ${companies} companies: shown + refused = 3 on every one, and ${refusedRows} refused rows each carry the engine's own sentence`
+    );
+    console.log(
+      `  the non-overlap sentence appears on ${disjoint} and is withheld on ${overlapping} that overlap` +
+        ` and ${oneApproachOnly} with fewer than two ranges to compare`
+    );
+    const top = Object.entries(byReason)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([r, c]) => `${c}x "${r}..."`)
+      .join('; ');
+    console.log(`  the reasons given: ${top || 'none'}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE ASSET ROW SAYS WHAT IS IN IT (build step 5, job B3)
+// ---------------------------------------------------------------------------
+//
+// The row read `Asset — what it owns` and carried the MEDIAN of its surviving
+// measures as a point. Two faults in one line.
+//
+// The label named nothing, so a band spanning book value and a liquidation
+// struck at recovery rates the READER set looked exactly like one spanning
+// book value and tangible book. And the median was a cross-measure average —
+// the one thing standing decision 4 forbids — because book value and a
+// forced-sale liquidation answer different questions and the middle of them
+// answers neither. `VALUATION_SIDE_BY_SIDE` rule 5 allows a point only where
+// there is no honest range.
+//
+// Four arms, over every company in the set.
+{
+  console.log('\n=== the asset row says which measures are in it ===');
+  const { valuationSummary } = await import(`file:///${REPO}/src/data/valuationSummary.ts`);
+  const { buildAssetApproach, MEASURE_SHORT_NAMES, DEFAULT_RECOVERY } = await import(
+    `file:///${REPO}/src/data/assetApproach.ts`
+  );
+  const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.ts`);
+  const { defaultDriversFor } = await import(`file:///${REPO}/src/data/companies.ts`);
+
+  const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
+  const faults: string[] = [];
+  let rows = 0;
+  let withOneMeasure = 0;
+  let withARange = 0;
+  let notInformative = 0;
+  const namesSeen: Record<string, number> = {};
+
+  for (const file of fs.readdirSync(PAYLOADS).filter((f) => f.endsWith('.json'))) {
+    let payload: any;
+    try {
+      payload = readPayload(file);
+    } catch {
+      continue;
+    }
+    const price = payload?.quote?.price;
+    if (!isNum(price) || price <= 0) continue;
+    let rec: any;
+    try {
+      rec = buildCompanyFrom(payload);
+    } catch {
+      continue;
+    }
+    const drivers: any = { ...rec.defaultDrivers, ...defaultDriversFor(rec.modelData) };
+    // THE LAST REPORTED BALANCE SHEET AND THE SHARE COUNT IN MILLIONS, the
+    // way the screen takes them: the raw statements, and the diluted count
+    // divided to the same units as every money figure.
+    const raw = rec.modelData?.rawStatements;
+    if (!Array.isArray(raw) || !raw.length) continue;
+    const lastReported = raw[raw.length - 1];
+    const rawShares =
+      typeof lastReported?.dilutedShares === 'number' ? lastReported.dilutedShares : null;
+    const sharesInMillions =
+      isNum(rawShares) && rawShares > 0 ? rawShares / 1e6 : null;
+    if (!isNum(sharesInMillions)) continue;
+    let asset: any;
+    try {
+      asset = buildAssetApproach(lastReported, sharesInMillions, DEFAULT_RECOVERY, false);
+    } catch {
+      continue;
+    }
+    if (!asset?.available) continue;
+    let summary: any;
+    try {
+      summary = valuationSummary(rec.modelData, drivers, price, undefined, asset);
+    } catch (err) {
+      faults.push(`${payload.ticker}: the summary threw — ${String(err).slice(0, 60)}`);
+      continue;
+    }
+    const band = (summary?.fieldBands || []).find((b: any) => b.variant === 'asset');
+    if (!band) {
+      faults.push(`${payload.ticker}: the asset approach is available and no row was drawn`);
+      continue;
+    }
+    rows++;
+    const where = payload.ticker;
+
+    // THE MEASURES INSIDE THE RANGE, worked out here from the approach's own
+    // measures rather than read back off the label.
+    const inRange = (asset.usable || []).filter((m: any) => isNum(m?.perShare));
+    const want = inRange.map(
+      (m: any) => MEASURE_SHORT_NAMES[m.key as keyof typeof MEASURE_SHORT_NAMES]
+    );
+
+    // ---- 1. THE LABEL LISTS EXACTLY THE MEASURES INSIDE IT -------------
+    for (const name of want) {
+      if (!band.label.includes(name)) {
+        faults.push(`${where}: ${name} is inside the range and the label does not say so — "${band.label}"`);
+      }
+      namesSeen[name] = (namesSeen[name] ?? 0) + 1;
+    }
+    // AND NOTHING ELSE. A label naming a measure that did not survive is the
+    // same fault the other way round, and the one a reader cannot detect.
+    for (const [key, name] of Object.entries(MEASURE_SHORT_NAMES) as [string, string][]) {
+      if (want.includes(name)) continue;
+      // `book` is a substring of `tangible book`, so a label naming only
+      // tangible book would read as naming book value too. Compare the list
+      // the label actually prints, not the whole string.
+      const listed = band.label
+        .replace(/^Asset — /, '')
+        .split(', ')
+        .map((x: string) => x.trim());
+      if (listed.includes(name)) {
+        faults.push(`${where}: the label names ${name} and that measure is not in the range`);
+      }
+    }
+
+    // ---- 2. A POINT ONLY WHERE ONE MEASURE SURVIVES --------------------
+    if (inRange.length === 1) {
+      withOneMeasure++;
+      if (!isNum(band.point)) {
+        faults.push(`${where}: one measure survives and no point was drawn`);
+      } else if (!isNum(asset.mid) || Math.abs(band.point - asset.mid) > 1e-9) {
+        faults.push(`${where}: the one measure is ${asset.mid} and the point says ${band.point}`);
+      }
+    } else {
+      withARange++;
+      if (isNum(band.point)) {
+        faults.push(
+          `${where}: ${inRange.length} measures are in the range and a point was drawn at ${band.point} — a cross-measure average`
+        );
+      }
+    }
+
+    // ---- 3. THE SUITABILITY SENTENCE IS IN THE ROW ---------------------
+    //
+    // Where the balance sheet does not hold what makes the business valuable,
+    // the engine's own sentence belongs in the row. Matched against the
+    // approach's `suitability`, not against a phrase written here, so the row
+    // cannot drift from the reason.
+    if (!asset.informative) {
+      notInformative++;
+      if (band.detail !== asset.suitability) {
+        faults.push(
+          `${where}: the asset approach is not informative and the row reads "${String(band.detail).slice(0, 50)}" rather than its suitability sentence`
+        );
+      }
+    } else if (band.detail === asset.suitability) {
+      faults.push(`${where}: an informative asset row is printing the unsuitability sentence`);
+    }
+
+    // ---- 4. THE BAND IS STILL THE MEASURES' OWN SPREAD -----------------
+    const values = inRange.map((m: any) => m.perShare as number);
+    if (values.length) {
+      if (Math.abs(band.low - Math.min(...values)) > 1e-9) {
+        faults.push(`${where}: the row starts at ${band.low} and the lowest measure is ${Math.min(...values)}`);
+      }
+      if (Math.abs(band.high - Math.max(...values)) > 1e-9) {
+        faults.push(`${where}: the row ends at ${band.high} and the highest measure is ${Math.max(...values)}`);
+      }
+    }
+  }
+
+  if (!rows) faults.push('no company produced an asset row, so nothing above was checked');
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the asset row:`);
+    faults.slice(0, 15).forEach((f) => console.log(`           ${f}`));
+    if (faults.length > 15) console.log(`           ... and ${faults.length - 15} more`);
+  } else {
+    console.log(
+      `  ${rows} asset rows, each labelled with exactly the measures inside it: ` +
+        Object.entries(namesSeen)
+          .map(([n, c]) => `${n} x${c}`)
+          .join(', ')
+    );
+    console.log(
+      `  ${withOneMeasure} draw a point because one measure survives; ${withARange} have a range and draw none`
+    );
+    console.log(
+      `  ${notInformative} of ${rows} carry the engine's own sentence about where the value does not sit`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // THE MARKET RANGE IS A FLEX OF A STATED ASSUMPTION (build step 5, job B2)
 // ---------------------------------------------------------------------------
 //

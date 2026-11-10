@@ -435,6 +435,46 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### The asset row says which measures are in it
+
+Four arms over every company with an asset approach, with the measures inside
+the range worked out in the check from the approach's own output rather than
+read back off the label. **The label lists exactly those measures** — and
+nothing else, which is the half a reader cannot detect, compared against the
+label's printed list rather than the whole string because `book` is a substring
+of `tangible book`. **A point only where one measure survives**, because the
+median of several measures is a cross-measure average. **The suitability
+sentence is in the row** where the approach is not informative, matched against
+the approach's own `suitability` so the row cannot drift from the reason. **And
+the band is still the measures' own spread.**
+
+Proved by breaking, four ways: the median point put back (1 fault), the label
+back to `Asset — what it owns` (305), a label naming every measure rather than
+the surviving ones (291), and the suitability sentence back to the nine-word
+aside (81).
+
+### Every approach is shown or says why not
+
+Rules 6 to 8 of `docs/VALUATION_SIDE_BY_SIDE_SPEC.md`, five arms. **Shown +
+refused = attempted**, with `shown` counted from the bands the chart would
+draw rather than from the block's own claim, and every variant asserted to have
+either a row or a reason — an approach with neither has vanished, which is the
+state this job fixed. **The reason is a sentence**, at least twenty characters
+of the engine's own words. **The overlap sentence appears exactly when it is
+true**: the spans are recomputed in the check, one per approach with the income
+approach's bands unioned, and the sentence must be absent where two ranges
+intersect AND where fewer than two exist. **The caption is the fixed wording.**
+**And no banned word appears in any row string**, through `bannedWordsInCopy`,
+which applies D4's allow-list by removing the fixed phrases `exit multiple` and
+`exit-multiple` before the scan — so a bare `exit` still fails. That arm found
+the income approach's own label reading `EV / EBITDA exit`.
+
+Proved by breaking, six ways: a refused approach hidden rather than given a row;
+the sentence printed whenever two ranges exist, overlapping or not; the caption
+reworded; the income refusal's reason thrown away; the allow-list widened to
+excuse the bare word, which D4 explicitly refused; and the banned word put back
+in the label.
+
 ### The market range is a flex of what the peers pay
 
 Six arms. **A hand-worked peer set**: seven peers at 9, 10, 12, 14, 16, 20 and

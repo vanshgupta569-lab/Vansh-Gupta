@@ -576,6 +576,60 @@ export interface ValuationBand {
   detail: string;
 }
 
+/** Why the income approach has no bands, in the engine's own words. */
+export interface ApproachRefusal {
+  code: string | null;
+  message: string;
+}
+
+/**
+ * THE INCOME APPROACH'S BANDS, AND THE REASON THERE ARE NONE (job B4).
+ *
+ * `valuationBandsFor` returns `[]` for a refused company, which is correct and
+ * silent: the screen could say there was no range but not why, and rule 6 of
+ * `VALUATION_SIDE_BY_SIDE` wants the engine's own sentence in the row rather
+ * than a blank. The build is the same one, so the refusal comes back from it
+ * rather than from a second pass — a second pass could also disagree with the
+ * first.
+ */
+export function valuationBandsWithRefusal(
+  source: any,
+  drivers: ValuationDrivers,
+  marketPriceOverride?: number | null
+): { bands: ValuationBand[]; refusal: ApproachRefusal | null } {
+  try {
+    const d = buildOverridden(source, drivers);
+    if (typeof marketPriceOverride === 'number' && marketPriceOverride > 0) {
+      d.dcf.sharePrice = marketPriceOverride;
+    }
+    const M: any = buildModel(d);
+    const D: any = buildDCF(M, d);
+    if (!D.applicable) {
+      return {
+        bands: [],
+        refusal: {
+          code: typeof D.code === 'string' ? D.code : null,
+          message:
+            typeof D.message === 'string' && D.message.trim()
+              ? D.message
+              : 'The income approach was refused and the engine gave no reason, which is itself a fault.',
+        },
+      };
+    }
+    return { bands: valuationBandsFor(source, drivers, marketPriceOverride), refusal: null };
+  } catch (err) {
+    return {
+      bands: [],
+      refusal: {
+        code: null,
+        message:
+          'The income approach could not be built for this company. ' +
+          'Nothing is shown rather than a figure that means nothing.',
+      },
+    };
+  }
+}
+
 export function valuationBandsFor(
   source: any,
   drivers: ValuationDrivers,
@@ -621,7 +675,11 @@ export function valuationBandsFor(
       const multiple = d.dcf.exitEbitdaMultiple ?? 0;
       const step = d.dcf.sensitivity.multipleSteps.slice(-1)[0] ?? 1;
       bands.push({
-        label: 'Income — DCF, EV / EBITDA exit',
+        // THE METHOD'S ONE NAME (TEARSHEET_SPEC D4). This read `EV / EBITDA
+        // exit`, and a bare `exit` is on the banned list: `exit` is a
+        // recommendation, and only the fixed phrase `exit multiple` is
+        // exempt. Found by job B4's scan over every row string.
+        label: 'Income — DCF, EV / EBITDA exit multiple',
         low: Math.min(...multipleValues),
         high: Math.max(...multipleValues),
         point: r(D.exitMultipleValuation.valuePerShare, 2),

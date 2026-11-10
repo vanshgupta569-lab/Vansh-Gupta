@@ -2153,6 +2153,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           <div id="football" className="scroll-mt-24">
           <FootballField
             bands={fieldBands}
+            approaches={summary.approaches}
             marketPrice={displayPrice}
             fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
             fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}

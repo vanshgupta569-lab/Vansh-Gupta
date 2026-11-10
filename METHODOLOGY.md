@@ -54,6 +54,7 @@ this file explains the machinery those verdicts are about.
 15. [The equity bridge](#15-the-equity-bridge)
 16. [Refusals, in the order they are tested](#16-refusals-in-the-order-they-are-tested)
 17. [Residual income](#17-residual-income)
+17a. [The three approaches side by side](#17a-the-three-approaches-side-by-side)
 18. [The market approach](#18-the-market-approach)
 19. [The asset approach](#19-the-asset-approach)
 20. [The valuation range](#20-the-valuation-range)
@@ -2470,6 +2471,69 @@ is roughly right, which for a bank means trusting the loan-loss provisioning —
 and provisioning is exactly where a bank in trouble flatters itself. It says
 nothing about capital adequacy, which is often the binding constraint on whether
 a bank can grow at all, and regulated dividend limits are not modelled.
+
+---
+
+## 17a. The three approaches side by side
+
+`valuationSummary.ts`, build step 5 jobs B3 and B4, 2026-11-08.
+`docs/VALUATION_SIDE_BY_SIDE_SPEC.md` rules 5 to 8.
+
+**The asset row says which measures are inside it** (job B3). It read `Asset —
+what it owns`, which named none of them, so a band spanning book value and a
+liquidation struck at recovery rates **the reader set** looked exactly like one
+spanning book value and tangible book. The label now lists exactly the measures
+that survived — `Asset — book, tangible book, net current assets`, and
+`liquidation at your recovery rates` where that measure is shown, because the
+rates are the reader's and the label says so.
+
+**And it carries no point where it has a range.** The point was the median of
+the surviving measures, which is a cross-measure average: book value and a
+forced-sale liquidation answer different questions and the middle of them
+answers neither, which is standing decision 4 inside a single row. Rule 5
+allows a point only where there is no honest range, so the point is drawn where
+**one** measure survives and withheld where more than one does. Measured over
+the set: 149 asset rows, 34 with one measure and a point, 115 with a range and
+none.
+
+**Where the balance sheet does not hold what makes the business valuable, the
+row carries the engine's own sentence** rather than a nine-word aside. 81 of the
+149 do.
+
+**Every approach is shown or says why not** (job B4, rule 6). Three approaches
+are always attempted, and each either draws a row or carries its refusal in the
+engine's own words. Until this an approach that could not be built was simply
+ABSENT: `valuationBandsFor` returned no bands and threw the reason away, and an
+asset approach whose every measure came out negative did not appear at all. A
+reader then saw two approaches in agreement and nothing about the third, which
+is the most misleading shape this screen can take, because the rows are counted
+and a consensus is inferred. The identity the check rests on is **shown +
+refused = attempted**, on all 174 companies, with 254 refused rows across the
+set — most often no peer set (114), no operating income filed (42), no total
+assets filed (23).
+
+**The caption is fixed wording** (rule 8): `Shown side by side; not combined.`
+One exported constant, so this page and the workbook cannot word it
+differently.
+
+**The non-overlap sentence is neutral and conditional** (rule 7): `The ranges do
+not overlap.` appears only where no two of the shown approaches' ranges
+intersect. The income approach contributes several bands and they are **one
+approach**, so its range is their union — otherwise two bands of the same
+approach failing to intersect would print a sentence about approaches
+disagreeing. With fewer than two approaches shown the sentence is withheld
+entirely: a lone range that "does not overlap" is a claim about nothing. It
+appears on 6 companies, is withheld on 54 that overlap, and on 114 with fewer
+than two ranges to compare.
+
+**One name for the exit multiple** (`TEARSHEET_SPEC` D4, approved 4 November
+2026). `exit` is on the banned list because it is a recommendation, and the
+fixed phrases `exit multiple` and `exit-multiple` are removed before the scan,
+so `exit` on its own anywhere else still fails. `bannedWordsInCopy` in
+`screener.ts` owns that, beside the list it exempts. Job B4's scan over every
+row string found the income approach's own label reading `Income — DCF, EV /
+EBITDA exit`, a bare banned word on every company with an exit-multiple band;
+it now reads `exit multiple`.
 
 ---
 

@@ -103,6 +103,23 @@ export const RECOVERY_PRESETS: {
 // not a floor.
 export const DEFAULT_RECOVERY: RecoveryRates = FORCED_SALE;
 
+/**
+ * THE SHORT NAME EACH MEASURE GOES BY IN THE ROW'S LABEL (job B3).
+ *
+ * The asset row read `Asset — what it owns`, which named nothing: a reader
+ * could not tell whether the band spanned book value and tangible book, or
+ * book value and a liquidation struck at recovery rates they had changed
+ * themselves. `VALUATION_SIDE_BY_SIDE` rule 5 wants the row to say what is
+ * inside it, so the label lists exactly the measures that survived — and
+ * `liquidation` says whose rates it used, because they are the reader's.
+ */
+export const MEASURE_SHORT_NAMES: Record<AssetMeasure['key'], string> = {
+  book: 'book',
+  tangibleBook: 'tangible book',
+  ncav: 'net current assets',
+  liquidation: 'liquidation at your recovery rates',
+};
+
 export const RECOVERY_LABELS: { key: keyof RecoveryRates; label: string }[] = [
   { key: 'cash', label: 'Cash and equivalents' },
   { key: 'receivables', label: 'Trade receivables' },

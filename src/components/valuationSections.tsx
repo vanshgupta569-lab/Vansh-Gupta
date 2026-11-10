@@ -32,6 +32,19 @@ export interface FieldBand extends ValuationBand {
 
 interface FootballFieldProps {
   bands: FieldBand[];
+  /**
+   * RULES 6 TO 8 (job B4): what was refused and why, the fixed caption, and
+   * the neutral non-overlap sentence. Taken from `valuationSummary` rather
+   * than worked out here, so the chart and the export cannot disagree about
+   * which approaches were attempted.
+   */
+  approaches?: {
+    attempted: number;
+    shown: number;
+    refused: { variant: string; label: string; reason: string }[];
+    caption: string;
+    overlapNote: string | null;
+  };
   marketPrice: number;
   fiftyTwoWeekHigh?: number | null;
   fiftyTwoWeekLow?: number | null;
@@ -40,6 +53,7 @@ interface FootballFieldProps {
 
 export const FootballField: React.FC<FootballFieldProps> = ({
   bands,
+  approaches,
   marketPrice,
   fiftyTwoWeekHigh,
   fiftyTwoWeekLow,
@@ -130,7 +144,14 @@ export const FootballField: React.FC<FootballFieldProps> = ({
             const left = pos(row.low);
             const right = pos(row.high);
             const width = Math.max(right - left, 0.6);
-            const pointPos = pos(row.point);
+            // A ROW CAN HAVE NO POINT (job B3). The asset approach's point was
+            // the median of its surviving measures, which is an average across
+            // measures that answer different questions — the thing standing
+            // decision 4 forbids. Rule 5 allows a point only where there is no
+            // honest range, so a row with a real range now arrives with
+            // `point: null` and nothing is drawn for it.
+            const hasPoint = typeof row.point === 'number' && isFinite(row.point);
+            const pointPos = hasPoint ? pos(row.point as number) : 0;
             const containsPrice = marketPrice >= row.low && marketPrice <= row.high;
             const isReference = row.variant === 'reference';
             // A method can produce one figure rather than a range: the asset
@@ -158,7 +179,9 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                     {row.label}
                   </span>
                   <span className="font-figure text-[13px] text-[#8A8A8F]">
-                    {isPoint ? fmt(row.point) : `${fmt(row.low)} – ${fmt(row.high)}`}
+                    {isPoint && hasPoint
+                      ? fmt(row.point as number)
+                      : `${fmt(row.low)} – ${fmt(row.high)}`}
                   </span>
                 </div>
 
@@ -185,18 +208,20 @@ export const FootballField: React.FC<FootballFieldProps> = ({
                     />
                   )}
 
-                  {!isReference && !isPoint && (
+                  {!isReference && !isPoint && hasPoint && (
                     <div
                       className="absolute inset-y-0 w-px bg-[#F2F0EA]/40"
                       style={{ left: `${pointPos}%` }}
-                      title={`base case ${fmt(row.point)}`}
+                      title={`base case ${fmt(row.point as number)}`}
                     />
                   )}
                 </div>
 
                 <div className="font-sans text-[13px] leading-snug text-[#8A8A8F] mt-1.5">
                   {row.detail}
-                  {!isReference && !isPoint && ` · base case ${fmt(row.point)}`}
+                  {!isReference && !isPoint && hasPoint
+                    ? ` · base case ${fmt(row.point as number)}`
+                    : ''}
                   <span className="ml-2 text-[#8A8A8F]">
                     · market price sits {containsPrice ? 'inside' : marketPrice > row.high ? 'above' : 'below'} this range
                   </span>
@@ -206,6 +231,30 @@ export const FootballField: React.FC<FootballFieldProps> = ({
           })}
         </div>
       </div>
+
+      {/* ---- RULE 6: AN APPROACH THAT WAS REFUSED IS STILL A ROW ----------
+          A refused approach left out of the chart leaves a reader looking at
+          two approaches in agreement with nothing said about the third, which
+          is the most misleading shape this screen can take. The row carries
+          the engine's own sentence; it has no bar, because there is no range,
+          and the dashes say that rather than a bar of zero width. */}
+      {approaches?.refused?.length ? (
+        <div className="mt-6 space-y-4 border-t border-[#222228] pt-5">
+          {approaches.refused.map((r) => (
+            <div key={r.variant}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 mb-1">
+                <span className="font-figure text-[13px] tracking-wider text-[#8A8A8F] uppercase">
+                  {r.label}
+                </span>
+                <span className="font-figure text-[13px] text-[#8A8A8F]">—</span>
+              </div>
+              <div className="font-sans text-[13px] leading-snug text-[#8A8A8F] max-w-2xl">
+                {r.reason}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* The scale, with the market price labelled directly under its line. */}
       <div className="relative mt-6 pt-4 border-t border-[#222228]">
@@ -223,6 +272,18 @@ export const FootballField: React.FC<FootballFieldProps> = ({
           market price {fmt(marketPrice)}
         </div>
       </div>
+
+      {/* ---- RULES 7 AND 8 -------------------------------------------------
+          The caption is fixed wording and comes from one constant, so this
+          page and the workbook cannot word it differently. The non-overlap
+          sentence is neutral and appears only where no two of the shown
+          ranges intersect — never as a verdict on which one is right. */}
+      {approaches ? (
+        <div className="mt-5 font-sans text-[13px] leading-relaxed text-[#8A8A8F]">
+          {approaches.overlapNote ? <span>{approaches.overlapNote} </span> : null}
+          <span>{approaches.caption}</span>
+        </div>
+      ) : null}
 
     </section>
   );

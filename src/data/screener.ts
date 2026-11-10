@@ -85,6 +85,35 @@ export const BANNED_WORDS = [
  * whole words only, so "entry" is caught and "entryway" is not — the spec
  * bans the instruction, not the substring.
  */
+/**
+ * THE ONE EXEMPTION FROM THE BANNED LIST (TEARSHEET_SPEC D4, approved by Nihar
+ * on 4 November 2026).
+ *
+ * `exit` is banned because "exit" is a recommendation. But **exit multiple** is
+ * the standard name of the second terminal value, used in every text on the
+ * subject, and renaming it would leave this site alone in calling it something
+ * else. So the two fixed phrases are REMOVED BEFORE THE SCAN rather than the
+ * word being excused: `exit` on its own, anywhere else in the same sentence,
+ * still fails.
+ *
+ * Written beside the list it exempts, the way the screener's footer exemption
+ * is, because an exemption kept somewhere else is an exemption nobody finds.
+ */
+export const BANNED_WORD_ALLOWED_PHRASES = ['exit multiple', 'exit-multiple'];
+
+/**
+ * The banned-word scan with D4's allow-list applied. This is what prose shown
+ * to a reader is checked against; `bannedWordsIn` is the raw list and stays
+ * exactly as `SCREENER_SPEC` rule 12 defines it.
+ */
+export function bannedWordsInCopy(text: string): string[] {
+  let scanned = String(text ?? '');
+  for (const phrase of BANNED_WORD_ALLOWED_PHRASES) {
+    scanned = scanned.replace(new RegExp(phrase.replace(/[-\s]/g, '[-\\s]'), 'gi'), ' ');
+  }
+  return bannedWordsIn(scanned);
+}
+
 export function bannedWordsIn(text: string): string[] {
   const found: string[] = [];
   const lower = String(text ?? '').toLowerCase();

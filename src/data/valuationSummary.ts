@@ -31,8 +31,9 @@
 // never silently swapped in. This function takes that one price and every
 // figure it returns is struck at it.
 import type { ValuationDrivers } from '../types';
-import { valuationBandsFor } from './companies';
+import { valuationBandsWithRefusal } from './companies';
 import { terminalSpread } from './terminalSpread';
+import { MEASURE_SHORT_NAMES } from './assetApproach';
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 
@@ -47,6 +48,42 @@ export interface ValuationBandOut {
 export interface FieldBandOut extends ValuationBandOut {
   variant: 'income' | 'market' | 'asset';
 }
+
+/**
+ * AN APPROACH THAT WAS TRIED AND REFUSED (job B4).
+ *
+ * Rule 6: a refused approach is a ROW carrying the engine's plain-English
+ * sentence, not a blank and not a missing row. A missing row is the worse of
+ * the two, because the page then shows two approaches agreeing and says
+ * nothing about the third that could not be built at all.
+ */
+export interface RefusedApproach {
+  variant: 'income' | 'market' | 'asset';
+  label: string;
+  /** The engine's own words. Never written here. */
+  reason: string;
+}
+
+export interface ApproachesOut {
+  /** Always three: income, market, asset. Every one of them is attempted. */
+  attempted: number;
+  shown: number;
+  refused: RefusedApproach[];
+  /** Rule 8, fixed wording. */
+  caption: string;
+  /**
+   * Rule 7: the neutral sentence, present only where no two of the shown
+   * approaches' ranges intersect, and null otherwise — including where fewer
+   * than two approaches are shown, since one range cannot fail to overlap.
+   */
+  overlapNote: string | null;
+}
+
+/** Rule 8. One string, so the page and the export cannot word it differently. */
+export const SIDE_BY_SIDE_CAPTION = 'Shown side by side; not combined.';
+
+/** Rule 7. */
+export const NO_OVERLAP_NOTE = 'The ranges do not overlap.';
 
 export interface ValuationSummary {
   /** The one price every figure below was struck at. */
@@ -66,6 +103,8 @@ export interface ValuationSummary {
   premiumAgainst: { perpetuity: number | null; exit: number | null };
   /** Every approach as a bar for the football field, income first. */
   fieldBands: FieldBandOut[];
+  /** Rules 6 to 8: what was attempted, what was refused, and the two captions. */
+  approaches: ApproachesOut;
 }
 
 /**
@@ -115,7 +154,16 @@ export function valuationSummary(
 ): ValuationSummary {
   const price = isNum(struckPrice) && struckPrice > 0 ? struckPrice : null;
 
-  const bands: ValuationBandOut[] = source ? (valuationBandsFor(source, drivers, price) as any[]) : [];
+  const built = source
+    ? valuationBandsWithRefusal(source, drivers, price)
+    : {
+        bands: [],
+        refusal: {
+          code: null,
+          message: 'There is no model for this company, so no income approach was attempted.',
+        },
+      };
+  const bands: ValuationBandOut[] = built.bands as any[];
 
   // THE HEADLINE IS TWO NUMBERS, NOT ONE.
   //
@@ -167,24 +215,129 @@ export function valuationSummary(
     });
   }
 
+  // ---- THE ASSET ROW SAYS WHAT IS IN IT (job B3) ------------------------
+  //
   // The asset approach is drawn as a floor rather than an estimate, which is
-  // what it is. Where only one measure survives the bar has no width, and that
-  // is honest: there is one figure, not a range.
-  if (asset?.available && isNum(asset.low) && isNum(asset.high) && isNum(asset.mid)) {
-    const count = (asset.usable || []).length;
+  // what it is. Three things the row owes a reader, and did not:
+  //
+  // 1. WHICH MEASURES. `Asset — what it owns` named none of them, so a band
+  //    spanning book value and a liquidation struck at recovery rates the
+  //    READER set looked the same as one spanning book and tangible book. The
+  //    label now lists exactly the measures inside the range.
+  //
+  // 2. NO MEDIAN WHERE THERE IS A RANGE. The point was the median of the
+  //    surviving measures — a cross-measure average, which is the one thing
+  //    standing decision 4 forbids: book value and a forced-sale liquidation
+  //    answer different questions, and the middle of them answers neither.
+  //    `VALUATION_SIDE_BY_SIDE` rule 5 allows a point only where there is no
+  //    honest range, so the point is drawn where ONE measure survives and
+  //    withheld where more than one does.
+  //
+  // 3. THE SUITABILITY SENTENCE, in the row, where `informative` is false. A
+  //    nine-word aside saying "shown as a floor" is not the same claim as the
+  //    engine's own sentence about where this company's value actually sits.
+  if (asset?.available && isNum(asset.low) && isNum(asset.high)) {
+    const inRange = (asset.usable || []).filter((m: any) => isNum(m?.perShare));
+    const names = inRange
+      .map((m: any) => MEASURE_SHORT_NAMES[m.key as keyof typeof MEASURE_SHORT_NAMES] || m.key)
+      .filter(Boolean);
+    const single = inRange.length === 1;
     fieldBands.push({
-      label: 'Asset — what it owns',
+      label: names.length ? `Asset — ${names.join(', ')}` : 'Asset — what it owns',
       low: asset.low,
       high: asset.high,
-      point: asset.mid,
-      detail: `${count} balance sheet measure${count === 1 ? '' : 's'}${
-        asset.informative ? '' : ', shown as a floor rather than a valuation'
-      }`,
+      // One measure is one figure, and the chart draws it as a tick. More than
+      // one is a range with no honest point inside it.
+      point: single && isNum(asset.mid) ? asset.mid : null,
+      detail: asset.informative
+        ? `${inRange.length} balance sheet measure${inRange.length === 1 ? '' : 's'}`
+        : asset.suitability ||
+          `${inRange.length} balance sheet measure${
+            inRange.length === 1 ? '' : 's'
+          }, shown as a floor rather than a valuation`,
       variant: 'asset',
     });
   }
 
-  return { struckPrice: price, bands, terminalMethods, premiumAgainst, fieldBands };
+  // ---- RULES 6 TO 8: WHAT WAS REFUSED, AND THE TWO CAPTIONS (job B4) ----
+  //
+  // THREE APPROACHES ARE ALWAYS ATTEMPTED, and every one of them either shows
+  // a row or says why it cannot. The identity the check rests on is
+  // `shown + refused === attempted`: a refused approach that is simply absent
+  // leaves the page showing two approaches in agreement and saying nothing
+  // about the third, which is the most misleading shape this screen can take.
+  const refused: RefusedApproach[] = [];
+  if (!fieldBands.some((b) => b.variant === 'income')) {
+    refused.push({
+      variant: 'income',
+      label: 'Income — discounted cash flow',
+      reason: built.refusal?.message || 'The income approach produced no range.',
+    });
+  }
+  if (!fieldBands.some((b) => b.variant === 'market')) {
+    refused.push({
+      variant: 'market',
+      label: 'Market — peer multiples',
+      reason:
+        market?.message ||
+        (market
+          ? 'The peer set produced no usable multiple for this company.'
+          : 'No peer set was available for this company.'),
+    });
+  }
+  if (!fieldBands.some((b) => b.variant === 'asset')) {
+    refused.push({
+      variant: 'asset',
+      // No measure survived, so there are no measures to name: the refused
+      // row keeps the approach's own name and the reason does the work.
+      label: 'Asset — what it owns',
+      reason:
+        asset?.message ||
+        (asset
+          ? 'Every measure in the asset approach came out negative or could not be computed.'
+          : 'The balance sheet needed for an asset approach was not available.'),
+    });
+  }
+
+  // THE RANGES, ONE PER APPROACH. The income approach contributes several
+  // bands (perpetuity and exit multiple), and they are one approach, so its
+  // range is their union — otherwise two bands of the SAME approach failing to
+  // intersect would print a sentence about approaches disagreeing.
+  const spans: { variant: string; low: number; high: number }[] = [];
+  for (const variant of ['income', 'market', 'asset'] as const) {
+    const mine = fieldBands.filter((b) => b.variant === variant && isNum(b.low) && isNum(b.high));
+    if (!mine.length) continue;
+    spans.push({
+      variant,
+      low: Math.min(...mine.map((b) => b.low as number)),
+      high: Math.max(...mine.map((b) => b.high as number)),
+    });
+  }
+  // DISJOINT MEANS NO TWO OF THEM INTERSECT. With one approach there is no
+  // pair, so there is nothing to say and the sentence is withheld: a lone
+  // range that "does not overlap" would be a claim about nothing.
+  let anyOverlap = false;
+  for (let i = 0; i < spans.length; i++) {
+    for (let j = i + 1; j < spans.length; j++) {
+      if (spans[i].low <= spans[j].high && spans[j].low <= spans[i].high) anyOverlap = true;
+    }
+  }
+  const approaches: ApproachesOut = {
+    attempted: 3,
+    shown: spans.length,
+    refused,
+    caption: SIDE_BY_SIDE_CAPTION,
+    overlapNote: spans.length >= 2 && !anyOverlap ? NO_OVERLAP_NOTE : null,
+  };
+
+  return {
+    struckPrice: price,
+    bands,
+    terminalMethods,
+    premiumAgainst,
+    fieldBands,
+    approaches,
+  };
 }
 
 export default { valuationSummary, premiumOf, admissibleInputs };
