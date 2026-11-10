@@ -4441,12 +4441,25 @@ oil major with commodity sales and equity earnings — it is a **component** of 
 top line, and the filing's own total sits in `Revenues`, further down the list,
 where nothing read it (`KI-39`).
 
-**The rule is the filing's own arithmetic.** Every other revenue tag is a
-component of total revenue and cannot exceed it, so among the candidates that
-cover the latest reported year the LARGEST figure is the total. Where two agree
-to within a tenth of a per cent they are the same line tagged twice and the order
-of preference decides, so nothing moves on a company that tags one revenue line —
-which is nearly all of them.
+**The rule is what the tag MEANS, not the size of the figure.** `Revenues` is
+the total revenue line as presented; `SalesRevenueNet` is what a filer that has
+not moved to ASC 606 calls the same thing; the contract-revenue tags are revenue
+from contracts with customers, which is the whole of the top line for most
+companies and a component of it for some. The first of those a filer tags, and
+that reaches its latest reported year, is its top line. Where two tags carry the
+same figure they are the same line tagged twice and nothing moves — which is
+nearly all companies.
+
+**It was written as "the largest figure" first, and the measurement disproved it
+the same afternoon.** The reasoning was that a component cannot exceed the total
+it is part of. Then Mastercard: it tags its GROSS revenue — before the rebates
+and incentives it pays out — under the contract tag, and its NET revenue, which
+is the top line of its income statement, under `Revenues`. 29,845 against 18,884
+in FY2021. The larger figure there is the line above two deductions, and
+"largest" would have published it. This is also why `KI-32`'s answer for a bank
+is `RevenuesNetOfInterestExpense`, which is SMALLER than the gross revenue above
+it: both rules pick the line the filer puts on the face of its income
+statement.
 
 `revenueDefinition` is now on every SEC filer rather than only on a financial
 one, and it carries the tag chosen, its basis, **every candidate's figure in the
@@ -4454,11 +4467,9 @@ latest reported year**, and how far short of the total the old rule's choice
 was — so the question can be audited from the payload without re-reading the
 filing.
 
-**`KI-32`'s rule for financial companies is untouched.** There the answer is not
-"the largest" but "the one the filer puts on the face of its income statement"
-(`RevenuesNetOfInterestExpense` where it is tagged), because a bank's revenue net
-of interest expense is smaller than its gross revenue and is still the top line.
-Two rules, each saying which companies it is for.
+**`KI-32`'s rule for financial companies is untouched**
+(`RevenuesNetOfInterestExpense` where it is tagged). Two rules, each saying which
+companies it is for, and each picking the line on the face of the statement.
 
 **Measured on 2026-11-08** by asking the fetcher for every SEC filer in the set
 and writing nothing: all 85 settle a top line, 7 of the 85 SEC filers in the set change their revenue.

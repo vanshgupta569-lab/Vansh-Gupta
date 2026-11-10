@@ -5,6 +5,8 @@
 4. Menu sections keep the names and order from the Idea Book platform structure (Companies, Research, Markets, Invest, Tools, Learn, Deals). A section with no shipped destination is hidden, as the spec says. The "Invest" name stays; its contents follow the facts-only rule.
 5. Loading-screen stage names and the "Usually about n seconds" line use the engine's real stages and real build-time records; the developer reports them before shipping.
 6. Built in build step 9 (screen-by-screen polish), after VISUAL_SYSTEM and the landing page (step 8).
+7. (Nihar, 4 November 2026) The menu shows Companies and Learn only while the other sections have no shipped destination: APPROVED. A section appears when it has one.
+8. (Nihar, 4 November 2026) The loading screen names the two stages this wait really has (reading the filings, checking the filed statements), not five: APPROVED.
 
 NAV_SEARCH_SPEC
 Marginalia · global header, main menu, search (⌘K) and loading screen · v1.0 · 31 October 2026 · obeys VISUAL_SYSTEM v1.0 and the decisions at its top (ⓘ stays; dark is the only instrument theme).

@@ -437,7 +437,7 @@ async function openModelTab(page: Page, ticker: string): Promise<boolean> {
     return false;
   }
   ok(`a search for ${ticker} lands on its company page, at its own address`);
-  await page.getByRole('button', { name: /^model$/i }).first().click({ timeout: 30_000 });
+  await page.getByRole('tab', { name: /^model$/i }).first().click({ timeout: 30_000 });
   await page
     .getByRole('button', { name: new RegExp(`open the figures for ${ticker}`, 'i') })
     .click({ timeout: 60_000 });
@@ -1055,11 +1055,16 @@ async function checkStaleFigures(page: Page) {
 async function checkHeaderOneLine(page: Page, label: string) {
   const was = page.viewportSize();
   await page.setViewportSize({ width: 1100, height: 900 });
+  // The full header, at the top of the page: scrolled, it gives way to the
+  // 48px bar (job 9.1b), which is checked on its own.
+  const scrolledTo = (await page.evaluate('window.scrollY')) as number;
+  await page.evaluate('window.scrollTo(0, 0)');
   await page.waitForTimeout(400);
   const measured: any = await page.evaluate(`(() => {
     const header = document.querySelector('header');
     if (!header) return { error: 'no header element' };
-    const row = header.querySelector(':scope > div');
+    // The full bar's own row (job 9.1b put the bar and the 48px bar in one header).
+    const row = header.querySelector('[data-header-full] > div') || header.querySelector(':scope > div');
     if (!row) return { error: 'no row inside the header' };
     const box = header.getBoundingClientRect();
     const out = [];
@@ -1134,6 +1139,7 @@ async function checkHeaderOneLine(page: Page, label: string) {
     await page.setViewportSize(was);
     await page.waitForTimeout(300);
   }
+  await page.evaluate(`window.scrollTo(0, ${scrolledTo})`);
 }
 
 async function checkHeadsOnScreen(page: Page) {
@@ -2363,7 +2369,37 @@ function reportType() {
     );
 }
 
-async function readContrast(page: Page, where: string) {
+// A LANDING PAGE WITH FEWER PIECES OF TEXT THAN THIS IS NOT THE LANDING PAGE:
+// an empty tab, an error screen, or a page whose sections never faded in.
+// The loaded page measured 2026-11-04 holds well over two hundred.
+const LANDING_MINIMUM_TEXT = 150;
+
+/** Scroll top to bottom in viewport steps, so every reveal-on-scroll has run. */
+async function revealWholePage(page: Page) {
+  await page.waitForTimeout(1200);
+  const height: number = await page.evaluate('document.documentElement.scrollHeight') as number;
+  const step: number = await page.evaluate('window.innerHeight') as number;
+  for (let y = 0; y < height; y += Math.max(200, step * 0.6)) {
+    await page.evaluate(`window.scrollTo(0, ${y})`);
+    await page.waitForTimeout(250);
+  }
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.waitForTimeout(800);
+}
+
+async function readContrast(page: Page, where: string, opts: { minimumText?: number } = {}) {
+  if (opts.minimumText) {
+    const pieces = (await page.evaluate(
+      `Array.from(document.querySelectorAll('body *')).filter(el => Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim().length > 1)).length`
+    )) as number;
+    if (pieces < opts.minimumText) {
+      problems++;
+      console.log(
+        `  PROBLEM: ${where} holds ${pieces} pieces of text, fewer than the ${opts.minimumText} the page has — ` +
+          `the read measured something other than the page`
+      );
+    }
+  }
   await readType(page, where);
   const found: any[] = await page.evaluate(CONTRAST_PROBE);
   contrastScreens++;
@@ -2459,7 +2495,7 @@ async function checkCardFromFigures(page: Page) {
     }
   });
 
-  const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
+  const overlay = page.locator('[data-build-modal]').filter({ hasText: /building the model/i }).first();
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
 
@@ -2644,7 +2680,20 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     }
   });
 
-  const overlay = page.getByRole('status').filter({ hasText: /building the model/i }).first();
+  // THE MODAL, not the role=status inside it: the card sits outside the live
+  // region on purpose (it is not announced), so the overlay is read whole.
+  const overlay = page.locator('[data-build-modal]').filter({ hasText: /building the model/i }).first();
+  // WHEN EACH PART APPEARED, stamped in the page (NAV_SEARCH §8 items 22–24;
+  // job 9.3): the page rule, the modal, the belief, the correction.
+  await context.addInitScript(`(() => {
+    window.__build = {};
+    const stamp = () => {
+      const now = performance.now();
+      for (const [k, sel] of [['rule', '[data-build-rule]'], ['modal', '[data-build-modal]'], ['belief', '[data-myth]'], ['fact', '[data-fact]']])
+        if (window.__build[k] === undefined && document.querySelector(sel)) window.__build[k] = now;
+    };
+    new MutationObserver(stamp).observe(document, { childList: true, subtree: true });
+  })()`);
   const read = async () => {
     const text = (await overlay.textContent().catch(() => null)) || '';
     return {
@@ -2659,51 +2708,21 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
   const started = search(page, PAPER_TICKER);
   await overlay.waitFor({ state: 'visible', timeout: 30_000 });
 
-  // ---- 0. NOT A FLICKER: NO CARD IN THE FIRST SECOND ----
+  // ---- 0. THE FIRST SECOND IS THE PAGE RULE ALONE (NAV §8 items 22–24) ----
   //
-  // TWO ASSERTIONS, AND THE FIRST IS THE ONE THAT HOLDS.
-  //
-  // No card when the overlay is first read: that read lands wherever it lands
-  // and the hold-off has to have outlasted it.
-  //
-  // Then the arrival is timed, from first sight rather than from the click,
-  // which this check cannot see: the search is deliberately not awaited so the
-  // overlay can be read while the fetch is outstanding. First sight trails the
-  // overlay opening by about a third of a second in this harness (the measured
-  // arrival is 671ms against a 1,000ms hold-off), so the floor is set below the
-  // hold-off by more than that margin. Between them the two catch a hold-off
-  // shortened to anything a reader could not read.
-  const openedAt = Date.now();
-  const atOnce = await overlay.locator('[data-myth-card]').count();
-  if (atOnce) {
-    fail(
-      'the card held back while a quick build could still finish',
-      'the progress rule alone for the first second',
-      `a card ${Date.now() - openedAt}ms after the overlay opened`
-    );
-  }
-  let appearedAfter: number | null = null;
-  for (let waited = 0; waited < 5000; waited += 100) {
-    if (await overlay.locator('[data-myth-card]').count()) {
-      appearedAfter = Date.now() - openedAt;
-      break;
-    }
-    await page.waitForTimeout(100);
-  }
-  if (appearedAfter === null) {
-    fail('the card on the loading screen', 'a card within five seconds', 'none ever appeared');
-  } else if (appearedAfter < 500) {
-    fail(
-      'the card held back while a quick build could still finish',
-      'no card inside the first second',
-      `the card appeared ${appearedAfter}ms in`
-    );
-  } else {
-    ok(
-      `no card when the overlay was first read, and the card ${appearedAfter}ms later: a build that ` +
-        'finishes inside a second shows the progress rule and closes rather than flashing a myth'
-    );
-  }
+  // Timed in the page from the moment the 2px rule appeared (the build's
+  // start as the reader sees it): the modal at 1,000ms, the belief with it,
+  // the correction 2,200ms after the belief. A quick build closes on the rule
+  // alone; that case is checked by the loading-timeline section.
+  const t: any = await page.evaluate(`window.__build || {}`);
+  const gap = (a: string, b: string) => (t[a] === undefined || t[b] === undefined ? null : Math.round(t[b] - t[a]));
+  const modalGap = gap('rule', 'modal');
+  const beliefGap = gap('modal', 'belief');
+  if (modalGap === null || modalGap < 950 || modalGap > 1250)
+    fail('the modal held back for the first second', 'the page rule alone, then the modal at 1,000ms', modalGap === null ? `stamps ${JSON.stringify(t)}` : `the modal ${modalGap}ms after the rule`);
+  else if (beliefGap === null || beliefGap > 150)
+    fail('the belief with the modal', 'the belief as the modal opens', beliefGap === null ? 'no belief' : `${beliefGap}ms after it`);
+  else ok(`the page rule alone for ${modalGap}ms, then the modal and its belief together (${beliefGap}ms apart)`);
 
   // ---- 1. THE MYTH BEFORE THE FACT ----
   const first = await read();
@@ -2730,10 +2749,14 @@ async function checkSlowBuild(context: BrowserContext, page: Page) {
     await page.waitForTimeout(900);
   }
 
+  const t2: any = await page.evaluate(`window.__build || {}`);
+  const factGap = t2.fact !== undefined && t2.belief !== undefined ? Math.round(t2.fact - t2.belief) : null;
   if (!sawFact) {
     fail('the fact following the myth', "the card's own correction", 'the myth held the screen alone');
+  } else if (factGap === null || factGap < 2100 || factGap > 2500) {
+    fail('the correction 2,200ms after the belief', 'belief + 2,200ms', factGap === null ? 'not stamped' : `${factGap}ms after the belief`);
   } else {
-    ok(`the fact follows it: "${sawFact.fact.slice(0, 56)}…"`);
+    ok(`the fact follows it ${factGap}ms after the belief: "${sawFact.fact.slice(0, 56)}…"`);
   }
   if (states.length < 2) {
     fail(
@@ -4040,7 +4063,8 @@ async function checkCompanyTabsOnScreen(page: Page) {
 
     // AN OVERLAY IS A SECOND LINE, and choosing one must change the drawing.
     const before = await page.evaluate(`document.querySelectorAll('section[aria-label="Price history"] svg[role="img"] path').length`);
-    const overlayButton = page.getByRole('button', { name: 'P / E', exact: true }).first();
+    // The overlay and range controls are radio groups (job 9.11, §3.4).
+    const overlayButton = page.getByRole('radio', { name: 'P / E', exact: true }).first();
     if (await overlayButton.count()) {
       await overlayButton.click();
       await page.waitForTimeout(400);
@@ -4056,8 +4080,10 @@ async function checkCompanyTabsOnScreen(page: Page) {
     }
 
     // A RANGE IS A DIFFERENT NUMBER OF CLOSES, so switching must change it.
-    const readout = () => page.locator('[data-chart-readout]').first().textContent();
-    const month = page.getByRole('button', { name: '1M', exact: true }).first();
+    // The count of closes is in the source line now; the readout holds the
+    // last close at rest (job 9.11, §3.6).
+    const readout = () => page.locator('[data-chart-count]').first().textContent();
+    const month = page.getByRole('radio', { name: '1M', exact: true }).first();
     if (await month.count()) {
       const wide = ((await readout()) || '').match(/([\d,]+) daily closes/)?.[1];
       await month.click();
@@ -4089,27 +4115,2057 @@ async function checkCompanyTabsOnScreen(page: Page) {
   else fail('an unknown tab', 'the Overview', fellBack || '(nothing current)');
 }
 
-// ------------------------------------------------------------------------ run
-let server: ChildProcess | null = null;
-let browser: Browser | null = null;
-try {
-  console.log(`starting the site on ${BASE} …`);
-  server = await startServer();
-  try {
-    browser = await chromium.launch({ headless: !HEADED });
-  } catch (error: any) {
-    // The browser binary is downloaded separately from the npm package, so a
-    // clean checkout has the library and not the browser. Say which command
-    // fixes it rather than printing a stack trace about a missing executable.
-    throw new Error(
-      'Chromium is not installed for Playwright. Run:  npx playwright install chromium  ' +
-        `(${String(error?.message || error).split('\n')[0]})`
-    );
+// ---- reduced motion: nothing travels, and the progress rule ---------------
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.4, VISUAL_SYSTEM §7 and §12.6. Under
+// reduced motion — the operating system's, or the site's own stored setting —
+// no transform may run and no fade may last longer than --m-dur-fast (110ms).
+// A CSS override cannot see motion driven from JavaScript, so this does not
+// read the stylesheet: it samples every element's computed transform and
+// opacity after a scroll, at 150, 400 and 700ms, and anything still changing
+// between samples is motion that outlived the rule. Every running Web
+// Animation longer than 110ms is reported too.
+//
+// THE CONTROL PASS. The same probe runs once with motion ON and must see
+// something move; if it sees nothing, it could not have seen anything in the
+// reduced passes either, and says so rather than passing.
+const MOTION_SAMPLE = `(() => {
+  const ids = (window.__mgIds = window.__mgIds || new WeakMap());
+  let next = window.__mgNext || 0;
+  const out = {};
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('[data-progress-rule]')) continue;
+    if (!ids.has(el)) ids.set(el, next++);
+    const st = getComputedStyle(el);
+    if (st.display === 'none') continue;
+    out[ids.get(el)] = { t: st.transform, o: st.opacity, d: (el.getAttribute('class') || el.tagName).toString().slice(0, 70) };
   }
-  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  window.__mgNext = next;
+  return out;
+})()`;
 
+const LONG_ANIMATIONS = `(() => document.getAnimations()
+  .filter(a => a.playState === 'running')
+  .map(a => ({ d: Number(a.effect && a.effect.getComputedTiming().duration) || 0, i: a.effect && a.effect.getComputedTiming().iterations, t: (a.effect && a.effect.target && (a.effect.target.getAttribute('class') || a.effect.target.tagName)) || '?' }))
+  .filter(x => x.d > 110 || x.i === Infinity)
+  .map(x => ({ ...x, t: String(x.t).slice(0, 70) })))()`;
+
+// A KNOWN MOVER. Neither screen this pass visits animates anything after it
+// has loaded (measured 2026-11-04: no running animation and no changing
+// transform on either, with motion on), so the real screens alone cannot show
+// that the probe sees motion. This element is put on the page by the check: a
+// 400ms transform and opacity transition, started, and asked how long it will
+// run. With motion on it is 400ms; under reduced motion the stylesheet must
+// have cut it to at most --m-dur-fast. The duration is read from the running
+// transition rather than inferred from where the element is after a wait:
+// on the landing page at 1440 the particle canvas keeps the main thread busy
+// enough that the animation clock had not ticked when it was read, so a
+// position read called a finished transition "part-way".
+const KNOWN_MOVER = `(() => {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;left:0;top:0;width:8px;height:8px;opacity:1;transform:none;transition:transform 400ms linear, opacity 400ms linear;pointer-events:none';
+  document.body.appendChild(el);
+  el.getBoundingClientRect();
+  el.style.transform = 'translateX(200px)';
+  el.style.opacity = '0.2';
+  el.getBoundingClientRect();
+  const longest = Math.max(0, ...el.getAnimations().map(a => Number(a.effect.getComputedTiming().duration) || 0));
+  el.remove();
+  return longest;
+})()`;
+
+async function knownMoverIsMoving(page: Page): Promise<boolean> {
+  const longest = (await page.evaluate(KNOWN_MOVER)) as number;
+  return longest > 110;
+}
+
+async function movingAfterScroll(page: Page): Promise<{ moved: string[]; long: any[] }> {
+  const moved = new Set<string>();
+  const long: any[] = [];
+  const height = (await page.evaluate('document.documentElement.scrollHeight')) as number;
+  const step = (await page.evaluate('window.innerHeight')) as number;
+  for (let y = 0; y < Math.min(height, step * 6); y += step * 0.8) {
+    await page.evaluate(`window.scrollTo(0, ${Math.round(y)})`);
+    await page.waitForTimeout(150);
+    const a: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(250);
+    const b: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(300);
+    const c: any = await page.evaluate(MOTION_SAMPLE);
+    for (const [first, second] of [[a, b], [b, c]] as any[])
+      for (const id of Object.keys(second))
+        if (first[id] && (first[id].t !== second[id].t || first[id].o !== second[id].o)) moved.add(second[id].d);
+    long.push(...((await page.evaluate(LONG_ANIMATIONS)) as any[]));
+  }
+  // AND AN INTERACTION: the first closed disclosure on the page, opened. A
+  // disclosure is the one element VISUAL_SYSTEM gives a 200ms movement, and
+  // under reduced motion it must snap open.
+  await page.evaluate('window.scrollTo(0, 0)');
+  const disclose = page.locator('button[aria-expanded="false"][aria-controls]').first();
+  if (await disclose.count()) {
+    await disclose.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    const before: any = await page.evaluate(MOTION_SAMPLE);
+    await disclose.click();
+    await page.waitForTimeout(60);
+    const a: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(90);
+    const b: any = await page.evaluate(MOTION_SAMPLE);
+    await page.waitForTimeout(300);
+    const c: any = await page.evaluate(MOTION_SAMPLE);
+    void before;
+    for (const [first, second] of [[a, b], [b, c]] as any[])
+      for (const id of Object.keys(second))
+        if (first[id] && (first[id].t !== second[id].t || first[id].o !== second[id].o)) moved.add(`${second[id].d} (opening a disclosure)`);
+    long.push(...((await page.evaluate(LONG_ANIMATIONS)) as any[]));
+  }
+  return { moved: [...moved], long };
+}
+
+async function checkReducedMotion(browser: Browser) {
+  console.log('\n=== reduced motion: nothing travels, and the progress rule ===');
+  const passes: { name: string; width: number; media: 'reduce' | 'no-preference'; stored: string | null; expectStill: boolean }[] = [
+    { name: 'motion on (control)', width: 1440, media: 'no-preference', stored: null, expectStill: false },
+    { name: 'the system asks for reduced motion, 1440', width: 1440, media: 'reduce', stored: null, expectStill: true },
+    { name: 'the system asks for reduced motion, 360', width: 360, media: 'reduce', stored: null, expectStill: true },
+    { name: 'the stored setting asks for it, 1440', width: 1440, media: 'no-preference', stored: 'reduced', expectStill: true },
+  ];
+  for (const pass of passes) {
+    const ctx = await browser.newContext({ viewport: { width: pass.width, height: pass.width > 600 ? 900 : 740 }, reducedMotion: pass.media });
+    await installFixtureRoutes(ctx);
+    if (pass.stored) await ctx.addInitScript(`try { localStorage.setItem('marginalia:motion', '${pass.stored}'); } catch (e) {}`);
+    const p = await ctx.newPage();
+    let controlSaw = 0;
+    for (const route of ['/', `/company/${PAPER_TICKER}/overview`]) {
+      await p.goto(BASE + route, { waitUntil: 'networkidle' });
+      await p.waitForTimeout(1200);
+      const attribute = await p.evaluate('document.documentElement.dataset.motion');
+      const want = pass.expectStill ? 'reduced' : 'full';
+      if (attribute !== want) {
+        problems++;
+        console.log(`  PROBLEM: ${pass.name}, ${route}: <html data-motion> is "${attribute}", not "${want}"`);
+      }
+      const { moved, long } = await movingAfterScroll(p);
+      const mover = await knownMoverIsMoving(p);
+      if (pass.expectStill && mover) moved.push('the check\'s own 400ms transition, still set to run for longer than 110ms');
+      if (!pass.expectStill && mover) moved.push('the check\'s own 400ms transition');
+      if (pass.expectStill) {
+        if (moved.length || long.length) {
+          problems++;
+          console.log(
+            `  PROBLEM: ${pass.name}, ${route}: ${moved.length} element${moved.length === 1 ? '' : 's'} still moving or fading after 150ms` +
+              `${long.length ? ` and ${long.length} animation${long.length === 1 ? '' : 's'} longer than 110ms` : ''}` +
+              ` — e.g. ${[...moved.slice(0, 3), ...long.slice(0, 2).map((x) => `${x.t} (${x.d}ms)`)].join(' | ')}`
+          );
+        } else ok(`${pass.name}, ${route}: nothing moves or fades for longer than 110ms`);
+      } else {
+        controlSaw += moved.length + long.length;
+        ok(`${pass.name}, ${route}: ${moved.length + long.length} moving or fading things seen with motion on`);
+      }
+    }
+    if (!pass.expectStill && !controlSaw) {
+      problems++;
+      console.log(`  PROBLEM: ${pass.name}: nothing moved on either screen with motion on, so the probe cannot see motion at all`);
+    }
+
+    // THE PROGRESS RULE: on the header's bottom edge, oxblood, no shadow.
+    if (pass.name.startsWith('the system') && pass.width === 1440) {
+      await p.goto(BASE, { waitUntil: 'networkidle' });
+      await p.waitForTimeout(800);
+      const rule: any = await p.evaluate(`(() => {
+        const r = document.querySelector('[data-progress-rule]');
+        const h = document.querySelector('header');
+        if (!r || !h) return null;
+        const bar = r.firstElementChild;
+        const shadows = [r, bar].map(el => getComputedStyle(el).boxShadow);
+        return { top: r.getBoundingClientRect().top, header: h.getBoundingClientRect().bottom, shadows, colour: getComputedStyle(bar).backgroundColor, height: r.getBoundingClientRect().height };
+      })()`);
+      if (!rule) {
+        problems++;
+        console.log('  PROBLEM: no [data-progress-rule] element, or no header, on the landing page');
+      } else {
+        const issues: string[] = [];
+        if (Math.abs(rule.top - rule.header) > 1) issues.push(`its top is at ${rule.top}px and the header ends at ${rule.header}px`);
+        if (rule.shadows.some((x: string) => x !== 'none')) issues.push(`it carries a box-shadow (${rule.shadows.join(' / ')})`);
+        if (rule.colour !== 'rgb(139, 30, 30)') issues.push(`its colour is ${rule.colour}, not the accent`);
+        if (issues.length) {
+          problems++;
+          console.log(`  PROBLEM: the scroll-progress rule: ${issues.join('; ')}`);
+        } else ok(`the scroll-progress rule sits on the header's bottom edge (${rule.header}px), ${rule.height}px tall, accent, no shadow`);
+      }
+    }
+    await ctx.close();
+  }
+}
+
+// ---- focus and targets: the ring, the header, the ⓘ ---------------------
+//
+// `docs/VISUAL_BUILD_PLAN.md` job 8.5, VISUAL_SYSTEM §7. Tabbing forward and
+// then back through the landing page (which has a paper band), the Margin
+// notes screen (paper) and the company overview, every element that takes
+// focus must show a 2px solid outline, 2px off it, in ink on the dark ground
+// and paper-ink on paper; and none may sit under the fixed header (WCAG
+// 2.4.11), which is what `scroll-padding-top` is for — tabbing BACK up the
+// page is the direction that would leave one there. Then every ⓘ is hit at
+// the corners of a 24px square around its centre with a mouse, and of a 44px
+// square in a touch context, and each point must land on that ⓘ.
+const FOCUS_PROBE = `(() => {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement) return null;
+  const parse = (s) => { const m = s.match(/rgba?\\(([^)]+)\\)/); if (!m) return null; const p = m[1].split(',').map(Number); return { r:p[0], g:p[1], b:p[2], a:p.length>3?p[3]:1 }; };
+  const lum = (c) => { const f=[c.r,c.g,c.b].map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);}); return 0.2126*f[0]+0.7152*f[1]+0.0722*f[2]; };
+  let n = el.parentElement, bg = null;
+  while (n && n !== document.documentElement) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0.85) { bg = c; break; } n = n.parentElement; }
+  const st = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  const header = document.querySelector('header');
+  return {
+    desc: (el.tagName.toLowerCase() + ' ' + (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40)) + (el.matches(':focus-visible') ? '' : ' [not :focus-visible]'),
+    style: st.outlineStyle, width: st.outlineWidth, offset: st.outlineOffset, colour: st.outlineColor,
+    paper: bg ? lum(bg) > 0.5 : false,
+    top: r.top, bottom: r.bottom, height: r.height,
+    headerBottom: header ? header.getBoundingClientRect().bottom : 0,
+    inHeader: !!el.closest('header'),
+  };
+})()`;
+
+const INK_RGB = 'rgb(242, 240, 234)';
+const PAPER_INK_RGB = 'rgb(22, 21, 15)';
+
+async function walkFocus(page: Page, where: string, found: Map<string, string>): Promise<number> {
+  let focused = 0;
+  const look = async () => {
+    const f: any = await page.evaluate(FOCUS_PROBE);
+    if (!f) return;
+    focused++;
+    const want = f.paper ? PAPER_INK_RGB : INK_RGB;
+    const issues: string[] = [];
+    if (f.style !== 'solid' || f.width !== '2px') issues.push(`outline ${f.style} ${f.width}, not solid 2px`);
+    if (f.offset !== '2px') issues.push(`offset ${f.offset}, not 2px`);
+    if (f.colour !== want) issues.push(`outline ${f.colour}, not ${f.paper ? 'paper-ink' : 'ink'} (${want})`);
+    if (!f.inHeader && f.height > 0 && f.bottom > 0 && f.top < f.headerBottom - 1)
+      issues.push(`its top is at ${Math.round(f.top)}px, under the header, which ends at ${Math.round(f.headerBottom)}px`);
+    for (const issue of issues) {
+      const key = `${where}: ${issue}`;
+      if (!found.has(key)) found.set(key, f.desc);
+    }
+  };
+  for (let i = 0; i < 45; i++) { await page.keyboard.press('Tab'); await look(); }
+  for (let i = 0; i < 30; i++) { await page.keyboard.press('Shift+Tab'); await look(); }
+  return focused;
+}
+
+const HINT_HITS = `((half) => {
+  const out = { count: 0, missed: [] };
+  // A reading is only fair where the whole square is in view and below the
+  // fixed header: a scroll step can leave an ⓘ half under the header, and the
+  // header being on top there is the header doing its job.
+  const header = document.querySelector('header');
+  const top = header ? header.getBoundingClientRect().bottom : 0;
+  for (const el of document.querySelectorAll('[data-hint]')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (cx - half < 0 || cy - half < top + 1 || cx + half > innerWidth || cy + half > innerHeight) continue;
+    out.count++;
+    for (const [dx, dy] of [[-half, -half], [half, -half], [-half, half], [half, half]]) {
+      const hit = document.elementFromPoint(cx + dx, cy + dy);
+      if (!hit || hit.closest('[data-hint]') !== el) {
+        const what = hit ? (hit.tagName.toLowerCase() + '.' + String(hit.getAttribute('class') || '').split(' ').slice(0, 3).join('.') + ' "' + (hit.textContent || '').trim().slice(0, 24) + '"') : 'nothing';
+        out.missed.push((el.getAttribute('aria-label') || 'ⓘ').slice(0, 40) + ' at ' + dx + ',' + dy + ', where ' + what + ' is on top');
+        break;
+      }
+    }
+  }
+  return out;
+})`;
+
+async function hintHitAreas(page: Page, size: number): Promise<{ count: number; missed: string[] }> {
+  const half = size / 2 - 0.5;
+  const total = { count: 0, missed: [] as string[] };
+  const height = (await page.evaluate('document.documentElement.scrollHeight')) as number;
+  const step = (await page.evaluate('window.innerHeight')) as number;
+  const seen = new Set<string>();
+  for (let y = 0; y < height; y += step * 0.7) {
+    await page.evaluate(`window.scrollTo(0, ${Math.round(y)})`);
+    await page.waitForTimeout(150);
+    const r: any = await page.evaluate(`${HINT_HITS}(${half})`);
+    total.count += r.count;
+    for (const m of r.missed) if (!seen.has(m)) { seen.add(m); total.missed.push(m); }
+  }
+  return total;
+}
+
+async function checkFocusAndTargets(browser: Browser) {
+  console.log('\n=== focus and targets: the ring, the header, the hit area ===');
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  const found = new Map<string, string>();
+  const counts: string[] = [];
+
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1200);
+  counts.push(`landing page ${await walkFocus(p, 'the landing page', found)}`);
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.getByRole('button', { name: /^All \d+ notes$/ }).click();
+  await p.waitForTimeout(800);
+  counts.push(`Margin notes ${await walkFocus(p, 'the Margin notes screen', found)}`);
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1200);
+  counts.push(`company overview ${await walkFocus(p, 'the company overview', found)}`);
+
+  for (const [issue, element] of found) {
+    problems++;
+    console.log(`  PROBLEM: ${issue} (e.g. ${element})`);
+  }
+  if (!found.size) ok(`focus walked forward 45 and back 30 on each screen (${counts.join(', ')} focused): every ring 2px solid, 2px off, ink or paper-ink, none under the header`);
+
+  // Measured from rest: the walk above leaves focus on whatever it reached
+  // last, and a focused ⓘ or source opens its tooltip over its neighbours.
+  // Which element that is depends on how many stops the header has, so
+  // without this the reading changed with the menu (job 9.1).
+  await p.evaluate(`document.activeElement && document.activeElement.blur && document.activeElement.blur()`);
+  await p.mouse.move(1, 1);
+  await p.waitForTimeout(200);
+  const fine = await hintHitAreas(p, 24);
+  await ctx.close();
+
+  const touch = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await installFixtureRoutes(touch);
+  const t = await touch.newPage();
+  await t.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await t.waitForTimeout(1200);
+  const coarse = await t.evaluate(`matchMedia('(pointer: coarse)').matches`);
+  const finger = coarse ? await hintHitAreas(t, 44) : { count: 0, missed: [] };
+  await touch.close();
+
+  for (const [name, size, r] of [['mouse', 24, fine], ['touch', 44, finger]] as const) {
+    if (!r.count) {
+      problems++;
+      console.log(`  PROBLEM: no ⓘ measured with the ${name} on the company overview${name === 'touch' && !coarse ? ' (the touch context does not match pointer: coarse)' : ''}`);
+    } else if (r.missed.length) {
+      problems++;
+      console.log(`  PROBLEM: ${r.missed.length} ⓘ miss${r.missed.length === 1 ? 'es' : ''} a ${size}×${size} hit with the ${name}: ${r.missed.slice(0, 3).join(' | ')}`);
+    } else ok(`${r.count} ⓘ readings with the ${name}: every corner of a ${size}×${size} square lands on its ⓘ`);
+  }
+}
+
+// ---- the valuation bridge in a worker (build step 5, job C4) -------------
+//
+// Ten drivers are 1,024 engine runs, 3–4 seconds, so a screen asks for the
+// bridge through `bridgeInWorker` (`src/data/bridgeRunner.ts`), which runs it
+// in a Web Worker and answers once, with the finished bridge. This loads the
+// runner in the real browser, sends it the ten-driver paper fixture, and
+// checks that what comes back is the whole bridge — every driver, parts equal
+// to the total to the cent — and the same, part for part, as the bridge the
+// same code gives in Node: what is under test is the trip through the worker,
+// not the arithmetic, which `npm run verify` checks.
+async function checkBridgeWorker(browser: Browser) {
+  console.log('\n=== the valuation bridge, in a worker ===');
+  const BRM: any = await import(`file:///${REPO}/verify/bridge.mts`);
+  const BRL: any = await import(`file:///${REPO}/src/data/bridge.ts`);
+  const { A, B } = BRM.tenDriverVersions();
+  const inNode = BRL.bridgeBetween(A, B);
+  // A quiet page: the company overview, with reduced motion so nothing on it
+  // animates. The landing page's particle canvas keeps the main thread busy
+  // on its own, which is not what this measures.
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1000);
+  const r: any = await p.evaluate(`(async () => {
+    const m = await import('/src/data/bridgeRunner.ts');
+    // The page's own rate first: how often a 50ms timer gets the thread back
+    // when nothing is being asked of it.
+    let idle = 0;
+    const idleTimer = setInterval(() => { idle++; }, 50);
+    await new Promise((r) => setTimeout(r, 1000));
+    clearInterval(idleTimer);
+    const started = performance.now();
+    // The page must stay free while the worker runs: a 50ms timer counts how
+    // often it got the main thread back. Run on the page instead, the bridge
+    // would hold the thread for seconds and the timer would barely tick.
+    let ticks = 0;
+    const timer = setInterval(() => { ticks++; }, 50);
+    const result = await m.bridgeInWorker(${JSON.stringify(A)}, ${JSON.stringify(B)});
+    clearInterval(timer);
+    const ms = performance.now() - started;
+    return { result, ms, ticks, idlePerSecond: idle, workerAvailable: typeof Worker !== 'undefined' };
+  })()`);
+  await ctx.close();
+  const res = r.result;
+  const cents = (res.parts || []).reduce((t: number, x: any) => t + Math.round(x.rounded * 100), 0);
+  const issues: string[] = [];
+  if (!r.workerAvailable) issues.push('the browser has no Worker, so the bridge ran on the page');
+  // Half the page's own idle rate, over the time the bridge took.
+  const expectedTicks = (r.idlePerSecond * r.ms) / 1000;
+  if (r.ticks < expectedTicks * 0.5)
+    issues.push(
+      `the page's 50ms timer ticked ${r.ticks} times in ${Math.round(r.ms)}ms against ${r.idlePerSecond} a second when idle ` +
+        `(${Math.round(expectedTicks)} expected), so the bridge held the main thread`
+    );
+  if (!res.ok) issues.push(`the worker returned no bridge (${(res.refused || []).map((x: any) => x.refusal).join('; ')})`);
+  if ((res.parts || []).length !== inNode.parts.length) issues.push(`the worker returned ${(res.parts || []).length} parts, not ${inNode.parts.length}`);
+  if (cents !== Math.round(res.totalRounded * 100)) issues.push(`its parts sum to ${cents / 100}, not its total ${res.totalRounded}`);
+  const differ = (res.parts || []).filter((x: any, i: number) => !inNode.parts[i] || x.key !== inNode.parts[i].key || x.rounded !== inNode.parts[i].rounded);
+  if (differ.length) issues.push(`${differ.length} parts differ from the same bridge in Node (e.g. ${differ[0].key} ${differ[0].rounded})`);
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: the bridge in a worker: ${issue}`);
+  }
+  if (!issues.length)
+    ok(
+      `10 drivers, ${res.runs} runs in a Web Worker, ${Math.round(r.ms)}ms in the browser with the page's timer ticking ${r.ticks} of ~${Math.round(expectedTicks)} times, answered once and whole: ` +
+        `${res.parts.length} parts summing to ${res.totalRounded.toFixed(2)}, each equal to the Node bridge`
+    );
+}
+
+// ---- the landing page claims only what has shipped (build step 8, 8.6) ---
+//
+// LANDING §2.4: the page may describe in the present tense only what the
+// feature register says has shipped; everything else keeps its place, carries
+// its status, is in the future tense, and opens nothing. §2.3: the company
+// count is read from the data and printed by the spec's own rule. This loads
+// the landing page with a screener table of 250 companies (and 12 duplicate
+// listings) and reads what it says.
+async function checkFeatureGate(browser: Browser) {
+  console.log('\n=== the landing page claims only what has shipped ===');
+  const FR: any = await import(`file:///${REPO}/src/data/featureRegister.ts`);
+  const exchanges = ['NYSE', 'NASDAQ', 'NSE', 'LSE'];
+  const rows = [
+    ...Array.from({ length: 250 }, (_, i) => ({ ticker: `C${i}`, exchange: exchanges[i % 4], homeListing: true })),
+    ...Array.from({ length: 12 }, (_, i) => ({ ticker: `D${i}`, exchange: 'TSX', homeListing: false })),
+  ];
+  // Worked out here, by the rule in LANDING §2.3, not by the code under test.
+  const wantCount = '200+';
+  const wantExchanges = [...exchanges].sort().join(' · ');
+  const built = '2026-11-01T00:00:00Z';
+  const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  await installFixtureRoutes(ctx);
+  await ctx.route('**/api/screener*', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows, built }) })
+  );
+  const p = await ctx.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await revealWholePage(p);
+  const page: any = await p.evaluate(`(() => ({
+    text: document.body.innerText,
+    features: Array.from(document.querySelectorAll('[data-feature]')).map((el) => ({
+      id: el.getAttribute('data-feature'),
+      status: el.getAttribute('data-feature-status'),
+      text: el.innerText,
+      opens: !!(el.matches('a[href], button:not([disabled])') || el.querySelector('a[href], button:not([disabled])')),
+    })),
+    stats: Array.from(document.querySelectorAll('[data-stat]')).map((el) => ({ key: el.getAttribute('data-stat'), text: el.innerText })),
+  }))()`);
+  await ctx.close();
+  const issues: string[] = [];
+  const unshipped = FR.FEATURES.filter((f: any) => f.status !== 'shipped');
+  for (const f of unshipped) {
+    if (f.does && page.text.includes(f.does)) issues.push(`the page describes "${f.title}" in the present tense, and it is ${f.status}: "${f.does.slice(0, 60)}…"`);
+  }
+  for (const el of page.features) {
+    const f = FR.featureById(el.id);
+    if (!f) { issues.push(`an element claims feature "${el.id}", which the register does not list`); continue; }
+    if (el.status && el.status !== f.status) issues.push(`"${f.title}" is marked ${el.status} on the page and ${f.status} in the register`);
+    if (f.status !== 'shipped' && el.opens) issues.push(`"${f.title}" is ${f.status} and its element opens something`);
+    const label = FR.statusLabel(f);
+    if (f.status !== 'shipped' && el.id !== 'three-approaches' && !el.text.includes(label)) issues.push(`"${f.title}" is ${f.status} and its element does not say "${label}"`);
+  }
+  const quarters = page.text.match(/\bQ[1-4] 20\d\d\b/g) || [];
+  const recorded = FR.FEATURES.map((f: any) => f.quarter).filter(Boolean);
+  const invented = quarters.filter((q: string) => !recorded.includes(q));
+  if (invented.length) issues.push(`the page prints ${invented.join(', ')}, which no register entry records`);
+  const count = page.stats.find((x: any) => x.key === 'companies');
+  if (!count) issues.push('there is no company-count tile with a screener table to count');
+  else {
+    if (!count.text.includes(wantCount)) issues.push(`the count reads "${count.text.split('\n')[0]}", not ${wantCount} for 250 companies`);
+    if (!count.text.includes(wantExchanges)) issues.push(`the exchanges read "${count.text}", not ${wantExchanges}`);
+    if (!/as at 1 Nov 2026/.test(count.text)) issues.push('the count does not say what date the table is as at');
+  }
+  if (/10,000\+/.test(page.text)) issues.push('the page says 10,000+ with 250 companies in the table');
+  if (!FR.CLAIMS.showFreeToUse && /cost to use|free to use/i.test(page.text)) issues.push('the page says it is free to use before pricing is decided (decision 2)');
+  if (!FR.isShipped('three-approaches') && page.stats.some((x: any) => x.key === 'approaches'))
+    issues.push('the page counts three valuation approaches before build step 5 has shipped (decision 4)');
+  if (!FR.isShipped('private-company') && /value a private company/i.test(page.text) && page.features.some((x: any) => x.id === 'private-company' && x.opens))
+    issues.push('the hero still offers "Value a private company" as a button');
+  for (const stat of page.stats) if (!/\S/.test(stat.text.split('\n').slice(-1)[0])) issues.push(`the ${stat.key} tile has no source line`);
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length)
+    ok(
+      `${page.features.length} feature elements, each with the register's status and nothing that opens unless shipped; ` +
+        `${unshipped.length} unshipped features, none described in the present tense; no invented quarter; ` +
+        `the count reads ${wantCount} from 250 companies over ${wantExchanges}, as at 1 Nov 2026; no free-to-use or three-approaches claim`
+    );
+}
+
+// ---- the hero's particle field keeps its budgets (build step 8, job 8.7) -
+//
+// VISUAL_SYSTEM §6: at most 12,000 points, drawn at no more than 1.5 device
+// pixels per CSS pixel; a pause control 24×24; settled — no frames at all —
+// once nothing has happened for five seconds; stopped while the tab is hidden;
+// the poster painted first and shown again whenever the field gives up; no
+// field at all under reduced motion.
+//
+// This browser draws WebGL in software and cannot keep a frame under 20ms, so
+// left alone the field halves its points twice and freezes on the poster —
+// which is checked as it is. For the rest, the page's clock is slowed to a
+// quarter for the field's own frame timing, so it behaves as it does on a
+// real GPU (a sixth and a bit, so frames up to ~130ms real pass); every wait
+// below is in real milliseconds.
+async function checkHeroField(browser: Browser) {
+  console.log('\n=== the hero: the particle field keeps its budgets ===');
+  const PF: any = await import(`file:///${REPO}/src/components/particleField.tsx`).catch(() => null);
+  const budget = PF?.PARTICLE_BUDGET ?? 12000;
+  const issues: string[] = [];
+  const counters = `(() => { window.__raf = 0; const raf = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => { window.__raf++; return raf(cb); }; })()`;
+  // A sixth and a bit: frames up to ~130ms real read as under 20ms, so the
+  // field neither halves nor freezes here; five settling seconds become ~33.
+  const slow = `(() => { const real = performance.now.bind(performance); performance.now = () => real() * 0.1; })()`;
+  const state = (p: Page) => p.evaluate(`document.querySelector('canvas')?.dataset.state || null`) as Promise<string | null>;
+
+  // 1. A 2x screen, the clock slowed: budgets, the pause control, settling.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    await ctx.addInitScript(counters);
+    await ctx.addInitScript(slow);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await p.locator('canvas').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    await p.waitForTimeout(1500);
+    const c: any = await p.evaluate(`(() => { const c = document.querySelector('canvas'); const poster = document.querySelector('[data-hero-poster]'); return c ? { particles: Number(c.dataset.particles), ratio: c.width / c.clientWidth, posterOpacity: poster ? getComputedStyle(poster).opacity : null } : null; })()`);
+    if (!c) issues.push('no particle canvas mounted on the landing page');
+    else {
+      if (!(c.particles > 0 && c.particles <= budget)) issues.push(`the field draws ${c.particles} points, over the ${budget} budget`);
+      if (c.ratio > 1.5 + 1e-6) issues.push(`the canvas is drawn at ${c.ratio.toFixed(2)} device pixels per CSS pixel on a 2x screen, over 1.5`);
+      if (c.posterOpacity !== '0') issues.push(`the poster is still showing (opacity ${c.posterOpacity}) after the field drew its first frame`);
+    }
+    const toggle = p.locator('[data-motion-toggle]').first();
+    const box = await toggle.boundingBox();
+    if (!box) issues.push('no pause control under the hero');
+    else {
+      if (box.width < 24 || box.height < 24) issues.push(`the pause control is ${box.width}×${box.height}, under 24×24`);
+      await toggle.click();
+      await p.waitForTimeout(400);
+      if ((await state(p)) !== 'paused') issues.push(`pressing pause leaves the field ${await state(p)}`);
+      await toggle.click();
+      await p.waitForTimeout(400);
+    }
+    // Leave it alone: within five (slowed) seconds of the last input it must
+    // stop drawing altogether.
+    let settled = false;
+    for (let i = 0; i < 90 && !settled; i++) {
+      await p.waitForTimeout(1000);
+      settled = (await state(p)) === 'settled';
+    }
+    if (!settled) issues.push(`left alone for 90 seconds the field is still ${await state(p)}, not settled`);
+    else {
+      const before = (await p.evaluate('window.__raf')) as number;
+      await p.waitForTimeout(2000);
+      const after = (await p.evaluate('window.__raf')) as number;
+      if (after - before > 2) issues.push(`settled, the page still asked for ${after - before} frames in two seconds`);
+      await p.mouse.wheel(0, 40);
+      await p.waitForTimeout(500);
+      const woke = await state(p);
+      if (woke !== 'running') issues.push(`a scroll after settling leaves the field ${woke}, not running`);
+      await p.evaluate(`(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); })()`);
+      await p.waitForTimeout(600);
+      if ((await state(p)) !== 'hidden') issues.push(`with the tab hidden the field is ${await state(p)}, not stopped`);
+    }
+    await ctx.close();
+  }
+
+  // 2. The real clock: this software GPU is slow, and the field must give up
+  //    gracefully — halving, then freezing with the poster back on screen.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(12_000);
+    const r: any = await p.evaluate(`(() => { const c = document.querySelector('canvas'); const poster = document.querySelector('[data-hero-poster]'); return { canvas: !!c, live: c ? c.dataset.live || null : null, particles: c ? c.dataset.particles : null, poster: poster ? getComputedStyle(poster).opacity : null }; })()`);
+    if (!r.canvas && r.poster !== '1') issues.push(`the field froze and the poster is not showing (opacity ${r.poster})`);
+    ok(r.canvas ? `on this browser's own clock the field is still drawing (${r.live ?? r.particles} points live)` : `on this browser's software GPU the field's first second averaged over 24ms a frame and the poster is back (opacity ${r.poster})`);
+    await ctx.close();
+  }
+
+  // 3. Reduced motion: the poster, and no WebGL at all.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(2500);
+    const r: any = await p.evaluate(`(() => ({ canvas: !!document.querySelector('canvas'), poster: getComputedStyle(document.querySelector('[data-hero-poster]')).opacity, toggle: !!document.querySelector('[data-motion-toggle]') }))()`);
+    if (r.canvas) issues.push('under reduced motion the particle canvas still mounts');
+    if (r.poster !== '1') issues.push(`under reduced motion the poster is not showing (opacity ${r.poster})`);
+    if (r.toggle) issues.push('under reduced motion a pause control is offered for motion that is not there');
+    await ctx.close();
+  }
+
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: the hero: ${issue}`);
+  }
+  if (!issues.length)
+    ok(`at most ${budget} points at ≤ 1.5 device pixels a pixel; the poster gives way to the first frame; pause holds the frame; settled after five seconds with no frames asked for; a scroll wakes it; a hidden tab stops it; reduced motion shows only the poster`);
+}
+
+// ---- one WebGL context on the page (build step 8, job 8.8) ---------------
+//
+// VISUAL_SYSTEM §6: one WebGL context per page. A second scene — the hexagon
+// in an early screenshot — must reuse the hero's canvas or be a still SVG.
+// Every getContext call for WebGL is counted from before the page's first
+// script runs, while the whole landing page is scrolled through, at desktop
+// and phone widths.
+async function checkOneWebglContext(browser: Browser) {
+  console.log('\n=== one WebGL context on the landing page ===');
+  const issues: string[] = [];
+  const counted: string[] = [];
+  for (const width of [1440, 390]) {
+    const ctx = await browser.newContext({ viewport: { width, height: width > 600 ? 900 : 844 } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    await ctx.addInitScript(`(() => {
+      window.__webgl = 0;
+      const original = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+        const made = original.call(this, kind, ...rest);
+        if (made && /webgl/i.test(String(kind))) {
+          // One canvas asking twice is one context; count canvases.
+          if (!this.__counted) { this.__counted = true; window.__webgl++; }
+        }
+        return made;
+      };
+    })()`);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    await revealWholePage(p);
+    const n = (await p.evaluate('window.__webgl')) as number;
+    counted.push(`${n} at ${width}`);
+    if (n > 1) issues.push(`${n} WebGL contexts at ${width}px, over the one the page may have`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`WebGL contexts made while the whole landing page is scrolled: ${counted.join(', ')} — never more than one`);
+}
+
+// ---- the accent budget, sections 1–4 of the landing page (job 8.9) -------
+//
+// LANDING §9 items 14 and 23 and §3.1. At every scroll position, in 100px
+// steps from the top of the page to the end of "Being built next", at 1440×900
+// and 390×844, the viewport may hold at most one oxblood-washed primary, at
+// most three oxblood fills or washes (rules of 2px or less and the heading
+// mark are not fills), and at most five words set in the accent text colour.
+// No text in those sections may be uppercased by CSS, and their copy holds
+// none of LANDING §2.3's banned words. Reduced motion, so every block is
+// visible as it is reached and the field does not draw.
+const ACCENT_BUDGET = { washedPrimary: 1, fills: 3, accentWords: 5 };
+async function checkLandingAccentBudget(browser: Browser) {
+  console.log('\n=== the accent budget on landing sections 1–4 ===');
+  const FR: any = await import(`file:///${REPO}/src/data/featureRegister.ts`);
+  const issues: string[] = [];
+  const worst: string[] = [];
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    const ctx = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce' });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    const end = (await p.evaluate(`(() => { const b = document.getElementById('beyond'); return b ? b.getBoundingClientRect().bottom + scrollY - innerHeight : -1; })()`)) as number;
+    if (end < 0) { issues.push(`no #beyond section at ${width}px: the range to scan is unknown`); await ctx.close(); continue; }
+    let most = { washed: 0, fills: 0, words: 0 };
+    const seenUpper = new Set<string>();
+    const reported = new Set<string>();
+    for (let y = 0; y <= end + 99; y += 100) {
+      await p.evaluate(`window.scrollTo(0, ${Math.min(y, end)})`);
+      await p.waitForTimeout(30);
+      const v: any = await p.evaluate(`(() => {
+        const vh = innerHeight, vw = innerWidth;
+        const ox = (c) => {
+          const m = /rgba?\\(([^)]+)\\)/.exec(c);
+          if (!m) return 0;
+          const [r, g, b, a] = m[1].split(',').map(Number);
+          return r === 139 && g === 30 && b === 30 ? (a === undefined || isNaN(a) ? 1 : a) : 0;
+        };
+        const ACCENT_TEXT = ['rgb(208, 94, 88)'];
+        let washed = 0, fills = 0, words = 0;
+        const fillWhere = [], wordWhere = [], upper = [];
+        for (const el of document.querySelectorAll('body *')) {
+          const r = el.getBoundingClientRect();
+          if (!(r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw && r.width > 0 && r.height > 0)) continue;
+          if (el.checkVisibility && !el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          const cs = getComputedStyle(el);
+          const a = ox(cs.backgroundColor);
+          if (a > 0 && r.width > 2 && r.height > 2 && !el.hasAttribute('data-mark')) {
+            fills++;
+            fillWhere.push((el.tagName + ' ' + (el.textContent || '').trim()).slice(0, 40));
+            if (a < 1 && el.matches('button, a, [role=button]')) washed++;
+          }
+          const own = Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim();
+          if (own) {
+            if (ACCENT_TEXT.includes(cs.color)) { const n = own.split(/\\s+/).length; words += n; wordWhere.push(own.slice(0, 40)); }
+            if (cs.textTransform === 'uppercase') upper.push(own.slice(0, 40));
+          }
+        }
+        return { washed, fills, words, fillWhere, wordWhere, upper };
+      })()`);
+      most = { washed: Math.max(most.washed, v.washed), fills: Math.max(most.fills, v.fills), words: Math.max(most.words, v.words) };
+      const at = `at ${width}px, scrolled to ${Math.min(y, end)}`;
+      const once = (key: string, line: string) => { if (!reported.has(key)) { reported.add(key); issues.push(line); } };
+      if (v.washed > ACCENT_BUDGET.washedPrimary) once('w', `${v.washed} oxblood-washed primaries in one viewport ${at}, over ${ACCENT_BUDGET.washedPrimary}: ${v.fillWhere.join(' | ')}`);
+      if (v.fills > ACCENT_BUDGET.fills) once('f', `${v.fills} oxblood fills in one viewport ${at}, over ${ACCENT_BUDGET.fills}: ${v.fillWhere.join(' | ')}`);
+      if (v.words > ACCENT_BUDGET.accentWords) once('t', `${v.words} accent-text words in one viewport ${at}, over ${ACCENT_BUDGET.accentWords}: ${v.wordWhere.join(' | ')}`);
+      for (const u of v.upper) seenUpper.add(u);
+    }
+    for (const u of seenUpper) issues.push(`uppercase set by CSS at ${width}px: "${u}"`);
+    const copy = (await p.evaluate(`(() => ['hero','routes','filings','forecast','cash','discount','answers','workbench','beyond'].map((id) => { const el = document.getElementById(id); return el ? el.textContent : ''; }).join(' '))()`)) as string;
+    const banned = FR.landingBannedIn(copy);
+    if (banned.length && width === 1440) issues.push(`LANDING §2.3 banned words in sections 1–4: ${banned.join(', ')}`);
+    worst.push(`${width}px: at most ${most.washed} washed primary, ${most.fills} fills, ${most.words} accent words`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`landing sections 1–4 in 100px steps — ${worst.join('; ')}; no CSS uppercase; no banned words`);
+}
+
+// ---- phone and low-end: the poster, no WebGL (job 8.11) -----------------
+//
+// VISUAL_SYSTEM §8. The machines this harness runs on report 4 cores, which
+// is itself low-end, so a check that needs the field says what device it is
+// (CAPABLE_DEVICE: 8 cores, 8GB, no Data Saver, 4g) and each low-end case
+// below changes one signal from that. On each: no WebGL context is made, no
+// canvas is in the page, the poster is showing and the hero says why
+// (`data-hero-mode`). The capable device at 1440 must get the field, or the
+// check would pass on a page that never draws it. Then the whole landing page
+// at 390 and 320 wide, scrolled top to bottom, must never scroll sideways.
+const CAPABLE_DEVICE = `(() => {
+  const def = (o, k, v) => { try { Object.defineProperty(o, k, { get: () => v, configurable: true }); } catch {} };
+  def(navigator, 'hardwareConcurrency', 8);
+  def(navigator, 'deviceMemory', 8);
+  const conn = { saveData: false, effectiveType: '4g', addEventListener() {}, removeEventListener() {} };
+  def(navigator, 'connection', conn);
+  window.__device = conn;
+})()`;
+const WEBGL_COUNTER = `(() => {
+  window.__webgl = 0;
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+    const made = original.call(this, kind, ...rest);
+    if (made && /webgl/i.test(String(kind)) && !this.__counted) { this.__counted = true; window.__webgl++; }
+    return made;
+  };
+})()`;
+async function checkPhoneAndLowEnd(browser: Browser) {
+  console.log('\n=== phone and low-end: the poster, no WebGL ===');
+  const issues: string[] = [];
+  const seen: string[] = [];
+  // VISUAL_BUILD_PLAN V7 (Nihar, 4 November 2026): 4 cores and 4GB are not
+  // low-end and get the field; 2 cores, 2GB, no WebGL2 and a first second
+  // averaging over 24ms a frame get the poster.
+  const SLOW_FRAMES = `(() => { const raf = window.requestAnimationFrame.bind(window); window.requestAnimationFrame = (cb) => raf((t) => { const end = performance.now() + 32; while (performance.now() < end) {} cb(t); }); })();`;
+  const cases: { name: string; width: number; height: number; tweak: string; wantField: boolean; reason?: string; drawsFirst?: boolean }[] = [
+    { name: 'a capable desktop', width: 1440, height: 900, tweak: '', wantField: true },
+    { name: '4 cores', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });`, wantField: true },
+    { name: '4GB of memory', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'deviceMemory', { get: () => 4 });`, wantField: true },
+    { name: '2 cores', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 2 });`, wantField: false, reason: 'few-cores' },
+    { name: '2GB of memory', width: 1440, height: 900, tweak: `Object.defineProperty(navigator, 'deviceMemory', { get: () => 2 });`, wantField: false, reason: 'low-memory' },
+    { name: 'no WebGL2', width: 1440, height: 900, tweak: `delete window.WebGL2RenderingContext;`, wantField: false, reason: 'no-webgl2' },
+    { name: 'frames over 24ms', width: 1440, height: 900, tweak: SLOW_FRAMES, wantField: false, reason: 'slow-frames', drawsFirst: true },
+    { name: 'Data Saver', width: 1440, height: 900, tweak: `window.__device.saveData = true;`, wantField: false, reason: 'save-data' },
+    { name: 'a 3g connection', width: 1440, height: 900, tweak: `window.__device.effectiveType = '3g';`, wantField: false, reason: 'slow-connection' },
+    { name: 'a 390px phone', width: 390, height: 844, tweak: '', wantField: false, reason: 'narrow' },
+  ];
+  for (const k of cases) {
+    const ctx = await browser.newContext({ viewport: { width: k.width, height: k.height } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(WEBGL_COUNTER);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    if (k.tweak) await ctx.addInitScript(`(() => { ${k.tweak} })()`);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    if (k.wantField) await p.locator('canvas').first().waitFor({ timeout: 15_000 }).catch(() => {});
+    else if (k.drawsFirst) {
+      await p.waitForFunction(`document.querySelector('[data-hero-mode]')?.getAttribute('data-hero-mode') === 'poster:slow-frames'`, null, { timeout: 20_000 }).catch(() => {});
+      await p.waitForTimeout(2000); // the poster fades back in
+    }
+    else await p.waitForTimeout(3000);
+    const v: any = await p.evaluate(`(() => {
+      const poster = document.querySelector('[data-hero-poster]');
+      const hero = document.querySelector('[data-hero-mode]');
+      return {
+        webgl: window.__webgl, canvases: document.querySelectorAll('canvas').length,
+        poster: poster ? getComputedStyle(poster).opacity : null,
+        mode: hero ? hero.getAttribute('data-hero-mode') : null,
+      };
+    })()`);
+    seen.push(`${k.name}: ${v.webgl} WebGL, ${v.mode}`);
+    if (k.wantField) {
+      if (v.webgl !== 1) issues.push(`${k.name}: ${v.webgl} WebGL contexts, where the field should draw (the check would pass a page that never draws it)`);
+    } else {
+      // A measured first second needs drawing to measure, so that one case
+      // may have made its one context; it must then have given it up.
+      if (v.webgl > (k.drawsFirst ? 1 : 0)) issues.push(`${k.name}: ${v.webgl} WebGL context made, where VISUAL_SYSTEM §8 asks for the poster`);
+      if (v.canvases > 0) issues.push(`${k.name}: ${v.canvases} canvas in the page, where there should be none`);
+      if (v.poster !== '1') issues.push(`${k.name}: the poster is not showing (opacity ${v.poster})`);
+      if (v.mode !== `poster:${k.reason}`) issues.push(`${k.name}: the hero says "${v.mode}", not "poster:${k.reason}"`);
+    }
+    await ctx.close();
+  }
+  // 320px reflow (WCAG 1.4.10) and 390.
+  const wide: string[] = [];
+  for (const width of [390, 320]) {
+    const ctx = await browser.newContext({ viewport: { width, height: 740 }, reducedMotion: 'reduce' });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(BASE, { waitUntil: 'networkidle' });
+    const total = (await p.evaluate(`document.documentElement.scrollHeight`)) as number;
+    let worst = 0;
+    let where = '';
+    for (let y = 0; y < total; y += 600) {
+      await p.evaluate(`window.scrollTo(0, ${y})`);
+      await p.waitForTimeout(40);
+      const r: any = await p.evaluate(`(() => {
+        const over = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+        let el = null;
+        if (over > 0) for (const e of document.querySelectorAll('body *')) { const b = e.getBoundingClientRect(); if (b.right > innerWidth + 1 && b.width > 0 && getComputedStyle(e).position !== 'fixed') { el = (e.tagName + '.' + String(e.className).slice(0, 50) + ' ' + (e.textContent || '').trim().slice(0, 30)); break; } }
+        return { over, el };
+      })()`);
+      if (r.over > worst) { worst = r.over; where = `${r.el} at y ${y}`; }
+    }
+    wide.push(`${width}px ${worst}px`);
+    if (worst > 0) issues.push(`at ${width}px the landing page scrolls sideways by ${worst}px (${where})`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${seen.join('; ')}; sideways scroll ${wide.join(', ')}`);
+}
+
+// ---- the Margin notes at their own addresses (job 9.8) -------------------
+//
+// LEARN_STATES §2.2 (L1) and §2.5. Every note is loaded directly at
+// /learn/notes/<key>/ and must open that note, by its title; /learn/notes/
+// opens the first note of the index. Back returns to the note before. Walking
+// "next" from the first note of the index must visit every note in the
+// index's own printed order, and "previous" from the last must walk it back
+// — the expected order is read from the rendered index, not from the code
+// that orders it. On a phone the index is one closed disclosure. A key no
+// note has lands on /learn/notes/. The landing page's "All n notes" goes to
+// /learn/notes/.
+async function checkNotesAddresses(browser: Browser) {
+  console.log('\n=== the Margin notes at their own addresses ===');
+  const MN: any = await import(`file:///${REPO}/src/data/marginNotes.ts`);
+  const notes: { key: string; title: string }[] = MN.MARGIN_NOTES;
+  const issues: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  const shown = async () =>
+    (await p.evaluate(`(() => { const a = document.querySelector('article[data-note]'); return a ? { key: a.getAttribute('data-note'), title: (a.querySelector('h2')?.textContent || '').trim() } : null; })()`)) as { key: string; title: string } | null;
+  const path = () => new URL(p.url()).pathname;
+  const waitNote = async (key?: string) =>
+    p.waitForFunction(key ? `document.querySelector('article[data-note="${key}"]') !== null` : `document.querySelector('article[data-note]') !== null`, null, { timeout: 15_000 }).catch(() => {});
+
+  // 1. Every note by its own address.
+  let direct = 0;
+  for (const n of notes) {
+    await p.goto(`${BASE}/learn/notes/${n.key}/`, { waitUntil: 'domcontentloaded' });
+    await waitNote(n.key);
+    const s = await shown();
+    if (!s || s.key !== n.key || s.title !== n.title) issues.push(`/learn/notes/${n.key}/ opens ${s ? `"${s.title}" (${s.key})` : 'no note'}, not "${n.title}"`);
+    else direct++;
+  }
+  // 2. The screen's own address, and the order its index prints.
+  await p.goto(`${BASE}/learn/notes/`, { waitUntil: 'domcontentloaded' });
+  await waitNote();
+  const indexOrder = (await p.evaluate(`Array.from(document.querySelectorAll('nav[data-notes-index] a[data-note-link]')).map((a) => a.getAttribute('data-note-link'))`)) as string[];
+  const first = await shown();
+  if (!indexOrder.length) issues.push('the notes index prints no note links');
+  if (indexOrder.length !== notes.length) issues.push(`the index prints ${indexOrder.length} notes, the data holds ${notes.length}`);
+  if (!first || first.key !== indexOrder[0]) issues.push(`/learn/notes/ opens ${first?.key ?? 'nothing'}, not the index's first note (${indexOrder[0]})`);
+  // 3. Next, all the way down, then previous all the way back, by clicking.
+  const walk = async (rel: 'next' | 'prev') => {
+    const seen: string[] = [(await shown())?.key ?? '?'];
+    for (let i = 0; i < notes.length + 2; i++) {
+      const link = p.locator(`article a[rel="${rel}"]`);
+      if (!(await link.count())) break;
+      const to = await link.getAttribute('data-note-link');
+      await link.click();
+      await waitNote(to || undefined);
+      seen.push((await shown())?.key ?? '?');
+    }
+    return seen;
+  };
+  const down = await walk('next');
+  if (down.join(',') !== indexOrder.join(',')) issues.push(`"next" from the first note walks ${down.length} notes in an order other than the index's (first difference at ${down.findIndex((k, i) => k !== indexOrder[i]) + 1}: ${down.find((k, i) => k !== indexOrder[i])})`);
+  const up = await walk('prev');
+  if (up.join(',') !== [...indexOrder].reverse().join(',')) issues.push(`"previous" from the last note does not walk the index back in order`);
+  // 4. Back.
+  await p.goto(`${BASE}/learn/notes/${indexOrder[0]}/`, { waitUntil: 'domcontentloaded' });
+  await waitNote(indexOrder[0]);
+  await p.locator('article a[rel="next"]').click();
+  await waitNote(indexOrder[1]);
+  const afterNext = path();
+  await p.goBack();
+  await waitNote(indexOrder[0]);
+  const afterBack = { path: path(), note: (await shown())?.key };
+  if (afterNext !== `/learn/notes/${indexOrder[1]}/`) issues.push(`"next" moved the address to ${afterNext}, not /learn/notes/${indexOrder[1]}/`);
+  if (afterBack.path !== `/learn/notes/${indexOrder[0]}/` || afterBack.note !== indexOrder[0]) issues.push(`Back from ${indexOrder[1]} lands on ${afterBack.path} showing ${afterBack.note}, not ${indexOrder[0]}`);
+  // 5. A key no note has.
+  await p.goto(`${BASE}/learn/notes/no-such-note/`, { waitUntil: 'domcontentloaded' });
+  await p.waitForFunction(`location.pathname === '/learn/notes/'`, null, { timeout: 10_000 }).catch(() => {});
+  if (path() !== '/learn/notes/') issues.push(`/learn/notes/no-such-note/ stays at ${path()}, not /learn/notes/`);
+  // 6. From the landing page.
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.getByRole('button', { name: /^All \d+ notes$/ }).first().click();
+  await waitNote();
+  if (path() !== '/learn/notes/') issues.push(`the landing page's "All notes" goes to ${path()}, not /learn/notes/`);
+  await ctx.close();
+  // 7. On a phone, the index is one closed disclosure.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(phone);
+  const q = await phone.newPage();
+  await q.goto(`${BASE}/learn/notes/${notes[3].key}/`, { waitUntil: 'domcontentloaded' });
+  await q.waitForSelector('article[data-note]', { timeout: 15_000 }).catch(() => {});
+  const ph: any = await q.evaluate(`(() => {
+    const b = document.querySelector('[data-notes-disclose]');
+    const links = Array.from(document.querySelectorAll('nav[data-notes-index] a[data-note-link]')).filter((a) => a.getBoundingClientRect().height > 0);
+    const art = document.querySelector('article[data-note]');
+    return { button: b ? b.getAttribute('aria-expanded') : null, label: b ? b.textContent.trim() : null, links: links.length, articleTop: art ? Math.round(art.getBoundingClientRect().top + scrollY) : null };
+  })()`);
+  if (ph.button !== 'false') issues.push(`at 390 the notes index is not a closed disclosure (aria-expanded ${ph.button})`);
+  if (ph.links) issues.push(`at 390 ${ph.links} note links show before the index is opened`);
+  if (ph.label !== `All ${notes.length} notes`) issues.push(`the phone index is labelled "${ph.label}", not "All ${notes.length} notes"`);
+  await phone.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`all ${direct} notes open at /learn/notes/<key>/; next walks the ${indexOrder.length} in index order and previous walks them back; Back returns; an unknown key lands on /learn/notes/; at 390 the index is a closed "${ph.label}" with the note at y ${ph.articleTop}`);
+}
+
+// ---- page not found, in the app (job 9.5) --------------------------------
+//
+// LEARN_STATES §3.6. The dev server sends every unknown path to the app, as
+// a rewrite would, and the app must answer with its not-found screen and the
+// path printed — not with the landing page at the wrong address. `/` must
+// still be the landing page, and "Home" must take the reader there.
+// (`verify:routes` checks the deployed routing: the static 404.html and the
+// rewrites in vercel.json.)
+async function checkInAppNotFound(browser: Browser) {
+  console.log('\n=== page not found, in the app ===');
+  const issues: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/definitely-not-a-page`, { waitUntil: 'domcontentloaded' });
+  const shown = await p.waitForSelector('[data-not-found]', { timeout: 15_000 }).then(() => true).catch(() => false);
+  const v: any = await p.evaluate(`(() => ({
+    path: document.querySelector('[data-not-found-path]')?.textContent || null,
+    h1: document.querySelector('[data-not-found] h1')?.textContent || null,
+    landing: !!document.getElementById('routes'),
+  }))()`);
+  if (!shown) issues.push(`/definitely-not-a-page shows no not-found screen${v.landing ? ' — the landing page renders at the wrong address' : ''}`);
+  else {
+    if (v.path !== '/definitely-not-a-page') issues.push(`the not-found screen prints "${v.path}", not the path asked for`);
+    if (!/^This page does not exist/.test(v.h1 || '')) issues.push(`the not-found title reads "${v.h1}"`);
+    if (v.landing) issues.push('the landing page renders under the not-found screen');
+    await p.getByRole('link', { name: 'Home' }).click();
+    const home = await p.waitForSelector('#routes', { timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!home || new URL(p.url()).pathname !== '/') issues.push(`"Home" from the not-found screen lands on ${new URL(p.url()).pathname}${home ? '' : ' without the landing page'}`);
+  }
+  await p.goto(BASE, { waitUntil: 'domcontentloaded' });
+  const landing = await p.waitForSelector('#routes', { timeout: 15_000 }).then(() => true).catch(() => false);
+  if (!landing || (await p.locator('[data-not-found]').count())) issues.push('/ no longer shows the landing page');
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok('an unknown path shows "This page does not exist" with the path printed; Home goes to the landing page; / is still the landing page');
+}
+
+// ---- the global header and the menu (job 9.1) ----------------------------
+//
+// NAV_SEARCH §8 items 1–12, on the landing page and the notes screen. At
+// 1440: the bar 64px; in order the wordmark, the section triggers and the
+// Search trigger, 320×36 with its right edge at 1392; no clock, no live dot,
+// no animate-pulse anywhere in the header; every trigger muted at rest
+// (#A8A29A) and none oxblood; at most one selected item; the triggers' names
+// a subsequence of the seven in their fixed order, each with a shipped link.
+// A panel opens on click, on Enter and on ↓, never on hover; Esc closes it and
+// gives focus back to its trigger; at most 8 links, rows 36px, the overlay
+// ground, no shadow; every "Coming" item is text with no link. At 390 (touch):
+// the bar 64px, Search and Menu 44×44, the sheet's top at y = 64, section rows
+// 56px, link rows 48px, every target in it at least 44 tall, Esc closes it
+// and returns focus to Menu.
+async function checkHeaderAndMenu(browser: Browser) {
+  console.log('\n=== the global header and the menu ===');
+  const SEVEN = ['Companies', 'Research', 'Markets', 'Invest', 'Tools', 'Learn', 'Deals'];
+  const issues: string[] = [];
+  const notes: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  for (const [where, address] of [['the landing page', '/'], ['the notes screen', '/learn/notes/']] as const) {
+    await p.goto(`${BASE}${address}`, { waitUntil: 'networkidle' });
+    await p.waitForSelector('header [data-menu-trigger]', { timeout: 15_000 }).catch(() => {});
+    const h: any = await p.evaluate(`(() => {
+      const header = document.querySelector('header');
+      const r = header.getBoundingClientRect();
+      const kids = Array.from(header.querySelectorAll('[aria-label="Marginalia home"], [data-menu-trigger], [aria-label="Search companies"]'))
+        .filter((e) => e.getBoundingClientRect().width > 0 && !e.closest('[data-header-condensed]'))
+        .map((e) => { const b = e.getBoundingClientRect(); return { what: e.getAttribute('data-menu-trigger') || e.getAttribute('aria-label'), x: Math.round(b.left), right: Math.round(b.right), w: Math.round(b.width), h: Math.round(b.height), colour: getComputedStyle(e).color, current: e.getAttribute('aria-current') }; });
+      const text = header.innerText;
+      return {
+        height: Math.round(r.height), kids,
+        clock: /\\b\\d{1,2}:\\d{2}(:\\d{2})?\\b/.test(text),
+        pulse: header.querySelectorAll('.animate-pulse').length,
+        live: /\\blive\\b/i.test(text),
+        selected: Array.from(header.querySelectorAll('[aria-current]')).filter((e) => e.getBoundingClientRect().width > 0).length,
+        banned: ['Home', 'All companies', 'Check the figures'].filter((w) => Array.from(header.querySelectorAll('a, button')).some((e) => e.getBoundingClientRect().width > 0 && e.textContent.trim() === w)),
+      };
+    })()`);
+    if (h.height !== 64) issues.push(`${where}: the header is ${h.height}px, not 64`);
+    if (h.clock) issues.push(`${where}: the header shows a clock`);
+    if (h.pulse) issues.push(`${where}: ${h.pulse} animate-pulse element(s) in the header`);
+    if (h.live) issues.push(`${where}: the header says "live"`);
+    if (h.banned.length) issues.push(`${where}: the header carries ${h.banned.join(', ')}`);
+    if (h.selected > 1) issues.push(`${where}: ${h.selected} header items in the selected state, over 1`);
+    const order = h.kids.map((k: any) => k.what);
+    const names = order.filter((w: string) => SEVEN.includes(w));
+    if (order[0] !== 'Marginalia home' || order[order.length - 1] !== 'Search companies') issues.push(`${where}: header order is ${order.join(' · ')}`);
+    if (!names.length) issues.push(`${where}: no section triggers`);
+    if (names.join() !== SEVEN.filter((n) => names.includes(n)).join()) issues.push(`${where}: sections out of the fixed order: ${names.join(', ')}`);
+    const search = h.kids.find((k: any) => k.what === 'Search companies');
+    if (search && (search.w !== 320 || search.h !== 36 || search.right !== 1392)) issues.push(`${where}: the Search trigger is ${search.w}×${search.h} with its right edge at ${search.right}, not 320×36 at 1392`);
+    for (const k of h.kids.filter((k: any) => SEVEN.includes(k.what) && !k.current))
+      if (k.colour !== 'rgb(168, 162, 154)') issues.push(`${where}: ${k.what} at rest is ${k.colour}, not #A8A29A`);
+    notes.push(`${where}: ${names.join(' · ')}, ${h.selected} selected`);
+  }
+  // Panels: hover opens nothing; click, Enter and ↓ open; Esc closes and returns focus.
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  const names: string[] = await p.evaluate(`Array.from(document.querySelectorAll('header [data-menu-trigger]')).map((e) => e.getAttribute('data-menu-trigger'))`);
+  for (const name of names) {
+    const trigger = p.locator(`header [data-menu-trigger="${name}"]`);
+    const panel = p.locator(`[data-menu-panel="${name}"]`);
+    await trigger.hover();
+    await p.waitForTimeout(250);
+    if (await panel.count()) issues.push(`${name}: the panel opens on hover`);
+    for (const how of ['click', 'Enter', 'ArrowDown'] as const) {
+      if (how === 'click') await trigger.click();
+      else { await trigger.focus(); await p.keyboard.press(how); }
+      await p.waitForTimeout(80);
+      if (!(await panel.count())) { issues.push(`${name}: ${how} does not open the panel`); continue; }
+      if (how === 'click') {
+        const d: any = await p.evaluate(`(() => {
+          const el = document.querySelector('[data-menu-panel="${name}"]');
+          const cs = getComputedStyle(el);
+          const links = Array.from(el.querySelectorAll('[data-menu-link]'));
+          const coming = Array.from(el.querySelectorAll('[data-menu-coming] [data-feature]'));
+          return {
+            links: links.length - el.querySelectorAll('[data-menu-coming] [data-menu-link]').length,
+            heights: [...new Set(links.map((l) => Math.round(l.getBoundingClientRect().height)))],
+            ground: cs.backgroundColor, shadow: cs.boxShadow,
+            comingLinked: coming.filter((c) => c.closest('a') || c.querySelector('a, button')).length,
+          };
+        })()`);
+        if (d.links > 8) issues.push(`${name}: ${d.links} links in the panel, over 8`);
+        if (d.heights.some((x: number) => x !== 36)) issues.push(`${name}: panel rows are ${d.heights.join('/')}px, not 36`);
+        if (d.ground !== 'rgb(22, 22, 26)') issues.push(`${name}: the panel ground is ${d.ground}, not the overlay`);
+        if (d.shadow && d.shadow !== 'none') issues.push(`${name}: the panel has a shadow`);
+        if (d.comingLinked) issues.push(`${name}: ${d.comingLinked} coming item(s) carry a link`);
+      }
+      await p.keyboard.press('Escape');
+      await p.waitForTimeout(80);
+      const back: any = await p.evaluate(`({ open: !!document.querySelector('[data-menu-panel]'), focus: document.activeElement?.getAttribute('data-menu-trigger') })`);
+      if (back.open) issues.push(`${name}: Esc does not close the panel`);
+      else if (back.focus !== name) issues.push(`${name}: after Esc focus is on ${back.focus ?? 'nothing'}, not the trigger`);
+    }
+  }
+  await ctx.close();
+  // The phone.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  await installFixtureRoutes(phone);
+  const q = await phone.newPage();
+  await q.goto(BASE, { waitUntil: 'networkidle' });
+  const bar: any = await q.evaluate(`(() => {
+    const box = (sel) => { const e = document.querySelector(sel); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.width), Math.round(b.height)]; };
+    return { height: Math.round(document.querySelector('header').getBoundingClientRect().height), search: box('header [aria-label="Search companies"]'), menu: box('header [data-menu-button]') };
+  })()`);
+  if (bar.height !== 64) issues.push(`390: the header is ${bar.height}px, not 64`);
+  for (const [what, b] of [['Search', bar.search], ['Menu', bar.menu]] as const)
+    if (!b || b[0] < 44 || b[1] < 44) issues.push(`390: ${what} is ${b ? b.join('×') : 'missing'}, under 44×44`);
+  if (bar.menu) {
+    await q.locator('header [data-menu-button]').click();
+    await q.waitForSelector('[data-menu-sheet]', { timeout: 5000 }).catch(() => {});
+    const first = await q.locator('[data-sheet-section]').first();
+    if (await first.count()) await first.click();
+    await q.waitForTimeout(100);
+    const sh: any = await q.evaluate(`(() => {
+      const s = document.querySelector('[data-menu-sheet]');
+      if (!s) return null;
+      const rows = Array.from(s.querySelectorAll('[data-sheet-section]')).map((e) => Math.round(e.getBoundingClientRect().height));
+      const links = Array.from(s.querySelectorAll('[data-menu-link]')).map((e) => Math.round(e.getBoundingClientRect().height));
+      const small = Array.from(s.querySelectorAll('a, button')).filter((e) => e.getBoundingClientRect().height < 44).map((e) => e.textContent.trim().slice(0, 30));
+      return { top: Math.round(s.getBoundingClientRect().top), rows: [...new Set(rows)], links: [...new Set(links)], small };
+    })()`);
+    if (!sh) issues.push('390: Menu opens no sheet');
+    else {
+      if (sh.top !== 64) issues.push(`390: the sheet's top is at y = ${sh.top}, not 64`);
+      if (sh.rows.some((x: number) => x !== 56)) issues.push(`390: sheet section rows are ${sh.rows.join('/')}px, not 56`);
+      if (!sh.links.length || sh.links.some((x: number) => x < 48)) issues.push(`390: sheet link rows are ${sh.links.join('/') || 'absent'}px, under 48`);
+      if (sh.small.length) issues.push(`390: targets under 44px in the sheet: ${sh.small.join(', ')}`);
+      await q.keyboard.press('Escape');
+      await q.waitForTimeout(80);
+      const after: any = await q.evaluate(`({ open: !!document.querySelector('[data-menu-sheet]'), menu: document.activeElement?.hasAttribute('data-menu-button') })`);
+      if (after.open) issues.push('390: Esc does not close the sheet');
+      else if (!after.menu) issues.push('390: after Esc focus is not on Menu');
+      notes.push(`390: sheet at y ${sh.top}, rows ${sh.rows.join('/')}, links ${sh.links.join('/')}`);
+    }
+  }
+  await phone.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${notes.join('; ')}; panels open by click, Enter and ↓, not hover, and Esc returns focus; no clock, live dot or pulse`);
+}
+
+// ---- the loading screen's timeline and controls (job 9.3) -----------------
+//
+// NAV_SEARCH §8 items 22–29. First the timeline itself
+// (`src/data/loadingTimeline.ts`) with fake times, for every finishing time
+// from 0 to 90 seconds in 50ms steps: a build done inside a second opens no
+// modal and is not held; otherwise the modal opens at 1,000ms, the
+// correction shows no later than belief + 2,200ms (at once if the build is
+// done first), stays at least 1,200ms, the modal at least 500ms, and no build
+// is held more than 1,200ms past finishing. Then in the browser: a build
+// answered at once never opens the modal; a build held open shows "Step 1 of
+// 2" with the fill at 0 (nothing creeps), no percentage and no counting
+// seconds, a fixed 232px card area, "Taking longer than usual." by 15
+// seconds; Esc closes it and gives focus back to the search field, and the
+// late answer is ignored; Esc at 300ms, before the modal, cancels too.
+async function checkLoadingScreen(browser: Browser) {
+  console.log('\n=== the loading screen: timeline and controls ===');
+  const LT: any = await import(`file:///${REPO}/src/data/loadingTimeline.ts`);
+  const issues: string[] = [];
+  let cases = 0;
+  for (let done = 0; done <= 90_000; done += 50) {
+    cases++;
+    const t = LT.loadingTimeline(done);
+    if (done < 1000) {
+      if (t.modalAt !== null || t.closeAt !== done) { issues.push(`timeline: a build done at ${done}ms opens the modal or is held (close ${t.closeAt})`); break; }
+      continue;
+    }
+    const bad =
+      t.modalAt !== 1000 ? 'the modal is not at 1,000ms' :
+      t.correctionAt === null || t.correctionAt > t.beliefAt + 2200 ? 'the correction is late' :
+      t.correctionAt < Math.min(done, t.beliefAt + 2200) ? 'the correction comes before it is due' :
+      t.closeAt - t.correctionAt < 1200 ? 'the correction is up under 1,200ms' :
+      t.closeAt - t.modalAt < 500 ? 'the modal is up under 500ms' :
+      t.closeAt - done > 1200 ? `the build is held ${t.closeAt - done}ms past finishing` : null;
+    if (bad) { issues.push(`timeline at ${done}ms: ${bad}`); break; }
+  }
+
+  const stampScript = `(() => {
+    window.__build = {};
+    const stamp = () => {
+      const now = performance.now();
+      for (const [k, sel] of [['rule', '[data-build-rule]'], ['modal', '[data-build-modal]']])
+        if (window.__build[k] === undefined && document.querySelector(sel)) window.__build[k] = now;
+    };
+    new MutationObserver(stamp).observe(document, { childList: true, subtree: true });
+  })()`;
+
+  // A build answered at once.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(stampScript);
+    const p = await ctx.newPage();
+    await search(p, PAPER_TICKER);
+    await p.waitForURL(/\/company\//, { timeout: 30_000 }).catch(() => {});
+    const t: any = await p.evaluate(`window.__build || {}`);
+    if (t.modal !== undefined) issues.push(`a build answered at once opened the modal (${Math.round(t.modal - (t.rule ?? t.modal))}ms after the rule)`);
+    if (t.rule === undefined) issues.push('a build answered at once showed no page rule either');
+    await ctx.close();
+  }
+
+  // A build held open.
+  let measured = '';
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    let release = () => {};
+    const held = new Promise<void>((r) => { release = () => r(); });
+    await ctx.unroute('**/api/company*');
+    await ctx.route('**/api/company*', async (route) => {
+      await held;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtureFor(PAPER_TICKER)) }); } catch { /* the check moved on */ }
+    });
+    const p = await ctx.newPage();
+    const started = search(p, PAPER_TICKER).catch(() => {});
+    const modal = p.locator('[data-build-modal]');
+    await modal.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => {});
+    const v: any = await p.evaluate(`(() => {
+      const m = document.querySelector('[data-build-modal]');
+      const area = document.querySelector('[data-build-card-area]');
+      return m ? {
+        step: (document.querySelector('[data-build-step]')?.textContent || '').trim(),
+        fill: document.querySelector('[data-build-modal] [data-build-fill]')?.getAttribute('data-build-fill'),
+        area: area ? Math.round(area.getBoundingClientRect().height) : null,
+        cancel: !!document.querySelector('[data-build-cancel]'),
+        text: (m.querySelector('[role=status]')?.textContent || '') + ' ' + (m.querySelector('[data-build-cancel]')?.parentElement?.textContent || ''),
+      } : null;
+    })()`);
+    if (!v) issues.push('a held build never opened the modal');
+    else {
+      if (v.step !== 'Step 1 of 2') issues.push(`a held build reads "${v.step}", not "Step 1 of 2"`);
+      if (v.fill !== '0') issues.push(`the fill is ${v.fill} with no stage finished, not 0`);
+      if (v.area !== 232) issues.push(`the card area is ${v.area}px high at 1440, not a fixed 232`);
+      if (!v.cancel) issues.push('no Cancel on the loading screen');
+      if (/\d\s*%/.test(v.text)) issues.push(`a percentage in the loading screen's progress: "${v.text.trim().slice(0, 80)}"`);
+    }
+    const a = (await modal.textContent().catch(() => '')) || '';
+    await p.waitForTimeout(2000);
+    const b = (await modal.textContent().catch(() => '')) || '';
+    const secs = (x: string) => (x.match(/\b\d+\s*(s|sec|seconds)\b/g) || []).join();
+    if (secs(a) !== secs(b) && secs(b)) issues.push('a counting number of seconds on the loading screen');
+    await p.waitForFunction(`(document.querySelector('[data-build-modal]')?.textContent || '').includes('Taking longer than usual.')`, null, { timeout: 16_000 }).catch(() => {});
+    const late = (await modal.textContent().catch(() => '')) || '';
+    if (!late.includes('Taking longer than usual.')) issues.push('no "Taking longer than usual." by 15 seconds');
+    await p.keyboard.press('Escape');
+    await p.waitForTimeout(200);
+    const after: any = await p.evaluate(`({ modal: !!document.querySelector('[data-build-modal], [data-build-rule]'), focus: document.activeElement?.tagName === 'INPUT' })`);
+    if (after.modal) issues.push('Esc does not close the loading screen');
+    if (!after.focus) issues.push('after Esc focus is not back on the search field');
+    release();
+    await p.waitForTimeout(6000);
+    if (/\/company\//.test(p.url())) issues.push('the cancelled build still opened the company when its answer came');
+    await started;
+    measured = v ? `${v.step}, fill ${v.fill}, card area ${v.area}px` : '';
+    await ctx.close();
+  }
+
+  // Esc before the modal.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await installFixtureRoutes(ctx);
+    let release = () => {};
+    const held = new Promise<void>((r) => { release = () => r(); });
+    await ctx.unroute('**/api/company*');
+    await ctx.route('**/api/company*', async (route) => {
+      await held;
+      try { await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtureFor(PAPER_TICKER)) }); } catch { /* moved on */ }
+    });
+    const p = await ctx.newPage();
+    const started = search(p, PAPER_TICKER).catch(() => {});
+    await p.locator('[data-build-rule]').waitFor({ state: 'attached', timeout: 30_000 }).catch(() => {});
+    await p.waitForTimeout(300);
+    await p.keyboard.press('Escape');
+    await p.waitForTimeout(1200);
+    if (await p.locator('[data-build-modal], [data-build-rule]').count()) issues.push('Esc at 300ms, before the modal, does not cancel the build');
+    release();
+    await started;
+    await ctx.close();
+  }
+
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`the timeline holds for ${cases} finishing times (0–90s); a quick build shows the rule and no modal; a held one reads ${measured}, says "Taking longer than usual." by 15s, and Esc closes it (also at 300ms) with focus back on the field and the late answer ignored`);
+}
+
+// ---- the company header and the tab row (job 9.9) ------------------------
+//
+// COMPANY_OVERVIEW §1.4–1.5 and checklist §7.1 (L2, L9–L11). On the paper
+// company's overview at 1440 and 390: the header panel starts at y = 88
+// (80 on a phone); the ticker line is muted, never oxblood; the name is on
+// the Title step; nothing in the header is a clock, seconds or a live dot,
+// and the stamp reads "Prices: close 30 Oct 2026[, 20:00 UTC]" and
+// "Statements: FY2026, ended 25 Jan 2026"; every tab is 48 high (and 44 wide
+// on the phone); the current tab is ink 600 with a 2px accent rule, and that
+// rule is the only accent anywhere in the header at rest. Manual activation:
+// → moves focus without changing the address, Enter selects. Switching tabs
+// does not move the header. On the phone the row scrolls inside itself with
+// the next tab clipped.
+async function checkCompanyHeader(browser: Browser) {
+  console.log('\n=== the company header and the tab row ===');
+  const issues: string[] = [];
+  const notes: string[] = [];
+  for (const [width, height, touch] of [[1440, 900, false], [390, 844, true]] as const) {
+    const ctx = await browser.newContext({ viewport: { width, height }, reducedMotion: 'reduce', isMobile: touch, hasTouch: touch });
+    await installFixtureRoutes(ctx);
+    const p = await ctx.newPage();
+    await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+    await p.waitForSelector('[data-company-stamp]', { timeout: 30_000 }).catch(() => {});
+    const h: any = await p.evaluate(`(() => {
+      const panel = document.querySelector('[data-company-header]');
+      if (!panel) return null;
+      const accent = (c) => /rgba?\\(139, 30, 30|rgba?\\(208, 94, 88/.test(c);
+      const tabs = Array.from(panel.querySelectorAll('[role=tab]'));
+      const current = panel.querySelector('[role=tab][aria-selected=true]');
+      const bar = current ? current.querySelector('span.absolute') : null;
+      const accents = [];
+      for (const el of panel.querySelectorAll('*')) {
+        if (el === bar) continue;
+        const cs = getComputedStyle(el);
+        const own = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
+        if ((own && accent(cs.color)) || accent(cs.backgroundColor) || (parseFloat(cs.borderTopWidth) > 0 && accent(cs.borderTopColor)) || (parseFloat(cs.borderBottomWidth) > 0 && accent(cs.borderBottomColor)))
+          accents.push(el.tagName + ' ' + (el.textContent || '').trim().slice(0, 20));
+      }
+      const list = panel.querySelector('[role=tablist]');
+      const lr = list.getBoundingClientRect();
+      return {
+        top: Math.round(panel.getBoundingClientRect().top + scrollY),
+        ticker: getComputedStyle(panel.querySelector('[data-company-ticker]')).color,
+        h1: getComputedStyle(panel.querySelector('h1')).fontSize,
+        title: getComputedStyle(document.documentElement).getPropertyValue('--m-size-title').trim(),
+        stamp: panel.querySelector('[data-company-stamp]')?.innerText.trim().split('\\n') ?? [],
+        text: panel.innerText,
+        pulse: panel.querySelectorAll('.animate-pulse').length,
+        tabs: tabs.map((t) => ({ slug: t.getAttribute('data-tab'), h: Math.round(t.getBoundingClientRect().height), w: Math.round(t.getBoundingClientRect().width), right: Math.round(t.getBoundingClientRect().right) })),
+        current: current ? { colour: getComputedStyle(current).color, weight: getComputedStyle(current).fontWeight, bar: bar ? Math.round(bar.getBoundingClientRect().height) + ' ' + getComputedStyle(bar).backgroundColor : null } : null,
+        accents,
+        scrolls: list.scrollWidth > list.clientWidth + 1,
+        clipped: tabs.some((t) => { const r = t.getBoundingClientRect(); return r.left < lr.right - 1 && r.right > lr.right + 1; }),
+      };
+    })()`);
+    const at = `${width}px`;
+    // For a reviewer: SHOT_DIR=<folder> keeps a screenshot of each width.
+    if (process.env.SHOT_DIR) await p.screenshot({ path: path.join(process.env.SHOT_DIR, `company-header-${width}.png`) });
+    if (!h) { issues.push(`${at}: no company header`); await ctx.close(); continue; }
+    const wantTop = width >= 640 ? 88 : 80;
+    if (h.top !== wantTop) issues.push(`${at}: the header panel starts at y = ${h.top}, not ${wantTop}`);
+    if (h.ticker !== 'rgb(168, 162, 154)') issues.push(`${at}: the ticker line is ${h.ticker}, not muted`);
+    const titlePx = width >= 1286 ? '36px' : width <= 1000 ? '28px' : null;
+    if (titlePx && h.h1 !== titlePx) issues.push(`${at}: the name is ${h.h1}, not the Title step (${titlePx})`);
+    if (/\b\d{1,2}:\d{2}:\d{2}\b/.test(h.text) || h.pulse || /\blive\b/i.test(h.text)) issues.push(`${at}: a clock, seconds or a live dot in the header`);
+    const [pr, st] = h.stamp;
+    if (!/^Prices: (close \d{1,2} [A-Z][a-z]{2} \d{4}(, \d{2}:\d{2} UTC)?|not recorded)$/.test(pr || '')) issues.push(`${at}: the stamp's first line reads "${pr}"`);
+    if (!/^Statements: (FY\d{4}|the last filed year)(, ended \d{1,2} [A-Z][a-z]{2} \d{4})?$/.test(st || '')) issues.push(`${at}: the stamp's second line reads "${st}"`);
+    const short = h.tabs.filter((t: any) => t.h !== 48 || (touch && t.w < 44));
+    if (short.length) issues.push(`${at}: tabs not 48 high${touch ? ' and 44 wide' : ''}: ${short.map((t: any) => `${t.slug} ${t.w}×${t.h}`).join(', ')}`);
+    if (!h.current || h.current.colour !== 'rgb(242, 240, 234)' || h.current.weight !== '600') issues.push(`${at}: the current tab is ${JSON.stringify(h.current)}, not ink 600`);
+    else if (!h.current.bar || !h.current.bar.startsWith('2 ') || !/139, 30, 30/.test(h.current.bar)) issues.push(`${at}: the current tab's rule is ${h.current.bar}, not 2px accent`);
+    if (h.accents.length) issues.push(`${at}: accent in the header besides the current tab's rule: ${h.accents.slice(0, 3).join(' | ')}`);
+    if (touch && !(h.scrolls && h.clipped)) issues.push(`${at}: the tab row does not scroll inside itself with the next tab clipped`);
+    // Manual activation, and a switch that does not move the header.
+    const before = p.url();
+    await p.locator('[role=tab][aria-selected=true]').focus();
+    await p.keyboard.press('ArrowRight');
+    const focused = await p.evaluate(`document.activeElement?.getAttribute('data-tab')`);
+    if (p.url() !== before) issues.push(`${at}: → changed the address (activation is manual)`);
+    if (focused !== h.tabs[1]?.slug) issues.push(`${at}: → moved focus to ${focused}, not ${h.tabs[1]?.slug}`);
+    const box = await p.locator('[data-company-header]').boundingBox();
+    await p.keyboard.press('Enter');
+    await p.waitForURL(new RegExp(`/${h.tabs[1]?.slug}$`), { timeout: 10_000 }).catch(() => {});
+    if (!p.url().endsWith(`/${h.tabs[1]?.slug}`)) issues.push(`${at}: Enter on ${h.tabs[1]?.slug} did not select it (${p.url()})`);
+    await p.waitForTimeout(300);
+    const after = await p.locator('[data-company-header]').boundingBox();
+    if (box && after && (Math.abs(box.y - after.y) > 0.5 || Math.abs(box.height - after.height) > 0.5)) issues.push(`${at}: switching tabs moved the header (${Math.round(box.y)}/${Math.round(box.height)} → ${Math.round(after.y)}/${Math.round(after.height)})`);
+    notes.push(`${at}: top ${h.top}, name ${h.h1}, "${pr}" / "${st}"`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${notes.join('; ')}; tabs 48 high, the current one ink 600 on a 2px accent rule, the only accent in the header; → moves focus, Enter selects, the header stays put`);
+}
+
+// ---- the search palette (job 9.2) ----------------------------------------
+//
+// NAV_SEARCH §8 items 13–21 and §4.2–4.5, against a fixture search route
+// (`/api/search` answered from a small list, with a delay or a failure on
+// demand). Opened by Ctrl+K and by /, and by neither while typing in a page
+// field; the dialog's role, label and combobox semantics; at 1440×900 640
+// wide with its top at 108 (max(64px, 12vh)), a 56px input row, 44px rows,
+// 32px group labels, a 40px hint bar, the overlay ground and no shadow; with
+// nothing typed and nothing recent, "Try" and four rows; typing gives
+// ranked rows with the match in bold; ↓ moves the highlight, ↑ from the
+// first row goes back to the input, End and Home; Ctrl+Backspace clears;
+// Tab stays inside; Esc closes and focus returns to the trigger; an answer
+// for an older query never replaces a newer one; at most one request in
+// flight; "Still searching…" after a second with no answer, without moving
+// the list; no match says so with the query and "Ask us to add it"; a failed
+// search says "Search is unavailable." as an alert with the query kept and
+// Try again working; Enter opens the company (its build starts) and it
+// becomes Recent, with × and Delete removing it. At 390: a full-screen sheet
+// with a 44×44 Cancel, two-line 56px rows and no hint bar.
+async function checkSearchPalette(browser: Browser) {
+  console.log('\n=== the search palette ===');
+  const issues: string[] = [];
+  const notes: string[] = [];
+  const LIST = [
+    { ticker: PAPER_TICKER, name: 'Fenwick Paper Mills Inc.', exchange: 'NYSE' },
+    { ticker: 'PAPR', name: 'Paper Excellence Corp', exchange: 'Toronto' },
+    { ticker: 'AAPL', name: 'Apple Inc.', exchange: 'NasdaqGS' },
+    { ticker: 'APLE', name: 'Apple Hospitality REIT, Inc.', exchange: 'NYSE' },
+    { ticker: 'NSRGY', name: 'Nestlé S.A.', exchange: 'OTC' },
+    { ticker: 'RELIANCE.NS', name: 'Reliance Industries Limited', exchange: 'NSE' },
+  ];
+  const fold = (t: string) => t.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const mode = { delay: 0, fail: false, slowFor: '' as string, slowMs: 0, inFlight: 0, maxInFlight: 0, requests: [] as string[] };
+  const route = async (ctx: BrowserContext) => {
+    await ctx.unroute('**/api/search*');
+    await ctx.route('**/api/search*', async (r) => {
+      const q = new URL(r.request().url()).searchParams.get('q') || '';
+      mode.requests.push(q);
+      mode.inFlight++;
+      mode.maxInFlight = Math.max(mode.maxInFlight, mode.inFlight);
+      const wait = q === mode.slowFor ? mode.slowMs : mode.delay;
+      if (wait) await new Promise((x) => setTimeout(x, wait));
+      mode.inFlight--;
+      try {
+        if (mode.fail) await r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' });
+        else {
+          const f = fold(q);
+          const results = LIST.filter((l) => fold(l.name).includes(f) || fold(l.ticker).startsWith(f));
+          await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results }) });
+        }
+      } catch { /* aborted by the page: that is the point */ }
+    });
+  };
+
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  await route(ctx);
+  // IN FLIGHT AS THE PAGE SEES IT: a request the page has aborted is over for
+  // the page even while this harness's handler is still sleeping on it.
+  await ctx.addInitScript(`(() => {
+    window.__search = { now: 0, max: 0 };
+    const real = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = String(input && input.url ? input.url : input);
+      if (!url.includes('/api/search')) return real(input, init);
+      const s = window.__search;
+      s.now++; s.max = Math.max(s.max, s.now);
+      let done = false;
+      const end = () => { if (!done) { done = true; s.now--; } };
+      init && init.signal && init.signal.addEventListener('abort', end);
+      return real(input, init).finally(end);
+    };
+  })()`);
+  const p = await ctx.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(2500); // the idle prefetch
+  const palette = p.locator('[data-search-palette]');
+  const open = async (how: 'Control+k' | 'Slash') => {
+    await p.locator('body').click({ position: { x: 5, y: 300 } }).catch(() => {});
+    await p.keyboard.press(how === 'Slash' ? '/' : how);
+    return palette.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
+  };
+  const close = async () => { await p.keyboard.press('Escape'); await p.waitForTimeout(100); };
+
+  // Opening, and not opening. ⌘K to a focused input is timed in the page,
+  // from the key event to focus arriving in the combobox (§4.6: ≤ 100ms),
+  // the median of three opens.
+  await p.evaluate(`(() => {
+    window.__open = [];
+    let t = 0;
+    window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') t = performance.now(); }, true);
+    document.addEventListener('focusin', (e) => { if (t && e.target && e.target.getAttribute && e.target.getAttribute('role') === 'combobox') { window.__open.push(performance.now() - t); t = 0; } });
+  })()`);
+  let opened = true;
+  for (let i = 0; i < 3; i++) {
+    if (!(await open('Control+k'))) opened = false;
+    if (i < 2) { await p.keyboard.press('Escape'); await p.waitForTimeout(150); }
+  }
+  if (!opened) issues.push('Ctrl+K does not open the palette');
+  const opens = ((await p.evaluate('window.__open')) as number[]).sort((a, b) => a - b);
+  const ms = Math.round(opens[Math.floor(opens.length / 2)] ?? NaN);
+  if (!(ms <= 100)) issues.push(`Ctrl+K to a focused input takes ${ms}ms (median of ${opens.length}), over 100`);
+  const focusedIn = await p.evaluate(`document.activeElement?.getAttribute('role') === 'combobox'`);
+  if (!focusedIn) issues.push('the palette opens without its input focused');
+  await close();
+  if (!(await open('Slash'))) issues.push('/ does not open the palette');
+  await close();
+  const field = p.locator('#coverage textarea[name="message"]');
+  if (await field.count()) {
+    await field.scrollIntoViewIfNeeded();
+    await field.click();
+    await p.keyboard.press('/');
+    await p.keyboard.press('Control+k');
+    await p.waitForTimeout(300);
+    if (await palette.count()) { issues.push('typing / or Ctrl+K in a page field opens the palette'); await close(); }
+    await field.fill('');
+    await p.evaluate('window.scrollTo(0, 0)');
+  }
+
+  // Layout and semantics.
+  const trigger = p.locator('header [data-header-full] [aria-label="Search companies"]');
+  await trigger.click();
+  await palette.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  const L: any = await p.evaluate(`(() => {
+    const d = document.querySelector('[data-search-palette]');
+    if (!d) return null;
+    const r = d.getBoundingClientRect(), cs = getComputedStyle(d);
+    const input = d.querySelector('input');
+    const rows = Array.from(d.querySelectorAll('[data-search-row]'));
+    return {
+      role: d.getAttribute('role'), modal: d.getAttribute('aria-modal'), label: d.getAttribute('aria-label'),
+      combobox: input?.getAttribute('role'), controls: !!document.getElementById(input?.getAttribute('aria-controls') || '-'),
+      width: Math.round(r.width), top: Math.round(r.top), ground: cs.backgroundColor, shadow: cs.boxShadow,
+      inputRow: Math.round(d.querySelector('[data-search-input-row]').getBoundingClientRect().height),
+      hints: d.querySelector('[data-search-hints]') ? Math.round(d.querySelector('[data-search-hints]').getBoundingClientRect().height) : null,
+      group: d.querySelector('[data-search-group]')?.textContent.trim(),
+      groupH: d.querySelector('[data-search-group]') ? Math.round(d.querySelector('[data-search-group]').getBoundingClientRect().height) : null,
+      tries: rows.filter((x) => x.getAttribute('data-search-row') === 'try').length,
+      rowH: rows[0] ? Math.round(rows[0].getBoundingClientRect().height) : null,
+    };
+  })()`);
+  if (!L) issues.push('the header trigger opens no palette');
+  else {
+    if (L.role !== 'dialog' || L.modal !== 'true' || L.label !== 'Search companies') issues.push(`the dialog is ${L.role}/${L.modal}/"${L.label}"`);
+    if (L.combobox !== 'combobox' || !L.controls) issues.push('the input is not a combobox controlling its list');
+    if (L.width !== 640 || L.top !== 108) issues.push(`the palette is ${L.width} wide at y ${L.top}, not 640 at 108`);
+    if (L.ground !== 'rgb(22, 22, 26)' || (L.shadow && L.shadow !== 'none')) issues.push(`the palette ground ${L.ground}, shadow ${L.shadow}`);
+    if (L.inputRow !== 56 || L.hints !== 40 || L.groupH !== 32 || L.rowH !== 44) issues.push(`rows: input ${L.inputRow}, hints ${L.hints}, group ${L.groupH}, result ${L.rowH} — not 56/40/32/44`);
+    if (L.group !== 'Try' || L.tries !== 4) issues.push(`with nothing typed and nothing recent it shows "${L.group}" with ${L.tries} rows, not Try with 4`);
+  }
+
+  // Typing, the order, the bold, and the live count.
+  const input = palette.locator('input');
+  await input.fill('pap');
+  await p.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length >= 2`, null, { timeout: 5000 }).catch(() => {});
+  const typed: any = await p.evaluate(`(() => ({
+    order: Array.from(document.querySelectorAll('[data-search-row="company"]')).map((r) => r.getAttribute('data-ticker')),
+    bold: document.querySelector('[data-search-row="company"] .font-semibold')?.textContent || null,
+    count: document.querySelector('[data-search-count]')?.textContent.trim(),
+  }))()`);
+  if (typed.order.join() !== `PAPR,${PAPER_TICKER}`) issues.push(`"pap" lists ${typed.order.join(', ')}, not PAPR then ${PAPER_TICKER} (name first, then a name word)`);
+  if (typed.bold !== 'Pap') issues.push(`the matched characters in bold are "${typed.bold}", not "Pap"`);
+  if (typed.count !== '2 results') issues.push(`the live region says "${typed.count}"`);
+  // Keyboard.
+  const active = () => p.evaluate(`(() => { const i = document.querySelector('[data-search-palette] input'); const id = i.getAttribute('aria-activedescendant'); return id ? document.getElementById(id)?.getAttribute('data-ticker') || document.getElementById(id)?.textContent.trim() : null; })()`);
+  await input.press('ArrowDown');
+  const first = await active();
+  await input.press('ArrowDown');
+  const second = await active();
+  await input.press('ArrowDown'); // no wrap
+  const stays = await active();
+  await input.press('Home');
+  const home = await active();
+  await input.press('End');
+  const end = await active();
+  await input.press('Home');
+  await input.press('ArrowUp');
+  const back = await active();
+  if (first !== 'PAPR' || second !== PAPER_TICKER || stays !== PAPER_TICKER || home !== 'PAPR' || end !== PAPER_TICKER || back !== null)
+    issues.push(`keyboard: ↓ ${first}, ↓ ${second}, ↓ ${stays}, Home ${home}, End ${end}, ↑ from the first ${back}`);
+  // Tab stays inside.
+  let escaped = false;
+  for (let i = 0; i < 6; i++) {
+    await p.keyboard.press('Tab');
+    if (!(await p.evaluate(`!!document.activeElement?.closest('[data-search-palette]')`))) escaped = true;
+  }
+  if (escaped) issues.push('Tab leaves the palette (focus is not trapped)');
+  await input.focus();
+  await input.press('Control+Backspace');
+  if ((await input.inputValue()) !== '') issues.push('Ctrl+Backspace does not clear the query');
+  await close();
+  const backTo = await p.evaluate(`document.activeElement?.getAttribute('aria-label')`);
+  if (backTo !== 'Search companies') issues.push(`after Esc focus is on ${backTo}, not the trigger that opened it`);
+
+  // An old answer never replaces a newer one; one request in flight.
+  await trigger.click();
+  await palette.waitFor({ state: 'visible' });
+  mode.slowFor = 'app';
+  mode.slowMs = 1500;
+  mode.maxInFlight = 0;
+  await input.fill('app');
+  await p.waitForTimeout(300);
+  await input.fill('nestle');
+  await p.waitForTimeout(2200);
+  const after: any = await p.evaluate(`Array.from(document.querySelectorAll('[data-search-row="company"]')).map((r) => r.getAttribute('data-ticker'))`);
+  if (after.join() !== 'NSRGY') issues.push(`after "app" (slow) then "nestle", the list is ${after.join(', ') || 'empty'}: an older answer replaced the newer`);
+  const flight: any = await p.evaluate('window.__search');
+  if (flight.max > 1) issues.push(`${flight.max} search requests in flight at once, as the page sees them`);
+  mode.maxInFlight = flight.max;
+  mode.slowFor = '';
+  // Slow.
+  mode.delay = 1600;
+  const listTop = (await p.evaluate(`document.querySelector("[data-search-slow]").getBoundingClientRect().top`)) as number;
+  await input.fill('relian');
+  await p.waitForTimeout(1250);
+  const slow: any = await p.evaluate(`({ text: document.querySelector('[data-search-slow]').textContent, top: document.querySelector('[data-search-slow]').getBoundingClientRect().top })`);
+  if (slow.text !== 'Still searching…') issues.push(`after a second with no answer the status row reads "${slow.text}"`);
+  if (Math.abs(slow.top - listTop) > 1 && after.length === 1) issues.push('the "Still searching…" row moved the list');
+  await p.waitForTimeout(1400);
+  mode.delay = 0;
+  // No match.
+  await input.fill('zzqx');
+  await p.waitForSelector('[data-search-empty]', { timeout: 3000 }).catch(() => {});
+  const empty = (await p.textContent('[data-search-empty]').catch(() => '')) || '';
+  if (!empty.includes('No company matches “zzqx”.') || !empty.includes('Ask us to add it')) issues.push(`no match reads "${empty.slice(0, 80)}"`);
+  // Failure.
+  mode.fail = true;
+  await input.fill('nest');
+  await p.waitForSelector('[data-search-error]', { timeout: 3000 }).catch(() => {});
+  const err: any = await p.evaluate(`({ role: document.querySelector('[data-search-error]')?.getAttribute('role'), text: document.querySelector('[data-search-error]')?.textContent, q: document.querySelector('[data-search-palette] input').value })`);
+  if (err.role !== 'alert' || !String(err.text).startsWith('Search is unavailable.') || err.q !== 'nest') issues.push(`a failed search shows ${JSON.stringify(err)}`);
+  mode.fail = false;
+  await p.getByRole('button', { name: 'Try again' }).click();
+  await p.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length > 0`, null, { timeout: 3000 }).catch(() => {});
+  if (!(await p.locator('[data-search-row="company"]').count())) issues.push('Try again does not search again');
+  // Enter opens; Recent; × and Delete.
+  await input.fill(PAPER_TICKER.toLowerCase());
+  await p.waitForFunction(`document.querySelector('[data-search-row="company"]')?.getAttribute('data-ticker') === '${PAPER_TICKER}'`, null, { timeout: 3000 }).catch(() => {});
+  await input.press('Enter');
+  await p.waitForTimeout(150);
+  if (await palette.count()) issues.push(`Enter on ${PAPER_TICKER} left the palette open`);
+  const arrived = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/`), { timeout: 30_000 }).then(() => true).catch(() => false);
+  if (!arrived) issues.push(`Enter on ${PAPER_TICKER} did not open its company (${new URL(p.url()).pathname})`);
+  await p.keyboard.press('Control+k');
+  await palette.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  const rec: any = await p.evaluate(`({ group: document.querySelector('[data-search-group]')?.textContent.trim(), first: document.querySelector('[data-search-row="company"]')?.getAttribute('data-ticker'), x: document.querySelectorAll('[data-search-remove]').length })`);
+  if (!rec.group?.startsWith('Recent') || rec.first !== PAPER_TICKER || !rec.x) issues.push(`after opening ${PAPER_TICKER}, the empty palette shows ${JSON.stringify(rec)}`);
+  await palette.locator('input').press('ArrowDown');
+  await palette.locator('input').press('Delete');
+  await p.waitForTimeout(150);
+  if (await p.locator('[data-search-row="company"]').count()) issues.push('Delete on a highlighted recent row does not remove it');
+  await close();
+  notes.push(`Ctrl+K to a focused input in ${ms}ms`);
+  await ctx.close();
+
+  // The phone.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  await installFixtureRoutes(phone);
+  await route(phone);
+  const q = await phone.newPage();
+  await q.goto(BASE, { waitUntil: 'networkidle' });
+  await q.locator('header [data-header-full] [aria-label="Search companies"]').click();
+  await q.waitForSelector('[data-search-palette]', { timeout: 5000 }).catch(() => {});
+  await q.locator('[data-search-palette] input').fill('apple');
+  await q.waitForFunction(`document.querySelectorAll('[data-search-row="company"]').length >= 2`, null, { timeout: 5000 }).catch(() => {});
+  const ph: any = await q.evaluate(`(() => {
+    const d = document.querySelector('[data-search-palette]');
+    if (!d) return null;
+    const r = d.getBoundingClientRect();
+    const cancel = Array.from(d.querySelectorAll('button')).find((b) => b.textContent.trim() === 'Cancel');
+    const row = d.querySelector('[data-search-row="company"]');
+    return { full: Math.round(r.width) === innerWidth && Math.round(r.height) === innerHeight, cancel: cancel ? [Math.round(cancel.getBoundingClientRect().width), Math.round(cancel.getBoundingClientRect().height)] : null, row: row ? Math.round(row.getBoundingClientRect().height) : null, hints: !!d.querySelector('[data-search-hints]') };
+  })()`);
+  if (!ph) issues.push('390: no palette');
+  else {
+    if (!ph.full) issues.push('390: the palette is not a full-screen sheet');
+    if (!ph.cancel || ph.cancel[0] < 44 || ph.cancel[1] < 44) issues.push(`390: Cancel is ${ph.cancel?.join('×') ?? 'missing'}`);
+    if (ph.row < 56) issues.push(`390: result rows are ${ph.row}px, under 56`);
+    if (ph.hints) issues.push('390: the keyboard hint bar shows on a phone');
+  }
+  await phone.close();
+
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`${notes.join('; ')}; layout 640 at y 108 with 56/44/32/40 rows; Try, ranking, bold, keyboard, focus trap, Esc back to the trigger; no stale overwrite (at most ${mode.maxInFlight} in flight); slow, no match, failure and Try again; Enter builds and the company becomes Recent; the phone sheet`);
+}
+
+// ---- the menu's company destinations (job 9.2, NAV_SEARCH §3) -------------
+//
+// A section shows only with a shipped destination: every company-tab link in
+// `src/data/menu.ts` must name a tab `companyRoute.ts` marks built, and a
+// section whose destinations are all unbuilt tabs (Research, Deals) must be
+// absent from the header. With no company open, a company link opens the
+// palette as "Choose a company for …" and the company chosen opens at that
+// tab; with a company open, the link goes straight to its tab.
+async function checkMenuCompanyLinks(browser: Browser) {
+  console.log('\n=== the menu: company destinations ===');
+  const MENU_M: any = await import(`file:///${REPO}/src/data/menu.ts`);
+  const ROUTE_M: any = await import(`file:///${REPO}/src/data/companyRoute.ts`);
+  const issues: string[] = [];
+  const built = new Set(ROUTE_M.COMPANY_TABS.filter((t: any) => t.built).map((t: any) => t.slug));
+  for (const sec of MENU_M.MENU)
+    for (const d of sec.links)
+      if (d.kind === 'company' && !built.has(d.tab)) issues.push(`${sec.name} links to the ${d.tab} tab, which is not built`);
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  await ctx.unroute('**/api/search*');
+  await ctx.route('**/api/search*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ results: [{ ticker: PAPER_TICKER, name: 'Fenwick Paper Mills Inc.', exchange: 'NYSE' }] }) })
+  );
+  const p = await ctx.newPage();
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  const shown: string[] = await p.evaluate(`Array.from(document.querySelectorAll('header [data-menu-trigger]')).map((e) => e.getAttribute('data-menu-trigger'))`);
+  for (const name of shown) {
+    const sec = MENU_M.MENU.find((m: any) => m.name === name);
+    if (!sec || !sec.links.length) issues.push(`${name} is in the header with no shipped destination`);
+  }
+  // No company open: Choose a company for Financials.
+  await p.click('header [data-menu-trigger="Companies"]');
+  await p.click('[data-menu-panel="Companies"] [data-menu-link]:has-text("Financials")');
+  const title = await p.waitForSelector('[data-search-palette]', { timeout: 5000 }).then(() => p.textContent('[data-search-palette]')).catch(() => null);
+  if (!title || !title.includes('Choose a company for Financials')) issues.push(`with no company open, Financials opens ${title === null ? 'no palette' : `a palette without its purpose ("${title.slice(0, 40)}")`}`);
+  else {
+    await p.fill('[data-search-palette] input', PAPER_TICKER.toLowerCase());
+    await p.waitForSelector(`[data-search-row="company"][data-ticker="${PAPER_TICKER}"]`, { timeout: 5000 }).catch(() => {});
+    await p.press('[data-search-palette] input', 'Enter');
+    const there = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/financials$`), { timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!there) issues.push(`choosing ${PAPER_TICKER} for Financials lands on ${new URL(p.url()).pathname}`);
+  }
+  // A company open: Tools goes straight to its Model tab.
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  if (shown.includes('Tools')) {
+    await p.click('header [data-menu-trigger="Tools"]');
+    await p.click('[data-menu-panel="Tools"] [data-menu-link]');
+    const direct = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/model$`), { timeout: 15_000 }).then(() => true).catch(() => false);
+    if (!direct) issues.push(`with ${PAPER_TICKER} open, Tools goes to ${new URL(p.url()).pathname}, not its Model tab`);
+    if (await p.locator('[data-search-palette]').count()) issues.push('with a company open, Tools still asks which company');
+  } else issues.push('Tools is not in the header, though its destination is built');
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`sections shown: ${shown.join(' · ')}; every company link names a built tab; with none open, "Choose a company for Financials" lands on its tab; with ${PAPER_TICKER} open, Tools goes straight to its Model tab`);
+}
+
+// ---- the condensed header bar (job 9.1, NAV_SEARCH §2.2) ------------------
+//
+// Past 80px of scroll the full header is moved up 64px by a transform and a
+// 48px bar comes down; between 40 and 80 nothing changes (the dead band); at
+// 40 or less the header is back. Both move by transform alone, the page's
+// content does not move when they switch (CLS 0), the bar holds the mark,
+// Search and Menu at 36×36, its Menu opens the sheet under it at y = 48 and
+// its Search opens the palette, and the page's progress rule sits under
+// whichever bar is showing.
+async function checkCondensedHeader(browser: Browser) {
+  console.log('\n=== the condensed header bar ===');
+  const issues: string[] = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await installFixtureRoutes(ctx);
+  const p = await ctx.newPage();
+  await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+  await p.waitForSelector('[data-company-header]', { timeout: 30_000 }).catch(() => {});
+  const read = async () =>
+    (await p.evaluate(`(() => {
+      const full = document.querySelector('[data-header-full]');
+      const bar = document.querySelector('[data-header-condensed]');
+      const rule = document.querySelector('[data-progress-rule]');
+      const anchor = document.querySelector('[data-company-header]');
+      const fb = full.getBoundingClientRect(), bb = bar.getBoundingClientRect();
+      return {
+        flag: document.querySelector('header').getAttribute('data-condensed'),
+        fullBottom: Math.round(fb.bottom), barTop: Math.round(bb.top), barH: Math.round(bb.height),
+        fullTransition: getComputedStyle(full).transitionProperty, barTransition: getComputedStyle(bar).transitionProperty,
+        rule: rule ? Math.round(rule.getBoundingClientRect().top) : null,
+        anchorY: Math.round(anchor.getBoundingClientRect().top + scrollY),
+        buttons: Array.from(bar.querySelectorAll('button')).map((b) => [b.getAttribute('aria-label'), Math.round(b.getBoundingClientRect().width), Math.round(b.getBoundingClientRect().height)]),
+      };
+    })()`)) as any;
+  const at = async (y: number) => { await p.evaluate(`window.scrollTo(0, ${y})`); await p.waitForTimeout(450); return read(); };
+  const top = await at(0);
+  if (top.flag !== 'false' || top.fullBottom !== 64 || top.barTop > -47) issues.push(`at rest: flag ${top.flag}, header bottom ${top.fullBottom}, bar top ${top.barTop}`);
+  const down = await at(200);
+  if (down.flag !== 'true' || down.fullBottom > 1 || down.barTop !== 0 || down.barH !== 48) issues.push(`past 80px: flag ${down.flag}, header bottom ${down.fullBottom}, bar at ${down.barTop}, ${down.barH} high`);
+  if (down.fullTransition !== 'transform' || down.barTransition !== 'transform') issues.push(`the bars move by ${down.fullTransition} / ${down.barTransition}, not transform alone`);
+  if (down.anchorY !== top.anchorY) issues.push(`the page content moved from y ${top.anchorY} to ${down.anchorY} when the bar switched`);
+  if (down.rule !== 48) issues.push(`the progress rule sits at y ${down.rule}, not under the 48px bar`);
+  const labels = down.buttons.map((b: any) => b[0]);
+  if (labels.join() !== 'Marginalia home,Search companies,Menu' || down.buttons.some((b: any) => b[1] !== 36 || b[2] !== 36)) issues.push(`the bar holds ${JSON.stringify(down.buttons)}`);
+  const band = await at(60);
+  if (band.flag !== 'true') issues.push('scrolling back to 60px restores the header: there is no dead band');
+  const back = await at(30);
+  if (back.flag !== 'false' || back.fullBottom !== 64) issues.push(`back at 30px the header is not restored (flag ${back.flag})`);
+  // The bar's Menu and Search.
+  await at(300);
+  await p.click('[data-menu-button-condensed]');
+  const sheetTop = await p.waitForSelector('[data-menu-sheet]', { timeout: 3000 }).then(() => p.evaluate(`Math.round(document.querySelector('[data-menu-sheet]').getBoundingClientRect().top)`)).catch(() => null);
+  if (sheetTop !== 48) issues.push(`the bar's Menu opens ${sheetTop === null ? 'no sheet' : `a sheet at y ${sheetTop}`}, not one at 48`);
+  await p.keyboard.press('Escape');
+  await p.waitForTimeout(150);
+  await p.click('[data-header-condensed] [aria-label="Search companies"]');
+  if (!(await p.waitForSelector('[data-search-palette]', { timeout: 5000 }).then(() => true).catch(() => false))) issues.push("the bar's Search opens no palette");
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`past 80px the header goes up and the 48px bar comes down, by transform alone, with nothing on the page moving; 60px keeps it (dead band), 30px restores it; its Menu opens the sheet at y 48, its Search the palette; the progress rule follows`);
+}
+
+// ---- the loading screen's error and its close (job 9.3b, NAV_SEARCH §5.2, §5.4)
+//
+// A build that fails keeps the loading screen up and says so in the card's
+// place: "The model could not be built for {company}." on the Title step, a
+// reason in plain words (never the browser's or the parser's own text), and
+// Try again and Back, with no Cancel; Try again builds again, Back closes it
+// with focus on the search field. A build that succeeds after the modal has
+// opened fades it out over 168ms on the exit curve before it goes.
+async function checkLoadingErrorAndClose(browser: Browser) {
+  console.log("\n=== the loading screen: its error, and its close ===");
+  const issues: string[] = [];
+  let answer: 'missing' | 'garbage' | 'ok' = 'missing';
+  let holdMs = 0;
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await installFixtureRoutes(ctx);
+  await ctx.unroute('**/api/company*');
+  await ctx.route('**/api/company*', async (r) => {
+    if (holdMs) await new Promise((x) => setTimeout(x, holdMs));
+    try {
+      if (answer === 'missing') await r.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: `No filings were found for ${PAPER_TICKER}.` }) });
+      else if (answer === 'garbage') await r.fulfill({ status: 200, contentType: 'text/html', body: '<html>Gateway timeout</html>' });
+      else await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtureFor(PAPER_TICKER)) });
+    } catch { /* moved on */ }
+  });
+  const p = await ctx.newPage();
+  const readError = () =>
+    p.evaluate(`(() => {
+      const e = document.querySelector('[data-build-error]');
+      return e ? { role: e.getAttribute('role'), text: e.textContent, title: e.querySelector('p')?.textContent, retry: !!e.querySelector('[data-build-retry]'), back: !!e.querySelector('[data-build-back]'), cancel: !!document.querySelector('[data-build-cancel]'), card: !!document.querySelector('[data-myth-card]') } : null;
+    })()`) as Promise<any>;
+
+  // A failure the server explains.
+  await search(p, PAPER_TICKER).catch(() => {});
+  await p.waitForSelector('[data-build-error]', { timeout: 15_000 }).catch(() => {});
+  const e1 = await readError();
+  if (!e1) issues.push('a failed build shows no error on the loading screen');
+  else {
+    if (e1.role !== 'alert') issues.push(`the error is role ${e1.role}, not alert`);
+    if (e1.title !== `The model could not be built for ${PAPER_TICKER}.`) issues.push(`the error's title reads "${e1.title}"`);
+    if (!e1.text.includes(`No filings were found for ${PAPER_TICKER}.`)) issues.push(`the server's own reason is not shown: "${e1.text.slice(0, 90)}"`);
+    if (!e1.retry || !e1.back || e1.cancel || e1.card) issues.push(`controls on the error: ${JSON.stringify({ retry: e1.retry, back: e1.back, cancel: e1.cancel, card: e1.card })}`);
+  }
+  // Back.
+  await p.click('[data-build-back]').catch(() => {});
+  await p.waitForTimeout(400);
+  const afterBack: any = await p.evaluate(`({ modal: !!document.querySelector('[data-build-modal]:not([data-leaving])'), field: document.activeElement?.tagName === 'INPUT' })`);
+  if (afterBack.modal) issues.push('Back leaves the loading screen up');
+  if (!afterBack.field) issues.push('after Back focus is not on the search field');
+  // A failure the browser explains, in its own words: not shown.
+  answer = 'garbage';
+  await search(p, PAPER_TICKER).catch(() => {});
+  await p.waitForSelector('[data-build-error]', { timeout: 15_000 }).catch(() => {});
+  const e2 = await readError();
+  if (!e2) issues.push('an answer that is not JSON shows no error');
+  else if (/unexpected token|json|syntaxerror|<html/i.test(e2.text)) issues.push(`the parser's own words reach the reader: "${e2.text.slice(0, 100)}"`);
+  // Try again, now succeeding, with the modal up long enough to fade.
+  answer = 'ok';
+  holdMs = 1600;
+  await p.evaluate(`(() => {
+    window.__close = null;
+    const look = () => {
+      const m = document.querySelector('[data-build-modal][data-leaving]');
+      if (m && !window.__close) { const cs = getComputedStyle(m); window.__close = { at: performance.now(), duration: cs.transitionDuration, timing: cs.transitionTimingFunction, property: cs.transitionProperty }; }
+      if (window.__close && !window.__close.gone && !document.querySelector('[data-build-modal]')) window.__close.gone = performance.now();
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  })()`);
+  await p.click('[data-build-retry]').catch(() => {});
+  const arrived = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/`), { timeout: 30_000 }).then(() => true).catch(() => false);
+  if (!arrived) issues.push('Try again does not build the company once the source answers');
+  await p.waitForTimeout(500);
+  const close: any = await p.evaluate('window.__close');
+  if (!close) issues.push('the loading screen closes without fading');
+  else {
+    const ms = close.gone ? Math.round(close.gone - close.at) : null;
+    if (close.duration !== '0.168s' || !/cubic-bezier\(0\.2, 0, 1, 0\.9\)/.test(close.timing) || close.property !== 'opacity') issues.push(`the close fades ${close.property} over ${close.duration} on ${close.timing}, not opacity over 168ms on the exit curve`);
+    if (ms === null || ms < 140 || ms > 400) issues.push(`the faded screen is gone after ${ms}ms, not about 168`);
+  }
+  await ctx.close();
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok(`a failed build keeps the screen up with "The model could not be built for ${PAPER_TICKER}.", the server's reason, Try again and Back; the parser's own words never shown; Back returns to the field; Try again builds; the close fades opacity over 168ms on the exit curve`);
+}
+
+// ---- the price chart (job 9.11, COMPANY_OVERVIEW §3) ----------------------
+//
+// On the paper company with its price history replaced by a fixture built
+// for the purpose: 300 weekday closes with five weekdays missing in the
+// middle, and 130 monthly closes rising thirtyfold. Checked: the draw-in
+// (the data's clip opens over 400ms, then the fill fades in over 200ms;
+// axes there from the first frame; no draw-in again on a range change; none
+// under reduced motion); the gap breaks the line and its fill and is a
+// hatched band, and pointing at it names both ends; the log scale offered on
+// Max (ratio over 20) and not on 1Y or 5Y, linear by default, with its note
+// when on; every axis label at 13px and at most five price ticks, whole
+// numbers without decimals; the readout at rest is the last close and Home
+// moves it to the first; the range and overlay controls are radio groups.
+function chartFixture(base: any) {
+  const p = JSON.parse(JSON.stringify(base));
+  const last = Date.parse(`${p?.quote?.history?.daily?.dates?.slice(-1)?.[0] ?? '2026-09-22'}T00:00:00Z`);
+  const dates: string[] = [];
+  const closes: (number | null)[] = [];
+  for (let t = last; dates.length < 300; t -= 86400000) {
+    const d = new Date(t).getUTCDay();
+    if (d === 0 || d === 6) continue;
+    dates.unshift(new Date(t).toISOString().slice(0, 10));
+  }
+  dates.forEach((_, i) => closes.push(i >= 150 && i < 155 ? null : 20 + i * 0.01 + Math.sin(i / 9)));
+  const months: string[] = [];
+  const mcloses: number[] = [];
+  const end = new Date(last);
+  for (let k = 129; k >= 0; k--) {
+    const d = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - k, 1));
+    months.push(d.toISOString().slice(0, 10));
+    mcloses.push(+(1 * Math.pow(30, (129 - k) / 129)).toFixed(4));
+  }
+  p.quote = { ...(p.quote || {}), history: { ...(p.quote?.history || {}), daily: { dates, closes }, monthly: { dates: months, closes: mcloses } } };
+  return { payload: p, missingFrom: dates[149], missingTo: dates[155] };
+}
+
+async function checkPriceChart(browser: Browser) {
+  console.log('\n=== the price chart ===');
+  const issues: string[] = [];
+  const { payload, missingFrom, missingTo } = chartFixture(fixtureFor(PAPER_TICKER));
+  const open = async (reduced: boolean) => {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+    await installFixtureRoutes(ctx);
+    await ctx.addInitScript(CAPABLE_DEVICE);
+    await ctx.unroute('**/api/company*');
+    await ctx.route('**/api/company*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) }));
+    // Each phase the chart passes through, stamped as it happens, with what
+    // was on screen at that moment.
+    await ctx.addInitScript(`(() => {
+      window.__draw = [];
+      let last = null;
+      const look = () => {
+        const svg = document.querySelector('section[aria-label="Price history"] svg[role="img"]');
+        if (svg) {
+          const ph = svg.getAttribute('data-draw-in');
+          if (ph !== last) {
+            last = ph;
+            const fill = svg.querySelector('[data-price-fill]');
+            window.__draw.push({ ph, t: performance.now(), axes: svg.querySelectorAll('[data-axis]').length, fill: fill ? getComputedStyle(fill).opacity : null, clip: getComputedStyle(svg.querySelector('[data-chart-data]')).clipPath });
+          }
+        }
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+    })()`);
+    const p = await ctx.newPage();
+    await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
+    await p.locator('section[aria-label="Price history"]').scrollIntoViewIfNeeded();
+    await p.waitForFunction(`document.querySelector('section[aria-label="Price history"] svg')?.getAttribute('data-draw-in') === 'done'`, null, { timeout: 20_000 }).catch(() => {});
+    return { ctx, p };
+  };
+
+  // 1. The draw-in, with motion.
+  {
+    const { ctx, p } = await open(false);
+    const d: any[] = await p.evaluate('window.__draw');
+    const at = (ph: string) => d.find((x) => x.ph === ph);
+    const wait = at('wait'), clip = at('clip'), fill = at('fill'), done = at('done');
+    if (!wait || !clip || !fill || !done) issues.push(`the draw-in phases seen: ${d.map((x) => x.ph).join(' → ') || 'none'}`);
+    else {
+      const clipMs = Math.round(fill.t - clip.t), fillMs = Math.round(done.t - fill.t);
+      if (clipMs < 350 || clipMs > 520) issues.push(`the clip opens over ${clipMs}ms, not 400`);
+      if (fillMs < 150 || fillMs > 320) issues.push(`the fill fades in over ${fillMs}ms, not 200`);
+      if (!wait.axes) issues.push('the axes are not there from the first frame');
+      if (wait.fill !== '0' || !/100%/.test(String(wait.clip))) issues.push(`before the draw-in the data shows (fill ${wait.fill}, clip ${wait.clip})`);
+    }
+    await p.getByRole('radio', { name: '6M', exact: true }).first().click();
+    await p.waitForTimeout(300);
+    const again: any[] = await p.evaluate('window.__draw');
+    if (again.length !== d.length) issues.push(`a range change replays the draw-in (${again.slice(d.length).map((x) => x.ph).join(' → ')})`);
+
+    // 2. The gap.
+    await p.getByRole('radio', { name: '1Y', exact: true }).first().click();
+    await p.waitForTimeout(300);
+    // For a reviewer: SHOT_DIR=<folder> keeps the chart at 1Y.
+    if (process.env.SHOT_DIR) await p.locator('section[aria-label="Price history"]').screenshot({ path: path.join(process.env.SHOT_DIR, 'price-chart-1y.png') });
+    const g: any = await p.evaluate(`(() => {
+      const svg = document.querySelector('section[aria-label="Price history"] svg[role="img"]');
+      const line = svg.querySelector('[data-price-line]').getAttribute('d') || '';
+      const fill = svg.querySelector('[data-price-fill]').getAttribute('d') || '';
+      const band = svg.querySelector('[data-gap-band] rect');
+      const r = band ? band.getBoundingClientRect() : null;
+      const texts = Array.from(svg.querySelectorAll('[data-axis]'));
+      return {
+        moves: (line.match(/M/g) || []).length, fills: (fill.match(/Z/g) || []).length,
+        band: r ? { x: r.right, y: r.top + r.height / 2 } : null,
+        sizes: [...new Set(texts.map((t) => t.getAttribute('font-size')))],
+        left: texts.filter((t) => t.getAttribute('data-axis') === 'left').map((t) => t.textContent),
+        radios: document.querySelectorAll('section[aria-label="Price history"] [role=radiogroup] [role=radio]').length,
+        readout: document.querySelector('[data-chart-readout]').textContent,
+      };
+    })()`);
+    if (g.moves < 2 || g.fills < 2) issues.push(`the line is ${g.moves} run(s) and the fill ${g.fills}: the gap is bridged`);
+    if (!g.band) issues.push('no hatched band over a five-day gap');
+    else {
+      await p.mouse.move(g.band.x + 1, g.band.y);
+      await p.waitForTimeout(150);
+      const said = (await p.textContent('[data-chart-readout]')) || '';
+      const want = (iso: string) => { const x = new Date(`${iso}T00:00:00Z`); return `${x.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getUTCMonth()]} ${x.getUTCFullYear()}`; };
+      if (!said.includes(`No data ${want(missingFrom)} – ${want(missingTo)}`)) issues.push(`pointing at the gap reads "${said.trim().slice(0, 80)}"`);
+      await p.mouse.move(5, 5);
+    }
+    if (g.sizes.join() !== '13') issues.push(`axis labels at ${g.sizes.join(', ')}px, not 13`);
+    if (g.left.length > 5) issues.push(`${g.left.length} price ticks, over 5`);
+    if (g.left.some((x: string) => /\.\d*0$|\.0+$/.test(x) && !/\.\d*[1-9]/.test(x))) issues.push(`a whole-number tick carries decimals: ${g.left.join(', ')}`);
+    const PS: any = await import(`file:///${REPO}/src/data/priceSeries.ts`);
+    const wantRadios = PS.RANGES.length + PS.OVERLAYS.length + 1;
+    if (g.radios !== wantRadios) issues.push(`${g.radios} radio controls, not the ${PS.RANGES.length} ranges, None and ${PS.OVERLAYS.length} overlays`);
+    if (!/Price/.test(g.readout)) issues.push(`the readout at rest reads "${g.readout.slice(0, 60)}"`);
+    await p.locator('section[aria-label="Price history"] [role=group]').focus();
+    await p.keyboard.press('Home');
+    await p.waitForTimeout(100);
+    const first = (await p.textContent('[data-chart-readout]')) || '';
+    if (first === g.readout) issues.push('Home does not move the readout to the first close');
+
+    // 3. The log scale.
+    const logButton = () => p.locator('[data-chart-log]').count();
+    const offered: Record<string, number> = {};
+    for (const r of ['1Y', '5Y', 'Max']) {
+      await p.getByRole('radio', { name: r, exact: true }).first().click();
+      await p.waitForTimeout(250);
+      offered[r] = await logButton();
+    }
+    if (offered['1Y'] || offered['5Y'] || !offered['Max']) issues.push(`the log scale is offered on ${Object.entries(offered).filter(([, v]) => v).map(([k]) => k).join(', ') || 'nothing'}, not on Max only`);
+    else {
+      const before = await p.evaluate(`document.querySelector('section[aria-label="Price history"] svg[role="img"]').getAttribute('data-scale')`);
+      await p.click('[data-chart-log]');
+      await p.waitForTimeout(250);
+      const after: any = await p.evaluate(`({ scale: document.querySelector('section[aria-label="Price history"] svg[role="img"]').getAttribute('data-scale'), note: !!document.querySelector('[data-log-note]') })`);
+      if (before !== 'linear' || after.scale !== 'log' || !after.note) issues.push(`log: default ${before}, then ${after.scale}, note ${after.note}`);
+      if (process.env.SHOT_DIR) await p.locator('section[aria-label="Price history"]').screenshot({ path: path.join(process.env.SHOT_DIR, 'price-chart-max-log.png') });
+    }
+    await ctx.close();
+  }
+  // 4. Reduced motion: no draw-in.
+  {
+    const { ctx, p } = await open(true);
+    const d: any[] = await p.evaluate('window.__draw');
+    if (d.some((x) => x.ph === 'clip' || x.ph === 'fill')) issues.push(`under reduced motion the chart draws in (${d.map((x) => x.ph).join(' → ')})`);
+    await ctx.close();
+  }
+  for (const issue of issues) {
+    problems++;
+    console.log(`  PROBLEM: ${issue}`);
+  }
+  if (!issues.length) ok('the clip opens over ~400ms then the fill over ~200ms, axes there from the first frame, never again on a range change, never under reduced motion; a five-day gap breaks the line and fill, is hatched, and is named end to end; log offered on Max only, linear by default; axis labels 13px, ≤ 5 ticks; the readout rests on the last close');
+}
+
+// NOTHING LEAVES THE MACHINE: every call the site makes, answered from the
+// fixtures. A function so the reduced-motion and touch contexts (jobs 8.4,
+// 8.5) are answered exactly as the main one is.
+async function installFixtureRoutes(ctx: BrowserContext) {
   // NOTHING LEAVES THE MACHINE. Every call the site makes is answered here.
-  await context.route('**/api/company*', async (route) => {
+  await ctx.route('**/api/company*', async (route) => {
     const url = new URL(route.request().url());
     const ticker = (url.searchParams.get('ticker') || '').toUpperCase();
     // Only the paper company exists here. A curated company also asks for its
@@ -4131,24 +6187,82 @@ try {
       body: JSON.stringify(payload),
     });
   });
-  await context.route('**/api/news*', (route) =>
+  await ctx.route('**/api/news*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"items":[]}' })
   );
-  await context.route('**/api/search*', (route) =>
+  await ctx.route('**/api/search*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"results":[]}' })
   );
-  await context.route('**/api/comps*', (route) =>
+  await ctx.route('**/api/comps*', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"comparables":[]}' })
   );
   // The index a beta is measured against, answered from the fixture: a series
   // built so the regression's answer is known before it runs.
-  await context.route('**/api/marketIndex*', (route) =>
+  await ctx.route('**/api/marketIndex*', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(paperIndexSeries()),
     })
   );
+}
+
+// ------------------------------------------------------------------------ run
+let server: ChildProcess | null = null;
+let browser: Browser | null = null;
+try {
+  console.log(`starting the site on ${BASE} …`);
+  server = await startServer();
+  try {
+    browser = await chromium.launch({ headless: !HEADED });
+  } catch (error: any) {
+    // The browser binary is downloaded separately from the npm package, so a
+    // clean checkout has the library and not the browser. Say which command
+    // fixes it rather than printing a stack trace about a missing executable.
+    throw new Error(
+      'Chromium is not installed for Playwright. Run:  npx playwright install chromium  ' +
+        `(${String(error?.message || error).split('\n')[0]})`
+    );
+  }
+  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+
+  await installFixtureRoutes(context);
+
+  // ONE SECTION AT A TIME, FOR PROVING A CHECK FAILS. `DASHBOARD_ONLY=hero,webgl
+  // npm run verify:dashboard` runs just those self-contained sections and
+  // stops, so a deliberate break is reported by the check it was made for
+  // rather than by whichever earlier journey it happened to slow down. The
+  // full run, which is the one a commit quotes, takes no such variable.
+  const ONLY: Record<string, () => Promise<void>> = {
+    motion: () => checkReducedMotion(browser as Browser),
+    focus: () => checkFocusAndTargets(browser as Browser),
+    bridge: () => checkBridgeWorker(browser as Browser),
+    features: () => checkFeatureGate(browser as Browser),
+    hero: () => checkHeroField(browser as Browser),
+    webgl: () => checkOneWebglContext(browser as Browser),
+    accent: () => checkLandingAccentBudget(browser as Browser),
+    lowend: () => checkPhoneAndLowEnd(browser as Browser),
+    notes: () => checkNotesAddresses(browser as Browser),
+    notfound: () => checkInAppNotFound(browser as Browser),
+    header: () => checkHeaderAndMenu(browser as Browser),
+    loading: () => checkLoadingScreen(browser as Browser),
+    company: () => checkCompanyHeader(browser as Browser),
+    palette: () => checkSearchPalette(browser as Browser),
+    menu: () => checkMenuCompanyLinks(browser as Browser),
+    condensed: () => checkCondensedHeader(browser as Browser),
+    chart: () => checkPriceChart(browser as Browser),
+    loadingerror: () => checkLoadingErrorAndClose(browser as Browser),
+  };
+  const only = (process.env.DASHBOARD_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (only.length) {
+    for (const name of only) {
+      if (!ONLY[name]) throw new Error(`DASHBOARD_ONLY names "${name}"; the sections are ${Object.keys(ONLY).join(', ')}`);
+      await ONLY[name]();
+    }
+    console.log(`\n(DASHBOARD_ONLY=${only.join(',')}: only these sections ran)`);
+    throw Object.assign(new Error('__only__'), { only: true });
+  }
+
   const page = await context.newPage();
   page.on('pageerror', (error) => {
     problems++;
@@ -4163,7 +6277,6 @@ try {
 
   // 1. The curated model, which the site renders without fetching anything.
   const apple: any = (COMPANIES_DATA as any).AAPL;
-  await readContrast(page, 'the landing page');
   await openCurated(page, 'AAPL');
   // AFTER THE FIRST REAL NAVIGATION, not before it. `readContrast` evaluates on
   // whatever is loaded and never navigates, so a font check placed above it
@@ -4171,19 +6284,23 @@ try {
   // a check that fails for the wrong reason, and would have gone on failing
   // after the fix.
   await checkFontRequests(page, requests);
-  // THE LANDING PAGE, LOADED. The contrast read labelled "the landing page"
-  // above runs before the first navigation and so measures an empty tab; the
-  // type check needs the real page, at the desktop width and at a phone's,
-  // because the landing steps are fluid. In a tab of its own, so the journey
-  // in `page` is not moved and the font check's request count is untouched.
+  // THE LANDING PAGE, LOADED, at the desktop width and at a phone's.
+  //
+  // Until 2026-11-04 the contrast read for "the landing page" ran here, on
+  // `page`, before the first navigation — so it measured about:blank and could
+  // not fail. It now opens the landing page in a tab of its own (so the
+  // journey in `page` and the font check's request count are untouched),
+  // scrolls it top to bottom so every section that fades in on scroll has
+  // faded in, and refuses to call a page with almost no text on it measured.
   {
     const landing = await context.newPage();
-    await landing.goto(BASE, { waitUntil: 'networkidle' });
-    await landing.waitForTimeout(1500);
-    await readType(landing, LANDING_TYPE_SCREEN);
-    await landing.setViewportSize({ width: 390, height: 844 });
-    await landing.waitForTimeout(600);
-    await readType(landing, `${LANDING_TYPE_SCREEN}, at 390`);
+    for (const width of [1400, 390]) {
+      await landing.setViewportSize({ width, height: width > 600 ? 1000 : 844 });
+      await landing.goto(BASE, { waitUntil: 'networkidle' });
+      await revealWholePage(landing);
+      const where = width > 600 ? LANDING_TYPE_SCREEN : `${LANDING_TYPE_SCREEN}, at 390`;
+      await readContrast(landing, where, { minimumText: LANDING_MINIMUM_TEXT });
+    }
     await landing.close();
   }
   await readContrast(page, 'the questions screen');
@@ -4255,9 +6372,28 @@ try {
   await checkSlowBuild(context, page);
 
   // 7. Nothing anywhere on any of those screens is below WCAG AA.
+  await checkReducedMotion(browser);
+  await checkFocusAndTargets(browser);
+  await checkBridgeWorker(browser);
+  await checkFeatureGate(browser);
+  await checkHeroField(browser);
+  await checkOneWebglContext(browser);
+  await checkLandingAccentBudget(browser);
+  await checkPhoneAndLowEnd(browser);
+  await checkNotesAddresses(browser);
+  await checkInAppNotFound(browser);
+  await checkHeaderAndMenu(browser);
+  await checkLoadingScreen(browser);
+  await checkCompanyHeader(browser);
+  await checkSearchPalette(browser);
+  await checkMenuCompanyLinks(browser);
+  await checkCondensedHeader(browser);
+  await checkPriceChart(browser);
+  await checkLoadingErrorAndClose(browser);
   reportContrast();
   reportType();
 } catch (error: any) {
+  if (!error?.only) {
   problems++;
   console.log(`\n  PROBLEM: the check could not finish — ${error?.message || error}`);
   // WHICH SCREEN IT WAS ON. A timeout on a button says nothing about where the
@@ -4274,6 +6410,7 @@ try {
     }
   } catch {
     /* the browser may already be gone */
+  }
   }
 } finally {
   await browser?.close().catch(() => {});

@@ -1606,8 +1606,8 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     'src/components/figuresHint.tsx': { literal: 2 },
     'src/components/instrument.tsx': { literal: 3 },
     'src/components/landingPage.tsx': { all: 1, literal: 1 },
-    'src/components/motionPrimitives.tsx': { literal: 16, property: 1 },
-    'src/index.css': { literal: 3 },
+    'src/components/motionPrimitives.tsx': { literal: 8 },
+    'src/index.css': { literal: 1 },
   };
 
   const ALLOWED_CSS = new Set([
@@ -1700,6 +1700,189 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
       `${totals.property} animated properties outside the allowed set (recorded ${recorded.all} / ${recorded.literal} / ${recorded.property}) -- ` +
       `${bad ? bad + ' PROBLEMS' : 'none above the ratchet'}`
   );
+  totalProblems += bad;
+}
+
+// ---- the valuation bridge (build step 5, part C) --------------------------
+//
+// The checks live in `verify/bridge.mts` and run on the paper company fixture,
+// so they need no payloads and sit before the first section that does.
+{
+  console.log('\n=== the valuation bridge: drivers, mixing and attribution ===');
+  const { checkBridge } = await import(`file:///${REPO}/verify/bridge.mts`);
+  const report = await checkBridge();
+  for (const line of report.lines) console.log(`  ${line}`);
+  for (const problem of report.problems) console.log(`  PROBLEM: ${problem}`);
+  totalProblems += report.problems.length;
+}
+
+// ---- the feature register (build step 8, job 8.6) ------------------------
+//
+// LANDING §2.4: one list of what ships, which the landing page reads. Here the
+// list itself is held to its own rules; `verify:dashboard` checks the page
+// against it.
+{
+  console.log('\n=== the feature register: statuses, tenses, dates ===');
+  const FR: any = await import(`file:///${REPO}/src/data/featureRegister.ts`);
+  const SCR: any = await import(`file:///${REPO}/src/data/screener.ts`);
+  let bad = 0;
+  const say = (m: string) => { bad++; console.log(`  PROBLEM: ${m}`); };
+  const ids = new Set<string>();
+  for (const f of FR.FEATURES) {
+    if (ids.has(f.id)) say(`feature id ${f.id} appears twice`);
+    ids.add(f.id);
+    if (!['shipped', 'in_build', 'planned'].includes(f.status)) say(`${f.id} has status "${f.status}"`);
+    if (!f.basis || !/VISION/.test(f.basis)) say(`${f.id} does not say which VISION.md row its status comes from`);
+    // A quarter is a promise: recorded as "Q1 2027" or not at all, never computed.
+    if (f.quarter !== null && !/^Q[1-4] 20\d\d$/.test(f.quarter)) say(`${f.id} has quarter "${f.quarter}"`);
+    if (f.status !== 'shipped' && !String(f.willDo).trim()) say(`${f.id} is not shipped and has no future-tense line`);
+    if (f.status !== 'shipped' && /\b(will|being built|is being)\b/i.test(f.willDo) === false)
+      say(`${f.id}'s line for an unshipped feature is not in the future tense: "${f.willDo}"`);
+    for (const text of [f.title, f.does, f.willDo]) {
+      // Both lists: the screener's (SCREENER_SPEC rule 12) and the landing
+      // page's own (LANDING §2.3), since this is landing copy. "exit" is in
+      // the first and no allow-list covers it outside "exit multiple".
+      const banned = [...SCR.bannedWordsIn(text), ...FR.landingBannedIn(text)];
+      if (banned.length) say(`${f.id} uses ${banned.join(', ')} ("${text}")`);
+    }
+  }
+  // The count label, by LANDING §2.3's own rule, against values worked out
+  // here: "10,000+" only at 10,000 or more; below, rounded down to the hundred.
+  const cases: [number | null, string | null][] = [[null, null], [0, null], [45, '45'], [178, '100+'], [250, '200+'], [9999, '9,900+'], [10000, '10,000+'], [25000, '10,000+']];
+  for (const [n, want] of cases) if (FR.companyCountLabel(n) !== want) say(`companyCountLabel(${n}) is ${FR.companyCountLabel(n)}, not ${want}`);
+  if (FR.CLAIMS.showFreeToUse !== false) say('"Free to use" is switched on before pricing is decided (LANDING decision 2)');
+  const shipped = FR.FEATURES.filter((f: any) => f.status === 'shipped').length;
+  console.log(
+    `  ${FR.FEATURES.length} features (${shipped} shipped), each with its VISION.md basis, a future-tense line until it ships, ` +
+      `no computed quarter, no banned word; the count label holds to LANDING §2.3 on ${cases.length} cases -- ${bad ? bad + ' PROBLEMS' : 'all clear'}`
+  );
+  totalProblems += bad;
+}
+
+// ---- the search palette's order (build step 9, job 9.2) -------------------
+//
+// NAV_SEARCH §4.3 on a fixture list, worked out by hand from the rule rather
+// than by the code under test: exact ticker, name starts, a name word
+// starts, a near miss, ticker starts, then the rest in the source's order;
+// accents, punctuation and legal suffixes ignored; recent opens break ties.
+// The order against the real company list is LOCAL (it needs the list).
+{
+  console.log('\n=== the search palette: matching and ranking ===');
+  const SR: any = await import(`file:///${REPO}/src/data/searchRank.ts`);
+  const L = (ticker: string, name: string, exchange: string) => ({ ticker, name, exchange });
+  const list = [
+    L('PINE', 'Pineapple Express Inc', 'OTC'),
+    L('AAPL', 'Apple Inc.', 'NasdaqGS'),
+    L('APLE', 'Apple Hospitality REIT, Inc.', 'NYSE'),
+    L('PAPER', 'Fenwick Paper Mills Inc.', 'NYSE'),
+    L('PAPR', 'Paper Excellence Corp', 'Toronto'),
+    L('NSRGY', 'Nestlé S.A.', 'OTC'),
+    L('T', 'AT&T Inc.', 'NYSE'),
+    L('RELIANCE.BO', 'Reliance Industries Limited', 'BSE'),
+    L('RELIANCE.NS', 'Reliance Industries Limited', 'NSE'),
+    L('MSFT', 'Microsoft Corporation', 'NasdaqGS'),
+    L('MSFTX', 'Msftx Trust', 'OTC'),
+    L('GLE.PA', 'Société Générale S.A.', 'Paris'),
+  ];
+  let bad = 0;
+  const say = (m: string) => { bad++; console.log(`  PROBLEM: ${m}`); };
+  const order = (q: string, recent: string[] = []) => SR.rankListings(q, list, recent).map((r: any) => r.ticker);
+  const cases: [string, string[], string[]?][] = [
+    ['aapl', ['AAPL']],
+    ['apple', ['AAPL', 'APLE']],
+    ['apple', ['APLE', 'AAPL'], ['APLE']],
+    ['nestle', ['NSRGY']],
+    ['societe generale', ['GLE.PA']],
+    ['att', ['T']],
+    ['mills', ['PAPER']],
+    ['microsft', ['MSFT']],
+    ['pap', ['PAPR', 'PAPER']],
+    ['RELIANCE.NS', ['RELIANCE.NS']],
+    ['msft', ['MSFT', 'MSFTX']],
+  ];
+  for (const [q, want, recent] of cases) {
+    const got = order(q, recent || []);
+    if (got.slice(0, want.length).join() !== want.join()) say(`"${q}"${recent ? ` (recent ${recent.join()})` : ''} ranks ${got.slice(0, want.length + 1).join(', ')}, not ${want.join(', ')} first`);
+  }
+  const inc = SR.rankListings('inc', list).filter((r: any) => r.tier <= 5);
+  if (inc.length) say(`"inc" matches ${inc.map((r: any) => r.ticker).join(', ')} by name: legal suffixes are not ignored`);
+  if (SR.rankListings('', [...list, ...list, ...list]).length > SR.RESULTS_RETURNED) say(`more than ${SR.RESULTS_RETURNED} results returned`);
+  for (const [ex, cc] of [['NasdaqGS', 'US'], ['NSE', 'IN'], ['BSE', 'IN'], ['LSE', 'GB'], ['Toronto', 'CA'], ['Somewhere', '']])
+    if (SR.countryFor(ex) !== cc) say(`the country for ${ex} is "${SR.countryFor(ex)}", not "${cc}"`);
+  const bold = SR.rankListings('nestle', list)[0]?.matched?.[0];
+  if (!bold || list.find((l) => l.ticker === 'NSRGY')!.name.slice(bold[0], bold[1]) !== 'Nestlé') say(`the matched characters of "Nestlé" for "nestle" are ${JSON.stringify(bold)}`);
+  console.log(`  ${cases.length + 3} ranking cases (exact ticker, name, word, near miss, ticker prefix, accents, punctuation, suffixes, recent ties), country codes, the matched span -- ${bad ? bad + ' PROBLEMS' : 'all clear'}`);
+  totalProblems += bad;
+}
+
+// ---- the price chart's arithmetic (build step 9, job 9.11) ----------------
+//
+// COMPANY_OVERVIEW §3.2 and §3.7 on hand-built series: a weekend is not a
+// gap; one or two missing weekdays are read as holidays; three or more break
+// the line, four or more also band; a missing month breaks a monthly series.
+// Ticks on 1-2-5 steps, at most five, whole numbers without decimals; the log
+// scale offered on 10Y and Max only, above a twentyfold move; x labels on
+// the spec's worked examples (1Y at 1184px monthly, at 218px six-monthly; 3Y
+// two-monthly; 5Y six-monthly; 10Y yearly), the first carrying its year.
+{
+  console.log('\n=== the price chart: gaps, ticks, log scale, dates ===');
+  const CS: any = await import(`file:///${REPO}/src/data/chartScale.ts`);
+  let bad = 0;
+  const say = (m: string) => { bad++; console.log(`  PROBLEM: ${m}`); };
+  const weekdays = (from: string, n: number, skip: (i: number) => boolean = () => false) => {
+    const out: { date: string; value: number }[] = [];
+    let t = Date.parse(`${from}T00:00:00Z`), i = 0;
+    while (out.length < n) {
+      const d = new Date(t).getUTCDay();
+      if (d !== 0 && d !== 6) { if (!skip(i)) out.push({ date: new Date(t).toISOString().slice(0, 10), value: 10 + i }); i++; }
+      t += 86400000;
+    }
+    return out;
+  };
+  const cases: [string, any[], 'daily' | 'monthly', number, boolean][] = [
+    ['a run across weekends', weekdays('2026-01-05', 40), 'daily', 1, false],
+    ['one missing weekday (a holiday)', weekdays('2026-01-05', 40, (i) => i === 10), 'daily', 1, false],
+    ['two missing weekdays (Good Friday and Easter Monday)', weekdays('2026-01-05', 40, (i) => i === 10 || i === 11), 'daily', 1, false],
+    ['three missing weekdays', weekdays('2026-01-05', 40, (i) => i >= 10 && i < 13), 'daily', 2, false],
+    ['five missing weekdays', weekdays('2026-01-05', 40, (i) => i >= 10 && i < 15), 'daily', 2, true],
+    ['a missing month', ['2025-01-01', '2025-02-01', '2025-04-01', '2025-05-01'].map((date, i) => ({ date, value: i + 1 })), 'monthly', 2, true],
+  ];
+  for (const [what, pts, grain, runs, band] of cases) {
+    const r = CS.segmentsOf(pts, grain);
+    if (r.segments.length !== runs) say(`${what}: ${r.segments.length} runs, not ${runs}`);
+    if (runs > 1 && r.gaps[0]?.band !== band) say(`${what}: band ${r.gaps[0]?.band}, not ${band}`);
+  }
+  for (const [lo, hi] of [[0.3, 0.9], [17.2, 26.1], [180, 245], [3, 4200], [0.012, 0.031]]) {
+    const { ticks, step } = CS.ticks125(lo, hi, 5);
+    const m = step / Math.pow(10, Math.floor(Math.log10(step) + 1e-9));
+    if (ticks.length > 5 || ![1, 2, 5].some((x) => Math.abs(m - x) < 1e-6)) say(`ticks for ${lo}–${hi}: ${ticks.join(', ')} (step ${step})`);
+    if (ticks[0] < lo - 1e-9 || ticks[ticks.length - 1] > hi + 1e-9) say(`ticks for ${lo}–${hi} leave the range: ${ticks.join(', ')}`);
+  }
+  if (CS.priceTick(225, 25, '$') !== '$225') say(`a whole-number tick reads ${CS.priceTick(225, 25, '$')}`);
+  if (CS.priceTick(1.5, 0.5, '$') !== '$1.5') say(`a half tick reads ${CS.priceTick(1.5, 0.5, '$')}`);
+  const up = (n: number, ratio: number) => Array.from({ length: n }, (_, i) => Math.pow(ratio, i / (n - 1)));
+  const logCases: [string, number[], boolean][] = [['10Y', up(50, 25), true], ['MAX', up(50, 21), true], ['MAX', up(50, 15), false], ['5Y', up(50, 40), false], ['1Y', up(50, 40), false]];
+  for (const [range, vs, want] of logCases) if (CS.logOffered(range, vs) !== want) say(`log on ${range} at ×${(vs[vs.length - 1] / vs[0]).toFixed(0)}: ${!want ? 'offered' : 'not offered'}`);
+  const lt = CS.logTicks(1, 30, 5);
+  if (lt.length > 5 || lt.some((v: number) => v < 1 || v > 30)) say(`log ticks for 1–30: ${lt.join(', ')}`);
+  const end = Date.parse('2026-10-30T00:00:00Z');
+  const span = (days: number) => [end - days * 86400000, end] as const;
+  const stepOf = (ticks: any[]) => {
+    if (ticks.length < 2) return NaN;
+    const a = new Date(ticks[0].t), b = new Date(ticks[1].t);
+    return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + b.getUTCMonth() - a.getUTCMonth();
+  };
+  const xCases: [string, number, number, number][] = [['1Y at 1184', 366, 1184, 1], ['1Y at 218', 366, 218, 6], ['3Y at 1184', 3 * 366, 1184, 2], ['5Y at 1184', 5 * 366, 1184, 6], ['10Y at 1184', 10 * 366, 1184, 12]];
+  for (const [what, days, w, want] of xCases) {
+    const ticks = CS.xTicks(...span(days), w, false);
+    if (stepOf(ticks) !== want) say(`${what}: a ${stepOf(ticks)}-month step, not ${want}`);
+  }
+  const y1 = CS.xTicks(...span(366), 1184, false);
+  if (!/\d{4}$/.test(y1[0]?.label) || !y1[0]?.landmark) say(`the first 1Y label "${y1[0]?.label}" does not carry its year`);
+  if (!y1.some((x: any) => x.label === '2026' && x.landmark)) say('January is not replaced by its year');
+  const wk = CS.xTicks(...span(31), 1184, true);
+  if (!wk.length || wk.some((x: any) => new Date(x.t).getUTCDay() !== 1)) say('1M labels are not on Mondays');
+  console.log(`  ${cases.length} gap cases, 5 tick ranges, 2 tick labels, ${logCases.length} log cases, ${xCases.length + 2} date-axis cases -- ${bad ? bad + ' PROBLEMS' : 'all clear'}`);
   totalProblems += bad;
 }
 

@@ -114,6 +114,36 @@ nowhere better to put them and each is cheap:
   `MOTION_RATCHET` holds each file's count per category as measured on
   2026-11-04 — 3, 99 and 7 in total — and a file may fall below its number
   and never rise above it; a file not listed must be zero.
+- **the valuation bridge** (build step 5 part C, `verify/bridge.mts`, on the
+  paper fixture, so it needs no payloads). C1: the drivers between two
+  versions equal the inputs changed by hand; A with none of B is A, with all
+  of B is B; each driver moves the value alone; a refused mix is reported with
+  its reason. C2: the spec's worked example to the cent (FCF 161.64, WACC
+  272.20, growth 137.59 after largest-remainder rounding, total 571.43, in
+  2^3 runs), and on the fixture the parts sum to the total to the cent, with a
+  driver that changes nothing at exactly zero. C3: above ten drivers, 2,000
+  orders drawn from a fixed seed: on a 14-driver function with interactions
+  the parts sum to the total exactly, repeat on the seed, change on another
+  seed, and every part is within 1% of the total of the exact answer (worst
+  0.089%, measured 4 November 2026).
+  C4: ten drivers on the paper company, timed (1,024 runs, about 3–5 seconds
+  here); in `verify:dashboard` the same bridge goes through
+  `bridgeInWorker` in the real browser and must come back once and whole —
+  every part, adding up, equal to the Node bridge part for part — while a
+  50ms timer on the page keeps at least half its own idle rate.
+- **the feature register** (build step 8, job 8.6, `src/data/featureRegister.ts`).
+  Every feature has a valid status and the VISION.md row it was read from; an
+  unshipped one has a future-tense line; a quarter is recorded as "Q1 2027" or
+  absent, never computed; no banned word from either list (the screener's and
+  LANDING §2.3's); the company-count label follows LANDING §2.3 on eight cases.
+  `verify:dashboard` then reads the rendered landing page against it.
+- **the landing page budgets** (build step 8, job 8.7; `npm run build && npm
+  run verify:landing`, its own command because it needs the build and
+  Lighthouse). The bundle: three.js in a chunk of its own, not loaded by
+  `index.html`, at most 180KB gzipped; the poster at most 60KB. Lighthouse,
+  desktop preset, on `vite preview`, the median of three runs (one run's TBT ranged from 379 to 1,653ms on the same build here): LCP at most 2.5s, CLS at most 0.1, TBT
+  (for INP) under a 600ms ratchet while `KI-40` is open (budget 200ms), and the
+  largest paint the poster or the hero headline, never the canvas.
 - **the explainers are whole.** The eight articles at `/learn/` are static HTML
   written at build time by a small markdown renderer, and a renderer that
   quietly drops a construct publishes a beautifully typeset page with a hole in
@@ -122,6 +152,24 @@ nowhere better to put them and each is cheap:
   the index — and the pages are checked to carry no script at all, which is the
   whole point of them. Run before `npm run build`, it says so and checks the
   sources only.
+- **direct loads, routed as Vercel routes them** (build step 9, job 9.5;
+  `npm run build && npm run verify:routes`). `vite preview` answers every
+  path with the app, so it cannot show what the deployed site does. This
+  serves `dist/` as Vercel routes this project — a file, a folder's
+  index.html, else the first rewrite in `vercel.json` that matches, else
+  `404.html` with status 404 — and loads `/screener?exchange=NSE`,
+  `/learn/notes/<key>/`, `/learn/notes`, `/learn/`, a company address and an
+  unknown path in a browser, each expected on its own screen, the unknown one
+  at 404 with its path printed.
+- **the /learn/ pages on the type system** (build step 9, job 9.7;
+  `verify/learnPages.mts`, run at the end of `npm run build`, which fails on
+  it, and on its own with `npx tsx verify/learnPages.mts`). The static pages
+  are outside `src/index.css`'s remapping, so their stylesheet is read as
+  written: every font size through the four step variables (13, 15, 20 and
+  the Title clamp, themselves checked against `SIZE`), no text-transform,
+  weights 400/500/600 only (in the CSS and in the font request), letter-spacing
+  only on the h1, `lang="en-IN"`, the header with Learn current, and no inline
+  type styles.
 
 - **the quarters: cumulative, derived, and what the TTM is made of.** Three
   failures that would all look right on screen. **A cumulative figure shown as
@@ -505,22 +553,27 @@ arms were written because of it.
 ### Every company's top line is the total revenue it reports
 
 Four arms. **Every SEC filer settles a top line and records how**, with a basis
-long enough to be a reason. **The tag chosen is the largest figure it
-considered**, recomputed in the check from the candidates' own figures as the
-payload records them — every other revenue tag is a component of the total and
-cannot exceed it, so the largest in the latest reported year IS the total. A
-financial company is exempt from that arm by `KI-32`'s own rule, which is the
-line on the face of the income statement rather than the largest. **What the old
-order of preference would have shown**, company by company and as a percentage
-short of the total, which is the measurement this fix exists for. And **the
-figures shown are that tag's**: the latest year's revenue on the statements must
-be the figure the chosen tag reports, and the concept cited beside it must be
-that tag.
+long enough to be a reason — and since this fix that is every SEC filer, not
+only a financial one, which is why `KI-32`'s arm was widened rather than
+weakened. **The tag chosen is the first one that MEANS total revenue** and
+reaches the filer's latest reported year, recomputed in the check against the
+order the fetcher exports (`TOTAL_REVENUE_FIRST`) rather than read back off the
+payload. Not "the largest figure": that rule was written first and disproved by
+Mastercard, which tags its gross revenue under the contract tag and its net
+revenue — its real top line — under `Revenues`. A financial company is settled
+by `KI-32`'s own list instead, where the answer is the smaller
+`RevenuesNetOfInterestExpense`; both rules pick the line on the face of the
+income statement. **What the old order of preference would have shown**, company
+by company and as a percentage short of the total, which is the measurement this
+fix exists for. And **the figures shown are that tag's**: the latest year's
+revenue on the statements must be the figure the chosen tag reports, and the
+concept cited beside it must be that tag.
 
 Proved by breaking, four ways: the old rule put back, so the first tag in the
-list wins again; the comparison inverted, so the SMALLEST candidate is taken as
-the total; a payload whose definition names a tag smaller than one it considered;
-and a definition with no basis for its choice. The two fetcher breaks are asked
+extraction's own list wins again; the order reversed, so revenue from contracts
+with customers outranks the filing's own total-revenue line; a payload whose
+definition names a tag it did not choose; and a definition with no basis for its
+choice. The two fetcher breaks are asked
 directly by a driver that writes nothing — no payload and no capture — because a
 capture built by a deliberately broken fetcher would be kept for ever by the rule
 that exists to keep every fetch.
@@ -1106,6 +1159,157 @@ held by a ratchet, `TYPE_RATCHET`: the figures screen's 14px, which comes from
 inline styles in `figuresEditor.tsx` no stylesheet can overrule. Its count
 (347) may fall and never rise; any other off-step size fails at once.
 Measured on 2026-11-04: 21 screens, 3,493 pieces of type.
+
+**A seventh is motion, reduced** (build step 8, job 8.4). Four passes, each
+in a context of its own on the landing page and the company overview: motion
+on (the control); the operating system asking for reduced motion, at 1440 and
+at 360; and the site's stored setting (`marginalia:motion` = `reduced`) with
+the operating system silent. Each pass checks that `<html data-motion>` says
+what both sources say; samples every element's transform and opacity after
+each scroll step and after opening the first closed disclosure, failing on
+anything still changing between 150, 400 and 700ms; reports every running
+animation longer than 110ms; and asks a 400ms transition the check puts on
+the page how long it will run — 400ms with motion on, which proves the probe
+can see motion, and at most 110ms under reduced motion. The 1440 pass also
+checks the scroll-progress rule: on the header's bottom edge, the accent, no
+`box-shadow`.
+
+**An eighth is focus and targets** (build step 8, job 8.5). On the landing
+page (with its paper bands), the Margin notes screen (paper) and the company
+overview, the keyboard tabs forward 45 times and back 30; every focused
+element must show a 2px solid outline 2px off it, in ink on the dark ground
+and paper-ink on paper, and none may sit under the fixed header — tabbing
+back up the page is the direction `scroll-padding-top` exists for. Then
+every ⓘ fully below the header is hit at the four corners of a 24px square
+around its centre with a mouse, and of a 44px square in a touch context
+(`isMobile`, `hasTouch`, which matches `pointer: coarse`); each corner must
+land on that ⓘ.
+
+**A ninth is the hero's particle field** (build step 8, job 8.7). On a 2x
+screen with the page's clock slowed to 0.1 of real time (this browser's software GPU
+cannot keep a frame under 20ms, and would otherwise freeze the field, which is
+checked separately): at most 12,000 points, at most 1.5 device pixels a CSS
+pixel, the poster gone once the first frame is drawn, a 24×24 pause control
+that holds the frame, the field settled within five slowed seconds of the last
+input with no frames asked for afterwards, a scroll waking it, a hidden tab
+stopping it. On the real clock, if the field freezes the poster must be back.
+Under reduced motion there is no canvas and no pause control, only the
+poster.
+
+**A tenth counts WebGL contexts** (job 8.8): every `getContext('webgl…')` is
+counted per canvas from before the first script, while the landing page is
+scrolled top to bottom at 1440 and 390. More than one fails.
+
+**An eleventh is the accent budget on landing sections 1–4** (job 8.9). From
+the top of the page to the end of `#beyond`, in 100px steps at 1440×900 and
+390×844 under reduced motion, each viewport may hold at most one
+oxblood-washed primary, three oxblood fills (a rule of 2px or less and the
+heading mark, `data-mark`, are not fills) and five words in the accent text
+colour. No text there may be uppercased by CSS, and the copy of those sections
+holds none of LANDING §2.3's banned words.
+
+**A twelfth is phone and low-end** (job 8.11, VISUAL_SYSTEM §8). This
+harness's machine reports 4 cores, which is itself low-end, so the checks
+that need the particle field declare a capable device (`CAPABLE_DEVICE`: 8
+cores, 8GB, no Data Saver, 4g). From that device, one signal at a time — 4
+cores, 4GB, Data Saver, a 3g connection, a 390px screen — must give no WebGL
+context, no canvas, the poster showing and `data-hero-mode="poster:<why>"`;
+the capable desktop itself must get the field, so the check cannot pass on a
+page that never draws it. Then the landing page at 390 and 320 wide, scrolled
+top to bottom, must never scroll sideways.
+
+**A thirteenth is the Margin notes at their own addresses** (job 9.8). Every
+note loaded directly at `/learn/notes/<key>/` must show its own title;
+`/learn/notes/` opens the index's first note; walking "next" from the first
+must visit every note in the index's printed order (read from the page, not
+from the code that orders it) and "previous" must walk it back; Back returns
+to the note before; an unknown key lands on `/learn/notes/`; at 390 the index
+is one closed "All n notes" disclosure with no note link showing.
+
+**A fourteenth is page not found, in the app** (job 9.5): an unknown path
+must show "This page does not exist" with that path printed, not the landing
+page at the wrong address; Home must go to `/`, which is still the landing
+page.
+
+**A fifteenth is the global header and the menu** (job 9.1, NAV_SEARCH §8
+items 1–5 and 7–12). On the landing page and the notes screen at 1440: the
+bar 64px; wordmark, section triggers, then Search 320×36 with its right edge
+at 1392; no clock, "live" or `animate-pulse`; triggers #A8A29A at rest; at
+most one selected item; the section names in the fixed order. Each panel
+opens on click, Enter and ↓ and not on hover, closes on Esc with focus back
+on its trigger, holds at most 8 links in 36px rows on the overlay ground with
+no shadow, and its "Coming" items carry no link. At 390 with touch: Search
+and Menu 44×44, the sheet's top at y = 64, rows 56px, links 48px, no target
+under 44, Esc closes it with focus back on Menu.
+
+**A sixteenth is the loading screen's timeline and controls** (job 9.3,
+NAV_SEARCH §8 items 22–29): `src/data/loadingTimeline.ts` for every finishing
+time from 0 to 90 seconds in 50ms steps (no modal inside the first second;
+the modal at 1,000ms; the correction no later than belief + 2,200ms and up at
+least 1,200ms; no build held more than 1,200ms past finishing); a build
+answered at once never opening the modal; a held build reading "Step 1 of 2"
+with the fill at 0, no percentage, no counting seconds, a fixed 232px card
+area, "Taking longer than usual." by 15 seconds; Esc closing it with focus
+back on the field and the late answer ignored, and Esc at 300ms cancelling.
+
+**A seventeenth is the company header and tab row** (job 9.9,
+COMPANY_OVERVIEW §7.1 L2 and L9–L11), at 1440 and 390: the panel's top at
+y = 88 (80 on a phone), the ticker muted, the name on the Title step, no
+clock or live dot, the stamp's two lines in the one date format, tabs 48
+high (44 wide on touch), the current tab ink 600 on a 2px accent rule and no
+other accent in the header, → moving focus without changing the address,
+Enter selecting, the header not moving on a switch, the phone row scrolling
+inside itself. `SHOT_DIR=<folder>` keeps a screenshot of each width.
+
+**An eighteenth is the search palette** (job 9.2, NAV_SEARCH §8 items
+13–21): against a fixture search route that can be slowed or failed on
+demand — Ctrl+K and / open it and neither does while typing in a page field;
+Ctrl+K to a focused input in at most 100ms (median of three, timed in the
+page); 640 wide at y 108 with 56px input, 44px rows, 32px labels and a 40px
+hint bar on the overlay ground with no shadow; "Try" with four rows when
+nothing is recent; the order and the bold; the live count; ↓ ↑ Home End;
+the focus trap; Ctrl+Backspace; Esc back to the trigger; an older answer
+never replacing a newer one and one request in flight (counted in the page);
+"Still searching…"; no match; failure with the query kept and Try again;
+Enter opening the company and it becoming Recent, Delete removing it; the
+phone sheet with Cancel 44×44 and 56px rows. The ranking itself is checked in
+`npm run verify` ("the search palette: matching and ranking").
+
+**A nineteenth is the menu's company destinations** (job 9.2): every
+company-tab link in `src/data/menu.ts` names a built tab, every section shown
+has a shipped destination, a company link with nothing open asks "Choose a
+company for …" and lands on that tab, and with a company open it goes
+straight there.
+
+**A twentieth is the condensed header bar** (job 9.1b, NAV_SEARCH §2.2):
+past 80px of scroll the full header moves up and a 48px bar comes down, by
+transform alone and with nothing on the page moving; 60px keeps it (the dead
+band) and 30px restores the header; the bar holds the mark, Search and Menu at
+36×36; its Menu opens the sheet at y 48 and its Search the palette; the
+progress rule sits under whichever bar shows.
+
+**A twenty-first is the loading screen's error and close** (job 9.3b,
+NAV_SEARCH §5.2, §5.4): a failed build keeps the screen up with "The model
+could not be built for {company}.", the source's reason, Try again and Back
+and no Cancel; an HTML answer never shows the parser's words; Back returns
+focus to the field; Try again builds; a successful close fades opacity over
+168ms on the exit curve before the screen goes.
+
+**A twenty-second is the price chart** (job 9.11, COMPANY_OVERVIEW §3), on a
+fixture of 300 weekday closes with five missing and 130 monthly closes rising
+thirtyfold: the draw-in (the clip over ~400ms, then the fill over ~200ms, axes
+from the first frame, no replay on a range change, none under reduced motion),
+the gap breaking the line and fill with its hatched band and its readout, the
+log toggle on Max only and linear by default, 13px labels and at most five
+ticks, the range and overlay radios, the readout at rest and on Home.
+`SHOT_DIR=<folder>` keeps screenshots. Its arithmetic is in `npm run verify`
+("the price chart: gaps, ticks, log scale, dates").
+
+**One section at a time, for proofs.** `DASHBOARD_ONLY=hero,webgl,accent npm
+run verify:dashboard` runs only the named self-contained sections (motion,
+focus, bridge, features, hero, webgl, accent, lowend, notes, notfound, header, loading, company, palette, menu, condensed, loadingerror, chart) and stops, so a deliberate break
+is reported by the check it was made for. The run a commit quotes is the full
+one, without the variable.
 
 **And a fourth case with no company in it: a slow build.** The fixture is held
 open for seventeen seconds on purpose and the loading overlay is read while it

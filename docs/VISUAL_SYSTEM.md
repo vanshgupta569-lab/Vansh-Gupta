@@ -218,7 +218,7 @@ Instant value swap, no tween.
 • Text: 13px floor, 15px body. Layout reflows at 320 CSS px and at 200% text zoom. Tables scroll inside their own container with a sticky first column.
 • Language and numbers: lang=en-IN, Indian grouping preserved. Negative numbers use U+2212 or parentheses, never a hyphen.
 8. Phone performance
-Low-end detection (any one): navigator.hardwareConcurrency ≤ 4; deviceMemory ≤ 4 (where exposed); connection.saveData; effective type 2g or 3g; or a frame average above 24ms in the first second. Also treat any viewport under 640px wide as constrained.
+Low-end detection (any one; CHANGE, Nihar, 4 November 2026, VISUAL_BUILD_PLAN V7): navigator.hardwareConcurrency ≤ 2; deviceMemory ≤ 2 (where exposed); connection.saveData; effective type 2g or 3g; no WebGL2; or a frame average above 24ms in the first second. Also treat any viewport under 640px wide as constrained.
 Drop on low-end or ≤ 640px
 Replacement
 WebGL particle scenes

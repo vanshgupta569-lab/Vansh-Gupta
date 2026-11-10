@@ -256,11 +256,16 @@ export const EASE = {
 
 /** Durations in milliseconds. */
 export const DURATION_MS = {
+  /** Under reduced motion: finish at once (a duration of zero is ignored by
+   *  some engines, so a hundredth of a millisecond). */
+  instant: 0.01,
   press: 70,
   fast: 110,
   pageOut: 120,
   base: 200,
   mod: 240,
+  /** A modal's exit, 70% of `mod`: the loading screen's close (NAV_SEARCH §5.2). */
+  modExit: 168,
   slow: 280,
   reveal: 400,
   chart: 400,

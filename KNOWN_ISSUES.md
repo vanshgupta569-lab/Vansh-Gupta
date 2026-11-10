@@ -29,7 +29,7 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-39`. **Next free: `KI-40`.** Retired, meaning
+- Taken so far: `KI-1` to `KI-40`. **Next free: `KI-41`.** Retired, meaning
   fixed and never to be reused: `KI-39` (a revenue tag that is only part of the
   top line. The revenue tags were read in order of preference and the first one
   present won, so a company whose revenue is not all revenue from contracts
@@ -39,12 +39,15 @@ mistakes and would never be fixed:
   because the cost of sales alone then exceeded the revenue being shown.
   Measured on 2026-11-08 by asking the fetcher for every SEC filer in the set:
   **7 of the 85 SEC filers in the set change their revenue**, worst Enbridge, FY2021 19,432 -> 47,071 (+142.2%), where the contract-revenue tag is 55.0% short of the total. Fixed by payload version 14: every
-  company settles its own top line, not only a financial one — of the revenue
-  tags a filer files, the one with the largest figure in the latest reported
-  year, because every other revenue tag is a component of the total and cannot
-  exceed it. `KI-32`'s rule for financial companies is untouched, where the
-  answer is the line on the face of the income statement rather than the
-  largest. Of those seven, five are refused a valuation for reasons that have nothing to do with revenue -- no cost of sales filed, no operating income filed -- both before and after. The two that are valued both move: Walmart 51.65 to 52.46 (+1.6%) and MercadoLibre 583.89 to 581.80 (-0.4%).), `KI-36` (a quarterly figure read from a proxy
+  company settles its own top line, not only a financial one — the first tag that
+  MEANS total revenue and reaches the filer's latest reported year, in the order
+  `Revenues`, `SalesRevenueNet`, then the contract-revenue forms. Written as
+  "the largest figure" first, and disproved the same afternoon by Mastercard,
+  which tags its GROSS revenue under the contract tag and its net revenue — the
+  top line of its own income statement — under `Revenues`: 29,845 against
+  18,884. `KI-32`'s rule for financial companies is untouched, and both rules
+  are the same rule: the line the filer puts on the face of its income
+  statement, which for a bank is the SMALLER `RevenuesNetOfInterestExpense`. Of those seven, five are refused a valuation for reasons that have nothing to do with revenue -- no cost of sales filed, no operating income filed -- both before and after. The two that are valued both move: Walmart 51.65 to 52.46 (+1.6%) and MercadoLibre 583.89 to 581.80 (-0.4%).), `KI-36` (a quarterly figure read from a proxy
   statement or an 8-K. The annual path has taken 10-K facts and nothing else
   since the beginning; the quarterly path filtered by PERIOD and not by form
   at all, and its rule that the most recently filed point wins — which is
@@ -238,15 +241,49 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**None is open, as of 2026-11-08.** `KI-31` to `KI-39` were all fixed within
-eight days of each other, and the ID ledger above says what each retired number
-was.
+**One is open, as of 2026-11-08**, and it moves no valuation: `KI-40` is a
+page-load time on the landing page, not a figure a reader could quote.
+`KI-31` to `KI-39` were all fixed within eight days of each other, and the ID
+ledger above says what each retired number was.
 
 **What the list being short does not mean.** It is not a claim that the model is
 right about everything, only that **nothing else is known to be wrong and left
 standing**. What the sources do not publish is in `DATA_CONSTRAINTS.md`; what
 the engine does on purpose is in `METHODOLOGY.md`. The next defect found goes
 here as `KI-39`.
+
+### `KI-40` The landing page's first script holds the main thread for about half a second
+
+**Where:** the entry chunk the landing page loads first (`dist/assets/index-*.js`),
+which `src/App.tsx` builds. Two static imports keep it large: `src/data/heads.ts`
+imports `MODEL_SHEET_ROWS` from `src/data/excelExport.ts`, which pulls the
+workbook library (exceljs, with jszip) into the first script; and
+`src/data/companies.ts`, imported by `App.tsx` for the curated models, builds the
+hand-built Apple model when it is first evaluated.
+
+**What is wrong.** `docs/VISUAL_SYSTEM.md` §6 sets the landing page's budget at
+Total Blocking Time (standing in for INP, which a page-load run cannot measure)
+of at most 200ms. It is over.
+
+**Measured on 2026-11-04**, Lighthouse 13.6 desktop preset on `vite preview`
+of the build, in a cloud session whose GPU is emulated in software:
+**TBT 1,194ms** before build step 8 job 8.7 (entry 2,263KB, 678KB gzipped);
+**453–506ms** after it, which moved the dashboard, the figures editor, the
+screener and the other screens into chunks of their own (entry 1,671KB,
+501KB gzipped). The long tasks left are the entry script's own evaluation
+(200, 128 and 120ms). With reduced motion — no particle field at all — it is
+58ms on the pre-8.7 build, so part of the rest is the field's frames on a
+software GPU, which a real one does not pay.
+
+**How many companies:** none; it is the landing page.
+
+**What fixing it needs:** `MODEL_SHEET_ROWS` in a module of its own that both
+`excelExport.ts` and `heads.ts` read (one definition, as `CLAUDE.md` asks), and
+the curated Apple model built when it is first asked for rather than when
+`companies.ts` is imported. `companies.ts` is being changed by another session;
+neither is done here. Until then `npm run verify:landing` holds TBT to a
+ratchet of 600ms (measured 453–506ms) that may fall and never rise, and the
+number must be re-measured on a real GPU in Cursor.
 
 ## A defect found and fixed on 29 October 2026, with no number
 

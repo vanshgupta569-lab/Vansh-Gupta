@@ -27,6 +27,14 @@
     {
       "source": "/company/:path*",
       "destination": "/"
+    },
+    {
+      "source": "/screener",
+      "destination": "/"
+    },
+    {
+      "source": "/learn/notes/:path*",
+      "destination": "/"
     }
   ]
 }

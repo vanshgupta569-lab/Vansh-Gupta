@@ -165,16 +165,34 @@
   transition-duration: var(--m-dur-fast);
   transition-timing-function: var(--m-ease-standard);
 }
+/* REDUCED MOTION (VISUAL_SYSTEM section 7; build step 8, job 8.4).
+   Two sources: the operating system's `prefers-reduced-motion`, and the
+   site's own stored setting, which `src/design/motion.ts` writes onto
+   `<html data-motion>` together with the system's answer. The media query
+   covers the moment before JavaScript runs; the attribute covers the stored
+   setting, in either direction (a stored "full" leaves motion on). Nothing
+   travels: animations and transitions finish at once, so no fade is longer
+   than --m-dur-fast. JavaScript motion is stopped by the same answer through
+   the root MotionConfig in App.tsx. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
+  :root:not([data-motion="full"]) *,
+  :root:not([data-motion="full"]) *::before,
+  :root:not([data-motion="full"]) *::after {
+    animation-duration: var(--m-dur-instant) !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: var(--m-dur-instant) !important;
     scroll-behavior: auto !important;
   }
 }
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: var(--m-dur-instant) !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: var(--m-dur-instant) !important;
+  scroll-behavior: auto !important;
+}
+:root[data-motion="reduced"] { scroll-behavior: auto; }
 
 /* ---------------------------------------------------------------------------
    THE SURFACES NOBODY DRAWS
@@ -220,18 +238,43 @@ textarea,
   caret-color: var(--m-accent-text);
 }
 
-/* Keyboard focus, from the palette and only for the keyboard (VISUAL_SYSTEM 7).
-   2px of ink at a 2px offset: ink is 17.26:1 on the page and 8.0:1 on the
-   oxblood, so one ring works on every surface, where the old 1px read-oxblood
-   ring was thin and vanished on controls that were already oxblood. Never
-   animated, and never restyled per component. */
-:focus-visible {
-  outline: 2px solid var(--m-ink);
+/* KEYBOARD FOCUS (VISUAL_SYSTEM section 7, CHANGE; build step 8, job 8.5).
+   2px ink, 2px offset, on every interactive element, never restyled per
+   component. Ink is 17.26:1 on the page and 8.0:1 on the oxblood, so it shows
+   on any surface the site has; the 1px read-oxblood it replaces was thin and
+   sat on controls that are already oxblood. On paper the ring is paper-ink,
+   because ink there is the paper itself.
+
+   `:root` in front lifts the rule above a component's own `outline: none`
+   (the figures screen's inputs set one in an embedded stylesheet), which a
+   bare `:focus-visible` lost on source order. */
+/* THE RING APPEARS AT ONCE (VISUAL_SYSTEM section 4: focus ring, 0ms).
+   Tailwind's `transition-colors` animates `outline-color`, and an element's
+   outline colour starts as its own text colour, so the ring used to fade in
+   from the text colour over 110ms, and an element with `transition-all`
+   animated its width and offset too. Every element carries the ring's colour,
+   width and offset all the time instead (invisible while the style is none),
+   so focus only switches the style on, which does not animate. */
+:root * {
+  outline-color: var(--m-ink);
+  outline-width: 2px;
   outline-offset: 2px;
 }
-/* On the paper ground the ink ring would be ink on ink, so it takes paper ink. */
-[data-ground="paper"] :focus-visible {
+:root [data-ground="paper"] * {
   outline-color: var(--m-paper-ink);
+}
+:root :focus-visible {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-offset: 2px;
+}
+
+/* A FOCUSED ELEMENT IS NEVER UNDER THE HEADER OR THE BOTTOM BAR (WCAG 2.4.11).
+   88px is the 64px header plus 24 (VISUAL_SYSTEM section 7); the header is
+   75px until job 9.1 sets it to 64, still inside the 88. */
+html {
+  scroll-padding-top: 88px;
+  scroll-padding-bottom: calc(var(--bottom-bar-inset, 0px) + 16px);
 }
 
 /* Marquee animation */
@@ -257,6 +300,14 @@ textarea,
    The gap between the copies lives INSIDE each copy, as padding, rather than
    as a gap on the strip. With a gap on the strip the half-way point is one
    copy plus half a gap, and the loop drifts by that half-gap every cycle. */
+/* A fade, for a screen element that arrives (the loading screen, job 9.3).
+   Opacity only; its duration and curve come from the --m-* tokens where it
+   is used. */
+@keyframes m-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
@@ -463,11 +514,15 @@ textarea,
   --m-ease-enter: cubic-bezier(0, 0, 0.38, 0.9);
   --m-ease-exit: cubic-bezier(0.2, 0, 1, 0.9);
   --m-ease-expr: cubic-bezier(0.4, 0.14, 0.3, 1);
+  --m-dur-instant: 0.01ms;
   --m-dur-press: 70ms;
   --m-dur-fast: 110ms;
   --m-dur-page-out: 120ms;
   --m-dur-base: 200ms;
   --m-dur-mod: 240ms;
+  /* A modal's exit: 70% of its 240ms entry (VISUAL_SYSTEM §4); the loading
+     screen's close (NAV_SEARCH §5.2). */
+  --m-dur-mod-exit: 168ms;
   --m-dur-slow: 280ms;
   --m-dur-reveal: 400ms;
   --m-dur-chart: 400ms;

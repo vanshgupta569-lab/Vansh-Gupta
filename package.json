@@ -17,6 +17,8 @@
     "verify:workbook": "tsx verify/workbook-vs-site.mts",
     "verify:dashboard": "tsx verify/dashboard.mts",
     "verify:indices": "tsx verify/fetch-indices.mts",
+    "verify:landing": "tsx verify/landing.mts",
+    "verify:routes": "tsx verify/routes.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts"
   },
   "dependencies": {
@@ -40,6 +42,7 @@
     "@types/three": "^0.180.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "lighthouse": "13.6.0",
     "playwright": "^1.63.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

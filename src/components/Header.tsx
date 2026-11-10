@@ -15,25 +15,19 @@
 //     now on every screen, and the ones that are sections of the home page
 //     go home first.
 
-import React, { useEffect, useState } from 'react';
-import { Search, PencilLine, Table2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, PencilLine, Table2, Menu as MenuIcon, X, ChevronRight } from 'lucide-react';
 import { ScreenType } from '../types';
 import { Mark } from '../design/Mark';
+import { MENU, comingFor, type Destination, type MenuSection } from '../data/menu';
+import { setMotionSetting, useReducedMotion } from '../design/motion';
 
-/* Four links, not six. A header with six choices is a header nobody reads,
-   and the page below is built to be found by scrolling. These are the four
-   places somebody actually arrives looking for.
-
-   NAV_SEARCH_SPEC 2.1 asks for seven section triggers (Companies, Research,
-   Markets, Invest, Tools, Learn, Deals), each opening a panel. Those panels
-   are build step 9 and their contents still carry [CONFIRM] marks, so the
-   four links that have a real destination today stay until then. */
-const SECTIONS = [
-  { id: 'routes', label: 'What you can do' },
-  { id: 'filings', label: 'How it works' },
-  { id: 'numbers', label: 'Coverage' },
-  { id: 'margin-notes', label: 'Margin notes' },
-];
+/* THE MENU IS DATA (`src/data/menu.ts`): seven sections in a fixed order, of
+   which only those with a shipped destination are shown (NAV_SEARCH §3; job
+   9.1). From 1100px up each is a trigger that opens a panel on click, Enter,
+   Space or ↓ — never on hover; below 1100px they live in the Menu sheet. */
+const DESKTOP_FROM = 1100;
 
 /* The key hint names the shortcut the reader's own keyboard has. */
 const isApple = (): boolean => {
@@ -59,6 +53,15 @@ interface HeaderProps {
   /** Lines put under another head, each read as "line → head". */
   reclassified?: { count: number; lines: string[]; excluded: string[] };
   onReviewFigures?: () => void;
+  /** The address, so the header can tell which section the reader is in. */
+  path?: string;
+  /** Move to an address inside the app. */
+  onGo?: (path: string) => void;
+  /** Open the search palette (job 9.2); without it, search is the search screen.
+      With a purpose, a company chosen opens that tab of it. */
+  onOpenSearch?: (target?: { tab: string; title: string }) => void;
+  /** Start loading the palette's code before it is asked for. */
+  onPrefetchSearch?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -69,8 +72,115 @@ export const Header: React.FC<HeaderProps> = ({
   corrected,
   reclassified,
   onReviewFigures,
+  path = '/',
+  onGo,
+  onOpenSearch,
+  onPrefetchSearch,
 }) => {
+  const openSearch = () => (onOpenSearch ? onOpenSearch() : onNavigateToScreen('DIRECTORY'));
+  /** The company in context: the one whose page is open. */
+  const inContext = /^\/company\/([^/]+)/.exec(path)?.[1] ?? null;
   const [apple] = useState(isApple);
+  const [openPanel, setOpenPanel] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetSection, setSheetSection] = useState<string | null>(null);
+  const reduced = useReducedMotion();
+  const triggers = useRef<Record<string, HTMLButtonElement | null>>({});
+  const menuButton = useRef<HTMLButtonElement | null>(null);
+  const sheet = useRef<HTMLDivElement | null>(null);
+
+  /* THE CONDENSED BAR (NAV_SEARCH §2.2; job 9.1). Past 80px of scroll the
+     64px header slides up out of view and a 48px bar slides down in its
+     place; back at 40px or less the header returns. The 40px between is a
+     dead band, so a reader resting near the threshold does not set it
+     flickering. Two elements and transforms only — no height animates and
+     the page's 64px of top padding never changes, so nothing shifts. */
+  const CONDENSE_AT = 80;
+  const RESTORE_AT = 40;
+  const [condensed, setCondensed] = useState(false);
+  useEffect(() => {
+    let raf = 0;
+    const read = () => {
+      raf = 0;
+      const y = window.scrollY;
+      setCondensed((c) => (c ? y > RESTORE_AT : y > CONDENSE_AT));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    read();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+  // A panel belongs to the full header; it closes as the header goes.
+  useEffect(() => { if (condensed) setOpenPanel(null); }, [condensed]);
+
+  /* THE CURRENT SECTION: the one the route is inside. At most one. */
+  const currentSection: MenuSection['name'] | null =
+    currentScreen === 'NOTES' || path.startsWith('/learn')
+      ? 'Learn'
+      : currentScreen === 'DIRECTORY' || currentScreen === 'COMPANY' || path === '/screener'
+        ? 'Companies'
+        : null;
+
+  const closePanel = (focusTrigger: boolean) => {
+    const was = openPanel;
+    setOpenPanel(null);
+    if (focusTrigger && was) triggers.current[was]?.focus();
+  };
+  const closeSheet = () => {
+    setSheetOpen(false);
+    menuButton.current?.focus();
+  };
+
+  /* Esc closes whichever is open and gives focus back to what opened it; a
+     click outside an open panel closes it. */
+  useEffect(() => {
+    if (!openPanel && !sheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (sheetOpen) closeSheet();
+      else closePanel(true);
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (openPanel && !t?.closest('[data-menu-panel], [data-menu-trigger]')) setOpenPanel(null);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onDown);
+    };
+  }, [openPanel, sheetOpen]);
+
+  /* Focus stays inside the sheet while it is open (NAV_SEARCH §2.4). */
+  useEffect(() => {
+    if (!sheetOpen) return;
+    sheet.current?.querySelector<HTMLElement>('button, a')?.focus();
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !sheet.current) return;
+      const items = [menuButton.current, ...Array.from(sheet.current.querySelectorAll<HTMLElement>('button, a'))].filter(Boolean) as HTMLElement[];
+      const i = items.indexOf(document.activeElement as HTMLElement);
+      const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1;
+      e.preventDefault();
+      items[next]?.focus();
+    };
+    window.addEventListener('keydown', onTab);
+    return () => window.removeEventListener('keydown', onTab);
+  }, [sheetOpen]);
+
+  /* A desktop-width window has no sheet. */
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= DESKTOP_FROM) setSheetOpen(false);
+      else setOpenPanel(null);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   /* ⌘K or Ctrl K, and / as the fallback where the browser or the OS has
      taken Ctrl K (NAV_SEARCH_SPEC 4.1). Never while the reader is typing in a
@@ -90,12 +200,77 @@ export const Header: React.FC<HeaderProps> = ({
       if (currentScreen === 'DIRECTORY') {
         document.querySelector<HTMLInputElement>('main input[type="text"]')?.focus();
       } else {
-        onNavigateToScreen('DIRECTORY');
+        openSearch();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [currentScreen, onNavigateToScreen]);
+  }, [currentScreen, onNavigateToScreen, onOpenSearch]);
+
+  const follow = (d: Destination) => {
+    setOpenPanel(null);
+    setSheetOpen(false);
+    if (d.kind === 'screen') openSearch();
+    else if (d.kind === 'company') {
+      if (inContext && onGo) {
+        onGo(`/company/${inContext}/${d.tab}`);
+        window.scrollTo({ top: 0 });
+      } else if (onOpenSearch) onOpenSearch({ tab: d.tab, title: `Choose a company for ${d.purpose}` });
+      else onNavigateToScreen('DIRECTORY');
+    }
+    else if (d.kind === 'section') goHomeAnd(d.section);
+    else if (d.href === '/learn/' || !onGo) window.location.assign(d.href);
+    else {
+      onGo(d.href);
+      window.scrollTo({ top: 0 });
+    }
+  };
+
+  /* One destination as a row: a real link where it has an address. */
+  const Row: React.FC<{ d: Destination; tall?: boolean }> = ({ d, tall }) => {
+    const cls = `flex w-full items-center ${tall ? 'min-h-[48px] pl-12 pr-6' : 'h-9 px-2'} text-[15px] text-read hover:text-ink text-left cursor-pointer transition-colors duration-[110ms]`;
+    if (d.kind === 'href')
+      return (
+        <a
+          href={d.href}
+          data-menu-link
+          className={cls}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+            e.preventDefault();
+            follow(d);
+          }}
+        >
+          {d.label}
+        </a>
+      );
+    return (
+      <button type="button" data-menu-link className={cls} onClick={() => follow(d)}>
+        <span className="flex-1">{d.label}</span>
+        {d.kind === 'screen' && d.hint && (
+          <kbd className="pointer-coarse:hidden text-[13px] text-quiet font-sans">{apple ? '⌘K' : 'Ctrl K'}</kbd>
+        )}
+      </button>
+    );
+  };
+
+  /* "Coming": text with its status, no link; then the way to the roadmap. */
+  const Coming: React.FC<{ section: MenuSection; tall?: boolean }> = ({ section, tall }) => {
+    const items = comingFor(section);
+    if (!items.length) return null;
+    return (
+      <div className={tall ? 'px-6 pb-2' : 'mt-3 pt-3 border-t border-line'} data-menu-coming>
+        <p className="text-[13px] text-quiet mb-1 px-2">Coming</p>
+        {items.map((c) => (
+          <p key={c.id} data-feature={c.id} className={`flex items-center justify-between gap-3 ${tall ? 'min-h-[48px]' : 'h-9'} px-2 text-[15px] text-muted`}>
+            <span>{c.label}</span>
+            <span className="text-[13px] text-quiet">{c.status}</span>
+          </p>
+        ))}
+        <Row d={{ kind: 'section', label: 'See the roadmap →', section: 'beyond' }} tall={tall} />
+      </div>
+    );
+  };
 
   const goHomeAnd = (id: string) => {
     if (currentScreen !== 'HOME') {
@@ -129,92 +304,11 @@ export const Header: React.FC<HeaderProps> = ({
   const GHOST =
     'h-9 border px-3 text-[13px] flex items-center gap-2 whitespace-nowrap cursor-pointer transition-colors duration-[110ms]';
 
-  return (
-    /* ONE HEADER, EVERY SCREEN (NAV_SEARCH_SPEC 2.1). 64px, the page colour
-       at 95% under an 8px blur, a hairline at the foot. Wordmark, the section
-       links, flexible space, search. No clock and no live dot: a ticking
-       seconds display is motion with nothing to explain (VISUAL_SYSTEM 5), and
-       no Home or All companies, because the wordmark and search already go
-       there. */
-    <header
-      className="fixed top-0 inset-x-0 z-50 h-16 border-b border-line"
-      style={{
-        background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-      }}
-    >
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 lg:focus:left-12 focus:top-[14px] focus:z-10 focus:h-9 focus:px-3 focus:flex focus:items-center focus:bg-page focus:border focus:border-line focus:text-ink text-[13px]"
-      >
-        Skip to content
-      </a>
-
-      {/* THE BAR CANNOT OVERLAP ITSELF. The wordmark steps down on a phone
-          and the controls opposite are icon-only there, so the two never need
-          more width than the bar has. Measured at 320px. */}
-      <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-12 flex items-center gap-3 sm:gap-5 lg:gap-10">
-        <button
-          onClick={() => {
-            onNavigateToScreen('HOME');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          aria-label="Marginalia home"
-          className="text-[20px] sm:text-[26px] lg:text-[28px] leading-none text-ink hover:text-accent-text transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
-        >
-          {/* The mark, not a label: lowercase Newsreader with the red square
-              standing in for the full stop, as the hero draws it. */}
-          <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
-            marginalia
-          </span>
-          <Mark />
-        </button>
-
-        {/* Nav links at rest are muted, never oxblood (VISUAL_SYSTEM 3.1); ink
-            on hover; the current one takes the system's one selected state. */}
-        <nav aria-label="Main" className="hidden lg:flex items-center gap-1 shrink-0">
-          {SECTIONS.map((item) => {
-            const current =
-              item.id === 'margin-notes'
-                ? currentScreen === 'NOTES'
-                : currentScreen === 'HOME' && activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                aria-current={current ? 'true' : undefined}
-                onClick={() =>
-                  /* The margin notes are a screen now, not an anchor. The
-                     other three links are sections of the home page, so from
-                     any other screen they go home first. */
-                  item.id === 'margin-notes'
-                    ? onNavigateToScreen('NOTES')
-                    : goHomeAnd(item.id)
-                }
-                className={`h-10 px-3 border text-[13px] whitespace-nowrap cursor-pointer transition-colors duration-[110ms] ${
-                  current
-                    ? 'bg-panel border-accent text-ink font-semibold'
-                    : 'border-transparent text-muted hover:text-ink font-medium'
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="flex-1 min-w-0" />
-
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* ONE CONTROL, TWO STATES, ALWAYS THERE.
-              Quiet when every figure is as filed, oxblood when some are not,
-              and in both cases the way back to the figures. Shown even with
-              nothing corrected on purpose: the reader who most needs this
-              screen is the one looking at a valuation that seems wrong and
-              wondering where the numbers came from. It stays in the header
-              because a corrected figure must never pass as a filed one on any
-              screen (standing decision 5). */}
-          {onReviewFigures && (currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS') && (
+  /* THE WAY BACK TO THE FIGURES rides in both bars: a corrected figure must
+     never pass as a filed one on any screen (standing decision 5), and that
+     includes a scrolled one (job 9.1b). */
+  const figuresControl =
+    onReviewFigures && (currentScreen === 'ANALYSIS' || currentScreen === 'QUESTIONS') ? (
             <button
               onClick={onReviewFigures}
               title={figuresTitle}
@@ -245,7 +339,122 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </button>
-          )}
+    ) : null;
+
+  return (
+    /* ONE HEADER, EVERY SCREEN (NAV_SEARCH_SPEC 2.1). 64px, the page colour
+       at 95% under an 8px blur, a hairline at the foot. Wordmark, the section
+       links, flexible space, search. No clock and no live dot: a ticking
+       seconds display is motion with nothing to explain (VISUAL_SYSTEM 5), and
+       no Home or All companies, because the wordmark and search already go
+       there. */
+    <header
+      className="fixed top-0 inset-x-0 z-50 h-16 pointer-events-none"
+      data-condensed={condensed ? 'true' : 'false'}
+    >
+      <div
+        data-header-full
+        aria-hidden={condensed ? true : undefined}
+        {...(condensed ? { inert: true } : {})}
+        className="absolute inset-0 border-b border-line pointer-events-auto"
+        style={{
+          background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          transform: condensed ? 'translateY(-64px)' : 'translateY(0)',
+          transition: `transform var(--m-dur-base) ${condensed ? 'var(--m-ease-exit)' : 'var(--m-ease-enter)'}`,
+        }}
+      >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 lg:focus:left-12 focus:top-[14px] focus:z-10 focus:h-9 focus:px-3 focus:flex focus:items-center focus:bg-page focus:border focus:border-line focus:text-ink text-[13px]"
+      >
+        Skip to content
+      </a>
+
+      {/* THE BAR CANNOT OVERLAP ITSELF. The wordmark steps down on a phone
+          and the controls opposite are icon-only there, so the two never need
+          more width than the bar has. Measured at 320px. */}
+      <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-12 flex items-center gap-3 sm:gap-5 lg:gap-10">
+        <button
+          onClick={() => {
+            onNavigateToScreen('HOME');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          aria-label="Marginalia home"
+          className="text-[20px] sm:text-[26px] lg:text-[28px] leading-none text-ink hover:text-accent-text transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
+        >
+          {/* The mark, not a label: lowercase Newsreader with the red square
+              standing in for the full stop, as the hero draws it. */}
+          <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
+            marginalia
+          </span>
+          <Mark />
+        </button>
+
+        {/* SECTION TRIGGERS, from 1100px up. Muted at rest, never oxblood
+            (VISUAL_SYSTEM 3.1); ink on hover; ink 600 while open; the current
+            section takes the system's one selected state. */}
+        <nav aria-label="Main" className="hidden min-[1100px]:flex items-center gap-1 shrink-0">
+          {MENU.map((section) => {
+            const current = currentSection === section.name;
+            const open = openPanel === section.name;
+            return (
+              <div key={section.name} className="relative">
+                <button
+                  type="button"
+                  data-menu-trigger={section.name}
+                  ref={(el) => { triggers.current[section.name] = el; }}
+                  aria-expanded={open}
+                  aria-haspopup="true"
+                  aria-current={current ? 'true' : undefined}
+                  onClick={() => setOpenPanel(open ? null : section.name)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setOpenPanel(section.name);
+                      window.setTimeout(() => document.querySelector<HTMLElement>(`[data-menu-panel="${section.name}"] [data-menu-link]`)?.focus(), 0);
+                    }
+                  }}
+                  className={`h-10 px-3 border text-[13px] whitespace-nowrap cursor-pointer transition-colors duration-[110ms] ${
+                    current
+                      ? 'bg-panel border-accent text-ink font-semibold'
+                      : open
+                        ? 'border-transparent text-ink font-semibold'
+                        : 'border-transparent text-muted hover:text-ink font-medium'
+                  }`}
+                >
+                  {section.name}
+                </button>
+                {open && (
+                  <div
+                    data-menu-panel={section.name}
+                    className="absolute left-0 top-[52px] w-[480px] bg-overlay border border-line p-4"
+                  >
+                    <p className="text-[13px] text-quiet mb-1 px-2">{section.name}</p>
+                    {section.links.map((d) => (
+                      <Row key={d.label} d={d} />
+                    ))}
+                    <Coming section={section} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="flex-1 min-w-0" />
+
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* ONE CONTROL, TWO STATES, ALWAYS THERE.
+              Quiet when every figure is as filed, oxblood when some are not,
+              and in both cases the way back to the figures. Shown even with
+              nothing corrected on purpose: the reader who most needs this
+              screen is the one looking at a valuation that seems wrong and
+              wondering where the numbers came from. It stays in the header
+              because a corrected figure must never pass as a filed one on any
+              screen (standing decision 5). */}
+          {figuresControl}
 
           {/* SEARCH IS A GHOST (NAV_SEARCH_SPEC 2.1). The oxblood wash is kept
               for the one action a screen exists for; search is in every
@@ -253,7 +462,9 @@ export const Header: React.FC<HeaderProps> = ({
               has its own field: never two searches on screen. */}
           {currentScreen !== 'DIRECTORY' && (
             <button
-              onClick={() => onNavigateToScreen('DIRECTORY')}
+              onClick={openSearch}
+              onFocus={onPrefetchSearch}
+              onPointerEnter={onPrefetchSearch}
               aria-label="Search companies"
               aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}
               className="group h-9 w-9 sm:w-[240px] xl:w-[320px] border border-line hover:border-accent flex items-center justify-center sm:justify-start gap-2 sm:pl-3 sm:pr-2 cursor-pointer transition-colors duration-[110ms] pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-coarse:w-[240px]"
@@ -267,8 +478,139 @@ export const Header: React.FC<HeaderProps> = ({
               </kbd>
             </button>
           )}
+
+          {/* MENU, under 1100px: 44×44, opening the sheet under the bar. */}
+          <button
+            type="button"
+            ref={menuButton}
+            data-menu-button
+            aria-expanded={sheetOpen}
+            aria-label={sheetOpen ? 'Close the menu' : 'Menu'}
+            onClick={() => (sheetOpen ? closeSheet() : setSheetOpen(true))}
+            className="min-[1100px]:hidden h-11 w-11 border border-line hover:border-accent flex items-center justify-center cursor-pointer transition-colors duration-[110ms]"
+          >
+            {sheetOpen ? <X className="w-4 h-4 text-ink" strokeWidth={1.5} /> : <MenuIcon className="w-4 h-4 text-muted" strokeWidth={1.5} />}
+          </button>
         </div>
       </div>
+
+      </div>
+
+      {/* The 48px bar: the mark, which goes home, Search and Menu. */}
+      <div
+        data-header-condensed
+        aria-hidden={!condensed}
+        {...(condensed ? {} : { inert: true })}
+        className="absolute top-0 inset-x-0 h-12 border-b border-line pointer-events-auto"
+        style={{
+          background: 'color-mix(in srgb, var(--m-page) 95%, transparent)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          transform: condensed ? 'translateY(0)' : 'translateY(-48px)',
+          transition: `transform ${condensed ? 'var(--m-dur-slow) var(--m-ease-enter)' : 'var(--m-dur-base) var(--m-ease-exit)'}`,
+        }}
+      >
+        <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-12 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Marginalia home"
+            onClick={() => {
+              onNavigateToScreen('HOME');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 flex items-center justify-center cursor-pointer"
+          >
+            <span aria-hidden="true" className="block w-6 h-6 bg-accent" />
+          </button>
+          <div className="flex-1" />
+          {figuresControl}
+          {currentScreen !== 'DIRECTORY' && (
+            <button
+              type="button"
+              aria-label="Search companies"
+              onClick={openSearch}
+              className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 border border-line hover:border-accent flex items-center justify-center cursor-pointer"
+            >
+              <Search className="w-4 h-4 text-muted" strokeWidth={1.5} />
+            </button>
+          )}
+          <button
+            type="button"
+            data-menu-button-condensed
+            aria-expanded={sheetOpen}
+            aria-label={sheetOpen ? 'Close the menu' : 'Menu'}
+            onClick={() => (sheetOpen ? closeSheet() : setSheetOpen(true))}
+            className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 border border-line hover:border-accent flex items-center justify-center cursor-pointer"
+          >
+            {sheetOpen ? <X className="w-4 h-4 text-ink" strokeWidth={1.5} /> : <MenuIcon className="w-4 h-4 text-muted" strokeWidth={1.5} />}
+          </button>
+        </div>
+      </div>
+
+      {/* THE SHEET (NAV_SEARCH §2.4, LEARN_STATES §4): its top edge at the
+          bar's foot, the bar still visible; a 0.72 scrim with no blur; one
+          accordion row of 56px per section, its links 48px; the Reduce motion
+          switch at the foot. */}
+      {/* A PORTAL, because the bar's backdrop blur makes it the containing
+          block of anything fixed inside it: a sheet rendered here measured
+          from the bar, not the window, and had no height at all. */}
+      {sheetOpen && typeof document !== 'undefined' && createPortal(
+        <div data-menu-root className="dark">
+          <div className={`fixed inset-x-0 ${condensed ? 'top-12' : 'top-16 min-[1100px]:hidden'} bottom-0 z-40 bg-scrim`} onClick={closeSheet} aria-hidden="true" />
+          <div
+            ref={sheet}
+            data-menu-sheet
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu"
+            className={`fixed inset-x-0 ${condensed ? 'top-12' : 'top-16 min-[1100px]:hidden'} bottom-0 z-50 overflow-y-auto bg-overlay border-t border-line min-[640px]:left-auto min-[640px]:w-[480px] min-[640px]:border-l`}
+          >
+            {MENU.map((section) => {
+              const open = sheetSection === section.name;
+              return (
+                <div key={section.name} className="border-b border-line">
+                  <button
+                    type="button"
+                    data-sheet-section={section.name}
+                    aria-expanded={open}
+                    onClick={() => setSheetSection(open ? null : section.name)}
+                    className={`flex w-full items-center gap-3 h-14 px-6 text-[15px] cursor-pointer ${currentSection === section.name ? 'text-ink font-semibold' : 'text-ink font-medium'}`}
+                  >
+                    <ChevronRight
+                      className="w-3 h-3 text-muted"
+                      strokeWidth={1.5}
+                      style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform var(--m-dur-base) var(--m-ease-standard)' }}
+                    />
+                    {section.name}
+                  </button>
+                  {open && (
+                    <div className="pb-2">
+                      {section.links.map((d) => (
+                        <Row key={d.label} d={d} tall />
+                      ))}
+                      <Coming section={section} tall />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="flex items-center justify-between h-14 px-6">
+              <span className="text-[15px] text-read">Reduce motion</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reduced}
+                data-sheet-motion
+                onClick={() => setMotionSetting(reduced ? 'full' : 'reduced')}
+                className="h-11 min-w-11 px-3 border border-line-control text-[13px] text-ink cursor-pointer"
+              >
+                {reduced ? 'On' : 'Off'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </header>
   );
 };

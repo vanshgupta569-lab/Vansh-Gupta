@@ -24,11 +24,21 @@
 // magazine, and this is meant to read as an institution. Playfair is kept for
 // the three places it earns: the wordmark, the margin notes, and the quote.
 
-import React, { useEffect, useRef, useState } from 'react';
-import { ParticleField } from './particleField';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from '../design/motion';
+import { useConstrained } from '../design/constrained';
+/* THE 3D CHUNK LOADS AFTER THE FIRST PAINT (VISUAL_SYSTEM §6, job 8.7):
+   three.js is its own chunk, fetched once the page has drawn, and the poster
+   is what is painted first. */
+const ParticleField = lazy(() => import('./particleField'));
+/* The still the page paints first, and the largest thing it paints: the
+   wordmark as the particle field draws it, captured once (≤ 60KB). */
+const HERO_POSTER = '/hero-poster.webp';
 import { MarginNotesSection } from './marginNotesSection';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
+import { featureById, statusLabel, claimFor, isShipped, CLAIMS, companyCountLabel } from '../data/featureRegister';
+import type { Feature } from '../data/featureRegister';
 
 /* The sections the object is bound to, in page order. Every id here must be
    rendered below, and the object holds one formation per entry. */
@@ -47,7 +57,7 @@ const OBJECT_SECTIONS = [
 
 // Colours come from the one palette. They used to be six local constants at
 // the top of this file, and six more at the top of four of its neighbours.
-const { accent: RED, accentText: RED_TEXT, ink: INK, read: READ, muted: MUTED, line: LINE } = DARK;
+const { accent: RED, ink: INK, read: READ, muted: MUTED, quiet: QUIET, line: LINE } = DARK;
 
 const DISPLAY: React.CSSProperties = {
   fontFamily: TYPE.display,
@@ -60,9 +70,10 @@ const DISPLAY: React.CSSProperties = {
 /* Furniture                                                           */
 /* ------------------------------------------------------------------ */
 
-const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
+const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean; n?: string }> = ({
   children,
   centred,
+  n,
 }) => (
   <p
     /* NO RED LABEL TEXT. The red stays on the rule beside the words rather
@@ -76,7 +87,14 @@ const Eyebrow: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({
     style={{ color: MUTED }}
   >
     <span className="h-px w-8 shrink-0" style={{ background: RED }} />
-    {children}
+    {/* LANDING §3.1: the number in an eyebrow is in quiet, never in the
+        accent, and the words are muted. */}
+    {n && (
+      <span data-eyebrow-number style={{ color: QUIET }}>
+        {n}&nbsp;&middot;
+      </span>
+    )}
+    <span>{children}</span>
   </p>
 );
 
@@ -169,7 +187,7 @@ const Readout: React.FC<{ rows: [string, string][]; centred?: boolean }> = ({ ro
   >
     {rows.map(([k, v]) => (
       <div key={k}>
-        <span style={{ color: RED_TEXT }}>{k}</span>
+        <span style={{ color: MUTED }}>{k}</span>
         &nbsp;&nbsp;
         <span style={{ color: INK, fontWeight: 500 }}>{v}</span>
       </div>
@@ -183,11 +201,14 @@ const Readout: React.FC<{ rows: [string, string][]; centred?: boolean }> = ({ ro
 const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' }) => {
   const ref = useRef<HTMLSpanElement>(null);
   const [n, setN] = useState(0);
+  // VISUAL_SYSTEM §8: on a phone-width or low-end device, and under reduced
+  // motion, the figure is shown at its value at once.
+  const still = useConstrained() !== null || useReducedMotion();
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (typeof IntersectionObserver === 'undefined') { setN(to); return; }
+    if (still || typeof IntersectionObserver === 'undefined') { setN(to); return; }
 
     let raf = 0;
     let fired = false;
@@ -212,7 +233,7 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
     );
     io.observe(el);
     return () => { io.disconnect(); if (raf) cancelAnimationFrame(raf); };
-  }, [to]);
+  }, [to, still]);
 
   return (
     <span ref={ref} className="tabular-nums">
@@ -231,48 +252,16 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
 /* model that already exists and belongs on that model's own screen.    */
 /* Status is stated once, in the roadmap lower down, and nowhere else.  */
 /* ------------------------------------------------------------------ */
-const ROUTES = [
-  {
-    n: '01',
-    title: 'Value a listed company',
-    line: 'Type a ticker. Its filings become a three-statement model and a DCF you can argue with.',
-  },
-  {
-    n: '02',
-    title: 'Value a private company',
-    line: 'A private company files nothing public. Type in the accounts you already have and get the same model a listed company gets.',
-  },
-  {
-    n: '03',
-    title: 'Make a one or two-pager',
-    line: 'A whole company on one page — the summary you would be asked for before a meeting.',
-  },
-  {
-    n: '04',
-    title: 'Reformat your Excel model',
-    line: 'Your own workbook set to house convention: blue for inputs, black for formulas. Not one number changes.',
-  },
-];
+/* FROM THE FEATURE REGISTER (`src/data/featureRegister.ts`, LANDING §2.4).
+   A route that has not shipped keeps its place, carries its status, is
+   written in the future tense and opens nothing. */
+const ROUTES: { n: string; feature: Feature }[] = ['listed-company', 'private-company', 'one-pager', 'reformat-workbook'].map(
+  (id, i) => ({ n: String(i + 1).padStart(2, '0'), feature: featureById(id) as Feature })
+);
 
 /* What is not built yet. Every line here is stated as a plan, because a plan
    described in the present tense is a false claim about a website. */
-const NEXT = [
-  {
-    title: 'A one or two-pager',
-    status: 'In build',
-    line: 'The whole company on a single page: what it does, what it earns, what it is worth, and the figures you would be asked about first.',
-  },
-  {
-    title: 'A leveraged buyout model',
-    status: 'Planned',
-    line: 'The same forecast run for a buyer using debt — the structure it is bought with, the years of repayment, the exit, and the return that falls out of it.',
-  },
-  {
-    title: 'A private company',
-    status: 'In build',
-    line: 'A private company files nothing public, so you supply the accounts. Type in the income statement and balance sheet you already have and the same engine runs on them.',
-  },
-];
+const NEXT: Feature[] = ['one-pager', 'lbo', 'private-company'].map((id) => featureById(id) as Feature);
 
 
 const MARGIN_LINES = [
@@ -305,12 +294,45 @@ const MARGIN_LINES = [
   },
 ];
 
-const STATS = [
-  { to: 10000, suffix: '+', label: 'Listed companies', detail: 'NYSE · NASDAQ · NSE · BSE · LSE · TSX' },
-  { to: 5, suffix: 'Y', label: 'Of filed history', detail: 'IS · BS · CF · WC · PP&E · Debt · Equity' },
-  { to: 0, suffix: '', label: 'Cost to use', detail: 'No subscription, no paywall' },
-  { to: 3, suffix: '', label: 'Valuation approaches', detail: 'Income · Market · Asset' },
-];
+/* THE COUNTS (LANDING §2.3, decisions 2–4). Each is read from what it
+   claims about, or not shown: the company count and the exchanges from the
+   screener table, the years from the register's recorded claim. "Free to
+   use" waits for pricing (decision 2); "Three valuation approaches" waits
+   for build step 5 to ship (decision 4). */
+interface Stat { key: string; to: number; suffix: string; label: string; detail: string; source: string }
+
+function useCoverage(): { count: number | null; exchanges: string[]; built: string | null } {
+  const [state, setState] = useState<{ count: number | null; exchanges: string[]; built: string | null }>({
+    count: null,
+    exchanges: [],
+    built: null,
+  });
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/screener')
+      .then((r) => r.json())
+      .then((body) => {
+        if (!alive || !Array.isArray(body?.rows)) return;
+        // One listing per company, as the screener counts them.
+        const home = body.rows.filter((row: any) => row?.homeListing !== false);
+        const exchanges = [...new Set(home.map((row: any) => row?.exchange).filter(Boolean))].sort() as string[];
+        setState({ count: home.length, exchanges, built: body.built ?? null });
+      })
+      .catch(() => {
+        /* No table, no count: the tile is left out rather than guessed. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return state;
+}
+
+/** The years claim in words, for the hero's sentence. */
+const YEARS_IN_WORDS: Record<number, string> = { 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten' };
+
+const asAt = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : null;
 
 /* ------------------------------------------------------------------ */
 
@@ -329,6 +351,47 @@ interface LandingProps {
 
 export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo, onOpenNotes, children }) => {
   const [launching, setLaunching] = useState(false);
+  const reducedMotion = useReducedMotion();
+  // The field mounts after the first paint, never before it.
+  const [fieldWanted, setFieldWanted] = useState(false);
+  const [fieldDrawn, setFieldDrawn] = useState(false);
+  const [fieldFrozen, setFieldFrozen] = useState(false);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    let a = 0, b = 0;
+    a = requestAnimationFrame(() => { b = requestAnimationFrame(() => setFieldWanted(true)); });
+    return () => { cancelAnimationFrame(a); cancelAnimationFrame(b); };
+  }, []);
+  // VISUAL_SYSTEM §8: a phone-width screen or a low-end device gets the
+  // poster and no WebGL at all (src/design/constrained.ts says which signals).
+  const constrained = useConstrained();
+  const fieldOn = fieldWanted && !reducedMotion && !fieldFrozen && !constrained;
+  const heroMode = fieldOn
+    ? 'field'
+    : `poster:${constrained ?? (reducedMotion ? 'reduced-motion' : fieldFrozen ? 'slow-frames' : 'loading')}`;
+  const posterOn = !fieldOn || !fieldDrawn;
+  const coverage = useCoverage();
+  const countLabel = companyCountLabel(coverage.count);
+  const builtAt = asAt(coverage.built);
+  const STATS: (Stat & { label: string; text: string | null })[] = [
+    ...(countLabel
+      ? [{
+          key: 'companies', to: coverage.count as number, suffix: '', text: countLabel,
+          label: 'Listed companies',
+          detail: coverage.exchanges.join(' · '),
+          source: `Counted from the screener table${builtAt ? `, as at ${builtAt}` : ''}`,
+        }]
+      : []),
+    {
+      key: 'years', to: CLAIMS.historyYears, suffix: 'Y', text: null,
+      label: 'Up to, of filed history',
+      detail: 'IS · BS · CF · WC · PP&E · Debt · Equity',
+      source: 'Fiscal years read from each company\u2019s own filings',
+    },
+    ...(isShipped('three-approaches')
+      ? [{ key: 'approaches', to: 3, suffix: '', text: null, label: 'Valuation approaches', detail: 'Income · Market · Asset', source: 'Shown side by side, not averaged' }]
+      : []),
+  ];
   const [activeMargin, setActiveMargin] = useState(0);
   const marginRef = useRef<HTMLDivElement>(null);
 
@@ -404,87 +467,154 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             'radial-gradient(ellipse 130% 85% at 50% 10%, #14141C 0%, #0E0E13 40%, #08080B 78%, #060608 100%)',
         }}
       />
-      <ParticleField sectionIds={OBJECT_SECTIONS} launching={launching} />
+      <img
+        src={HERO_POSTER}
+        alt=""
+        aria-hidden="true"
+        data-hero-poster
+        data-hero-mode={heroMode}
+        width={1440}
+        height={900}
+        fetchPriority="high"
+        className="absolute inset-x-0 top-0 w-full h-screen object-cover z-[4] pointer-events-none"
+        style={{ opacity: posterOn ? 1 : 0, transition: 'opacity var(--m-dur-reveal) var(--m-ease-enter)' }}
+      />
+      {fieldOn && (
+        <Suspense fallback={null}>
+          <ParticleField
+            sectionIds={OBJECT_SECTIONS}
+            launching={launching}
+            paused={paused}
+            onFirstFrame={() => setFieldDrawn(true)}
+            onFreeze={() => setFieldFrozen(true)}
+          />
+        </Suspense>
+      )}
 
       <div className="relative z-10 pointer-events-none">
         {/* ---------------------------------------------------------- */}
         {/* the wordmark, drawn in particles above the words            */}
         {/* ---------------------------------------------------------- */}
         <Block id="hero" side="mid">
-          <Eyebrow centred>Filed data, not estimates</Eyebrow>
+          {/* LANDING §2.1, final text. The display and lead steps are the
+              landing page's alone (VISUAL_SYSTEM finding 8). "Live models"
+              went because it reads as live market data. */}
+          <Eyebrow centred>Source: company filings</Eyebrow>
           <h1
-            className="text-[34px] sm:text-[46px] lg:text-[58px] mb-6"
-            style={{ ...DISPLAY, color: INK }}
+            className="text-display mb-6 mx-auto max-w-[1000px]"
+            style={{ ...DISPLAY, color: INK, lineHeight: 1.05, textWrap: 'balance' as any }}
           >
             {/* No full stop here: the red square is the full stop. Written
                 out, the line ended on two of them. */}
-            Real financials. Live models
+            Filed numbers. A model you can argue with
             <Mark />
           </h1>
-          <p className="text-[18px] leading-[1.6] mx-auto max-w-[38rem]" style={{ color: READ }}>
-            Five years of income statements, balance sheets and cash flows, read
-            from a company&rsquo;s own filings exactly as reported.
+          <p className="text-lead leading-[1.5] mx-auto max-w-[620px]" style={{ color: READ }}>
+            Marginalia reads up to {YEARS_IN_WORDS[CLAIMS.historyYears] ?? CLAIMS.historyYears} years of a
+            company&rsquo;s own filings, builds the three-statement model and DCF, and shows where every
+            figure came from.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <button
               type="button"
               onClick={launch}
-              className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border transition-colors"
-              style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
+              data-primary
+              className="font-figure text-[15px] font-medium h-12 px-5 border transition-colors"
+              style={{ borderColor: RED, background: 'rgba(139,30,30,0.2)', color: INK }}
             >
               Value a listed company
             </button>
-            <button
-              type="button"
-              onClick={launch}
-              className="font-figure text-[12px] tracking-[0.16em] uppercase px-6 py-3.5 border bg-transparent transition-colors hover:border-[#8B1E1E]"
-              style={{ borderColor: LINE, color: MUTED }}
-            >
-              Value a private company
-            </button>
+            {isShipped('private-company') ? (
+              <button
+                type="button"
+                onClick={launch}
+                data-feature="private-company"
+                className="font-figure text-[15px] font-medium h-12 px-5 border bg-transparent transition-colors hover:border-ink"
+                style={{ borderColor: LINE, color: MUTED }}
+              >
+                Value a private company
+              </button>
+            ) : (
+              /* LANDING §2.4: while private-company inputs are not shipped,
+                 the ghost button is a text link to what is being built. */
+              <button
+                type="button"
+                onClick={() => onScrollTo('beyond')}
+                className="font-figure text-[15px] h-12 px-2 bg-transparent underline underline-offset-4 transition-colors hover:text-ink"
+                style={{ color: MUTED }}
+              >
+                What is being built next &darr;
+              </button>
+            )}
           </div>
-          <p
-            className="font-figure text-[12px] tracking-[0.16em] uppercase mt-8"
-            style={{ color: MUTED }}
-          >
+          <p className="font-figure text-[13px] mt-8" style={{ color: MUTED }}>
             Scroll to see how it works
           </p>
+          {fieldOn && (
+            /* WCAG 2.2.2: the motion can be stopped. 24×24 at the hero's
+               lower edge, inside the pointer-events-none column, so it opts
+               back in. */
+            <button
+              type="button"
+              data-motion-toggle
+              onClick={() => setPaused((v) => !v)}
+              aria-pressed={paused}
+              aria-label={paused ? 'Play the animation' : 'Pause the animation'}
+              className="pointer-events-auto mx-auto mt-4 flex h-6 w-6 items-center justify-center border border-line-control text-muted hover:text-ink"
+            >
+              <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                {paused ? <path d="M3 2 L10 6 L3 10 Z" fill="currentColor" /> : <path d="M3 2 H5 V10 H3 Z M7 2 H9 V10 H7 Z" fill="currentColor" />}
+              </svg>
+            </button>
+          )}
         </Block>
 
         {/* 01 — what you can do */}
         <Block id="routes" side="right">
-          <Eyebrow>01 &middot; What you can do</Eyebrow>
+          <Eyebrow n="01">What you can do</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
             Four ways in
             <Mark />
           </h2>
           <div className="grid gap-6">
-            {ROUTES.map((r) => (
+            {ROUTES.map((r) => {
+              const shipped = r.feature.status === 'shipped';
+              const opens = shipped && r.feature.id === 'listed-company';
+              return (
               <button
                 key={r.n}
                 type="button"
-                onClick={r.n === '01' ? launch : undefined}
-                className={`text-left ${r.n === '01' ? 'cursor-pointer' : 'cursor-default'}`}
+                onClick={opens ? launch : undefined}
+                disabled={!opens}
+                data-feature={r.feature.id}
+                data-feature-status={r.feature.status}
+                className={`text-left ${opens ? 'cursor-pointer' : 'cursor-default'}`}
               >
                 <div className="flex items-baseline gap-4">
-                  <span className="font-figure text-[13px] tracking-[0.2em] shrink-0" style={{ color: RED_TEXT }}>
+                  <span className="font-figure text-[13px] shrink-0 w-6" style={{ color: QUIET }}>
                     {r.n}
                   </span>
-                  <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
-                    {r.title}
+                  <span className="text-[20px] leading-[1.2]" style={{ fontFamily: TYPE.display, fontWeight: 600, color: INK }}>
+                    {r.feature.title}
                   </span>
+                  {!shipped && (
+                    <span className="font-figure text-[13px]" style={{ color: MUTED }}>
+                      {statusLabel(r.feature)}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[15px] leading-[1.55] mt-1.5 pl-10" style={{ color: MUTED }}>
-                  {r.line}
+                <p className="text-[15px] leading-[1.65] mt-2 pl-10" style={{ color: READ }}>
+                  {claimFor(r.feature)}
                 </p>
               </button>
-            ))}
+              );
+            })}
           </div>
         </Block>
 
         {/* 02 — the filings arrive */}
         <Block id="filings" side="left">
-          <Eyebrow>02 &middot; Where the numbers come from</Eyebrow>
+          <Eyebrow n="02">Where the numbers come from</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Five years of accounts, exactly as filed
             <Mark />
@@ -506,7 +636,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 03 — the forecast is built */}
         <Block id="forecast" side="right">
-          <Eyebrow>03 &middot; The forecast</Eyebrow>
+          <Eyebrow n="03">The forecast</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every forecast line is one assumption you can move
             <Mark />
@@ -527,7 +657,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 04 — profit becomes cash */}
         <Block id="cash" side="left">
-          <Eyebrow>04 &middot; Profit becomes cash</Eyebrow>
+          <Eyebrow n="04">Profit becomes cash</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Profit and cash are not the same number
             <Mark />
@@ -550,7 +680,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 05 — the discount */}
         <Block id="discount" side="right">
-          <Eyebrow>05 &middot; What it is worth today</Eyebrow>
+          <Eyebrow n="05">What it is worth today</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Every future year, collapsed into one number
             <Mark />
@@ -572,15 +702,20 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 06 — three approaches */}
         <Block id="answers" side="left">
-          <Eyebrow>06 &middot; Three approaches</Eyebrow>
+          <Eyebrow n="06">Three approaches</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             They do not agree, and they are not supposed to
             <Mark />
           </h2>
           <p className="text-[17px] leading-[1.6] mt-6" style={{ color: READ }}>
             What a business earns, what buyers pay for businesses like it, and
-            what it owns outright are three different questions. All three are
-            run and all three are shown. They are never averaged into one tidy
+            what it owns outright are three different questions.{' '}
+            <span data-feature="three-approaches" data-feature-status={featureById('three-approaches')?.status}>
+              {isShipped('three-approaches')
+                ? 'All three are run and all three are shown.'
+                : 'All three are run; showing them side by side on one chart is being built.'}
+            </span>{' '}
+            They are not averaged into one tidy
             number, because an average of three different questions answers none
             of them.
           </p>
@@ -595,7 +730,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 07 — edit it, then take it away */}
         <Block id="workbench" side="right">
-          <Eyebrow>07 &middot; The model is yours</Eyebrow>
+          <Eyebrow n="07">The model is yours</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[44px]" style={{ ...DISPLAY, color: INK }}>
             Change anything on the page, then take the model with you
             <Mark />
@@ -618,30 +753,30 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
         {/* 08 — what is being built, said as a plan and not as a claim */}
         <Block id="beyond" side="left">
-          <Eyebrow>08 &middot; Being built next</Eyebrow>
+          <Eyebrow n="08">Being built next</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
             Three more things, and where each one has got to
             <Mark />
           </h2>
           <div className="grid gap-7">
             {NEXT.map((item) => (
-              <div key={item.title}>
+              <div key={item.id} data-feature={item.id} data-feature-status={item.status}>
                 <div className="flex items-baseline gap-3 flex-wrap">
-                  <span className="text-[19px] lg:text-[21px]" style={{ ...DISPLAY, color: INK }}>
+                  <span className="text-[20px] leading-[1.2]" style={{ fontFamily: TYPE.display, fontWeight: 600, color: INK }}>
                     {item.title}
                   </span>
                   <span
-                    className="font-figure text-[10px] tracking-[0.18em] uppercase px-2 py-1 border"
+                    className="font-figure text-[13px]"
                     style={{
-                      color: item.status === 'In build' ? RED_TEXT : MUTED,
-                      borderColor: item.status === 'In build' ? 'rgba(139,30,30,0.55)' : LINE,
+                      color: item.status === 'in_build' ? INK : MUTED,
+                      fontWeight: item.status === 'in_build' ? 600 : 400,
                     }}
                   >
-                    {item.status}
+                    {statusLabel(item)}
                   </span>
                 </div>
                 <p className="text-[15px] leading-[1.55] mt-2" style={{ color: MUTED }}>
-                  {item.line}
+                  {claimFor(item)}
                 </p>
               </div>
             ))}
@@ -722,11 +857,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               <span className="h-px w-8" style={{ background: RED }} />
               09 &middot; Coverage
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-14 gap-x-8">
+            <div className={`grid grid-cols-2 ${STATS.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-y-14 gap-x-8`}>
               {STATS.map((s) => (
-                <div key={s.label}>
+                <div key={s.key} data-stat={s.key}>
                   <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: PAPER.ink }}>
-                    <CountUp to={s.to} suffix={s.suffix} />
+                    {/* A count that is a label ("200+") is printed, not counted up. */}
+                    {s.text ? <span className="font-figure tabular-nums">{s.text}</span> : <CountUp to={s.to} suffix={s.suffix} />}
                   </div>
                   <div
                     className="font-figure text-[12px] tracking-[0.2em] uppercase mt-4"
@@ -736,6 +872,9 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                   </div>
                   <div className="font-figure text-[12px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
                     {s.detail}
+                  </div>
+                  <div className="font-figure text-[12px] mt-1 leading-[1.5]" data-stat-source style={{ color: PAPER.quiet }}>
+                    {s.source}
                   </div>
                 </div>
               ))}

@@ -28,15 +28,51 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
+/* THE BUDGETS (VISUAL_SYSTEM §6; build step 8, job 8.7). The object and the
+   sky behind it share one WebGL context and, together, at most 12,000 points
+   on a desktop: the object was 130,000 and the sky 4,400. The canvas is drawn
+   at no more than 1.5 device pixels per CSS pixel. The animation settles five
+   seconds after the last input and then holds still until the reader scrolls,
+   points or presses a key (WCAG 2.2.2), and stops while the tab is hidden.
+   If its frames average more than 24ms over its first second it gives way to
+   the poster (VISUAL_BUILD_PLAN V7, Nihar, 4 November 2026: the measured
+   frame-average signal); after that, frames that run over 20ms halve its
+   points, twice at most, and it keeps drawing. */
+export const PARTICLE_BUDGET = 12000;
+export const OBJECT_POINTS = { desktop: 9000, compact: 5000 } as const;
+export const SKY_POINTS = { desktop: 3000, compact: 1000 } as const;
+export const MAX_PIXEL_RATIO = 1.5;
+export const SETTLE_MS = 5000;
+export const SLOW_FRAME_MS = 20;
+/** The first second's frame average above which the poster takes over (V7). */
+export const SLOW_START_MS = 24;
+export const START_WINDOW_MS = 1000;
+
 interface ParticleFieldProps {
   /** Section ids, in page order, that the object is bound to. */
   sectionIds: string[];
   /** Set true to fire the fly-through. */
   launching: boolean;
+  /** The reader pressed Pause: hold the current frame. */
+  paused?: boolean;
+  /** The first frame is on screen, so the poster can step aside. */
+  onFirstFrame?: () => void;
+  /** The first second's frames averaged over 24ms: show the poster instead. */
+  onFreeze?: () => void;
 }
 
-export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launching }) => {
+export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launching, paused = false, onFirstFrame, onFreeze }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pausedRef = useRef(paused);
+  const wakeRef = useRef<() => void>(() => {});
+  const firstFrameRef = useRef(onFirstFrame);
+  const freezeRef = useRef(onFreeze);
+  firstFrameRef.current = onFirstFrame;
+  freezeRef.current = onFreeze;
+  useEffect(() => {
+    pausedRef.current = paused;
+    if (!paused) wakeRef.current();
+  }, [paused]);
   const launchRef = useRef(false);
 
   useEffect(() => { launchRef.current = launching; }, [launching]);
@@ -63,7 +99,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     }
     if (!renderer.getContext()) { canvas.style.display = 'none'; return; }
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     renderer.setSize(vw(), vh(), false);
 
     const FOV = 46;
@@ -73,7 +109,10 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     camera.position.set(0, 0, DIST);
 
     const MOBILE = window.innerWidth < 900;
-    const COUNT = MOBILE ? 26000 : 130000;
+    const COUNT = MOBILE ? OBJECT_POINTS.compact : OBJECT_POINTS.desktop;
+    /* How many of the points are drawn and moved: all of them, until slow
+       frames halve it (the arrays keep their full length). */
+    let live: number = COUNT;
 
     const forms: Float32Array[] = [];
     const scatterDir = new Float32Array(COUNT * 3);
@@ -191,11 +230,20 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       const scale = target / inkW;
 
       const inkN = ink.length / 2, sqN = sqInk.length / 2;
+      /* STRIDED, NOT CONSECUTIVE. With 130,000 points the walk covered
+         every ink pixel; with a twelfth of that (the 8.7 budget) a
+         consecutive walk filled only the first rows of the letters and the
+         wordmark fell apart. The walk keeps its order — no clumping — but
+         steps evenly across the whole of the ink. */
+      const squareN = sqN > 0 ? Math.ceil(COUNT / 16) : 0;
+      const wordN = COUNT - squareN;
       let wi = 0, si = 0;
       for (let i = 0; i < COUNT; i++) {
         const useSquare = sqN > 0 && i % 16 === 0;
         const pool = useSquare ? sqInk : ink;
-        const k = useSquare ? (si++ % sqN) * 2 : (wi++ % inkN) * 2;
+        const k = useSquare
+          ? (Math.floor(((si++ + 0.5) * sqN) / Math.max(1, squareN)) % sqN) * 2
+          : (Math.floor(((wi++ + 0.5) * inkN) / Math.max(1, wordN)) % inkN) * 2;
         accent[i] = useSquare ? 1 : 0;
         a[i * 3]     =  (pool[k]     - cx + (seeded(i + 331) - 0.5) * 1.9) * scale;
         a[i * 3 + 1] = -(pool[k + 1] - cy + (seeded(i + 341) - 0.5) * 1.9) * scale;
@@ -368,8 +416,10 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       const g = seeded(i + 601);
       const isStar = g > 0.948;
       bright[i] = isStar ? 1 : 0;
+      /* A twelfth of the points the object had, so each grain of dust is
+         drawn larger (×2.6) for the body to keep its silhouette. */
       sizes[i] =
-        0.020 + Math.pow(seeded(i + 81), 1.6) * 0.026 +
+        (0.020 + Math.pow(seeded(i + 81), 1.6) * 0.026) * 2.6 +
         (isStar ? 0.055 + Math.pow((g - 0.948) / 0.052, 1.5) * 0.26 : 0);
       const u = seeded(i + 51) * Math.PI * 2, v = Math.acos(2 * seeded(i + 61) - 1);
       scatterDir[i * 3]     = Math.sin(v) * Math.cos(u);
@@ -480,8 +530,11 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
              pulse at all. */
           float tw = 0.76 + 0.24 * sin(uTime * (0.7 + seed * 2.1) + seed * 61.0);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          /* Dust is lifted by half again: at a twelfth of the points it
+             used to have, the additive light it built up was faint. */
           vFade = clamp((mv.z + 21.0) / 16.0, 0.64, 1.0)
-                * mix(0.96, tw, 0.18 + bright * 0.62);
+                * mix(0.96, tw, 0.18 + bright * 0.62)
+                * mix(1.5, 1.0, bright);
           gl_PointSize = psize * uScale / max(-mv.z, 0.1);
           gl_Position = projectionMatrix * mv;
         }
@@ -505,7 +558,8 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     /* which is felt rather than seen — and it takes a quarter of the drag */
     /* the object takes, which is what gives the screen its depth.         */
     /* ---------------------------------------------------------------- */
-    const SKY = MOBILE ? 1400 : 4400;
+    const SKY = MOBILE ? SKY_POINTS.compact : SKY_POINTS.desktop;
+    canvas.dataset.particles = String(COUNT + SKY);
     const skyPos = new Float32Array(SKY * 3);
     const skySize = new Float32Array(SKY);
     const skySeed = new Float32Array(SKY);
@@ -615,7 +669,86 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
 
     const arr = geom.attributes.position.array as Float32Array;
 
+    /* SETTLING, PAUSING, AND KEEPING UP. */
+    let lastInput = performance.now();
+    let lastFrameAt = 0;
+    let sampled: number[] = [];
+    let halvings = 0;
+    let frozen = false;
+    /* The first second of drawing, measured once (V7). */
+    let startAt = 0;
+    let startSum = 0;
+    let startCount = 0;
+    let startJudged = false;
+    let warm = 0;
+    let drawnFirst = false;
+    let moving = 1;
+    const state = (s: string) => { canvas.dataset.state = s; };
+    const wake = () => {
+      lastInput = performance.now();
+      if (!raf && !frozen && !pausedRef.current && !document.hidden && !disposed) {
+        lastFrameAt = 0;
+        raf = requestAnimationFrame(frame);
+      }
+    };
+    wakeRef.current = wake;
+    const inputs: (keyof WindowEventMap)[] = ['scroll', 'wheel', 'pointermove', 'pointerdown', 'keydown', 'touchstart'];
+    for (const name of inputs) window.addEventListener(name, wake, { passive: true });
+    const onVisibility = () => { if (!document.hidden) wake(); };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const keepUp = (now: number) => {
+      // The first three frames are left out of the first second's average:
+      // they carry the shaders' compilation, which a reader never sees again.
+      if (lastFrameAt) {
+        sampled.push(now - lastFrameAt);
+        warm++;
+        if (!startJudged && warm > 3) {
+          if (!startAt) startAt = now;
+          startSum += now - lastFrameAt;
+          startCount++;
+        }
+      }
+      lastFrameAt = now;
+      if (!startJudged && startAt && now - startAt >= START_WINDOW_MS && startCount > 0) {
+        startJudged = true;
+        const first = startSum / startCount;
+        canvas.dataset.firstSecond = first.toFixed(1);
+        if (first > SLOW_START_MS) {
+          frozen = true;
+          state('frozen');
+          freezeRef.current?.();
+          return;
+        }
+      }
+      if (sampled.length < 30) return;
+      const average = sampled.reduce((a, b) => a + b, 0) / sampled.length;
+      sampled = [];
+      if (average <= SLOW_FRAME_MS) return;
+      if (halvings < 2) {
+        halvings++;
+        live = Math.max(1, Math.floor(live / 2));
+        geom.setDrawRange(0, live);
+        canvas.dataset.live = String(live);
+      }
+    };
+
+    /* Decide, after a frame, whether to draw another. */
+    const next = () => {
+      const now = performance.now();
+      if (frozen || disposed) { raf = 0; return; }
+      if (pausedRef.current) { raf = 0; state('paused'); return; }
+      if (document.hidden) { raf = 0; state('hidden'); return; }
+      const idle = now - lastInput > SETTLE_MS;
+      if (idle && !launchRef.current && entry >= 1 && moving < 1e-4) { raf = 0; state('settled'); return; }
+      state('running');
+      raf = requestAnimationFrame(frame);
+    };
+
     const frame = () => {
+      raf = 0;
+      keepUp(performance.now());
+      if (frozen) return;
       clock += 0.016;
       skyDrift += 0.00008;
       skyMaterial.uniforms.uTime.value = clock;
@@ -641,7 +774,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
         camera.fov = FOV + launchT * 26;
         camera.updateProjectionMatrix();
         renderer.render(scene, camera);
-        raf = requestAnimationFrame(frame);
+        next();
         return;
       }
       if (launchT > 0) {
@@ -676,7 +809,8 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       const burst = ending ? 0 : Math.sin(smooth * Math.PI) * 2.15;
       const chase = ending ? 0.045 : 0.13;
 
-      for (let k = 0; k < COUNT; k++) {
+      moving = 0;
+      for (let k = 0; k < live; k++) {
         const k3 = k * 3;
         const j = 0.55 + seeds[k] * 0.95;
         let tx = A[k3]     + (B[k3]     - A[k3])     * smooth + burst * scatterDir[k3]     * j;
@@ -687,9 +821,12 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
           ty += scatterDir[k3 + 1] * 11 * (1 - ease);
           tz += scatterDir[k3 + 2] * 11 * (1 - ease);
         }
-        arr[k3]     += (tx - arr[k3])     * chase;
-        arr[k3 + 1] += (ty - arr[k3 + 1]) * chase;
-        arr[k3 + 2] += (tz - arr[k3 + 2]) * chase;
+        const dx = (tx - arr[k3]) * chase, dy = (ty - arr[k3 + 1]) * chase, dz = (tz - arr[k3 + 2]) * chase;
+        arr[k3]     += dx;
+        arr[k3 + 1] += dy;
+        arr[k3 + 2] += dz;
+        const step = Math.abs(dx) + Math.abs(dy) + Math.abs(dz);
+        if (step > moving) moving = step;
       }
       geom.attributes.position.needsUpdate = true;
 
@@ -723,8 +860,16 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       group.position.y = posY;
       group.scale.setScalar(zoom);
 
+      // The camera and the group ease too: count them as motion until they land.
+      moving = Math.max(moving, Math.abs(wantX - rotX), Math.abs(wantY - rotY), Math.abs(wantP - posX), Math.abs(wantZ - zoom));
+
       renderer.render(scene, camera);
-      raf = requestAnimationFrame(frame);
+      if (!drawnFirst) {
+        drawnFirst = true;
+        canvas.style.opacity = '1';
+        firstFrameRef.current?.();
+      }
+      next();
     };
 
     const onResize = () => {
@@ -735,14 +880,18 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       skyMaterial.uniforms.uScale.value = vh() * 0.5;
       forms[0] = buildWordmark();
       geom.attributes.accent.needsUpdate = true;
+      wake();
     };
     window.addEventListener('resize', onResize);
+    state('running');
     frame();
 
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
+      for (const name of inputs) window.removeEventListener(name, wake);
+      document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
@@ -764,6 +913,9 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
          box. The size has to be stated. */
       className="fixed inset-0 w-full h-full z-[5] block cursor-grab active:cursor-grabbing"
       aria-hidden="true"
+      /* Fades in over --m-dur-reveal once its first frame is drawn; until then
+         the poster is what the reader sees (VISUAL_SYSTEM §6). */
+      style={{ opacity: 0, transition: 'opacity var(--m-dur-reveal) var(--m-ease-enter)' }}
     />
   );
 };
