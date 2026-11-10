@@ -101,7 +101,22 @@ export function countryFor(exchange: string): string {
 const tierOf = (q: string, l: Listing): { tier: number; matched: [number, number][] } => {
   const ticker = l.ticker.toLowerCase();
   const qt = q.trim().toLowerCase();
-  const fq = fold(q);
+  // THE QUERY IS STRIPPED THE SAME WAY THE NAME IS (found by the LOCAL ranking
+  // check of 10 November 2026, `KI-41`).
+  //
+  // `nameWords` drops legal suffixes from the LISTING, so "Nestlé S.A." is
+  // matched as "nestle". The query was only folded, so a reader who typed or
+  // PASTED the company's whole name asked for "nestle sa" — and
+  // "nestle".startsWith("nestle sa") is false, so the company fell to the
+  // catch-all tier and sat among 177 listings it had nothing to do with.
+  // Typing half the name worked and typing all of it did not, which is the
+  // opposite of what a reader expects, and pasting a name is one of the
+  // commonest ways to search.
+  //
+  // Both sides are now stripped by the same function, so the comparison is
+  // symmetric. The ticker arms keep the raw query: a ticker is not a name and
+  // has no suffix to drop.
+  const fq = nameWords(q).join(' ');
   const words = nameWords(l.name);
   const joined = words.join(' ');
   const where = (needle: string): [number, number][] => {

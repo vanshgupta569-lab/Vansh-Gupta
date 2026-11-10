@@ -1226,6 +1226,53 @@ provenance says the rate is assumed rather than the company's own.
 **Bound:** re-running across a wide band, 2% to 8%. The largest move is Shopify
 at **0.07%**, because these are companies that barely borrow. All notes.
 
+### No exchange calendar, so a long national holiday reads as a gap
+
+**Source:** none publishes one freely. **Affects:** 178 series, measured on
+2026-11-11 by `npm run verify:chart`.
+
+The price chart never bridges a missing trading day (`COMPANY_OVERVIEW_SPEC`
+§3.7), which needs to know which days each exchange was open. No calendar is in
+the data, so a **weekday stands in for a trading day**: one or two missing
+weekdays are read as holidays (Good Friday and Easter Monday, Christmas and
+Boxing Day), three or more as a gap, four or more as a hatched band. Approved by
+Nihar on 8 November 2026 (second cloud run, decision 8) as a stand-in, not as
+the rule.
+
+**What it produces.** Across every series in the set: **194 gaps, 41 of them
+long enough to hatch** — 153 of three weekdays, and a tail out to eight. The
+longest is **Taiwan Semiconductor, 2023-01-17 to 2023-01-30**, which is Lunar
+New Year. The exchange was shut and the chart says "gap", which is honest about
+the data and wrong about the world: a reader sees a break in the line where
+nothing happened.
+
+**What removes it:** a trading calendar per exchange. Until then the break is
+drawn and named rather than bridged, because bridging would invent closes that
+were never published.
+
+### No size ranking across the set, because there is no rate to rank it with
+
+**Source:** Yahoo Finance (the market capitalisation). **Affects:** the whole
+set — 178 companies in 16 currencies, measured on 2026-11-11.
+
+Each company's market capitalisation arrives in its OWN currency, and no free
+source gives a rate for the date it was struck. So the set cannot be put in size
+order: sorting the figures as they stand ranks the size of the currency unit
+rather than the size of the company, and Samsung's KRW 1,264,886,021,026,800
+comes out above every company in the United States. `SCREENER_SPEC` rule 6
+allows a converted value only through an explicit base-currency setting with the
+FX date.
+
+**What it stops.** `NAV_SEARCH_SPEC` §4.6 asks for "the 200 largest listings" to
+ship with the search dialog. `npm run search:instant` therefore ships **every**
+listing the set holds, in name order, and says so in the file it writes: 178
+listings are 2.8KB gzipped against a 20KB budget, so nothing has to be chosen
+between yet. The ranking only starts to matter when the universe passes 200.
+
+**What removes it:** a base-currency setting with a rate date, which rule 6
+already describes, or a source that publishes market capitalisation in a common
+currency.
+
 ### A price converted at one exchange rate
 
 **Source:** Yahoo Finance (the rate). **Affects:** 47 modelled, measured on

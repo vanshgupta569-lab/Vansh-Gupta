@@ -483,6 +483,46 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### Search ranking, against the real company list (`npm run verify:search`)
+
+The cloud run checked the palette's ranking on fixtures. Five arms over the 178
+real listings instead, because the collisions are the point: **every ticker in
+the set ranks its own listing first**; **every full company name finds its own
+company**, and where another listing beats it, that listing must be at the SAME
+tier carrying the SAME folded name — another listing of the same company, which
+29 of them are; **accents and ampersands fold**, measured on the 6 and 8 real
+names that carry them; **a recent open breaks a tie and never promotes a listing
+that does not match**; and **no keystroke blocks the main thread**, typed one
+character at a time through six real queries.
+
+It found `KI-41` on its first run: 166 faults, because the query was folded but
+not stripped of legal suffixes while the listing was, so a reader who typed a
+company's WHOLE name found nothing. Proved by breaking: with the fix reverted,
+329 faults.
+
+### The price chart, over the real price series (`npm run verify:chart`)
+
+Four arms over all 178 daily series, the three the run log asks for plus the
+axis. **Gaps**: every gap at least the three missing weekdays the holiday
+allowance permits, the hatched band exactly where four or more are missing,
+every close in exactly one segment and no segment bridging a gap. **The log
+scale**: offered on 10Y and MAX exactly where the series moves more than
+twentyfold, recomputed here, and never on a shorter range. **Splits**, asked of
+the source's own `quote.splits` list rather than inferred from the shape of the
+line — an unadjusted series falls BY the ratio on the split day. **And the y
+axis** contains its series with every tick inside the domain.
+
+Two of its own arms had to be corrected before it could say anything: the range
+key is `MAX` and not `Max`, which made 22 false faults; and the split test is
+meaningless where the ratio is near 1, because the tolerance band then contains
+no move at all — it called Canadian Natural's 1.021-for-1 and Itaú's 1.03-for-1
+unadjusted on a series that had RISEN. Those events are now counted as
+untestable and reported.
+
+Measured: 194 gaps, 41 hatched, the longest 8 missing weekdays at Taiwan
+Semiconductor — Lunar New Year, which is the exchange-calendar constraint in
+`DATA_CONSTRAINTS.md` showing up exactly where it was predicted to.
+
 ### The asset row says which measures are in it
 
 Four arms over every company with an asset approach, with the measures inside

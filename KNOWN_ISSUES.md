@@ -29,8 +29,21 @@ mistakes and would never be fixed:
   the same defect for as long as this file exists; fixing `KI-1` does not make
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
-- Taken so far: `KI-1` to `KI-40`. **Next free: `KI-41`.** Retired, meaning
-  fixed and never to be reused: `KI-39` (a revenue tag that is only part of the
+- Taken so far: `KI-1` to `KI-42`. **Next free: `KI-43`.** Retired, meaning
+  fixed and never to be reused: `KI-41` (the search palette found nothing when
+  the query was a company's WHOLE name. `nameWords` drops legal suffixes from
+  the listing, so "Nestlé S.A." is matched as "nestle", but the query was only
+  folded — so a reader who typed or PASTED the full name asked for "nestle sa",
+  and "nestle".startsWith("nestle sa") is false. The company fell to the
+  catch-all tier and sat among 177 listings it had nothing to do with. Typing
+  half the name worked and typing all of it did not. Measured on 2026-11-11
+  against the real company list: **only 11 of 178 full names ranked their own
+  company first, and 166 faults in all**; with the query stripped by the same
+  function as the name, 149 of 178 rank first and the other 29 are each beaten
+  only by another listing of the SAME company on another exchange, asserted as
+  such. Found by `verify:search`, the LOCAL half of build step 9 job 9.2, on the
+  day the cloud run was merged; fixed in the same commit, and the check reports
+  329 faults without the fix), `KI-39` (a revenue tag that is only part of the
   top line. The revenue tags were read in order of preference and the first one
   present won, so a company whose revenue is not all revenue from contracts
   with customers — a pipeline selling commodities, an oil major with equity
@@ -241,8 +254,9 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**One is open, as of 2026-11-08**, and it moves no valuation: `KI-40` is a
-page-load time on the landing page, not a figure a reader could quote.
+**Two are open, as of 2026-11-11**, and neither moves a valuation: `KI-40` is a
+page-load time on the landing page and `KI-42` is the browser check failing to
+reach a company screen. Neither is a figure a reader could quote.
 `KI-31` to `KI-39` were all fixed within eight days of each other, and the ID
 ledger above says what each retired number was.
 
@@ -251,6 +265,53 @@ right about everything, only that **nothing else is known to be wrong and left
 standing**. What the sources do not publish is in `DATA_CONSTRAINTS.md`; what
 the engine does on purpose is in `METHODOLOGY.md`. The next defect found goes
 here as `KI-39`.
+
+### `KI-42` The browser check cannot reach a company screen on the merged tree
+
+**Where:** `verify/dashboard.mts`, the `search()` helper and the journey it
+opens, against the app as merged from the cloud runs on 2026-11-11.
+
+**What is wrong.** `npm run verify:dashboard` does not finish. It opens a
+company the way a reader does — the landing page, "Value a listed company", the
+search box, "Build model" — and on the merged tree that journey does not
+complete inside the check's budget.
+
+**Measured on 2026-11-11**, four consecutive runs on this machine, each failing
+at a DIFFERENT point and every one of them a timeout:
+
+| Run | Stopped at | Waiting for |
+|---|---|---|
+| 1 | the debt head, then a click | `locator.click` 30s |
+| 2 | a value in the trading currency | `page.goto` — `ERR_NETWORK_IO_SUSPENDED` |
+| 3 | the EBITDA bridge after a return to default | `build the model`, 90s |
+| 4 | the first assertion of all | `how it was calculated`, 60s |
+
+In each capture that was examined the browser was **still on the landing page**,
+so the app had not reached a company screen at all. Run 3 passed the debt-head
+arm that run 1 reported, which is why run 1's report is not a separate defect:
+it was collateral from the same stall.
+
+**What is NOT known** is whether the cause is the app or this machine, and the
+entry says so rather than guessing. Two things point at the app: the merged
+tree brings a search palette (job 9.2) that captures `/`, `Ctrl+K` and the
+header's Search, and a loading screen (9.3) that deliberately shows nothing for
+the first second — both on the journey this helper walks, and both written
+against an EMPTY payload folder in the cloud, where no model is ever built. Two
+point at the machine: `ERR_NETWORK_IO_SUSPENDED` is the operating system
+suspending network IO, and two background tasks were killed for low memory on
+the same day.
+
+**What it does not affect.** Nothing the engine computes. Every other check on
+the merged tree is at zero: `verify` 0, `verify:workbook` 60 models,
+`verify:routes` 0, `verify:search` 0, `verify:chart` 0, the sweep 0 companies
+moved, `tsc` and the build clean.
+
+**The fix** is a session of its own: walk the journey by hand against the
+merged app with the payload set in place, decide whether the palette or the
+loading screen changed what `search()` has to do, and update whichever is
+wrong. The helper already carries three separate comments about this journey
+breaking before, which is a sign the journey wants a `data-` hook rather than a
+fourth prose fix.
 
 ### `KI-40` The landing page's first script holds the main thread for about half a second
 
