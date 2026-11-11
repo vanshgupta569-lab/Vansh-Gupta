@@ -53,7 +53,7 @@
 // another device or browser, which is the same trade `savedModels.ts` makes and
 // is stated on screen in the same words rather than implied.
 import ExcelJS from 'exceljs';
-import { MODEL_SHEET_ROWS, MODEL_SHEET_ROW_LABELS } from './excelExport';
+import { MODEL_SHEET_ROWS, MODEL_SHEET_ROW_LABELS } from './modelSheetRows';
 
 const isNum = (v: any): v is number => typeof v === 'number' && isFinite(v);
 

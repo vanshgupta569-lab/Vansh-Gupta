@@ -56,6 +56,7 @@ this file explains the machinery those verdicts are about.
 17. [Residual income](#17-residual-income)
 17a. [The three approaches side by side](#17a-the-three-approaches-side-by-side)
 17b. [A figure the screen cannot read is refused, not rendered](#17b-a-figure-the-screen-cannot-read-is-refused-not-rendered)
+17c. [The published row contract is data, and lives where data can be imported](#17c-the-published-row-contract-is-data-and-lives-where-data-can-be-imported)
 18. [The market approach](#18-the-market-approach)
 19. [The asset approach](#19-the-asset-approach)
 20. [The valuation range](#20-the-valuation-range)
@@ -2560,6 +2561,35 @@ real one to pass.
 place, close to where it arrived, rather than carried inward to be discovered
 by whichever component dereferences it first. The cost of that second shape is
 never a missing footnote; it is the page.
+
+---
+
+## 17c. The published row contract is data, and lives where data can be imported
+
+`modelSheetRows.ts`, 2026-11-11.
+
+The model sheet's 138 contracted rows, their labels and the contract's version
+are row numbers and strings — no dependency on anything. They used to sit in
+`excelExport.ts`, which imports ExcelJS at its top, so **any module that wanted
+a row number pulled the whole workbook library in behind it**. `heads.ts` wants
+one, `App.tsx` reaches `heads.ts`, and the result was exceljs and JSZip inside
+the entry chunk the landing page loads first: a megabyte of workbook writer
+downloaded and evaluated by a reader who had not asked for a workbook and might
+never ask (`KI-40`).
+
+They are their own module now, importing nothing. `excelExport.ts` re-exports
+the three names, so every existing importer is unchanged and `verify:workbook`
+checks the same contract it always did — **one definition, moved rather than
+copied**, which is the rule `CLAUDE.md` sets for a positional layout.
+
+It also ends a cycle that `heads.ts` documented rather than fixed: `excelSheets`
+imported `heads`, `heads` imported `excelExport`, and `excelExport` imported
+`excelSheets`. ES modules resolve a cycle by handing back a half-initialised
+module, so which screen a reader entered by decided whether the row map was
+ready. Nothing imports in a circle through a file that imports nothing.
+
+**Measured:** the entry chunk fell from 1,695KB to 677KB raw, and nothing blocks
+the main thread before the first paint at all.
 
 ---
 

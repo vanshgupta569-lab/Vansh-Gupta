@@ -38,13 +38,23 @@ export const BUDGET = {
   cls: 0.1,
   tbtMs: 200,
   /**
-   * THE RATCHET (decision V4's rule, applied here). TBT is over the 200ms
-   * budget for reasons outside the landing page — `KI-40` — and measured
-   * 453–506ms on 2026-11-04 in the cloud's software-GPU browser. The check
-   * fails above this ceiling; lower it as `KI-40` is fixed, and set it to the
-   * budget when it closes.
+   * THE RATCHET (decision V4's rule, applied here), 600ms until 2026-11-11.
+   *
+   * `KI-40` is closed: the entry chunk no longer carries the workbook writer
+   * (1,695KB to 677KB raw), and nothing blocks the main thread before the
+   * first paint at all — the two long tasks that remain start at about 1.1 and
+   * 1.4 seconds, after the page is on screen, when the particle field mounts.
+   *
+   * SO WHY NOT 200, THE BUDGET? Because this measurement is noisy on one
+   * machine and the ratchet exists to catch a REGRESSION, not to re-measure
+   * the hardware. Five medians taken within an hour on the same build:
+   * 39, 71, 83, 137 and 200ms, with single runs from 29 to 397. A ceiling at
+   * the budget would fail on the machine's own spread and teach everyone to
+   * ignore it; 300 is below every median but one, half the old ceiling, and
+   * well under the 453–506ms this page used to measure. The BUDGET stays 200
+   * and the line below still says when a median is over it.
    */
-  tbtCeilingMs: 600,
+  tbtCeilingMs: 300,
 };
 
 let problems = 0;
@@ -77,6 +87,51 @@ for (const f of threeChunks) {
   if (gz > BUDGET.threeChunkGzipKB) fail(`${f} holds three.js and is ${gz.toFixed(1)}KB gzipped, over the ${BUDGET.threeChunkGzipKB}KB budget`);
   else say(`${f}: three.js, ${gz.toFixed(1)}KB gzipped (budget ${BUDGET.threeChunkGzipKB}KB), not in the entry chunk`);
 }
+// ---- AND THE WORKBOOK WRITER IS NOT IN THE FIRST SCRIPT EITHER (`KI-40`) ----
+//
+// `heads.ts` wanted a row number, the row map lived in `excelExport.ts`, and
+// that file imports ExcelJS at its top — so **exceljs and JSZip travelled into
+// the entry chunk the landing page loads first**, a megabyte of workbook
+// writer shipped to a reader who has not asked for a workbook. The map is its
+// own module now (`modelSheetRows.ts`), which imports nothing.
+//
+// Measured by this check rather than remembered: the entry chunk fell from
+// 1,695KB to 677KB raw when the map moved, and the only thing stopping it
+// coming back is one more import of `excelExport` from a module the entry
+// reaches. Named libraries, not a size ceiling, because a size ceiling says
+// something is wrong and never says what.
+const HEAVY = [
+  ['exceljs', /exceljs/i],
+  ['JSZip', /JSZip/],
+] as const;
+let carried = 0;
+for (const name of firstLoaded) {
+  const file = path.join(assets, name);
+  if (!fs.existsSync(file)) continue;
+  const text = fs.readFileSync(file, 'utf8');
+  for (const [lib, pattern] of HEAVY) {
+    if (pattern.test(text)) {
+      carried++;
+      fail(
+        `${name} is loaded before the first paint and carries ${lib} — a reader who opens the landing ` +
+          `page downloads and evaluates the workbook writer`
+      );
+    }
+  }
+}
+{
+  const sizes = firstLoaded
+    .filter((n) => fs.existsSync(path.join(assets, n)))
+    .map((n) => fs.statSync(path.join(assets, n)).size / 1024);
+  const total = sizes.reduce((a, b) => a + b, 0);
+  if (sizes.length) {
+    say(
+      `${sizes.length} script(s) before the first paint, ${total.toFixed(0)}KB raw` +
+        (carried ? `, ${carried} carrying a workbook library` : ', none carrying exceljs or JSZip')
+    );
+  }
+}
+
 const poster = path.join(DIST, 'hero-poster.webp');
 if (!fs.existsSync(poster)) fail('dist/hero-poster.webp is missing');
 else {

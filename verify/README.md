@@ -483,6 +483,19 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### No workbook writer in the first script (`npm run verify:landing`)
+
+The bundle half of the landing check gained an arm with `KI-40`: every script
+`index.html` loads or preloads before the first paint is read, and a named
+library found in one is a fault — `exceljs` and `JSZip` by name, not a size
+ceiling, because a size ceiling says something is wrong and never says what.
+
+It exists because the libraries got there by accident and nothing could see
+them: `heads.ts` wanted a row number, the row map lived in `excelExport.ts`,
+and that file imports ExcelJS at its top. The map is its own module now and the
+entry chunk fell from 1,695KB to 677KB raw. Proved by breaking: with the import
+put back, the arm names the chunk and both libraries, twice.
+
 ### The landing page survives the width changing (`npm run verify:phone`)
 
 Three journeys — loaded wide then narrowed, loaded narrow then widened, and

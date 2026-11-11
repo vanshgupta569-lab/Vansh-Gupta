@@ -116,7 +116,7 @@
 // never written by a move, so the reported column is the filing and the four
 // visible states stay four.
 
-import { MODEL_SHEET_ROWS } from './excelExport';
+import { MODEL_SHEET_ROWS } from './modelSheetRows';
 
 export type Statement = 'income' | 'balance';
 
