@@ -6715,6 +6715,63 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// A MALFORMED INDEX SERIES DOES NOT TAKE THE SCREEN WITH IT (2026-11-11)
+// ---------------------------------------------------------------------------
+//
+// `fetchIndexSeries` ended `return body as IndexSeries` — a promise to the
+// compiler and nothing to the browser. A 200 that is not a series then flowed
+// into the cost of capital card, where `index.asOf.slice(0, 10)` sits behind
+// an `index ?` guard that such a body passes. The exception escapes render,
+// React unmounts the tree, and the WHOLE COMPANY SCREEN goes blank over a beta
+// footnote that is decoration on the figure beside it.
+//
+// Found while walking the company journey for `KI-42`, by a stub that answered
+// `{"series":[]}`. The shape is checked at the boundary now, so the card's own
+// error line says the index could not be read and every other figure survives.
+{
+  console.log('\n=== a malformed index series is refused at the boundary ===');
+  const { fetchIndexSeries } = await import(`file:///${REPO}/src/data/marketIndex.ts`);
+
+  const faults: string[] = [];
+  const realFetch = globalThis.fetch;
+  // Every shape a 200 can carry that is not a usable series, and the one that
+  // is. Written out, because the point is which of them must throw.
+  const bodies: [string, any, boolean][] = [
+    ['an empty object', {}, false],
+    ['the stub that found this', { series: [] }, false],
+    ['no asOf', { dates: ['2026-01-01'], closes: [1] }, false],
+    ['dates and closes of different lengths', { asOf: '2026-01-01', dates: ['a', 'b'], closes: [1] }, false],
+    ['closes missing', { asOf: '2026-01-01', dates: ['2026-01-01'] }, false],
+    ['null', null, false],
+    ['a real series', { asOf: '2026-01-01', dates: ['2026-01-01', '2026-01-02'], closes: [1, 2] }, true],
+  ];
+  for (const [what, body, shouldPass] of bodies) {
+    (globalThis as any).fetch = async () => ({ ok: true, json: async () => body });
+    let threw = false;
+    try {
+      await fetchIndexSeries('^PAPER');
+    } catch {
+      threw = true;
+    }
+    if (shouldPass && threw) faults.push(`${what} was refused and it is a usable series`);
+    if (!shouldPass && !threw) {
+      faults.push(`${what} was accepted as an index series, and the company screen renders from it`);
+    }
+  }
+  globalThis.fetch = realFetch;
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the index boundary:`);
+    faults.forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  ${bodies.length - 1} shapes a 200 can carry that are not a series are each refused, and a real one is not`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // REFUSALS, THE CAPTION AND THE OVERLAP SENTENCE (build step 5, job B4)
 // ---------------------------------------------------------------------------
 //

@@ -254,9 +254,9 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**Two are open, as of 2026-11-11**, and neither moves a valuation: `KI-40` is a
-page-load time on the landing page and `KI-42` is the browser check failing to
-reach a company screen. Neither is a figure a reader could quote.
+**Two are open, as of 2026-11-11**, and neither moves a valuation: `KI-40` is
+a page-load time on the landing page and `KI-42` is the browser check not
+finishing. Neither is a figure a reader could quote.
 `KI-31` to `KI-39` were all fixed within eight days of each other, and the ID
 ledger above says what each retired number was.
 
@@ -266,52 +266,61 @@ standing**. What the sources do not publish is in `DATA_CONSTRAINTS.md`; what
 the engine does on purpose is in `METHODOLOGY.md`. The next defect found goes
 here as `KI-39`.
 
-### `KI-42` The browser check cannot reach a company screen on the merged tree
+### `KI-42` The browser check does not finish on this machine
 
-**Where:** `verify/dashboard.mts`, the `search()` helper and the journey it
-opens, against the app as merged from the cloud runs on 2026-11-11.
+**Where:** `verify/dashboard.mts`, against the app as merged from the cloud runs.
 
-**What is wrong.** `npm run verify:dashboard` does not finish. It opens a
-company the way a reader does — the landing page, "Value a listed company", the
-search box, "Build model" — and on the merged tree that journey does not
-complete inside the check's budget.
+**What is wrong.** `npm run verify:dashboard` does not run to the end. It stops
+at a different place each time, always on a timeout.
 
-**Measured on 2026-11-11**, four consecutive runs on this machine, each failing
-at a DIFFERENT point and every one of them a timeout:
+**ONE CAUSE WAS FOUND AND FIXED ON 2026-11-11**, and it was a real defect of the
+site rather than of the check. `CountUp` on the landing page read
+`useConstrained() !== null || useReducedMotion()`, and `||` short-circuits: on a
+wide screen the right-hand hook runs and the component uses two hooks; at phone
+width it never runs and the component uses one. React tracks hooks by call
+order, so the count changing between renders desynchronised its internal list
+and **the whole landing page rendered nothing** — zero pieces of text. It needed
+the TRANSITION between widths, which no single-width check performs; the
+dashboard resizes to 390 to read contrast, so it met the bug and then failed
+wherever the run happened to be. Measured: 20 narrowings, 20 blank pages. Both
+hooks are called before their answers are combined now, and `verify:phone`
+reproduces the transition in seconds — 7 faults with the conditional hook put
+back.
 
-| Run | Stopped at | Waiting for |
-|---|---|---|
-| 1 | the debt head, then a click | `locator.click` 30s |
-| 2 | a value in the trading currency | `page.goto` — `ERR_NETWORK_IO_SUSPENDED` |
-| 3 | the EBITDA bridge after a return to default | `build the model`, 90s |
-| 4 | the first assertion of all | `how it was calculated`, 60s |
+**What is still wrong.** With that fixed the run gets further and the failures
+stop moving randomly, but it still does not finish. Five runs on 2026-11-11:
 
-In each capture that was examined the browser was **still on the landing page**,
-so the app had not reached a company screen at all. Run 3 passed the debt-head
-arm that run 1 reported, which is why run 1's report is not a separate defect:
-it was collateral from the same stall.
+| Run | Stopped at |
+|---|---|
+| 1 | nothing — 0 problems |
+| 2 | the landing page at 390 held 0 pieces of text (the hooks bug) |
+| 3 | a `waitFor` timeout |
+| 4, 5 | the webfont count read 2, then the execution context was destroyed |
+| 6 | the figures screen was not reached — the Reported figures table and the EBITDA bridge both absent |
 
-**What is NOT known** is whether the cause is the app or this machine, and the
-entry says so rather than guessing. Two things point at the app: the merged
-tree brings a search palette (job 9.2) that captures `/`, `Ctrl+K` and the
-header's Search, and a loading screen (9.3) that deliberately shows nothing for
-the first second — both on the journey this helper walks, and both written
-against an EMPTY payload folder in the cloud, where no model is ever built. Two
-point at the machine: `ERR_NETWORK_IO_SUSPENDED` is the operating system
-suspending network IO, and two background tasks were killed for low memory on
-the same day.
+The webfont count of 2 did not recur on the sixth run, and the check now names
+the requests it saw: two for ONE url is a page loaded twice, which is what that
+was.
 
-**What it does not affect.** Nothing the engine computes. Every other check on
-the merged tree is at zero: `verify` 0, `verify:workbook` 60 models,
-`verify:routes` 0, `verify:search` 0, `verify:chart` 0, the sweep 0 companies
-moved, `tsc` and the build clean.
+**What is NOT known** is whether the rest is the app or this machine, and this
+entry says so rather than guessing. Each journey the check walks has been walked
+BY HAND, with a screenshot at every step, and each completes every time: the
+curated company reaches its valuation and the fetched one reaches the questions.
+What distinguishes the full run is length — one browser, dozens of navigations,
+ten minutes. Against the machine: it suspended network IO (`ERR_NETWORK_IO_SUSPENDED`)
+during one run, and background tasks have twice been killed for low memory on
+the same day. A WebGL context leak was tested and ruled out: 24 visits, one
+canvas and one live context every time.
 
-**The fix** is a session of its own: walk the journey by hand against the
-merged app with the payload set in place, decide whether the palette or the
-loading screen changed what `search()` has to do, and update whichever is
-wrong. The helper already carries three separate comments about this journey
-breaking before, which is a sign the journey wants a `data-` hook rather than a
-fourth prose fix.
+**What it does not affect.** Nothing the engine computes. Every other check is
+at zero: `verify`, `verify:workbook`, `verify:routes`, `verify:search`,
+`verify:chart`, `verify:phone`, and the sweep.
+
+**The fix** is a session with the run instrumented rather than watched: record
+the browser's memory and the page's own state at each screen, and find whether
+the failures track a resource climbing. A check that cannot be trusted to finish
+is worth as much time as a defect in the site, because it is the thing that
+finds the defects.
 
 ### `KI-40` The landing page's first script holds the main thread for about half a second
 

@@ -359,6 +359,26 @@ export async function fetchIndexSeries(symbol: string): Promise<IndexSeries> {
   const res = await fetch(`/api/marketIndex?symbol=${encodeURIComponent(symbol)}`);
   const body = await res.json();
   if (!res.ok || body?.error) throw new Error(body?.error || `Could not load ${symbol}`);
+  // THE SHAPE IS CHECKED, NOT ASSERTED (2026-11-11).
+  //
+  // This read `return body as IndexSeries`, which is a promise to the compiler
+  // and nothing to the browser. A 200 that is not a series — an empty object,
+  // a cached older shape, a proxy's own JSON — then flowed into the cost of
+  // capital card, where `index.asOf.slice(0, 10)` sits behind an `index ?`
+  // guard that such a body passes. The exception escapes render and React
+  // unmounts the tree: the WHOLE COMPANY SCREEN goes blank, with no message,
+  // over a beta footnote that is decoration on the figure beside it.
+  //
+  // Thrown instead, so the card's own `indexError` path says the index could
+  // not be read and every other figure on the screen survives. Found while
+  // walking the journey for `KI-42`, by a stub that returned `{"series":[]}`.
+  const ok =
+    body &&
+    typeof body.asOf === 'string' &&
+    Array.isArray(body.dates) &&
+    Array.isArray(body.closes) &&
+    body.dates.length === body.closes.length;
+  if (!ok) throw new Error(`The index series for ${symbol} came back in a shape this cannot read.`);
   return body as IndexSeries;
 }
 

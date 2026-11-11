@@ -483,6 +483,23 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### The landing page survives the width changing (`npm run verify:phone`)
+
+Three journeys — loaded wide then narrowed, loaded narrow then widened, and
+turned over twice — each asserting the page still has its words, plus the hero
+reading `poster` at phone width so a page that survived by never taking the
+constrained branch could not pass quietly.
+
+It exists because `KI-42` hid for days inside `verify:dashboard`, surfacing as a
+timeout in a different place on every run. The cause was a Rules of Hooks
+violation on the landing page: `useConstrained() !== null || useReducedMotion()`
+calls the second hook only when the first returns null, so the hook COUNT
+changed with the viewport and React's internal list desynchronised. It needs the
+TRANSITION between widths, which no single-width check performs. Seconds to run,
+against ten minutes of browser work that found it by accident; proved by
+breaking, 7 faults with the conditional hook put back, including React's own
+"Rendered more hooks than during the previous render."
+
 ### Search ranking, against the real company list (`npm run verify:search`)
 
 The cloud run checked the palette's ranking on fixtures. Five arms over the 178

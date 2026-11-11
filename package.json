@@ -21,6 +21,7 @@
     "verify:routes": "tsx verify/routes.mts",
     "verify:search": "tsx verify/searchRanking.mts",
     "verify:chart": "tsx verify/priceChartLocal.mts",
+    "verify:phone": "tsx verify/phoneWidth.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts",
     "search:instant": "tsx scripts/buildInstantListings.mts"
   },

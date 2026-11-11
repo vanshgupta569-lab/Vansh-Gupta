@@ -1588,7 +1588,20 @@ async function checkFontRequests(page: Page, requests: string[]) {
   // AND ONE REQUEST, not two. Each stylesheet is its own render-blocking round
   // trip to a third-party origin; the families belong in one.
   if (sheets.length > 1) {
-    fail('webfont stylesheet requests', 'one', `${sheets.length} — each is its own render-blocking round trip`);
+    // NAME THEM. "2, not 1" sends the reader hunting through the source for a
+    // second `<link>` that may not exist: two requests for the SAME url is a
+    // page being loaded twice, which is a different fault from two different
+    // families being asked for separately, and the message should say which.
+    const distinct = new Set(sheets.map((u) => u.split('&display=')[0]));
+    const detail =
+      distinct.size === 1
+        ? `${sheets.length} requests for ONE url — the page was loaded more than once`
+        : [...distinct].map((u) => u.replace('https://fonts.googleapis.com/css2?', '').slice(0, 60)).join(' | ');
+    fail(
+      'webfont stylesheet requests',
+      'one',
+      `${sheets.length} — each is its own render-blocking round trip: ${detail}`
+    );
   } else {
     ok('one stylesheet request carries the whole type system');
   }

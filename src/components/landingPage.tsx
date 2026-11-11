@@ -203,7 +203,23 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
   const [n, setN] = useState(0);
   // VISUAL_SYSTEM §8: on a phone-width or low-end device, and under reduced
   // motion, the figure is shown at its value at once.
-  const still = useConstrained() !== null || useReducedMotion();
+  //
+  // BOTH HOOKS ARE CALLED EVERY RENDER (`KI-42`, 2026-11-11). This read
+  // `useConstrained() !== null || useReducedMotion()`, and `||` SHORT-CIRCUITS:
+  // on a wide screen `useConstrained()` returns null, the right-hand side runs
+  // and the component uses two hooks; at phone width it returns a reason, the
+  // right-hand side never runs, and the component uses one. React tracks hooks
+  // by call order, so the count changing between renders desynchronises its
+  // internal list — `areHookInputsEqual` then reads the deps of a hook that is
+  // no longer there, throws `Cannot read properties of undefined (reading
+  // 'length')`, and the WHOLE LANDING PAGE renders nothing at 390px.
+  //
+  // Measured: 20 visits at phone width, 20 blank pages, zero pieces of text.
+  // It is a Rules of Hooks violation, and the fix is to ask both questions
+  // before combining the answers.
+  const constrained = useConstrained();
+  const reducedMotion = useReducedMotion();
+  const still = constrained !== null || reducedMotion;
 
   useEffect(() => {
     const el = ref.current;

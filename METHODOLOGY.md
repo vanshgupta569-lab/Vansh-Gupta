@@ -55,6 +55,7 @@ this file explains the machinery those verdicts are about.
 16. [Refusals, in the order they are tested](#16-refusals-in-the-order-they-are-tested)
 17. [Residual income](#17-residual-income)
 17a. [The three approaches side by side](#17a-the-three-approaches-side-by-side)
+17b. [A figure the screen cannot read is refused, not rendered](#17b-a-figure-the-screen-cannot-read-is-refused-not-rendered)
 18. [The market approach](#18-the-market-approach)
 19. [The asset approach](#19-the-asset-approach)
 20. [The valuation range](#20-the-valuation-range)
@@ -2534,6 +2535,31 @@ so `exit` on its own anywhere else still fails. `bannedWordsInCopy` in
 row string found the income approach's own label reading `Income — DCF, EV /
 EBITDA exit`, a bare banned word on every company with an exit-multiple band;
 it now reads `exit multiple`.
+
+---
+
+## 17b. A figure the screen cannot read is refused, not rendered
+
+`marketIndex.ts`, 2026-11-11.
+
+The index series behind the measured beta arrives from `/api/marketIndex` and
+used to be taken on trust — `return body as IndexSeries`, which is a promise to
+the compiler and nothing to the browser. A 200 that is not a series flowed into
+the cost of capital card, where `index.asOf.slice(0, 10)` sits behind an
+`index ?` guard that such a body passes. The exception escapes render, React
+unmounts the tree, and the **whole company screen goes blank** — over a beta
+footnote that is decoration on the figure beside it.
+
+The shape is checked at the boundary now: an `asOf` string, `dates` and
+`closes` arrays, and the two the same length. Anything else throws, the card's
+own error line says the index could not be read, and every other figure on the
+screen survives. Six shapes a 200 can carry are asserted to be refused and a
+real one to pass.
+
+**The rule this follows.** A figure the screen cannot read is refused in one
+place, close to where it arrived, rather than carried inward to be discovered
+by whichever component dereferences it first. The cost of that second shape is
+never a missing footnote; it is the page.
 
 ---
 
