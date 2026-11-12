@@ -1250,6 +1250,47 @@ nothing happened.
 drawn and named rather than bridged, because bridging would invent closes that
 were never published.
 
+### The SEC bulk archive: measured, and what it does and does not settle
+
+**Source:** `https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip`.
+**Measured on 2026-11-12** (build step 5, job D0, `npm run sec:bulk`).
+
+`docs/SEC_BULK_NOTES.md` marked four things UNCONFIRMED. Three are now figures.
+
+**Size: 1.33GB compressed, 18.16GB unpacked, 20,571 filers** — one JSON per
+10-digit CIK. Read from the zip's own central directory without unpacking a
+single file, because learning the unpacked size by unpacking it would cost 18GB
+to find out. That settles where D2 runs: 18GB is beyond a cloud session's disk,
+so the builder runs locally and streams the archive entry by entry rather than
+expanding it.
+
+**Deregistered, acquired and bankrupt filers ARE kept.** Three companies that
+stopped filing for three different reasons, their CIKs taken from the SEC's own
+lookup file rather than guessed:
+
+| Company | Why it stopped | CIK | In the archive |
+|---|---|---|---|
+| Time Warner Cable Inc. | acquired by Charter, 2016 | 0001377013 | yes |
+| Sears Holdings Corp | bankrupt, 2018 | 0001310067 | yes |
+| Dell Inc | taken private, 2013 | 0000826083 | yes |
+
+Judged per COMPANY. The lookup file also returns subsidiaries — "Time Warner
+Cable Information Services (Alabama), LLC", "Sears Holdings Management Corp" —
+which are absent because they never filed in their own right, not because the
+SEC dropped them. Counting those rows gives "4 of 8" and a wrong answer; the
+question is whether a filer survives its own delisting, and it does.
+
+**So the universe is not survivors-only**, and `BASE_RATE_SPEC` rule 9's
+sentence — "survivors only; likely overstates growth" — is not required for the
+US base rates. That is one of the few ways a base-rate table can be quietly
+wrong, so it is written down with the date and the CIKs it was checked on.
+
+**What is still not confirmed.** The exact fair-access rate limit as a number
+(§4.2 item 4): the archive is one request, so nothing here needed it, and a
+figure nobody has read on an sec.gov page stays unconfirmed rather than being
+repeated from memory. The archive is not committed, for the same reason the
+payload set is not.
+
 ### No size ranking across the set, because there is no rate to rank it with
 
 **Source:** Yahoo Finance (the market capitalisation). **Affects:** the whole

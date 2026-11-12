@@ -24,7 +24,8 @@
     "verify:phone": "tsx verify/phoneWidth.mts",
     "verify:bridge": "tsx verify/bridgeVersions.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts",
-    "search:instant": "tsx scripts/buildInstantListings.mts"
+    "search:instant": "tsx scripts/buildInstantListings.mts",
+    "sec:bulk": "tsx scripts/secBulk.mts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
