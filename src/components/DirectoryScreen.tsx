@@ -346,10 +346,27 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
             }`}
           >
             {filteredCompanies.map((comp) => (
+                /* A CARD A KEYBOARD CAN REACH (2026-11-12).
+                   This was a bare `div` with an `onClick`: no role, no tab
+                   stop, no Enter. The whole shelf of hand-built models was
+                   unreachable without a mouse, which makes it not a way of
+                   choosing a company at all for anyone who does not use one.
+                   It cannot become a `<button>` — it holds the workbook
+                   download links, and an anchor inside a button is not valid —
+                   so it takes the role, the tab stop and the keys instead. */
                 <div
                   key={comp.ticker}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${comp.name} (${comp.ticker})`}
                   onClick={() => onSelectCompany(comp.ticker)}
-                  className="group cursor-pointer transition-colors p-7 lg:p-8 flex flex-col justify-between border hover:border-[#4A4740]"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    // Space scrolls the page unless it is claimed here.
+                    event.preventDefault();
+                    onSelectCompany(comp.ticker);
+                  }}
+                  className="group cursor-pointer transition-colors p-7 lg:p-8 flex flex-col justify-between border hover:border-[#4A4740] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F2F0EA]"
                   style={{ background: '#111114', borderColor: LINE }}
                 >
                   <div>

@@ -577,6 +577,32 @@ and that file imports ExcelJS at its top. The map is its own module now and the
 entry chunk fell from 1,695KB to 677KB raw. Proved by breaking: with the import
 put back, the arm names the chunk and both libraries, twice.
 
+### Every way of choosing a company opens the company (`npm run verify:open`)
+
+Four ways in — the ⌘K palette, the search screen, the menu and the directory
+grid — driven with AAPL at 1440 and 390, each asserted to land on
+`/company/AAPL/overview` with Overview selected.
+
+They disagreed. A company already in hand (the curated Apple file, or one
+fetched earlier in the session) went straight to the qualitative questions: no
+address, no chart, no profile, and ten judgements asked of a reader who had not
+yet seen the company. A company that had to be fetched went to the overview. So
+where a reader landed depended on whether the model happened to be in memory,
+which is not a distinction anyone can see. AAPL is the ticker on purpose — it
+is the file that took the wrong branch, and a check written on a fetched ticker
+would have passed throughout.
+
+Proved by breaking: with the old behaviour restored, all eight land on the
+questions and the check names each one.
+
+**Four of its own arms were wrong before the app was.** The `**/api/**`
+catch-all was registered after `**/api/search*`, and Playwright matches the LAST
+route — so the palette answered "No company matches AAPL" while the app was
+fine. The desktop header has no Menu button, so a phone-shaped driver reported
+it broken. The directory shelf sits below the fold. And the phone sheet opens
+with its sections CLOSED, so the row did not exist until Companies was tapped.
+Each was a check failing to do what a reader does, not a site failing to work.
+
 ### The landing page survives the width changing (`npm run verify:phone`)
 
 Three journeys — loaded wide then narrowed, loaded narrow then widened, and

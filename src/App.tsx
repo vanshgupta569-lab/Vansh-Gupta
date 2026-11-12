@@ -581,8 +581,29 @@ export default function App() {
     }
   };
 
+  /**
+   * CHOOSING A COMPANY OPENS THE COMPANY, WHATEVER CHOSE IT (2026-11-12).
+   *
+   * Every way in — the palette, the search screen, the menu, the directory
+   * grid — now lands on `/company/<ticker>/overview`, the page that says what
+   * the company IS before anything is modelled.
+   *
+   * It did not. A company already in hand (the curated Apple file, or one
+   * fetched earlier this session) took a different branch in
+   * `handleLookupTicker` and went straight to the qualitative questions, with
+   * no address, no chart, no profile, and ten judgements asked of a reader who
+   * had not yet seen the company. A fetched company went to the overview. So
+   * the destination depended on whether the model happened to be in memory,
+   * which is not a distinction a reader can see or would expect.
+   *
+   * The questions keep their place in the BUILD journey — the Model tab, the
+   * figures screen, then the questions, then the valuation — which is where
+   * `openQuestionsFor` is still called from.
+   */
   const handleSelectCompanyFromDirectory = (ticker: string) => {
-    openQuestionsFor(ticker);
+    setSelectedTicker(ticker);
+    nav.go(companyPath(ticker));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
