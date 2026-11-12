@@ -506,6 +506,36 @@ faults, including three equal thirds summing to 0.99 against a total of 1);
 "caused by" (2); the method line dropped (1); the near-zero guard ignored (1);
 and sign carried by colour (2).
 
+### The base-rate table adds up (`npm run verify:baserates`)
+
+Build step 5 job D2. A base rate is a count with a denominator, and both are
+easy to get wrong in ways that look right: a threshold counted with `>` instead
+of `>=`, a CAGR taken from the wrong pair of years, a band that quietly holds
+everything. None of those crashes.
+
+Six identities, recomputed rather than read back. **X ≤ N at every threshold,
+and the counts fall as the threshold rises** — which catches a comparison
+written backwards. **The bands divide the sample**: one band holding over 90%
+of the windows is a fault, because that is what a unit error looks like from
+the outside. **Every exclusion is reported**, with a fault if NOTHING was
+excluded for a missing year, since the proof that a hole was never filled is
+that the windows it would have made are counted. **The real median sits at or
+below the nominal one on the same windows.** **The CPI series is unbroken.**
+And **four worked CAGRs reproduce**, including doubling over five years at
+14.87%.
+
+Two of those arms were written because the check failed on its first run and
+was right to. The bands were in millions while the archive reports DOLLARS, so
+32,526 of 33,406 three-year windows landed in "$50bn and above" and "under
+$100m" held only shell companies with revenue under a hundred dollars — whose
+median three-year growth came out at 625% a year. And the real-versus-nominal
+arm was comparing two different samples, because the real series covers fewer
+windows (CPI must reach both ends); the builder now records the nominal median
+over the same windows so the comparison is like for like.
+
+Proved by breaking, the plan's two ways: treating a missing year as zero
+revenue, and leaving a non-USD filer in.
+
 ### The bridge between real saved versions (`npm run verify:bridge`)
 
 Build step 5 job C6. Jobs C1 to C3 are checked on worked examples where the

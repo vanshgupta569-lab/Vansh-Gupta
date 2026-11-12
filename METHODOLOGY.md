@@ -57,6 +57,7 @@ this file explains the machinery those verdicts are about.
 17a. [The three approaches side by side](#17a-the-three-approaches-side-by-side)
 17b. [A figure the screen cannot read is refused, not rendered](#17b-a-figure-the-screen-cannot-read-is-refused-not-rendered)
 17c. [The published row contract is data, and lives where data can be imported](#17c-the-published-row-contract-is-data-and-lives-where-data-can-be-imported)
+17d. [The base rates: how often companies actually grew that fast](#17d-the-base-rates-how-often-companies-actually-grew-that-fast)
 18. [The market approach](#18-the-market-approach)
 19. [The asset approach](#19-the-asset-approach)
 20. [The valuation range](#20-the-valuation-range)
@@ -2590,6 +2591,48 @@ ready. Nothing imports in a circle through a file that imports nothing.
 
 **Measured:** the entry chunk fell from 1,695KB to 677KB raw, and nothing blocks
 the main thread before the first paint at all.
+
+---
+
+## 17d. The base rates: how often companies actually grew that fast
+
+`scripts/buildBaseRates.mts`, `src/data/baseRates.json`, 2026-11-12.
+`docs/BASE_RATE_SPEC.md`.
+
+When a reader assumes 15% revenue growth for five years, this says how many
+comparable companies managed it in the past. **A fact about a group's history,
+never a forecast for this company and never a verdict on the assumption.**
+
+**Where the figures come from.** The SEC's own bulk company-facts archive —
+20,571 filers — streamed entry by entry and never unpacked. **6,914 filers
+contribute 60,771 company-windows**: every 3, 5 and 10-year span starting in
+every year each filer reports.
+
+**The same revenue definition the site models with** (`api/_revenueDefinition.js`),
+because a base rate built on a different revenue line would describe a universe
+this site does not model and nothing would say so.
+
+**A missing year is never filled.** 2,363 windows are excluded for a hole and
+counted; interpolating would invent the very growth being measured. 2,959 are
+excluded because the starting figure is not positive, which makes a CAGR
+undefined; 2,816 for too short a history; 10,362 filers report no usable
+revenue; 28 are not in USD and are excluded rather than converted at a rate
+nobody has.
+
+**Real and nominal, both labelled**, deflated with BLS CPI-U (2007–2024,
+unbroken). A window whose years are not both covered gets a nominal figure and
+no real one — 5,336 of them — rather than a real figure deflated with a guess.
+
+**What it found**, five-year windows, median nominal growth by starting size:
+8.6% under $100m, 7.2% to $1bn, 4.7% to $5bn, 3.4% to $25bn, 3.9% to $50bn,
+3.3% above. Real: 6.1%, 4.8%, 2.0%, 0.7%, 1.4%, 0.4%. **Growth falls as size
+rises, and the largest companies' real median is near zero.** The share
+reaching 15% a year nominal over five years falls from 41% of the smallest band
+to 2% of the largest.
+
+Those figures are ours, built from the filings. `BASE_RATE_SPEC`'s key findings
+from Mauboussin and others are cited on the method page and **never combined
+with these** — different universes, periods and bases.
 
 ---
 

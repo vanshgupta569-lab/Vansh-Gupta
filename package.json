@@ -23,9 +23,12 @@
     "verify:chart": "tsx verify/priceChartLocal.mts",
     "verify:phone": "tsx verify/phoneWidth.mts",
     "verify:bridge": "tsx verify/bridgeVersions.mts",
+    "verify:baserates": "tsx verify/baseRates.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts",
     "search:instant": "tsx scripts/buildInstantListings.mts",
-    "sec:bulk": "tsx scripts/secBulk.mts"
+    "sec:bulk": "tsx scripts/secBulk.mts",
+    "cpi:fetch": "tsx scripts/fetchCpi.mts",
+    "baserates": "tsx scripts/buildBaseRates.mts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

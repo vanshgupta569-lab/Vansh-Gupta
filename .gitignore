@@ -10,3 +10,4 @@ coverage/
 # Impeccable detector cache: regenerated on every edit, not a record.
 .impeccable/hook.cache.json
 .sec-bulk/
+.break-backup

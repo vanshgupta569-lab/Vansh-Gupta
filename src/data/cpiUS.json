@@ -1,0 +1,27 @@
+{
+  "source": "US Bureau of Labor Statistics, public API v1",
+  "series": "CUUR0000SA0",
+  "seriesName": "CPI-U, all items, U.S. city average, not seasonally adjusted",
+  "note": "The annual figure is the average of the twelve monthly values, which is what the BLS annual series is. A year without twelve months is left out rather than averaged over what arrived.",
+  "fetchedAt": "2026-11-12T16:13:00.811Z",
+  "annual": {
+    "2007": 207.342,
+    "2008": 215.303,
+    "2009": 214.537,
+    "2010": 218.055,
+    "2011": 224.939,
+    "2012": 229.594,
+    "2013": 232.957,
+    "2014": 236.736,
+    "2015": 237.017,
+    "2016": 240.007,
+    "2017": 245.12,
+    "2018": 251.107,
+    "2019": 255.657,
+    "2020": 258.811,
+    "2021": 270.97,
+    "2022": 292.655,
+    "2023": 304.702,
+    "2024": 313.689
+  }
+}
