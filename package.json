@@ -22,6 +22,7 @@
     "verify:search": "tsx verify/searchRanking.mts",
     "verify:chart": "tsx verify/priceChartLocal.mts",
     "verify:phone": "tsx verify/phoneWidth.mts",
+    "verify:bridge": "tsx verify/bridgeVersions.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts",
     "search:instant": "tsx scripts/buildInstantListings.mts"
   },

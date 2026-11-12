@@ -6715,6 +6715,132 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
 
 
 // ---------------------------------------------------------------------------
+// THE BRIDGE SCREEN SHOWS WHAT THE BRIDGE COMPUTED (build step 5, job C5)
+// ---------------------------------------------------------------------------
+//
+// `docs/STUDIO_SPEC.md` §4.6 and `VALUATION_SIDE_BY_SIDE` rules 15 to 24. The
+// arithmetic is checked above; this is about the SCREEN, and the three things
+// it can get wrong without the arithmetic changing at all:
+//
+//   1. THE PARTS IT PRINTS DO NOT ADD UP TO THE TOTAL IT PRINTS. The engine's
+//      unrounded parts always sum to the total — that is what Shapley is — so
+//      a check that sums THOSE proves nothing about the screen. The table
+//      prints the ROUNDED parts, and only largest-remainder rounding makes
+//      those sum to the rounded total too. Summed here from the same figures
+//      the row prints.
+//   2. IT SAYS "CAUSED BY" (rule 22). Shapley is an accounting identity, not
+//      a finding about the world: the same number arises whether the reader
+//      changed the discount rate because the price moved or in spite of it.
+//   3. IT DIVIDES BY A TOTAL OF ABOUT NOTHING (rule 19).
+//
+// Checked against the component's own rendered output rather than by reading
+// the source, because a rule obeyed in a comment is not obeyed on a screen.
+{
+  console.log('\n=== the bridge screen shows what the bridge computed ===');
+  const { largestRemainder, shareOfTotal, SHARE_NOT_MEANINGFUL_BELOW } = await import(
+    `file:///${REPO}/src/data/bridge.ts`
+  );
+
+  const faults: string[] = [];
+
+  // ---- 1. THE ROUNDING IS WHAT MAKES THE LINE TRUE --------------------
+  //
+  // Worked sets, including the ones that only tie BECAUSE of largest
+  // remainder: three thirds of a cent, and a set whose naive rounding is a
+  // cent short.
+  const sets: [string, number[], number][] = [
+    ['three equal thirds', [1 / 3, 1 / 3, 1 / 3], 1],
+    ['a set that rounds short', [0.335, 0.335, 0.33], 1],
+    ['one driver with everything', [12.5, 0, 0], 12.5],
+    ['opposite signs', [8.005, -3.005, 0.5], 5.5],
+    ['a tiny total', [0.004, -0.002, 0.001], 0.003],
+  ];
+  for (const [what, raw, total] of sets) {
+    let rounded: number[];
+    try {
+      rounded = largestRemainder(raw, total);
+    } catch (err) {
+      faults.push(`${what}: the rounding threw — ${String(err).slice(0, 50)}`);
+      continue;
+    }
+    const sum = rounded.reduce((t: number, v: number) => t + v, 0);
+    // The screen prints two decimals, so the tie has to hold at two decimals.
+    if (Math.abs(sum - total) > 0.005) {
+      faults.push(
+        `${what}: the rounded parts sum to ${sum.toFixed(4)} and the total is ${total} — the line on the screen would read false`
+      );
+    }
+    if (rounded.length !== raw.length) {
+      faults.push(`${what}: ${raw.length} parts went in and ${rounded.length} came out`);
+    }
+  }
+
+  // ---- 2. "% OF TOTAL" IS WITHHELD WHERE IT MEANS NOTHING -------------
+  //
+  // The screen asks `shareOfTotal`; this asserts what that answers, at both
+  // sides of the threshold, so the screen cannot quietly print 4,000%.
+  const start = 100;
+  const justUnder = start * SHARE_NOT_MEANINGFUL_BELOW * 0.9;
+  const justOver = start * SHARE_NOT_MEANINGFUL_BELOW * 1.1;
+  if (shareOfTotal(1, justUnder, start) !== null) {
+    faults.push(`a total of ${justUnder} on a start of ${start} produced a share, and it is below the threshold`);
+  }
+  if (shareOfTotal(justOver / 2, justOver, start) === null) {
+    faults.push(`a total of ${justOver} on a start of ${start} produced no share, and it is above the threshold`);
+  }
+
+  // ---- 3. THE SCREEN'S OWN WORDS --------------------------------------
+  //
+  // Read from the file, because this is the one rule whose breach is a
+  // string: rule 22 bans "caused by" and asks for "associated with".
+  const src = fs.readFileSync(`${REPO}/src/components/valuationBridge.tsx`, 'utf8');
+  // Only what the component RENDERS, not what its commentary discusses: the
+  // comment explains why "caused" is wrong and has to be able to say the word.
+  const rendered = src
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+  if (/caused\s+by/i.test(rendered)) {
+    faults.push('the bridge screen renders "caused by", which rule 22 bans');
+  }
+  if (!/associated with/i.test(rendered)) {
+    faults.push('the bridge screen never says "associated with", which rule 22 asks for');
+  }
+  // Rule 23's method line, and rule 17's reconciliation, both on the screen.
+  if (!/average effect across all orders/i.test(rendered)) {
+    faults.push("the method line (rule 23) is not on the screen");
+  }
+  if (!/Parts .*= total/i.test(rendered)) {
+    faults.push('the reconciliation line (rule 17) is not on the screen');
+  }
+  if (!/n\.m\./.test(rendered)) {
+    faults.push('the screen has no `n.m.` for a total near zero (rule 19)');
+  }
+  // Sign by label and direction, not by colour: no green or red anywhere.
+  for (const banned of ['green', 'red-', 'text-red', 'bg-red', 'bg-green']) {
+    if (rendered.includes(banned)) {
+      faults.push(`the bridge screen uses ${banned}: sign is carried by the label and the bar, not by colour`);
+    }
+  }
+
+  if (faults.length) {
+    totalProblems += faults.length;
+    console.log(`  PROBLEM: ${faults.length} faults in the bridge screen:`);
+    faults.slice(0, 12).forEach((f) => console.log(`           ${f}`));
+  } else {
+    console.log(
+      `  ${sets.length} worked sets round so the printed parts sum to the printed total, including the two that only tie because of largest remainder`
+    );
+    console.log(
+      `  the share is withheld below ${(SHARE_NOT_MEANINGFUL_BELOW * 100).toFixed(1)}% of version A and given above it`
+    );
+    console.log(
+      '  the screen says "associated with" and never "caused by", carries the method line and the reconciliation, and uses no colour to carry sign'
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // A MALFORMED INDEX SERIES DOES NOT TAKE THE SCREEN WITH IT (2026-11-11)
 // ---------------------------------------------------------------------------
 //

@@ -483,6 +483,57 @@ re-measured on the balance the reader settled rather than on the filing's own
 other); the screen's tie forgetting what was moved below the line (**16**); and
 the EBITDA bridge dropping the third kind of adjustment (**8**).
 
+### The bridge screen shows what the bridge computed (in `npm run verify`)
+
+Build step 5 job C5. Three things the screen can get wrong without the
+arithmetic changing at all. **The parts it prints do not add up to the total it
+prints** — and the check sums the ROUNDED parts the table shows, because the
+unrounded ones always sum to the total (that is what Shapley is) and summing
+those would prove nothing about the screen. Only largest-remainder rounding
+makes the printed figures tie, which is why removing it is the plan's own
+break. **It says "caused by"** (rule 22), which this arithmetic cannot support:
+the same number arises whether the reader changed the discount rate because the
+price moved or in spite of it. **It divides by a total of about nothing**
+(rule 19), asked of `bridge.ts` rather than reimplemented, so the screen and the
+engine cannot disagree about what `n.m.` means.
+
+It also asserts the method line is on the screen rather than in a tooltip
+(rule 23), the reconciliation line is present (rule 17), and no colour carries
+sign — a reader should not need to see green and red to read a waterfall.
+
+Proved by breaking, five ways: plain rounding instead of largest remainder (3
+faults, including three equal thirds summing to 0.99 against a total of 1);
+"caused by" (2); the method line dropped (1); the near-zero guard ignored (1);
+and sign carried by colour (2).
+
+### The bridge between real saved versions (`npm run verify:bridge`)
+
+Build step 5 job C6. Jobs C1 to C3 are checked on worked examples where the
+drivers are written out and the answer is known; that proves the arithmetic and
+says nothing about 180 real companies whose filings actually moved.
+
+**So the two versions are real.** The capture archive keeps every fetch, so the
+OLDEST capture and the CURRENT payload are the same model before and after new
+filings arrived — the pair rule 18 exists for. Nothing is simulated.
+
+It asserts, on every company that produces a bridge: the parts sum exactly,
+unrounded AND rounded; no NaN in a part, a total or either end; every part is
+one of that pair's own drivers and appears once; and every driver says what it
+moved from and to. Then one identity over the whole run — **bridged + refused =
+pairs found** — because a pair that quietly leaves the sample takes its failure
+with it.
+
+That identity earned its place twice on its first run. It found two pairs
+escaping through a `catch` that counted nothing, and it is what makes the plan's
+break visible at all: corrupting a payload's statements moves a company from
+bridged to refused-with-a-reason (36 to 35, 57 to 58, the cost-of-sales reason
+8 to 9) rather than deleting it from the sample. With the counting removed, the
+identity reports 55 unaccounted for.
+
+Measured: 93 companies whose filings changed, 36 bridging, "New filings" the
+largest driver on 31 of them, largest single part 336.88 a share at MercadoLibre,
+and the worst gap between the parts and the change they explain 9.95e-14.
+
 ### No workbook writer in the first script (`npm run verify:landing`)
 
 The bundle half of the landing check gained an arm with `KI-40`: every script
