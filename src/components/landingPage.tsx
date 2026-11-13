@@ -24,7 +24,7 @@
 // magazine, and this is meant to read as an institution. Playfair is kept for
 // the three places it earns: the wordmark, the margin notes, and the quote.
 
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { useReducedMotion } from '../design/motion';
 import { useConstrained } from '../design/constrained';
 /* THE 3D CHUNK LOADS AFTER THE FIRST PAINT (VISUAL_SYSTEM §6, job 8.7):
@@ -35,6 +35,9 @@ const ParticleField = lazy(() => import('./particleField'));
    wordmark as the particle field draws it, captured once (≤ 60KB). */
 const HERO_POSTER = '/hero-poster.webp';
 import { MarginNotesSection } from './marginNotesSection';
+// The listings this build ships, so the coverage count never depends on a
+// request that can fail (2026-11-12).
+import INSTANT_LISTINGS, { INSTANT_LISTINGS_BUILT } from '../data/instantListings';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
 import { featureById, statusLabel, claimFor, isShipped, CLAIMS, companyCountLabel } from '../data/featureRegister';
@@ -317,12 +320,35 @@ const MARGIN_LINES = [
    for build step 5 to ship (decision 4). */
 interface Stat { key: string; to: number; suffix: string; label: string; detail: string; source: string }
 
-function useCoverage(): { count: number | null; exchanges: string[]; built: string | null } {
-  const [state, setState] = useState<{ count: number | null; exchanges: string[]; built: string | null }>({
-    count: null,
-    exchanges: [],
-    built: null,
-  });
+/**
+ * THE COUNT COMES FROM THE BUILD, AND THE LIVE TABLE ONLY REFINES IT
+ * (2026-11-12).
+ *
+ * This asked `/api/screener` and, on any failure, kept `count: null` — and a
+ * null count removed the whole tile, leaving the coverage section with a hole
+ * where its headline figure belongs. On the live site that is exactly what
+ * happened: the section shipped with no number at all.
+ *
+ * `INSTANT_LISTINGS` is generated from the same company set and committed with
+ * the build (`npm run search:instant`), so the page always has a figure it can
+ * stand behind, offline and on a failed request alike. The live table is still
+ * asked, and still wins when it answers, because it is more current; it is no
+ * longer the only thing between a reader and a number.
+ *
+ * It is not a guess and not a hard-coded claim: it is the count of the
+ * listings this build actually ships, which is what the sentence says.
+ */
+function useCoverage(): { count: number | null; exchanges: string[]; built: string | null; from: 'build' | 'table' } {
+  const fromBuild = useMemo(
+    () => ({
+      count: INSTANT_LISTINGS.length,
+      exchanges: [...new Set(INSTANT_LISTINGS.map((l) => l.exchange).filter(Boolean))].sort(),
+      built: INSTANT_LISTINGS_BUILT,
+      from: 'build' as const,
+    }),
+    []
+  );
+  const [state, setState] = useState<{ count: number | null; exchanges: string[]; built: string | null; from: 'build' | 'table' }>(fromBuild);
   useEffect(() => {
     let alive = true;
     fetch('/api/screener')
@@ -332,10 +358,11 @@ function useCoverage(): { count: number | null; exchanges: string[]; built: stri
         // One listing per company, as the screener counts them.
         const home = body.rows.filter((row: any) => row?.homeListing !== false);
         const exchanges = [...new Set(home.map((row: any) => row?.exchange).filter(Boolean))].sort() as string[];
-        setState({ count: home.length, exchanges, built: body.built ?? null });
+        setState({ count: home.length, exchanges, built: body.built ?? null, from: 'table' });
       })
       .catch(() => {
-        /* No table, no count: the tile is left out rather than guessed. */
+        /* The build's own count stands. It is the listings this build ships,
+           so there is nothing to guess and nothing to leave out. */
       });
     return () => {
       alive = false;
@@ -395,12 +422,24 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           key: 'companies', to: coverage.count as number, suffix: '', text: countLabel,
           label: 'Listed companies',
           detail: coverage.exchanges.join(' · '),
-          source: `Counted from the screener table${builtAt ? `, as at ${builtAt}` : ''}`,
+          /* THE SOURCE LINE SAYS WHERE THE FIGURE ACTUALLY CAME FROM. With
+             the live table unavailable the count is the build's own, and a
+             line reading "counted from the screener table" would be a false
+             provenance on a page whose whole claim is that every figure has
+             one. */
+          source:
+            coverage.from === 'table'
+              ? `Counted from the screener table${builtAt ? `, as at ${builtAt}` : ''}`
+              : `Counted from the listings in this build${builtAt ? `, built ${builtAt}` : ''}`,
         }]
       : []),
     {
+      /* THE LABEL READ "Up to, of filed history" (2026-11-12) — a sentence
+         with its middle missing, because the number it refers to is printed
+         above it and the words were written as though it were inline. The
+         label now says what it means on its own. */
       key: 'years', to: CLAIMS.historyYears, suffix: 'Y', text: null,
-      label: 'Up to, of filed history',
+      label: `Up to ${YEARS_IN_WORDS[CLAIMS.historyYears] ?? CLAIMS.historyYears} fiscal years of filed history`,
       detail: 'IS · BS · CF · WC · PP&E · Debt · Equity',
       source: 'Fiscal years read from each company\u2019s own filings',
     },
@@ -873,14 +912,28 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           }}
         >
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-10 lg:pb-12">
-            <p
-              className="font-figure text-[12px] tracking-[0.22em] uppercase mb-12 flex items-center gap-3"
-              style={{ color: PAPER.accentText }}
-            >
-              <span className="h-px w-8" style={{ background: RED }} />
-              09 &middot; Coverage
+            {/* MUTED, SENTENCE CASE, UNNUMBERED (2026-11-12). The number
+                "09" counts sections of a page a reader never agreed to read in
+                order, and an accent-coloured rule drew the eye to a label
+                rather than to the figures under it. */}
+            <p className="font-figure text-[13px] mb-10" style={{ color: PAPER.quiet }}>
+              Coverage
             </p>
-            <div className={`grid grid-cols-2 ${STATS.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-y-14 gap-x-8`}>
+            {/* THE GRID FITS WHAT THERE IS. A fixed three-column grid left a
+                third of the section empty whenever a stat was withheld, and
+                the count was withheld on the live site — so the page showed a
+                wide blank where its headline figure belongs. The columns are
+                the number of stats, capped at three. */}
+            <div
+              className={`grid gap-y-14 gap-x-8 ${
+                STATS.length >= 3
+                  ? 'grid-cols-2 lg:grid-cols-3'
+                  : STATS.length === 2
+                    ? 'grid-cols-1 sm:grid-cols-2'
+                    : 'grid-cols-1 max-w-[42rem]'
+              }`}
+              data-coverage-stats={STATS.length}
+            >
               {STATS.map((s) => (
                 <div key={s.key} data-stat={s.key}>
                   <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: PAPER.ink }}>
