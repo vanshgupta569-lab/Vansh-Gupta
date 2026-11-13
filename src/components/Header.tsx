@@ -511,16 +511,27 @@ export const Header: React.FC<HeaderProps> = ({
         }}
       >
         <div className="max-w-[1440px] h-full mx-auto px-4 sm:px-6 lg:px-12 flex items-center gap-2">
+          {/* THE NAME, NOT THE SQUARE ALONE (2026-11-12).
+              The slim bar carried a bare red square. On its own it is a
+              shape, not a mark: the square is the full stop of a wordmark
+              and says nothing without the word in front of it, so a reader
+              who scrolled past the header lost any sign of whose site this
+              is. It is the same mark the full header draws, set smaller to
+              sit in 48px. */}
           <button
             type="button"
+            data-condensed-wordmark
             aria-label="Marginalia home"
             onClick={() => {
               onNavigateToScreen('HOME');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11 flex items-center justify-center cursor-pointer"
+            className="h-9 pointer-coarse:h-11 px-1 text-[17px] leading-none text-ink hover:text-accent-text transition-colors flex items-baseline cursor-pointer shrink-0 whitespace-nowrap"
           >
-            <span aria-hidden="true" className="block w-6 h-6 bg-accent" />
+            <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
+              marginalia
+            </span>
+            <Mark />
           </button>
           <div className="flex-1" />
           {figuresControl}
