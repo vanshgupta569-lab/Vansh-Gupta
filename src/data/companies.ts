@@ -533,6 +533,17 @@ export function calculateDCFFor(
     wacc: D.wacc,
     terminalGrowthRate: d.dcf.longTermGrowthRate,
     forecastRows,
+    /* THE SENSITIVITY GRID AND THE AXES IT IS PRINTED AGAINST.
+       This object is built field by field, and these two were never added —
+       so `dcfResult.sensitivity` and `dcfResult.sensitivityAxes` were both
+       undefined on the valuation screen and the grid rendered NO cells at
+       all: twenty-five blanks and a line reading "Hover a cell to inspect the
+       valuation at that pair."
+       The engine has computed both all along. It is the handover that lost
+       them, which is why nothing in `verify` saw it: every check of the grid's
+       ARITHMETIC passed, because the arithmetic was never wrong. */
+    sensitivity: D.sensitivity,
+    sensitivityAxes: D.sensitivityAxes,
   };
 }
 

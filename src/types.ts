@@ -71,6 +71,21 @@ export interface DCFResult {
   // Why the engine refused, when it did. The balance sheet integrity codes
   // (see isIntegrityRefusal) withhold every valuation, not just this one.
   refusalCode?: string | null;
+  /**
+   * THE SENSITIVITY GRIDS AND THE AXES THEY ARE PRINTED AGAINST.
+   *
+   * The engine computes both; `calculateDCFFor` builds its result field by
+   * field and did not carry them, so the valuation screen's grid rendered
+   * twenty-five blanks. They are on the interface now, which is what makes
+   * leaving them out a compile error rather than an empty grid nobody's check
+   * could see.
+   *
+   * `perpetuity` and `exitMultiple` are [waccStep][otherStep]; the axes are
+   * the absolute rates and multiples those steps land on, as the row and
+   * column heads print them.
+   */
+  sensitivity?: { perpetuity: number[][]; exitMultiple: number[][] };
+  sensitivityAxes?: { wacc: number[]; growth: number[]; multiple: number[] };
   // Valuation outputs
   targetPrice: number;
   /**

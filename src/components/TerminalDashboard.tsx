@@ -1853,9 +1853,19 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             bars in the panel's own ground and the margin line the chart's
             series colour. */}
         <div className="bg-panel border border-line p-6 flex flex-col min-h-[360px]">
-          <div className="mb-3 flex items-baseline justify-between">
+          {/* HEADROOM FOR THE TALLEST BAR'S FIGURE (2026-11-13).
+              Each bar's figure sits just above the bar, so the tallest one —
+              which by definition reaches the top of the plot — printed into
+              the "$ bn · as filed" note on the same line as the title.
+              THE BARS ARE NOT SCALED DOWN TO MAKE ROOM: that is exactly the
+              G4 trap, where a height stops being its own percentage of the
+              scale. The whole chart moves down instead, so every bar keeps
+              its proportion and the figure has somewhere to go. */}
+          <div className="mb-8 flex items-baseline justify-between" data-revenue-head>
             <span className="text-[13px] font-medium text-muted">Revenue and the margin it earns</span>
-            <span className="text-[13px] text-quiet">{company.currencySymbol} bn · as filed</span>
+            <span className="text-[13px] text-quiet" data-revenue-units>
+              {company.currencySymbol} bn · as filed
+            </span>
           </div>
 
           {(() => {
@@ -1923,6 +1933,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                                 without measuring it. */}
                             <span
                               className="absolute inset-x-0 text-center font-figure text-[13px] text-ink"
+                              data-revenue-figure={String(yr)}
                               style={{
                                 bottom: `calc(${heightPct}% + 2px)`,
                                 opacity: typeof thisRev === 'number' ? 1 : 0.5,
@@ -1981,14 +1992,46 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         <div className="bg-panel border border-line p-6 flex flex-col justify-between relative min-h-[360px]">
           <div>
             <div className="flex justify-between items-center mb-3">
-              <span className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest font-medium">
-                DCF SENSITIVITY MATRIX
+              {/* SENTENCE CASE, AND THE WORDS A READER USES (STUDIO §4.5).
+                  "DCF SENSITIVITY MATRIX" in capitals is three pieces of
+                  jargon shouted; the grid is a sensitivity, and the heads
+                  below now say what it is a sensitivity to. */}
+              <span className="font-figure text-[13px] text-ink font-medium">Sensitivity</span>
+              <span className="font-figure text-[12px] text-[#8A8A8F]">
+                Discount rate against growth after the forecast
               </span>
-              <span className="font-figure text-[9px] tracking-widest uppercase text-[#8A8A8F]">WACC vs. G%</span>
             </div>
 
-            {/* 5x5 Cell Matrix */}
-            <div className="grid grid-cols-5 gap-1 my-3 relative">
+            {/* THE COLUMN HEADS: the growth rate each column was computed at.
+                The grid used to name its axes once, at the foot, as
+                "X-Axis: Term Growth (+/-1%)" — which tells a reader what
+                VARIES and never what any particular cell IS. A cell is a pair
+                of inputs and should be readable as one. */}
+            <div className="grid grid-cols-[2.6rem_repeat(5,1fr)] gap-1 mt-3" aria-hidden="true">
+              <span />
+              {gRange.map((g, i) => (
+                <span
+                  key={`g-${i}`}
+                  data-sensitivity-col={g.toFixed(2)}
+                  className="font-figure text-[11px] text-[#8A8A8F] text-center tabular-nums"
+                >
+                  {g.toFixed(1)}%
+                </span>
+              ))}
+            </div>
+
+            {/* 5x5 Cell Matrix, each row headed by its discount rate */}
+            <div className="grid grid-cols-[2.6rem_repeat(5,1fr)] gap-1 my-1 relative">
+              {waccRange.map((w, rIdx) => (
+                <span
+                  key={`w-${rIdx}`}
+                  data-sensitivity-row={w.toFixed(2)}
+                  className="font-figure text-[11px] text-[#8A8A8F] self-center tabular-nums"
+                  style={{ gridColumn: 1, gridRow: rIdx + 1 }}
+                >
+                  {w.toFixed(1)}%
+                </span>
+              ))}
               {sensitivityMatrix.map((row, rIdx) =>
                 row.map((val, cIdx) => {
                   const currWacc = waccRange[rIdx];
@@ -2071,9 +2114,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             </div>
           </div>
 
-          <div className="font-figure text-[9px] tracking-widest uppercase text-[#8A8A8F] flex justify-between items-center pt-3">
-            <span>Y-Axis: WACC (+/-1%)</span>
-            <span>X-Axis: Term Growth (+/-1%)</span>
+          {/* The heads print the rates themselves now, so the foot says what
+              the grid is FOR rather than repeating its axes in capitals. */}
+          <div className="font-figure text-[12px] text-[#8A8A8F] pt-3">
+            Down: the discount rate. Across: growth after the forecast.
           </div>
         </div>
 
