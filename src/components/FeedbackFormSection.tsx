@@ -1,5 +1,4 @@
 import React from 'react';
-import { ShieldCheck } from 'lucide-react';
 
 export const FeedbackFormSection: React.FC = () => {
   return (
@@ -13,12 +12,16 @@ export const FeedbackFormSection: React.FC = () => {
         </div>
 
         {/* Analyst Profile Card */}
-        <div className="max-w-3xl mx-auto border hairline-border p-8 sm:p-12 bg-[#0B0B0D] shadow-2xl relative">
+        <div className="max-w-3xl mx-auto border hairline-border p-8 sm:p-12 bg-page relative">
           <div className="font-figure text-[11px] text-[#8A8A8F] uppercase tracking-widest mb-6 border-b hairline-border-b pb-4 flex justify-between items-center">
-            <span>ANALYST PROFILE</span>
-            <span className="text-[#8B1E1E] flex items-center gap-1.5 font-semibold">
-              <ShieldCheck className="w-4 h-4" /> VERIFIED LEAD
-            </span>
+            {/* "VERIFIED LEAD", under a shield, is GONE (standing decision 7:
+                no false or unverifiable claims). It was a credibility badge
+                attached to nothing -- no document, no verifier, no claim
+                stated. On a product whose whole proposition is that it never
+                overstates, an unverifiable verification badge costs more than
+                every other defect on this page put together. Nothing replaces
+                it: the honest version of that corner is empty. */}
+            <span>Analyst profile</span>
           </div>
 
           <h3 className="font-display text-3xl sm:text-4xl text-[#F2F0EA] mb-8 font-semibold">

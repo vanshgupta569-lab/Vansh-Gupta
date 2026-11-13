@@ -71,9 +71,12 @@ export const CoverageStatsSection: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="bg-[#111114] border hairline-border p-8 sm:p-10 relative overflow-hidden shadow-xl"
+        className="bg-panel border hairline-border p-8 sm:p-10 relative overflow-hidden"
       >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#8B1E1E]/5 rounded-bl-full pointer-events-none" />
+        {/* A QUARTER-CIRCLE OF OXBLOOD WASH IN THE CORNER, REMOVED. It is a
+            rounded decorative shape on a page whose form language is "a ruled
+            sheet, not a card deck", and it exists only to look busy -- the
+            last item on the VISUAL_SYSTEM Avoid list. */}
 
         <div className="max-w-3xl mb-8">
           <div className="flex items-center gap-2 mb-2">
@@ -107,7 +110,7 @@ export const CoverageStatsSection: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full md:w-auto bg-[#8B1E1E] text-[#F2F0EA] font-figure text-xs px-8 py-3.5 uppercase tracking-widest hover:bg-[#6a1515] transition-colors flex items-center justify-center gap-2 cursor-pointer font-semibold disabled:opacity-50 shadow-[0_0_15px_rgba(139,30,30,0.3)]"
+                className="w-full md:w-auto border border-accent bg-accent/15 text-ink font-figure text-[13px] px-8 py-3.5 hover:bg-accent/35 transition-colors flex items-center justify-center gap-2 cursor-pointer font-semibold disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{isSubmitting ? 'Transmitting...' : 'Dispatch Feedback'}</span>
@@ -126,13 +129,25 @@ export const CoverageStatsSection: React.FC = () => {
           </div>
 
           {result && (
-            <div className={`p-4 font-figure text-xs border ${result.includes("Success") ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" : "bg-[#0B0B0D] border-[#222228] text-[#dfbfbc]"}`}>
+            <div
+              role="status"
+              aria-live="polite"
+              className={`p-4 font-figure text-[13px] border ${
+                result.includes('Success')
+                  ? 'bg-positive-fill border-positive-line text-positive'
+                  : 'bg-page border-line text-accent-text'
+              }`}
+            >
               {result}
             </div>
           )}
           
           <div className="font-figure text-[9px] text-[#8A8A8F] uppercase tracking-widest">
-            * SECURE WEB3FORMS ENDPOINT · RESPONSES ROUTED DIRECTLY TO YOUR INBOX
+            {/* The vendor's name, an unproven security claim and "your
+                inbox" addressed to a reader who does not own it, all in
+                tracked capitals. What a reader is owed here is what happens
+                to their address. */}
+            We use your email address only to reply to this message.
           </div>
         </form>
       </motion.div>

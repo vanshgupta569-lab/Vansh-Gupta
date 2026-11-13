@@ -531,7 +531,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         width={1440}
         height={900}
         fetchPriority="high"
-        className="absolute inset-x-0 top-0 w-full h-screen object-cover z-[4] pointer-events-none"
+        className="absolute inset-x-0 top-0 w-full h-screen object-contain object-top sm:object-cover sm:object-center z-[4] pointer-events-none"
         style={{ opacity: posterOn ? 1 : 0, transition: 'opacity var(--m-dur-reveal) var(--m-ease-enter)' }}
       />
       {fieldOn && (
@@ -905,10 +905,13 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           className="w-full"
           style={{
             background: PAPER.ground,
-            borderTopLeftRadius: 26,
-            borderTopRightRadius: 26,
+            /* SQUARE, AND NO SHADOW. DESIGN.md Shapes: "Every panel,
+               tile, chip, pill and button has a 0px radius, and that right
+               angle is the form language: a ruled sheet, not a card deck."
+               The cream band used to slide up as a rounded card out of a dark
+               glow. The ground changing from page to paper is already the
+               strongest edge on this page and needs no card under it. */
             overflow: 'hidden',
-            boxShadow: '0 -50px 110px rgba(0,0,0,0.78)',
           }}
         >
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 pt-20 lg:pt-28 pb-10 lg:pb-12">
@@ -1064,9 +1067,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           className="w-full"
           style={{
             background: '#0B0B0D',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            boxShadow: '0 -40px 80px rgba(0,0,0,0.45)',
+
           }}
         >
           <div className="max-w-[1380px] mx-auto px-6 sm:px-10 lg:px-16 py-24 lg:py-32 flex flex-col items-center text-center">
