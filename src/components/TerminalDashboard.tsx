@@ -43,6 +43,7 @@ import { AssetPanel } from './assetPanel';
 import { ResidualIncomePanel } from './residualIncomePanel';
 import { DataConstraintBanner, DataConstraintPanel } from './dataConstraintPanel';
 import { TerminalReliancePanel } from './terminalReliancePanel';
+import { ValuationSection, ValuationContents } from './valuationSection';
 import { terminalReliance } from '../data/terminalReliance';
 import { BatchPanel } from './batchPanel';
 import { FullScreenPanel, ThreeStatementView, DCFView } from './nerdViews';
@@ -1011,6 +1012,31 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
   // Every approach as a bar, from the summary above.
   const fieldBands: FieldBand[] = summary.fieldBands as FieldBand[];
 
+  /**
+   * THE CONTENTS LIST, BUILT FROM THE SECTIONS THAT ARE ACTUALLY THERE.
+   *
+   * Written out by hand it would go stale the first time a section appeared
+   * for one company and not another -- a bank has no cash flow walkthrough, a
+   * company with no usable peers has no market approach -- and a contents
+   * entry that scrolls nowhere is worse than no contents at all. So each
+   * entry carries the SAME condition as the section it points to, and the two
+   * are read from one place.
+   */
+  const contentsEntries = useMemo(() => {
+    const rows: { id: string; label: string; when: boolean }[] = [
+      { id: 'ratios', label: 'Ratios', when: true },
+      { id: 'football', label: 'Valuation range', when: dcfResult.applicable !== false },
+      { id: 'implied', label: 'What the price assumes', when: dcfResult.applicable !== false && !!impliedByPrice },
+      { id: 'working', label: bankModel ? 'How it was valued' : 'How it was calculated', when: !!activeSource || !!bankModel },
+      { id: 'market', label: 'Market approach', when: !!marketApproach },
+      { id: 'asset', label: 'Asset approach', when: !!assetApproach },
+      { id: 'terminal', label: 'Beyond the forecast', when: !!activeSource && dcfResult.applicable !== false },
+      { id: 'constraints', label: 'What the source lacks', when: true },
+      { id: 'nerds', label: 'Full working', when: !bankModel },
+    ];
+    return rows.filter((r) => r.when).map(({ id, label }) => ({ id, label }));
+  }, [dcfResult.applicable, impliedByPrice, activeSource, bankModel, marketApproach, assetApproach]);
+
   const bankPremiumPct = useMemo(() => {
     if (!bankModel || !(bankModel.valuePerShare > 0)) return null;
     return premiumOf(struckPrice, bankModel.valuePerShare);
@@ -1717,26 +1743,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           ------------------------------------------------------------------ */}
       <div className="sticky top-[65px] z-40 -mx-6 lg:-mx-12 px-6 lg:px-12 mb-8 bg-[#0B0B0D] border-y border-[#222228]">
         <div className="flex flex-wrap items-center gap-x-1 gap-y-1 py-2.5">
-          {[
-            { id: 'working', label: bankModel ? 'How it was valued' : 'How it was calculated' },
-            { id: 'ratios', label: 'Ratios' },
-            ...(bankModel ? [] : [{ id: 'football', label: 'Valuation range' }]),
-            ...(bankModel ? [] : [{ id: 'implied', label: 'What the price assumes' }]),
-            ...(bankModel ? [] : [{ id: 'nerds', label: 'Full working' }]),
-          ].map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() =>
-                document
-                  .getElementById(entry.id)
-                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              className="font-figure text-[11px] uppercase tracking-widest px-3 py-2 text-[#8A8A8F] hover:text-[#F2F0EA] whitespace-nowrap transition-colors"
-            >
-              {entry.label}
-            </button>
-          ))}
+          {/* THE CONTENTS OF THIS VALUATION, every section of it.
+              The bar used to carry FIVE entries written out by hand, which
+              went stale the moment a section was added: the market approach,
+              the asset approach, how much lies beyond the forecast and what
+              the source does not give us were all on the screen and none of
+              them was in the list. It is built from the sections that render
+              now, so the two cannot disagree. */}
+          <ValuationContents entries={contentsEntries} />
 
           <span className="mx-2 h-4 w-px bg-[#222228]" aria-hidden="true" />
 
@@ -2191,71 +2205,184 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
         </div>
       )}
 
-      {/* Ratios, the valuation range, and the plain-English walkthrough. */}
-      <div className="space-y-6 mb-10">
+      {/* ------------------------------------------------------------------
+          THE SECTIONS OF THE VALUATION, in the order STUDIO_SPEC 4.1 sets
+          (2026-11-13).
+
+          They used to run: the valuation range, what the price assumes, how
+          much of the value lies beyond the forecast, what the source does not
+          give us, and then the walkthrough -- with the market and asset
+          approaches reachable only as full-screen overlays behind a row of
+          buttons, which is to say not on the screen at all.
+
+          The spec's order puts the VALUE first and the WORKING after it: the
+          range, the price's own assumptions, then the three approaches, then
+          how much of it rests on the part nobody modelled, and the full
+          working last. Each is its own panel with its own heading and 24px
+          between, because a column of identical bordered boxes is a stack of
+          cards rather than a document with parts.
+          ------------------------------------------------------------------ */}
+      <div className="mb-10 flex flex-col gap-6">
+        {/* THE RANGE. Never collapsed: it is the screen's answer. */}
         {dcfResult.applicable !== false && (
-          <div id="football" className="scroll-mt-24">
-          <FootballField
-            bands={fieldBands}
-            approaches={summary.approaches}
-            marketPrice={displayPrice}
-            fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
-            fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
-            currencySymbol={company.currencySymbol}
-          />
-          </div>
+          <ValuationSection
+            id="football"
+            title="Valuation range"
+            aside="Each approach side by side, never averaged"
+          >
+            <FootballField
+              bands={fieldBands}
+              approaches={summary.approaches}
+              marketPrice={displayPrice}
+              fiftyTwoWeekHigh={liveQuote?.fiftyTwoWeekHigh ?? company.fiftyTwoWeekHigh}
+              fiftyTwoWeekLow={liveQuote?.fiftyTwoWeekLow ?? company.fiftyTwoWeekLow}
+              currencySymbol={company.currencySymbol}
+            />
+          </ValuationSection>
         )}
 
+        {/* WHAT THE PRICE ASSUMES -- the reverse DCF. */}
         {dcfResult.applicable !== false && impliedByPrice && (
-          <ImpliedByPrice
-            result={impliedByPrice}
-            currencySymbol={company.currencySymbol}
-          />
-        )}
-        {/* HOW MUCH OF THE VALUE IS THE PART NOBODY MODELLED. Shown before the
-            working rather than buried inside it: a reader who stops here should
-            still know what the headline rests on. */}
-        {activeSource && dcfResult.applicable !== false && (
-          <TerminalReliancePanel
-            reliance={terminalReliance(buildFullModel(activeSource, drivers).dcf, activeSource)}
-            currencySymbol={company.currencySymbol}
-            value={isNum(dcfResult.targetPrice) && dcfResult.targetPrice > 0 ? dcfResult.targetPrice : null}
-          />
+          <ValuationSection
+            id="implied"
+            title="What the price assumes"
+            aside="The growth the market is already paying for"
+          >
+            <ImpliedByPrice result={impliedByPrice} currencySymbol={company.currencySymbol} />
+          </ValuationSection>
         )}
 
-        {/* The whole list, including what cannot move a value, next to the
-            figures someone checking the model will be reading. */}
-        <DataConstraintPanel constraints={company.dataConstraints ?? []} />
-
+        {/* THE THREE APPROACHES, each closed to its headline. They are the
+            long ones, and they are what a reader opens deliberately rather
+            than scrolls past. NEVER BLENDED (standing decision 4): three
+            panels in the order the spec sets, never one combined figure. */}
         {activeSource && (
-          <div id="working" className="scroll-mt-24">
-          <HowCalculated
-            source={activeSource}
-            dcfResult={dcfResult}
-            drivers={drivers}
-            defaults={activeDefaults}
-            currencySymbol={company.currencySymbol}
-            currency={company.currency}
-            unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
-            sourceLabel={
-              viewMode === 'ANALYST' && company.engineBacked
-                ? 'Built by hand from the filings, then checked figure by figure against them'
-                : activeSource.meta?.source || company.dataSource || 'the company filings'
+          <ValuationSection
+            id="working"
+            title="How it was calculated"
+            collapsible
+            headline={
+              'The discounted cash flow, line by line: the forecast, the ' +
+              'discount rate it is brought back at, the terminal value, and ' +
+              'the bridge from the business to a value per share.'
             }
-            companyName={company.name}
-            isDerived={viewMode === 'DERIVED' || !company.engineBacked}
-            methods={[
-              { label: 'perpetuity growth', value: terminalMethods.perpetuity },
-              { label: 'exit multiple', value: terminalMethods.exit },
-            ].filter((m) => isNum(m.value)) as { label: string; value: number }[]}
-            terminalSplit={terminalMethods.split}
-            marketApproach={marketApproach}
-            assetApproach={assetApproach}
-            recoveryKey={recoveryKey}
-            onRecoveryKey={applyRecoveryPreset}
-          />
-          </div>
+          >
+            <HowCalculated
+              source={activeSource}
+              dcfResult={dcfResult}
+              drivers={drivers}
+              defaults={activeDefaults}
+              currencySymbol={company.currencySymbol}
+              currency={company.currency}
+              unitLabel={activeSource.meta?.unitLabel || `${company.currencySymbol} millions`}
+              sourceLabel={
+                viewMode === 'ANALYST' && company.engineBacked
+                  ? 'Built by hand from the filings, then checked figure by figure against them'
+                  : activeSource.meta?.source || company.dataSource || 'the company filings'
+              }
+              companyName={company.name}
+              isDerived={viewMode === 'DERIVED' || !company.engineBacked}
+              methods={[
+                { label: 'perpetuity growth', value: terminalMethods.perpetuity },
+                { label: 'exit multiple', value: terminalMethods.exit },
+              ].filter((m) => isNum(m.value)) as { label: string; value: number }[]}
+              terminalSplit={terminalMethods.split}
+              marketApproach={marketApproach}
+              assetApproach={assetApproach}
+              recoveryKey={recoveryKey}
+              onRecoveryKey={applyRecoveryPreset}
+            />
+          </ValuationSection>
         )}
+
+        {/* THE MARKET AND ASSET APPROACHES ARE ON THE SCREEN NOW. They were
+            reachable only through a full-screen overlay, which meant the two
+            cross-checks on the income approach were invisible to anyone who
+            did not know to press a button labelled "For the nerds". The
+            overlays stay -- they have room for the full tables -- but the
+            approach itself belongs beside the value it checks. */}
+        {marketApproach && (
+          <ValuationSection
+            id="market"
+            title="Market approach"
+            collapsible
+            headline="What comparable companies are being paid for, and what that implies per share here."
+            aside="A cross-check, not an average"
+          >
+            <CompsPanel
+              companyName={company.name}
+              currencySymbol={company.currencySymbol}
+              unitLabel={activeSource?.meta?.unitLabel || `${company.currencySymbol} millions`}
+              result={marketApproach}
+              loading={compsLoading}
+              selected={peerSelection}
+              onSelected={setSelectedPeers}
+              onReset={() => setSelectedPeers(null)}
+              fiscalYear={subjectTrailing?.fiscalYear ?? null}
+              dcfValuePerShare={terminalMethods.perpetuity ?? dcfResult.targetPrice}
+            />
+          </ValuationSection>
+        )}
+
+        {assetApproach && (
+          <ValuationSection
+            id="asset"
+            title="Asset approach"
+            collapsible
+            headline="What the company owns, once everything it owes is paid."
+            aside="A floor, not a forecast"
+          >
+            <AssetPanel
+              companyName={company.name}
+              currencySymbol={company.currencySymbol}
+              unitLabel={activeSource?.meta?.unitLabel || `${company.currencySymbol} millions`}
+              result={assetApproach}
+              rates={recoveryRates}
+              presetKey={recoveryKey}
+              onPreset={applyRecoveryPreset}
+              onRate={setRecoveryRate}
+              dcfValuePerShare={terminalMethods.perpetuity ?? dcfResult.targetPrice}
+            />
+          </ValuationSection>
+        )}
+
+        {/* HOW MUCH OF THE VALUE IS THE PART NOBODY MODELLED. NOT
+            collapsible: it qualifies the headline figure, and a reader who
+            stops here should still know what that figure rests on. */}
+        {activeSource && dcfResult.applicable !== false && (
+          <ValuationSection
+            id="terminal"
+            title="How much lies beyond the forecast"
+            aside="The part no year of the model covers"
+          >
+            <TerminalReliancePanel
+              reliance={terminalReliance(buildFullModel(activeSource, drivers).dcf, activeSource)}
+              currencySymbol={company.currencySymbol}
+              value={isNum(dcfResult.targetPrice) && dcfResult.targetPrice > 0 ? dcfResult.targetPrice : null}
+            />
+          </ValuationSection>
+        )}
+
+        {/* WHAT THE SOURCE DOES NOT GIVE US. Collapsible, and the headline
+            SAYS HOW MANY rather than hiding the count behind the heading: a
+            reader has to be able to tell a company with one gap from a company
+            with eleven without opening anything. */}
+        <ValuationSection
+          id="constraints"
+          title="What the source does not give us"
+          collapsible
+          headline={
+            (company.dataConstraints?.length ?? 0) === 0
+              ? 'Nothing on this company is missing from the filing in a way that could move a value.'
+              : `${company.dataConstraints!.length} ${
+                  company.dataConstraints!.length === 1
+                    ? 'thing the filing does not publish'
+                    : 'things the filing does not publish'
+                }, each with the bound on what it could move.`
+          }
+        >
+          <DataConstraintPanel constraints={company.dataConstraints ?? []} />
+        </ValuationSection>
       </div>
 
       {/* ------------------------------------------------------------------

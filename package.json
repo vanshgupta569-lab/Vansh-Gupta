@@ -27,6 +27,7 @@
     "verify:coverage": "tsx verify/coverageSection.mts",
     "verify:condensed": "tsx verify/condensedHeader.mts",
     "verify:grid": "tsx verify/sensitivityGrid.mts",
+    "verify:sections": "tsx verify/valuationSections.mts",
     "verify:bridge": "tsx verify/bridgeVersions.mts",
     "verify:baserates": "tsx verify/baseRates.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts",
