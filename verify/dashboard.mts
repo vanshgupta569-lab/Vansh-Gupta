@@ -83,7 +83,12 @@ const { buildCompanyFrom } = await import(`file:///${REPO}/src/data/autoCompany.
 const { COMPANIES_DATA } = await import(`file:///${REPO}/src/data/companies.ts`);
 // The curated model the dashboard itself renders for Apple. The record in
 // COMPANIES_DATA carries the screen furniture; this is the model behind it.
-const AAPL_SOURCE: any = (await import(`file:///${REPO}/src/data/AAPL.js`)).default;
+// THE CURATED APPLE FILE IS NO LONGER LOADED HERE. It was the expectation
+// this check compared the screen against; the comparison lives in
+// `npm run verify` and the workbook suite now, which need no browser and
+// already run it over 60 models. Leaving the import behind would suggest the
+// browser still checks the hand-built reference, and it does not.
+const { applePayload, APPLE_TICKER } = await import(`file:///${REPO}/verify/fixtures/appleCompany.mts`);
 const { buildModel, buildDCF, computeWACC } = await import(`file:///${REPO}/src/engine/model.js`);
 const { buildWorkbook } = await import(`file:///${REPO}/src/data/excelExport.ts`);
 // The families the design system declares, which the font-request check below
@@ -131,9 +136,19 @@ const staleFixture = () => {
 const fixtureFor = (ticker: string) =>
   ticker === STALE_TICKER
     ? staleFixture()
-    : FIXTURES[ticker]
-      ? { ...paperPayload(FIXTURES[ticker]), ticker }
-      : null;
+    : ticker === APPLE_TICKER
+      // APPLE'S OWN FILED PAYLOAD (KI-43, Nihar 2026-11-13). It used to be a
+      // deliberate 404, on the premise that the curated company "renders
+      // without fetching anything" -- true until every route into a company
+      // started opening the company page, which needs a payload. The journey
+      // drives THE ENGINE'S model of Apple now, from the payload the live
+      // site would fetch; the curated file stays a verification reference,
+      // compared in `npm run verify` and the workbook suite, which need no
+      // browser. Standing decision 1 holds: no hand-built model on the site.
+      ? applePayload()
+      : FIXTURES[ticker]
+        ? { ...paperPayload(FIXTURES[ticker]), ticker }
+        : null;
 
 let problems = 0;
 const fail = (what: string, expected: string, got: string) => {
@@ -332,12 +347,11 @@ async function search(page: Page, ticker: string) {
     .click({ timeout: 30_000 });
 }
 
-/** A curated company: no fetch, straight to the questions. */
-async function openCurated(page: Page, ticker: string) {
-  await search(page, ticker);
-  await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 60_000 });
-  await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
-}
+// `openCurated` HAS BEEN REMOVED (KI-43, Nihar 2026-11-13). It searched for a
+// ticker and pressed "Skip and build the model" straight away, which only
+// worked while a chosen company opened the questions screen. Every company is
+// reached through `openFetched` now -- the same journey a reader takes, which
+// asserts the route lands on the Overview before it goes any further.
 
 /** A fetched company: the figures screen, then the questions. */
 /**
@@ -486,6 +500,12 @@ async function openFetched(page: Page, ticker: string) {
   await checkHeadsOnScreen(page);
   await checkBridgeOnScreen(page);
   await page.getByRole('button', { name: /^build the model$/i }).click({ timeout: 90_000 });
+  // THE QUESTIONS SCREEN, READ WHERE IT ACTUALLY IS. The contrast read for it
+  // used to sit in the Apple arm, after the journey had already passed through
+  // and left it -- so it measured the valuation screen under the questions
+  // screen's name. It runs here, while the questions are on screen, and now
+  // covers every company the check drives rather than one.
+  await readContrast(page, 'the questions screen');
   await page.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 90_000 });
   await page.getByText(/how it was calculated/i).first().waitFor({ timeout: 60_000 });
 }
@@ -1986,9 +2006,26 @@ async function checkValued(page: Page, label: string, source: any, symbol: strin
   if (headline?.includes(exit)) ok(`headline exit multiple value: ${exit}`);
   else fail('headline exit multiple value', exit, '(not on the page)');
 
+  // AGAINST THE SMALLER OF THE TWO, which is the convention the site publishes
+  // and `src/data/terminalSpread.ts` sets out in as many words: the spread
+  // reads as "how much bigger is one than the other" and does not depend on
+  // which method is chosen as the base.
+  //
+  // THIS CHECK DIVIDED BY THE PERPETUITY VALUE whatever the pair was, so it
+  // measured a different quantity from the one the page prints and only agreed
+  // when the perpetuity happened to be the smaller of the two. It does on the
+  // paper company, which is why this passed for as long as the paper company
+  // was the only one it ran on; Apple's exit multiple is the smaller, and the
+  // two figures came out 11.51% against the page's 13% -- the same pair of
+  // values, divided by different denominators.
+  //
+  // The arithmetic is written out here rather than imported from
+  // `terminalSpread`, because an expectation that calls the same function as
+  // the screen proves only that the function is deterministic.
   const spread =
     num(D.perpetuity?.valuePerShare) && num(D.exitMultipleValuation?.valuePerShare)
-      ? Math.abs(D.exitMultipleValuation.valuePerShare / D.perpetuity.valuePerShare - 1)
+      ? Math.abs(D.exitMultipleValuation.valuePerShare - D.perpetuity.valuePerShare) /
+        Math.min(D.exitMultipleValuation.valuePerShare, D.perpetuity.valuePerShare)
       : null;
   if (spread !== null) {
     // TO THE POINT, NOT TO THE LAST DIGIT. The page prints this percentage
@@ -2316,7 +2353,17 @@ const TYPE_RATCHET: Record<string, { count: number; why: string }> = {
 };
 
 const typeSeen = new Map<string, any>();
-const typeOffStep = new Map<string, number>();
+// THE RATCHET IS THE WORST SINGLE SCREEN, not the sum over every screen
+// visited (2026-11-13). It used to be one running total, so the figure it
+// compared against depended on HOW MANY TIMES a screen was walked rather than
+// on how much off-step type was on it: the moment Apple started coming through
+// the figures screen as well as the paper company, 391 became 594 and the
+// ratchet reported a regression where no type had changed at all.
+//
+// Counted per size PER SCREEN and compared at the worst of them, it is
+// insensitive to the route and still catches the thing it exists to catch --
+// more off-step type on a screen than the day it was recorded.
+const typeOffStep = new Map<string, Map<string, number>>();
 let typeScreens = 0;
 let typeElements = 0;
 
@@ -2345,7 +2392,10 @@ async function readType(page: Page, where: string) {
     if (onStep && !below) continue;
     const ratcheted = !below && TYPE_RATCHET[String(it.size)];
     if (ratcheted) {
-      typeOffStep.set(String(it.size), (typeOffStep.get(String(it.size)) ?? 0) + 1);
+      const key = String(it.size);
+      if (!typeOffStep.has(key)) typeOffStep.set(key, new Map());
+      const perScreen = typeOffStep.get(key)!;
+      perScreen.set(where, (perScreen.get(where) ?? 0) + 1);
       continue;
     }
     const key = `${where} | ${it.size}px${it.svg ? ' svg' : ''}`;
@@ -2365,10 +2415,19 @@ function reportType() {
     );
   }
   for (const [size, entry] of Object.entries(TYPE_RATCHET)) {
-    const now = typeOffStep.get(size) ?? 0;
+    // The worst single screen, and which one it was -- so a raise can be read
+    // rather than guessed at.
+    let now = 0;
+    let worstScreen = '(nowhere)';
+    for (const [screen, count] of typeOffStep.get(size) ?? new Map()) {
+      if (count > now) {
+        now = count;
+        worstScreen = screen;
+      }
+    }
     if (now > entry.count) {
       problems++;
-      console.log(`  PROBLEM: ${now} elements at ${size}px, more than the ${entry.count} recorded (${entry.why}); the ratchet only falls`);
+      console.log(`  PROBLEM: ${now} elements at ${size}px on ${worstScreen}, more than the ${entry.count} recorded (${entry.why}); the ratchet only falls`);
     } else if (now < entry.count) {
       console.log(`  NOTE: ${now} elements at ${size}px, fewer than the ${entry.count} recorded: lower TYPE_RATCHET['${size}'] to ${now}`);
     }
@@ -2377,7 +2436,10 @@ function reportType() {
     ok(
       `${typeScreens} screens, ${typeElements.toLocaleString('en-GB')} pieces of type: every size a step, none under 13px` +
         Object.entries(TYPE_RATCHET)
-          .map(([size, e]) => `; ratchet ${size}px at ${typeOffStep.get(size) ?? 0} of ${e.count} (${e.why})`)
+          .map(([size, e]) => {
+            const worst = Math.max(0, ...[...(typeOffStep.get(size) ?? new Map()).values()]);
+            return `; ratchet ${size}px at ${worst} of ${e.count} on its worst screen (${e.why})`;
+          })
           .join('')
     );
 }
@@ -5907,7 +5969,19 @@ async function checkCondensedHeader(browser: Browser) {
   if (down.anchorY !== top.anchorY) issues.push(`the page content moved from y ${top.anchorY} to ${down.anchorY} when the bar switched`);
   if (down.rule !== 48) issues.push(`the progress rule sits at y ${down.rule}, not under the 48px bar`);
   const labels = down.buttons.map((b: any) => b[0]);
-  if (labels.join() !== 'Marginalia home,Search companies,Menu' || down.buttons.some((b: any) => b[1] !== 36 || b[2] !== 36)) issues.push(`the bar holds ${JSON.stringify(down.buttons)}`);
+  // THE MARK IS A WORD NOW, SO IT IS NOT A SQUARE (Nihar, 2026-11-12, item 4).
+  // This used to require all three controls to be exactly 36x36, which was
+  // right while the bar carried a bare red square -- but a square is the FULL
+  // STOP of the wordmark and says nothing without the word, so the bar spells
+  // "marginalia." The two icon buttons are still square to the pixel; the
+  // wordmark is checked for what it has to be instead: wide enough to be a
+  // word rather than a glyph, and short enough to sit in a 48px bar. Both
+  // still fail if it goes back to a square or grows out of the bar.
+  const [markLabel, markW, markH] = (down.buttons[0] ?? []) as [string, number, number];
+  if (labels.join() !== 'Marginalia home,Search companies,Menu') issues.push(`the bar holds ${JSON.stringify(labels)}`);
+  else if (markW < 56 || markW > 160) issues.push(`the bar's mark is ${markW}px wide (${markLabel}) — a word belongs between 56 and 160`);
+  else if (markH !== 36) issues.push(`the bar's mark is ${markH}px tall, not 36 in a 48px bar`);
+  else if (down.buttons.slice(1).some((b: any) => b[1] !== 36 || b[2] !== 36)) issues.push(`the bar's icon buttons are ${JSON.stringify(down.buttons.slice(1))}, not 36x36`);
   const band = await at(60);
   if (band.flag !== 'true') issues.push('scrolling back to 60px restores the header: there is no dead band');
   const back = await at(30);
@@ -6299,9 +6373,17 @@ try {
   const requests: string[] = [];
   page.on('request', (r: any) => requests.push(r.url()));
 
-  // 1. The curated model, which the site renders without fetching anything.
-  const apple: any = (COMPANIES_DATA as any).AAPL;
-  await openCurated(page, 'AAPL');
+  // 1. APPLE, THROUGH THE COMPANY PAGE, AND THE ENGINE'S MODEL OF IT.
+  //
+  // This arm used to open the curated file with no fetch at all. The route
+  // changed, not what the arm proves: `openFetched` asserts that a search for
+  // AAPL lands on `/company/AAPL/overview` with the company page rendered, and
+  // fails by name if it lands anywhere else, then goes Overview -> Model ->
+  // figures -> build the way a reader does. What the screen is compared
+  // against is the engine's own model of Apple's filed payload, so the arm
+  // still fails if the model does not render or renders different figures.
+  const apple: any = buildCompanyFrom(applePayload());
+  await openFetched(page, APPLE_TICKER);
   // AFTER THE FIRST REAL NAVIGATION, not before it. `readContrast` evaluates on
   // whatever is loaded and never navigates, so a font check placed above it
   // measured an about:blank page and reported no stylesheet at all — which is
@@ -6327,9 +6409,8 @@ try {
     }
     await landing.close();
   }
-  await readContrast(page, 'the questions screen');
-  await checkValued(page, 'Apple, the curated model', AAPL_SOURCE, apple.currencySymbol || '$');
-  await readContrast(page, 'the analysis screen, curated');
+  await checkValued(page, 'Apple, the engine model', apple.modelData, apple.currencySymbol || '$');
+  await readContrast(page, 'the analysis screen, Apple');
 
   // 2. A derived model, built through the fetch, the figures and the
   //    questions, the way a reader reaches one.

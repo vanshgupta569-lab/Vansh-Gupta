@@ -30,7 +30,40 @@ mistakes and would never be fixed:
   anything else `KI-1`. The order of the table still says which matters most,
   but nothing outside this file should refer to an entry by its position.
 - Taken so far: `KI-1` to `KI-43`. **Next free: `KI-44`.** Retired, meaning
-  fixed and never to be reused: `KI-40` (the landing page's first script held the main thread. `heads.ts` wanted a row number, the published row map lived in `excelExport.ts`, and that file imports ExcelJS at its top — so **exceljs and JSZip travelled into the entry chunk the landing page loads first**, a megabyte of workbook writer downloaded and evaluated by a reader who had not asked for a workbook. The map is its own module now, `modelSheetRows.ts`, which imports nothing; one definition still, moved rather than copied, and it ends a cycle `heads.ts` documented rather than fixed. Measured 2026-11-11: the entry chunk fell from **1,695KB to 677KB raw**, nothing blocks before the first paint at all (0ms), and the two long tasks left start at about 1.1 and 1.4 seconds — after the page is on screen, when the particle field mounts. TBT medians 39, 71, 83, 137 and 200ms against a 200ms budget, where this page measured 453–506ms. `verify:landing` now names any workbook library in a script loaded before the first paint, and reports 2 faults with the import put back), `KI-41` (the search palette found nothing when
+  fixed and never to be reused: `KI-43` (the dashboard check opened the curated
+  Apple model by searching and pressing "Skip and build the model", which only
+  worked while a chosen company opened the questions screen. Since `9bd0a76`
+  every route opens the company page, which needs a payload, and the check
+  answered `/api/company?ticker=AAPL` with a deliberate 404 — so the journey
+  dead-ended on "Nothing to show" and `openCurated` timed out after 60s.
+  **Nihar's decision of 2026-11-13: re-aim the route, not what the arm proves.**
+  Apple's own filed payload is served offline from `verify/fixtures/appleCompany.mts`
+  — the same `verify/payloads/AAPL.json` the capture already maintains, so no
+  network call and no second copy of Apple's figures — and the arm now runs
+  through `openFetched`, the journey a reader takes, against THE ENGINE'S model
+  of Apple. The curated file stays a verification reference, compared in
+  `npm run verify` and the workbook suite, which need no browser and already
+  agree to 3.77e-9% over 60 models; standing decision 1 holds, with no
+  hand-built model on the site. `openModelTab` still fails by name if the route
+  lands anywhere but `/company/AAPL/overview`, and `checkValued` still fails if
+  the model does not render. Measured 2026-11-13: `verify:dashboard` at **0
+  problems**, 25 screens and 3,882 pieces of type, where the same suite on the
+  same tree reported 1 before the re-aim and 3 part-way through it. The three
+  consecutive clean runs Nihar asked for were NOT obtained: the second stalled
+  on the figures screen with four arms reporting "not on the page" and a 90s
+  timeout, and the third never started because the harness stopped the task
+  for critically low memory. That is `KI-42`, which stays open, and not this.
+  **Re-aiming it exposed three faults the single-company route had hidden** —
+  a spread assertion that divided by the perpetuity value whatever the pair
+  was, and so measured a different quantity from the page unless the perpetuity
+  happened to be the smaller of the two, which it always was on the only
+  company the arm ran on; a condensed-bar assertion that required all three
+  controls to be 36x36, written when the bar held a bare red square and wrong
+  once it spelled the name; and a type ratchet summed across every screen
+  visited, so it counted VISITS rather than type and reported 594 against 391
+  the moment a second company came through the figures screen, with no type
+  changed at all — it is counted per screen and compared at the worst of them
+  now, which reads 284 of 391), `KI-40` (the landing page's first script held the main thread. `heads.ts` wanted a row number, the published row map lived in `excelExport.ts`, and that file imports ExcelJS at its top — so **exceljs and JSZip travelled into the entry chunk the landing page loads first**, a megabyte of workbook writer downloaded and evaluated by a reader who had not asked for a workbook. The map is its own module now, `modelSheetRows.ts`, which imports nothing; one definition still, moved rather than copied, and it ends a cycle `heads.ts` documented rather than fixed. Measured 2026-11-11: the entry chunk fell from **1,695KB to 677KB raw**, nothing blocks before the first paint at all (0ms), and the two long tasks left start at about 1.1 and 1.4 seconds — after the page is on screen, when the particle field mounts. TBT medians 39, 71, 83, 137 and 200ms against a 200ms budget, where this page measured 453–506ms. `verify:landing` now names any workbook library in a script loaded before the first paint, and reports 2 faults with the import put back), `KI-41` (the search palette found nothing when
   the query was a company's WHOLE name. `nameWords` drops legal suffixes from
   the listing, so "Nestlé S.A." is matched as "nestle", but the query was only
   folded — so a reader who typed or PASTED the full name asked for "nestle sa",
@@ -254,7 +287,7 @@ commit were measured on the payload set of that date and say so.
 
 ## Defects, by valuation impact
 
-**Two are open, as of 2026-11-13**, and neither moves a valuation: `KI-42` is the
+**One is open, as of 2026-11-13**, and it moves no valuation: `KI-42` is the
 browser check not finishing. It is not a figure a reader could quote.
 `KI-31` to `KI-39` were all fixed within eight days of each other, and the ID
 ledger above says what each retired number was.
@@ -264,54 +297,6 @@ right about everything, only that **nothing else is known to be wrong and left
 standing**. What the sources do not publish is in `DATA_CONSTRAINTS.md`; what
 the engine does on purpose is in `METHODOLOGY.md`. The next defect found goes
 here as `KI-39`.
-
-### `KI-43` The curated Apple model is no longer reachable through a reader's journey, and the dashboard check still goes looking for it
-
-**What is wrong.** `verify/dashboard.mts` opens the curated Apple model the way
-a reader used to: search for `AAPL`, then press "Skip and build the model" on
-the questions screen. Since 2026-11-12 (commit `9bd0a76`, "Choosing a company
-opens the company, whatever chose it") every route into a company opens
-`/company/AAPL/overview` instead, and that screen needs a payload from
-`/api/company`. The check answers that request with a 404 for AAPL on purpose —
-its comment says the curated company "renders without fetching anything" — so
-the page shows "Nothing to show: no fixture for AAPL", the questions screen
-never appears, and `openCurated` times out after 60 seconds.
-
-**Where.** `verify/dashboard.mts:336` (`openCurated`), against
-`src/components/companyPage.tsx:208` and `:366`, which gate every tab including
-Model on `!error && payload`.
-
-**How it was measured.** `npm run verify:dashboard`, 2026-11-13: **1 problem**,
-`locator.click: Timeout 60000ms exceeded` waiting for
-`getByRole('button', { name: /skip and build the model/i })`, with
-`verify/out/dashboard-failure.png` showing the AAPL overview tab carrying the
-404. Every other suite is at zero on the same tree: `verify` 0, `verify:grid` 0,
-`verify:sections` 0, the workbook suite's 60 models agreeing to 3.8e-9% at
-worst, `tsc` clean, `build` clean.
-
-**How many companies it affects.** None. No valuation moves, no figure changes,
-and the live site is unaffected: `/api/company` answers there, so a reader
-reaching AAPL gets the engine's own model from the filings, which is what
-standing decision 1 asks for.
-
-**The worst example, and why this is a decision rather than a patch.** The
-honest reading is that the product is now doing what standing decision 1 says —
-"the engine builds every model; no hand-built company models on the site; the
-hand-built Apple file is a test fixture and a verification reference" — and the
-check is still asserting the opposite, that the site renders a hand-built model
-to a reader with no fetch at all. **The fix is not to make the curated file
-reachable again**, which would put a hand-built model back on the site, and it
-is not to loosen the arm. It is to decide where the curated comparison belongs:
-it already runs outside the browser, where `npm run verify` and the workbook
-suite compare 60 models including curated Apple and agree to 3.8e-9%. Re-aiming
-the dashboard's journey arm at a company with a payload, and leaving the curated
-reference to the suites that do not need a browser, changes WHAT THIS CHECK
-VERIFIES, so it is Nihar's call and not a side effect of another job.
-
-**Roughly what it moves.** Nothing in any model. It costs the dashboard suite
-its run: one arm fails and the arms after it do not execute, so the contrast
-reads, the bottom-bar clearance and the saved-model comparison are all currently
-unreported rather than passing.
 
 ### `KI-42` The browser check does not finish on this machine
 
@@ -348,6 +333,31 @@ stop moving randomly, but it still does not finish. Five runs on 2026-11-11:
 The webfont count of 2 did not recur on the sixth run, and the check now names
 the requests it saw: two for ONE url is a page loaded twice, which is what that
 was.
+
+**Four more runs on 2026-11-13**, after `KI-43` re-aimed the Apple arm through
+the company page. The suite is doing more than it was — two companies now come
+through the figures screen rather than one — and the pattern is unchanged:
+
+| Run | Stopped at |
+|---|---|
+| 1 | 3 problems, all of them real and all now fixed (`KI-43`) |
+| 2 | nothing — **0 problems**, 25 screens, 3,882 pieces of type |
+| 3 | the figures screen again: the rebuilt value, the way back, the drag and the EBITDA bridge all reported "not on the page", then a 90s timeout waiting for "Build the model" |
+| 4 | never started — the harness stopped the task because the machine was critically low on memory |
+
+**The evidence says the machine, not the site.** Run 3's four faults are all
+absences followed by a timeout, which is a screen that never rendered rather
+than a screen that rendered wrongly, and run 2 passed every one of those arms
+on a tree identical to the one run 3 failed on. The harness then killed run 4
+outright for memory pressure while the session was idle, which is the clearest
+statement yet of what this machine has spare. **The three consecutive clean runs
+Nihar asked for on 2026-11-13 were therefore not obtained**, and that is this
+entry rather than `KI-43`.
+
+What is still not known is why memory pressure lands on the FIGURES SCREEN
+every time rather than anywhere else. Until that is understood this stays open,
+because "it is the machine" is a diagnosis that would cover a real leak just as
+comfortably.
 
 **What is NOT known** is whether the rest is the app or this machine, and this
 entry says so rather than guessing. Each journey the check walks has been walked
