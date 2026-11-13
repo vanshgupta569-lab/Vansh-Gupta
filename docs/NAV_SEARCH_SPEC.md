@@ -7,6 +7,14 @@
 6. Built in build step 9 (screen-by-screen polish), after VISUAL_SYSTEM and the landing page (step 8).
 7. (Nihar, 4 November 2026) The menu shows Companies and Learn only while the other sections have no shipped destination: APPROVED. A section appears when it has one.
 8. (Nihar, 4 November 2026) The loading screen names the two stages this wait really has (reading the filings, checking the filed statements), not five: APPROVED.
+9. **(Nihar, 11 November 2026) The menu's sections and rows, named one by one.** APPROVED:
+   - **Companies** — Search a company (⌘K), Screener. Coming: private companies.
+   - **Valuation** (replaces **Tools**) — Value a listed company, Saved models, Excel model and house template, Peer workbook. Coming: one-pager, reformat Excel, LBO model.
+   - **Learn** — Margin notes, Explainers, How Marginalia works, Coverage and sources, What's being built.
+   - **Overview and Financials leave the menu.** They are tabs of a company and live on the company page's own tab row. This REVERSES decision 7's shape of 4 November, where they were menu rows that opened the palette as "Choose a company for …" when no company was open: a menu row that can only ask which company is meant is asking a question the reader answered by opening the menu.
+   - **This also reverses the decision of 8 November** (second cloud run, decision 5), which was one Tools row covering the model, the Excel download, saved models and the template, on the rule that each destination appears only once. The four are named separately now, because a reader looking for saved models should find the words "saved models".
+   - **OPEN, and not a proposal:** three of Valuation's four rows name PANELS inside the Model tab — saved models, the house template and the peer workbook open from buttons on the valuation screen and have no address of their own. Each row therefore lands on the Model tab of the chosen company rather than on its own panel. Giving those panels addresses is its own job; until it is done the labels promise a little more than the rows deliver, and this line is the record of that.
+
 
 NAV_SEARCH_SPEC
 Marginalia · global header, main menu, search (⌘K) and loading screen · v1.0 · 31 October 2026 · obeys VISUAL_SYSTEM v1.0 and the decisions at its top (ⓘ stays; dark is the only instrument theme).

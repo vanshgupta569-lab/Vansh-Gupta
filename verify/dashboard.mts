@@ -5131,7 +5131,7 @@ async function checkInAppNotFound(browser: Browser) {
 // and returns focus to Menu.
 async function checkHeaderAndMenu(browser: Browser) {
   console.log('\n=== the global header and the menu ===');
-  const SEVEN = ['Companies', 'Research', 'Markets', 'Invest', 'Tools', 'Learn', 'Deals'];
+  const SEVEN = ['Companies', 'Research', 'Markets', 'Invest', 'Valuation', 'Learn', 'Deals'];
   const issues: string[] = [];
   const notes: string[] = [];
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
@@ -5825,33 +5825,44 @@ async function checkMenuCompanyLinks(browser: Browser) {
     const sec = MENU_M.MENU.find((m: any) => m.name === name);
     if (!sec || !sec.links.length) issues.push(`${name} is in the header with no shipped destination`);
   }
-  // No company open: Choose a company for Financials.
+  // OVERVIEW AND FINANCIALS ARE NOT IN THE MENU (Nihar, 11 November 2026).
+  // They are tabs of a company, and a tab needs a company: chosen from the
+  // menu without one they could only ask which company was meant.
   await p.click('header [data-menu-trigger="Companies"]');
-  await p.click('[data-menu-panel="Companies"] [data-menu-link]:has-text("Financials")');
-  const title = await p.waitForSelector('[data-search-palette]', { timeout: 5000 }).then(() => p.textContent('[data-search-palette]')).catch(() => null);
-  if (!title || !title.includes('Choose a company for Financials')) issues.push(`with no company open, Financials opens ${title === null ? 'no palette' : `a palette without its purpose ("${title.slice(0, 40)}")`}`);
-  else {
-    await p.fill('[data-search-palette] input', PAPER_TICKER.toLowerCase());
-    await p.waitForSelector(`[data-search-row="company"][data-ticker="${PAPER_TICKER}"]`, { timeout: 5000 }).catch(() => {});
-    await p.press('[data-search-palette] input', 'Enter');
-    const there = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/financials$`), { timeout: 15_000 }).then(() => true).catch(() => false);
-    if (!there) issues.push(`choosing ${PAPER_TICKER} for Financials lands on ${new URL(p.url()).pathname}`);
-  }
-  // A company open: Tools goes straight to its Model tab.
+  const strays = await p
+    .locator('[data-menu-panel="Companies"] [data-menu-link]')
+    .filter({ hasText: /^(Overview|Financials)$/ })
+    .count();
+  if (strays) issues.push(`${strays} company TAB(s) are still rows in the Companies menu`);
+  await p.keyboard.press('Escape');
+
+  // A company open: Valuation goes straight to its Model tab, without asking
+  // which company is meant.
   await p.goto(`${BASE}/company/${PAPER_TICKER}/overview`, { waitUntil: 'networkidle' });
-  if (shown.includes('Tools')) {
-    await p.click('header [data-menu-trigger="Tools"]');
-    await p.click('[data-menu-panel="Tools"] [data-menu-link]');
+  if (shown.includes('Valuation')) {
+    await p.click('header [data-menu-trigger="Valuation"]');
+    // The rows that need a company; "Value a listed company" opens the
+    // palette on purpose and is not one of them.
+    await p.click('[data-menu-panel="Valuation"] [data-menu-link]:has-text("Saved models")');
     const direct = await p.waitForURL(new RegExp(`/company/${PAPER_TICKER}/model$`), { timeout: 15_000 }).then(() => true).catch(() => false);
-    if (!direct) issues.push(`with ${PAPER_TICKER} open, Tools goes to ${new URL(p.url()).pathname}, not its Model tab`);
-    if (await p.locator('[data-search-palette]').count()) issues.push('with a company open, Tools still asks which company');
-  } else issues.push('Tools is not in the header, though its destination is built');
+    if (!direct) issues.push(`with ${PAPER_TICKER} open, Saved models goes to ${new URL(p.url()).pathname}, not its Model tab`);
+    if (await p.locator('[data-search-palette]').count()) issues.push('with a company open, Valuation still asks which company');
+  } else issues.push('Valuation is not in the header, though its destinations are built');
+
+  // AND WITHOUT A COMPANY, a row that needs one says what it is for.
+  await p.goto(BASE, { waitUntil: 'networkidle' });
+  await p.click('header [data-menu-trigger="Valuation"]');
+  await p.click('[data-menu-panel="Valuation"] [data-menu-link]:has-text("Peer workbook")');
+  const title = await p.waitForSelector('[data-search-palette]', { timeout: 5000 }).then(() => p.textContent('[data-search-palette]')).catch(() => null);
+  if (!title || !/Choose a company for the peer workbook/i.test(title)) {
+    issues.push(`with no company open, Peer workbook opens ${title === null ? 'no palette' : `a palette without its purpose ("${title.slice(0, 44)}")`}`);
+  }
   await ctx.close();
   for (const issue of issues) {
     problems++;
     console.log(`  PROBLEM: ${issue}`);
   }
-  if (!issues.length) ok(`sections shown: ${shown.join(' · ')}; every company link names a built tab; with none open, "Choose a company for Financials" lands on its tab; with ${PAPER_TICKER} open, Tools goes straight to its Model tab`);
+  if (!issues.length) ok(`sections shown: ${shown.join(' · ')}; every company link names a built tab; no company TAB is a menu row; with ${PAPER_TICKER} open, Valuation goes straight to its Model tab, and with none open it says what it needs one for`);
 }
 
 // ---- the condensed header bar (job 9.1, NAV_SEARCH §2.2) ------------------
