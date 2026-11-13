@@ -39,8 +39,15 @@ import * as THREE from 'three';
    frame-average signal); after that, frames that run over 20ms halve its
    points, twice at most, and it keeps drawing. */
 export const PARTICLE_BUDGET = 12000;
-export const OBJECT_POINTS = { desktop: 9000, compact: 5000 } as const;
-export const SKY_POINTS = { desktop: 3000, compact: 1000 } as const;
+/* THE SPLIT, INSIDE THE SAME TOTAL (2026-11-12). The object carried 9,000 and
+   the sky 3,000. The first form the object takes is the WORDMARK, and at 9,000
+   points spread across ten letters it read as drifting dust rather than as a
+   word — the one thing on the landing page that has to be legible. The object
+   takes 10,500 and the sky 1,500; the total is unchanged at 12,000, which is
+   what `VISUAL_SYSTEM` §6 budgets and what the check asserts. The sky is a
+   backdrop and loses nothing a reader can name. */
+export const OBJECT_POINTS = { desktop: 10500, compact: 6000 } as const;
+export const SKY_POINTS = { desktop: 1500, compact: 500 } as const;
 export const MAX_PIXEL_RATIO = 1.5;
 export const SETTLE_MS = 5000;
 export const SLOW_FRAME_MS = 20;
@@ -245,9 +252,14 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
           ? (Math.floor(((si++ + 0.5) * sqN) / Math.max(1, squareN)) % sqN) * 2
           : (Math.floor(((wi++ + 0.5) * inkN) / Math.max(1, wordN)) % inkN) * 2;
         accent[i] = useSquare ? 1 : 0;
-        a[i * 3]     =  (pool[k]     - cx + (seeded(i + 331) - 0.5) * 1.9) * scale;
-        a[i * 3 + 1] = -(pool[k + 1] - cy + (seeded(i + 341) - 0.5) * 1.9) * scale;
-        a[i * 3 + 2] =  (seeded(i + 311) - 0.5) * 0.22;
+        /* THE SCATTER IS HALVED, AND THE DEPTH WITH IT (2026-11-12). At
+           ±0.95 of a pixel in a 230px face the points sat off the strokes as
+           often as on them, and a letter made of dust that is beside itself
+           is not a letter. ±0.45 keeps the grain — this is a field of
+           particles, not a font — while the strokes stay strokes. */
+        a[i * 3]     =  (pool[k]     - cx + (seeded(i + 331) - 0.5) * 0.9) * scale;
+        a[i * 3 + 1] = -(pool[k + 1] - cy + (seeded(i + 341) - 0.5) * 0.9) * scale;
+        a[i * 3 + 2] =  (seeded(i + 311) - 0.5) * 0.12;
       }
       return a;
     };

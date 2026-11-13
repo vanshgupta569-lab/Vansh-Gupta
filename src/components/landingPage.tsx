@@ -515,6 +515,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           {/* LANDING §2.1, final text. The display and lead steps are the
               landing page's alone (VISUAL_SYSTEM finding 8). "Live models"
               went because it reads as live market data. */}
+          {/* CLEAR SPACE UNDER THE PARTICLE WORDMARK (2026-11-12).
+              The wordmark is drawn in the canvas behind this column and sat
+              ON the eyebrow: two pieces of type, one of them made of dust,
+              occupying the same band. The hero's own text starts below the
+              wordmark's lower edge now, so each has room of its own. */}
+          <div aria-hidden="true" className="h-[22vh] min-h-[120px] max-h-[260px]" data-hero-clear />
           <Eyebrow centred>Source: company filings</Eyebrow>
           <h1
             className="text-display mb-6 mx-auto max-w-[1000px]"
@@ -563,9 +569,10 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               </button>
             )}
           </div>
-          <p className="font-figure text-[13px] mt-8" style={{ color: MUTED }}>
-            Scroll to see how it works
-          </p>
+          {/* "Scroll to see how it works" removed (LANDING_SPEC finding 4).
+              A page that has to ask to be scrolled has not earned the scroll,
+              and the section below it already says what it is. */}
+
           {fieldOn && (
             /* WCAG 2.2.2: the motion can be stopped. 24×24 at the hero's
                lower edge, inside the pointer-events-none column, so it opts
