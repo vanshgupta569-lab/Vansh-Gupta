@@ -1,4 +1,41 @@
 # LANDING_SPEC — decisions (31 October 2026; replaces the 30 October file)
+0. **(Nihar, 13 November 2026) Three decisions from the Impeccable review.**
+   - **Page length: APPROVED.** The `min-h-screen` blocks and the empty vacancy
+     go, so each section is only as tall as its content, at 1440 and at 390.
+     **Every section stays; nothing is removed** — this is the sizing changing,
+     not the page losing a part, and decision 1 below is untouched. The hero
+     keeps a full viewport at the figure section 3.2 already sets for it,
+     `min(100svh, 900px)`; the rest sit on the gaps this spec already
+     publishes, 96px desktop and 64px mobile. The pinned margin section is a
+     SCRUB — its height is the scroll distance over which the active row
+     advances — so it was shortened from 62vh a row to 30vh rather than
+     collapsed, which keeps the interaction and halves the section.
+     **Measured 13 November 2026: 15,969px → 11,756px at 1440 (−26%), and
+     16,053px → 12,174px at 390 (−24%).** The page was longer on a phone than
+     on a desktop before this, because `min-h-screen` does not compress.
+   - **"Every figure has a source": the invented sample is replaced** with the
+     real NVIDIA rows this spec records at section 6.1 — revenue, cost of
+     sales, research and development, and selling, general and administrative,
+     FY2022–FY2026, US$ millions, as filed. Each row carries its five-year run,
+     its statement and SEC EDGAR; the column head names the company, the ticker,
+     the periods and the unit. The old rows named no company, currency, unit or
+     period, and three of the four were model OUTPUTS rather than filings —
+     under a heading promising the opposite. **Value per share is not among the
+     replacements**, per section 3.2: on a named company it would read as a
+     verdict.
+   - **The quote is Carveth Read's, and it is set at body size.** Checked
+     13 November 2026: the line traces to Carveth Read, *Logic: Deductive and
+     Inductive* (1898), chapter 22 — "It is better to be vaguely right than
+     exactly wrong." The Keynes attribution is spurious; Oxford Reference
+     records it as often wrongly attributed to him and Wikiquote notes it was
+     not put to Keynes until after his death. The page was also printing a
+     THIRD wording — "I would rather be vaguely right than precisely wrong" —
+     which is neither Read's sentence nor the usual Keynes variant, so the
+     words are now Read's own. No page number is cited: the sources disagree
+     (351, 352 and 272), and a page nobody here has opened is not a source.
+     Set at 20px rather than 38px, because an unsourced aphorism was the
+     loudest thing on a page about sourcing.
+
 1. v1.1 keeps every existing section. Sections 02–08 still need screenshots; until then they follow the spec's unseen-section rules. Nothing is removed without Nihar's recorded decision.
 2. "Free to use" is not shown until pricing is decided.
 3. Every count and claim is read from the database at build; with today's ~175 companies the page shows the true count, never "10,000+".

@@ -132,8 +132,8 @@ const Block: React.FC<{
   return (
     <section
       id={id}
-      className={`relative min-h-screen flex items-center py-32 ${
-        id === 'hero' ? 'items-end pb-16' : ''
+      className={`relative flex items-center py-16 lg:py-24 ${
+        id === 'hero' ? 'min-h-[min(100svh,900px)] items-end pb-16' : ''
       }`}
     >
       {/* THE SEAM.
@@ -283,33 +283,56 @@ const ROUTES: { n: string; feature: Feature }[] = ['listed-company', 'private-co
 const NEXT: Feature[] = ['one-pager', 'lbo', 'private-company'].map((id) => featureById(id) as Feature);
 
 
+/**
+ * NVIDIA'S OWN FILED LINES, FY2022-FY2026, US$ millions (LANDING_SPEC 6.1).
+ *
+ * Every row is a line from the income statement as filed. Nothing here is
+ * computed, averaged or smoothed, because the section this feeds is headed
+ * "Every figure has a source" and the four rows it used to carry had none:
+ * no company, no currency, no unit, no period, and three of the four were
+ * model OUTPUTS rather than filings. One of them was value per share, which
+ * on a named company reads as a verdict -- the spec excludes it by name.
+ *
+ * `years` is the run the figure column shows; `figure` is the latest of them,
+ * which is the one the table prints beside the annotation.
+ */
+const MARGIN_SNAPSHOT = {
+  company: 'NVIDIA Corporation',
+  ticker: 'NVDA',
+  unit: 'US$ millions',
+  periods: 'FY2022 - FY2026',
+  statement: 'Income statement, as filed',
+  source: 'SEC EDGAR',
+};
+
 const MARGIN_LINES = [
   {
     label: 'Revenue',
-    figure: '10,52,851',
+    figure: '215,938',
+    years: '26,914 · 26,974 · 60,922 · 130,497 · 215,938',
     note: 'What the company billed its customers, before a single cost is taken off.',
     source: 'Income statement, as filed',
   },
   {
-    label: 'Operating margin',
-    figure: '13.8%',
-    // G7: NO CURRENCY WORD ON A SCREEN THAT SERVES EVERY COMPANY. This read
-    // "every rupee of revenue" on a page about companies reporting in sixteen
-    // currencies; the sentence works without a unit at all.
-    note: 'What is left of revenue after the costs of running the business.',
-    source: 'Computed from the income statement',
+    label: 'Cost of sales',
+    figure: '62,475',
+    years: '9,439 · 11,618 · 16,621 · 32,639 · 62,475',
+    note: 'What it cost to make and deliver the things it sold.',
+    source: 'Income statement, as filed',
   },
   {
-    label: 'Free cash flow',
-    figure: '48,933',
-    note: 'The cash left after paying to run the business and replace what it wears out.',
-    source: 'Cash flow statement, as filed',
+    label: 'Research and development',
+    figure: '18,497',
+    years: '5,268 · 7,339 · 8,675 · 12,914 · 18,497',
+    note: 'What it spent designing what it will sell next.',
+    source: 'Income statement, as filed',
   },
   {
-    label: 'Value per share',
-    figure: '1,636.71',
-    note: 'What those future cash flows are worth today, split across the shares in issue.',
-    source: 'Computed. Every input is on the page',
+    label: 'Selling, general and administrative',
+    figure: '4,579',
+    years: '2,166 · 2,440 · 2,654 · 3,491 · 4,579',
+    note: 'What it spent selling the things and running the company.',
+    source: 'Income statement, as filed',
   },
 ];
 
@@ -532,7 +555,18 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         height={900}
         fetchPriority="high"
         className="absolute inset-x-0 top-0 w-full h-screen object-contain object-top sm:object-cover sm:object-center z-[4] pointer-events-none"
-        style={{ opacity: posterOn ? 1 : 0, transition: 'opacity var(--m-dur-reveal) var(--m-ease-enter)' }}
+        style={{
+          opacity: posterOn ? 1 : 0,
+          transition: 'opacity var(--m-dur-reveal) var(--m-ease-enter)',
+          /* THE POSTER'S OWN GROUND IS LIGHTER THAN THE PAGE, so where it
+             is contained rather than covering -- phone widths, so the whole
+             wordmark survives -- it ended on a hard horizontal edge partway
+             down the screen. Faded out instead, so the hero reads as one
+             ground. Cosmetic: the real fix is the second poster asset that
+             LANDING_SPEC 4 specifies and nobody has cut yet. */
+          WebkitMaskImage: 'linear-gradient(to bottom, #000 0%, #000 62%, transparent 94%)',
+          maskImage: 'linear-gradient(to bottom, #000 0%, #000 62%, transparent 94%)',
+        }}
       />
       {fieldOn && (
         <Suspense fallback={null}>
@@ -850,7 +884,10 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             it, so the object has the whole of it to come apart in. Given a
             single screen the dispersal was over before the reader had
             finished the first line. */}
-        <section id="letgo" className="relative min-h-[190vh]">
+        {/* 190vh for one sentence and its attribution: about two and a half
+            screens, most of it empty, to show a dispersal that does not read
+            on either width. The sentence stays; the emptiness does not. */}
+        <section id="letgo" className="relative py-32 lg:py-40">
           {/* A scrim across the whole section would dim the dispersal, which
               is the one thing this section exists to show. The only shading
               is a soft pool behind the quote, and it travels with it. */}
@@ -872,16 +909,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             <div className="relative w-full max-w-[42rem] mx-auto px-6 sm:px-10 lg:px-16 text-center pointer-events-auto">
               <Eyebrow centred>And then it lets go</Eyebrow>
               <p
-                className="font-serif italic text-[24px] sm:text-[30px] lg:text-[38px] leading-[1.32]"
-                style={{ color: INK, letterSpacing: '-0.01em' }}
+                className="font-serif italic text-[20px] leading-[1.45]"
+                style={{ color: INK }}
               >
-                &ldquo;I would rather be vaguely right than precisely wrong.&rdquo;
+                &ldquo;It is better to be vaguely right than exactly wrong.&rdquo;
               </p>
-              <p
-                className="font-figure text-[12px] tracking-[0.18em] uppercase mt-5"
-                style={{ color: MUTED }}
-              >
-                John Maynard Keynes
+              <p className="font-figure text-[13px] mt-4" style={{ color: MUTED }}>
+                Carveth Read, <span className="italic">Logic: Deductive and Inductive</span> (1898),
+                chapter 22
               </p>
             </div>
           </div>
@@ -968,7 +1003,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           data-ground="paper"
           ref={marginRef}
           className="relative w-full"
-          style={{ background: PAPER.ground, height: `calc(100vh + ${MARGIN_LINES.length * 62}vh)` }}
+          style={{
+            background: PAPER.ground,
+            // THE SCRUB IS THE SCROLL DISTANCE PER ROW, not decoration, so it
+            // is shortened rather than dropped: 62vh a row meant roughly a
+            // screen of scrolling to advance one line of a four-line table.
+            // 30vh is still a deliberate step and costs half the page.
+            height: `calc(100vh + ${MARGIN_LINES.length * 30}vh)`,
+          }}
         >
           {/* Top-aligned, not centred. Centred in a full screen it left a
               blank run of cream between the coverage figures and this
@@ -993,8 +1035,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-0">
                 <div>
-                  <div className="font-figure text-[12px] tracking-[0.2em] uppercase mb-5" style={{ color: PAPER.quiet }}>
-                    Sample output
+                  {/* IT SAYS WHOSE FIGURES THESE ARE. "Sample output" over
+                      four invented numbers was the weakest evidence on the
+                      page sitting directly under its strongest promise. */}
+                  <div className="font-figure text-[13px] mb-5" style={{ color: PAPER.quiet }}>
+                    {MARGIN_SNAPSHOT.company} ({MARGIN_SNAPSHOT.ticker}) · {MARGIN_SNAPSHOT.periods} ·{' '}
+                    {MARGIN_SNAPSHOT.unit}
                   </div>
                   <div className="relative border-t" style={{ borderColor: PAPER.line }}>
                     {MARGIN_LINES.map((item, i) => {
@@ -1008,7 +1054,11 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                           style={{
                             borderColor: PAPER.line,
                             height: ROW_H,
-                            background: on ? 'rgba(139,30,30,0.05)' : 'transparent',
+                            /* THE SELECTED ROW IS MARKED BY ITS RULE AND ITS
+                               WEIGHT, NOT BY A PINK WASH. One red on this site,
+                               and it belongs to the one thing to do -- not to
+                               whichever row a scroll position happens to be on. */
+                            background: 'transparent',
                           }}
                         >
                           <span className="font-figure text-[14px]" style={{ color: on ? PAPER.ink : PAPER.quiet }}>
@@ -1016,7 +1066,10 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                           </span>
                           <span
                             className="font-figure text-[19px] lg:text-[22px] tabular-nums"
-                            style={{ color: on ? PAPER.accentText : PAPER.ink }}
+                            /* A FIGURE IS ALWAYS INK (DESIGN.md C16). A filed
+                               number printed in the accent reads as a flag on
+                               the number itself. */
+                            style={{ color: PAPER.ink, opacity: on ? 1 : 0.55 }}
                           >
                             {item.figure}
                           </span>
@@ -1036,20 +1089,29 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 </div>
 
                 <div className="lg:pl-28 lg:pt-16">
-                  <div className="font-figure text-[12px] tracking-[0.2em] uppercase mb-4" style={{ color: PAPER.accentText }}>
+                  {/* THE LABEL IS NOT ACCENT-TEXT. Nine accent words sat in
+                      one viewport here against a budget of five
+                      (VISUAL_SYSTEM 3.1), and a row label is not the one
+                      thing to do on the screen. */}
+                  <div className="font-figure text-[13px] mb-4" style={{ color: PAPER.quiet }}>
                     {line.label}
                   </div>
-                  <p
-                    className="font-serif text-[22px] lg:text-[30px] leading-[1.32] max-w-[22ch]"
-                    style={{ color: PAPER.ink, letterSpacing: '-0.015em' }}
-                  >
+                  {/* THE DEFINITION IS SET IN THE BODY FACE. It was Newsreader,
+                      which is outside the pairing rule: the serif carries
+                      titles, not prose (LANDING_SPEC 3.2). */}
+                  <p className="text-[20px] leading-[1.5] max-w-[30ch]" style={{ color: PAPER.ink }}>
                     {line.note}
                   </p>
+                  {/* AND THE FIVE YEARS BEHIND THE ONE FIGURE, so the number
+                      beside the row is not the only thing a reader is given. */}
                   <div
-                    className="font-figure text-[12px] mt-6 pt-4 border-t inline-block"
-                    style={{ color: PAPER.quiet, borderColor: PAPER.line }}
+                    className="font-figure text-[13px] tabular-nums mt-5 pt-4 border-t"
+                    style={{ color: PAPER.read, borderColor: PAPER.line }}
                   >
-                    {line.source}
+                    {line.years}
+                  </div>
+                  <div className="font-figure text-[13px] mt-2" style={{ color: PAPER.quiet }}>
+                    {line.source} · {MARGIN_SNAPSHOT.source}
                   </div>
                 </div>
               </div>
