@@ -1392,11 +1392,14 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   maximumFractionDigits: 2,
                 })}`}
                 pill={
+                  /* NO COLOUR CARRIES THE SIGN (STUDIO_SPEC 4.2, standing
+                     decision 6, Nihar 2026-11-13). A premium was a red pill
+                     and a discount a green one -- a traffic light, and an
+                     opinion on a security dressed as a style. The words say
+                     which way it is; the pill is neutral. */
                   bankPremiumPct !== null ? (
-                    <Pill tone={bankPremiumPct > 0 ? 'negative' : 'positive'}>
-                      {bankPremiumPct > 0
-                        ? `${bankPremiumPct}% premium`
-                        : `${Math.abs(bankPremiumPct)}% discount`}
+                    <Pill tone="neutral">
+                      {`Price ${Math.abs(bankPremiumPct)}% ${bankPremiumPct > 0 ? 'above' : 'below'}`}
                     </Pill>
                   ) : undefined
                 }
@@ -1455,10 +1458,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                   }
                   pill={
                     premiumAgainst.perpetuity !== null ? (
-                      <Pill tone={premiumAgainst.perpetuity > 0 ? 'negative' : 'positive'}>
-                        {premiumAgainst.perpetuity > 0
-                          ? `${premiumAgainst.perpetuity}% premium`
-                          : `${Math.abs(premiumAgainst.perpetuity)}% discount`}
+                      <Pill tone="neutral">
+                        {`Price ${Math.abs(premiumAgainst.perpetuity)}% ${
+                          premiumAgainst.perpetuity > 0 ? 'above' : 'below'
+                        }`}
                       </Pill>
                     ) : undefined
                   }
@@ -1477,10 +1480,10 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                     foot={inTrading.exit ? `${inTrading.exit.text} in ${inTrading.exit.currency}` : undefined}
                     pill={
                       premiumAgainst.exit !== null ? (
-                        <Pill tone={premiumAgainst.exit > 0 ? 'negative' : 'positive'}>
-                          {premiumAgainst.exit > 0
-                            ? `${premiumAgainst.exit}% premium`
-                            : `${Math.abs(premiumAgainst.exit)}% discount`}
+                        <Pill tone="neutral">
+                          {`Price ${Math.abs(premiumAgainst.exit)}% ${
+                            premiumAgainst.exit > 0 ? 'above' : 'below'
+                          }`}
                         </Pill>
                       ) : undefined
                     }
