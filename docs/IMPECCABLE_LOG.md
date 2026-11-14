@@ -121,4 +121,8 @@ Carried forward rather than dropped. None is a conflict; each is work.
 
 ## Progress notes
 
+**Batch 1, part one — 14 November 2026** (landing page, header and menus, search palette and screen; company Overview follows).
+The landing page lost an unverifiable "VERIFIED LEAD" badge, four box-shadows and three rounded corners it had while DESIGN.md claimed none existed, and **26% of its height** (15,969 → 11,756px at 1440; 16,053 → 12,174px at 390) with every section kept; its sample figures became NVIDIA's filed lines and its quote found its real author. The header's two phone squares matched at 44px and its menu sheet went from 780px around 227px of content to 229px. The search field got a name a screen reader can read; **the palette needed nothing at all** and that is recorded as carefully as the changes.
+Three checks now run at 1440 and 390 — `verify:craft`, the extended `verify:condensed`, and `verify:open`'s field arm — and each was proved by breaking it.
+
 *(Three lines per batch, written after the push.)*
