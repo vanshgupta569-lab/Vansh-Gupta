@@ -467,7 +467,7 @@ export const Header: React.FC<HeaderProps> = ({
               onPointerEnter={onPrefetchSearch}
               aria-label="Search companies"
               aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}
-              className="group h-9 w-9 sm:w-[240px] xl:w-[320px] border border-line hover:border-accent flex items-center justify-center sm:justify-start gap-2 sm:pl-3 sm:pr-2 cursor-pointer transition-colors duration-[110ms] pointer-coarse:h-11 pointer-coarse:w-11 sm:pointer-coarse:w-[240px]"
+              className="group h-11 w-11 sm:h-9 sm:w-[240px] xl:w-[320px] border border-line hover:border-accent flex items-center justify-center sm:justify-start gap-2 sm:pl-3 sm:pr-2 cursor-pointer transition-colors duration-[110ms] sm:pointer-coarse:w-[240px]"
             >
               <Search className="w-4 h-4 text-muted shrink-0" strokeWidth={1.5} />
               <span className="hidden sm:inline flex-1 text-left text-[13px] text-muted group-hover:text-ink transition-colors duration-[110ms] whitespace-nowrap">
@@ -574,7 +574,9 @@ export const Header: React.FC<HeaderProps> = ({
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
-            className={`fixed inset-x-0 ${condensed ? 'top-12' : 'top-16 min-[1100px]:hidden'} bottom-0 z-50 overflow-y-auto bg-overlay border-t border-line min-[640px]:left-auto min-[640px]:w-[480px] min-[640px]:border-l`}
+            className={`fixed inset-x-0 ${
+              condensed ? 'top-12 max-h-[calc(100dvh-3rem)]' : 'top-16 max-h-[calc(100dvh-4rem)] min-[1100px]:hidden'
+            } z-50 overflow-y-auto bg-overlay border-t border-b border-line min-[640px]:left-auto min-[640px]:w-[480px] min-[640px]:border-l`}
           >
             {MENU.map((section) => {
               const open = sheetSection === section.name;

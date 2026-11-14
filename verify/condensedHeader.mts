@@ -117,6 +117,86 @@ for (const width of [1440, 390]) {
       else say(`${width}: ${what} is on the bar`);
     }
 
+    // ---- THE BAR'S TWO ICON SQUARES ARE THE SAME SIZE -----------------
+    //
+    // Below 640px the search square was 36x36 beside a 44x44 menu button:
+    // two siblings in one bar at visibly different sizes, the smaller of
+    // them under the 44px touch target. The `pointer-coarse` variant made
+    // it 44 on a real phone, so it was worst in the case nobody tests --
+    // a narrow window with a mouse.
+    await page.evaluate('window.scrollTo(0, 0)');
+    await page.waitForTimeout(700);
+    // WITHIN ONE BAR, NOT ACROSS BOTH. The condensed bar is in the DOM
+    // alongside the resting header, so a page-wide sweep compares a resting
+    // 44px square against a condensed 36px one and calls the pair a fault.
+    // The question is whether two buttons SIDE BY SIDE match.
+    const squares: any[] = await page.evaluate(
+      `Array.from(document.querySelectorAll('header button[aria-label]'))
+        .filter((el) => !el.closest('[data-header-condensed]'))
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          return { label: el.getAttribute('aria-label'), w: Math.round(r.width), h: Math.round(r.height) };
+        })
+        .filter((b) => b.w > 0 && b.w < 80 && b.h > 0)`
+    );
+    if (squares.length >= 2) {
+      const heights = [...new Set(squares.map((b: any) => b.h))];
+      if (heights.length > 1) {
+        fail(
+          `${width}: the bar's icon buttons are different heights — ` +
+            squares.map((b: any) => `${b.label} ${b.w}x${b.h}`).join(', ')
+        );
+      } else {
+        say(`${width}: ${squares.length} icon buttons, all ${heights[0]}px — ${squares.map((b: any) => b.label).join(', ')}`);
+      }
+    }
+
+    // ---- THE SHEET IS AS TALL AS WHAT IS IN IT ------------------------
+    //
+    // It was pinned `top-16 bottom-0`, so three collapsed headings and one
+    // switch reserved the whole screen. Measured against the viewport: a
+    // sheet holding four rows should not be most of a phone.
+    if (width < 500) {
+      await page.getByRole('button', { name: /^menu$/i }).first().click({ timeout: 5_000 }).catch(() => {});
+      await page.waitForTimeout(700);
+      const sheet: any = await page.evaluate(`(() => {
+        const el = document.querySelector('[data-menu-sheet]');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        let content = 0;
+        for (const kid of el.children) content += kid.getBoundingClientRect().height;
+        return { h: Math.round(r.height), content: Math.round(content), vh: window.innerHeight };
+      })()`);
+      if (!sheet) {
+        fail(`${width}: the menu sheet did not open`);
+      } else {
+        // Closed, the sheet should sit near its content rather than near the
+        // viewport. 80px of slack covers padding and the border.
+        const slack = sheet.h - sheet.content;
+        if (slack > 80) {
+          fail(
+            `${width}: the menu sheet is ${sheet.h}px tall around ${sheet.content}px of content — ` +
+              `${slack}px of empty ground in a ${sheet.vh}px viewport`
+          );
+        } else {
+          say(`${width}: the sheet is ${sheet.h}px around ${sheet.content}px of content`);
+        }
+        // AND THE SCRIM STILL COVERS WHAT THE SHEET NO LONGER DOES. Shrinking
+        // a modal's panel must not expose the page behind it to a tap.
+        const scrim: any = await page.evaluate(`(() => {
+          const el = document.querySelector('[data-menu-root] [aria-hidden="true"]');
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { bottom: Math.round(r.bottom), vh: window.innerHeight };
+        })()`);
+        if (!scrim) fail(`${width}: the open sheet has no backdrop, so the page behind it is live`);
+        else if (scrim.bottom < scrim.vh - 2) fail(`${width}: the backdrop stops at ${scrim.bottom}px in a ${scrim.vh}px viewport`);
+        else say(`${width}: the backdrop still covers the page to the foot`);
+      }
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    }
+
     if (SHOTS) {
       await page
         .locator('[data-condensed]')

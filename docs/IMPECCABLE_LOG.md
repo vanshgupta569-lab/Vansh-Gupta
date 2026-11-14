@@ -55,6 +55,7 @@ and the commit.)*
 
 | Screen | What changed | Commit |
 |---|---|---|
+| **Header and menus** (batch 1) | The phone bar's two icon squares matched to 44×44 — the search square was 36px beside a 44px menu button, worst in the case nobody tests (a narrow window with a mouse). The menu sheet sized to its contents instead of being pinned to the foot of the screen: **780px → 229px around 227px of content**, with the backdrop still covering the page to the foot. `verify:condensed` gained both arms. | `(this commit)` |
 | **Landing page** (batch 1) | The `VERIFIED LEAD` badge and its shield deleted; the Web3Forms footnote replaced with what actually happens to the reader's address; the form's solid oxblood fill and its 15px glow replaced with the hero's wash and border; four box-shadows and both band radii removed; the decorative quarter-circle wash removed; the emerald success state onto the one green, and announced through `role="status"`; the hero poster no longer cropped at 390. `verify:craft` added, running at 1440 **and 390**. | `(this commit)` |
 
 ---
