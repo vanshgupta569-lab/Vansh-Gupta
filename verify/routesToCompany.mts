@@ -227,6 +227,50 @@ for (const width of [1440, 390]) {
   });
 }
 
+// ---- EVERY FIELD A READER CAN TYPE IN HAS A NAME (2026-11-14) ----------
+//
+// The search screen's one input had no <label>, no aria-label and no id:
+// a placeholder and nothing else. A screen reader announced an unlabelled
+// text field, and a sighted reader lost the only description of it the
+// moment they began typing. LANDING_SPEC checklist 34 asks for visible
+// labels, and a placeholder is not one -- it is examples.
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  const page = await ctx.newPage();
+  try {
+    await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: /value a listed company/i }).first().click({ timeout: 8_000 }).catch(() => {});
+    await page.waitForTimeout(2200);
+    const unnamed: any[] = await page.evaluate(`(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('input[type="text"], input:not([type]), input[type="search"], textarea')) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8) continue;
+        const byLabel = el.id ? document.querySelector('label[for="' + el.id + '"]') : null;
+        const named = !!(byLabel || el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.closest('label'));
+        if (!named) out.push({ ph: el.getAttribute('placeholder') || '(no placeholder)', id: el.id || '(no id)' });
+      }
+      return out;
+    })()`);
+    if (unnamed.length) {
+      problems++;
+      console.log(
+        `  PROBLEM: ${unnamed.length} field(s) on the search screen have no name a screen reader can read — ` +
+          unnamed.map((f: any) => `placeholder "${f.ph}"`).join(', ')
+      );
+    } else {
+      console.log('  every field on the search screen carries a name');
+    }
+  } catch (err) {
+    problems++;
+    console.log(`  PROBLEM: the field check could not run — ${String(err).slice(0, 90)}`);
+  } finally {
+    await ctx.close();
+  }
+}
+
 await browser.close();
 child.kill();
 console.log(`\nTOTAL PROBLEMS IN THE ROUTES INTO A COMPANY: ${problems}`);

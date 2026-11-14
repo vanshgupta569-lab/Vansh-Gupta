@@ -210,9 +210,13 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
         <div className="mt-11 lg:mt-14 mx-auto max-w-[60rem]">
           {/* On a phone the button drops below the field. Held inside it, it
               covered the half of the placeholder that tells you what to type. */}
+          <label htmlFor="company-search" className="block font-figure text-[13px] mb-2" style={{ color: MUTED }}>
+            Company name or ticker
+          </label>
           <div className="relative flex items-center w-full">
-            <Search className="w-5 h-5 absolute left-5" style={{ color: MUTED }} />
+            <Search className="w-5 h-5 absolute left-5" style={{ color: MUTED }} aria-hidden="true" />
             <input
+              id="company-search"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -221,14 +225,14 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
                 if (e.key === 'Escape') setSearchQuery('');
               }}
               placeholder="Apple, Reliance, Nvidia, Tata Motors…"
-              className="w-full font-figure text-[15px] pl-14 pr-4 sm:pr-40 py-5 outline-none border transition-colors focus:border-[#8B1E1E] placeholder:text-[#52525B]"
+              className="w-full font-figure text-[15px] pl-14 pr-4 sm:pr-40 py-5 outline-none border transition-colors focus:border-accent placeholder:text-quiet"
               style={{ background: '#111114', borderColor: LINE, color: INK }}
               autoFocus
             />
             <button
               onClick={submitSearch}
               disabled={lookupState.loading || !searchQuery.trim()}
-              className="hidden sm:block absolute right-2 font-figure text-[11px] px-5 py-3 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap border"
+              className="hidden sm:block absolute right-2 font-figure text-[13px] px-5 py-3 transition-colors cursor-pointer disabled:opacity-40 whitespace-nowrap border"
               style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
             >
               {lookupState.loading ? 'Building…' : 'Build model'}
@@ -237,7 +241,7 @@ export const DirectoryScreen: React.FC<DirectoryScreenProps> = ({
           <button
             onClick={submitSearch}
             disabled={lookupState.loading || !searchQuery.trim()}
-            className="sm:hidden w-full mt-3 font-figure text-[12px] px-5 py-3.5 uppercase tracking-[0.16em] transition-colors cursor-pointer disabled:opacity-40 border"
+            className="sm:hidden w-full mt-3 font-figure text-[13px] px-5 py-3.5 transition-colors cursor-pointer disabled:opacity-40 border"
             style={{ borderColor: RED, background: 'rgba(139,30,30,0.22)', color: INK }}
           >
             {lookupState.loading ? 'Building…' : 'Build model'}
