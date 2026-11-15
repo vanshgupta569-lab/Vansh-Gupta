@@ -77,7 +77,62 @@
    - **`PRODUCT.md` says what the routes now do**, and `DESIGN.md` no longer
      claims that not one `box-shadow` exists in the build, which was untrue.
 
-1. v1.1 keeps every existing section. Sections 02–08 still need screenshots; until then they follow the spec's unseen-section rules. Nothing is removed without Nihar's recorded decision.
+1. **(Nihar, 16 November 2026) DECISION 1 — the page moves one section at a
+   time, and the object forms on arrival.**
+
+   **What it does.** One scroll, swipe, arrow key, Page Up/Down or space glides
+   smoothly to the next shape section over about 950ms, inside the 800–1200ms
+   this decision sets. The object then animates into that section's shape ON
+   ITS OWN: the reader does not have to keep scrolling to see a shape finish.
+   This replaces the continuous scroll-linked morph, under which a shape
+   existed only while the reader kept moving and was always a blend of two.
+
+   **Each shape section fills the screen.** `min-h-[100svh]`, with the object
+   and its words centred and clear space around them, so the next section's
+   heading is below the fold until the reader moves to it. Checked at
+   1440×900, 1366×768 and 390×844.
+
+   **THIS REVERSES PART OF DECISION 0 (13 November).** That decision sized
+   every section to its contents and took 26% off the page. It still stands
+   for everything BELOW the object — the coverage band, the margin table, the
+   notes and the close are content-height — and is reversed only for the ten
+   shape sections, where the whole point of a section is to hold one shape
+   still long enough to read it. **The hero's `min(100svh, 900px)` cap
+   (section 3.2) goes with it**: the hero is a shape section and fills the
+   screen like the rest.
+
+   **The rules it is built to, each checked in `verify:glide`:**
+   - **Keyboard, wheel, trackpad and touch all work.** One gesture moves one
+     section. A trackpad flick of twenty events in one burst moves ONE section,
+     not eight — the protection is that the current section is re-read from
+     the page on every event rather than accumulated, so a burst that arrives
+     before the page has moved all targets the same section. The lock during
+     and shortly after a glide is a second line, not the first.
+   - **The reader is never trapped.** The glide only acts between the first
+     and last shape section. Below them the page scrolls exactly as any other
+     page, the footer is reachable, and the long reading sections are not
+     rationed a gesture at a time. Nothing here touches history, so back,
+     forward and anchor links keep working; when the page moves by any other
+     means the current section is read back from the page rather than
+     asserted.
+   - **Reduced motion: no glide and no morph.** The page scrolls plainly and
+     the object arrives already formed.
+   - **Narrow screens scroll normally.** Below `CONSTRAINED_WIDTH` (640px) the
+     particle field does not run at all — a documented performance decision —
+     so there is no shape to form and nothing to glide between.
+   - **The blocking-time budget holds.** `verify:landing` measures TBT at a
+     median of 282ms, over the 200ms budget and inside the 300ms ratchet that
+     `KI-40` set; the glide added no work to the first paint, because it is a
+     listener and an eased index rather than anything drawn.
+
+   **OPEN, and not a proposal: there are no shapes at all at 390.** Item 3 of
+   the same brief asks for shapes "clearly readable at both 1440 and 390", and
+   the field is switched off below 640px by the constrained-width decision.
+   Making shapes appear on phones means reversing that decision, which has a
+   blocking-time cost on exactly the devices it was taken to protect. That is
+   Nihar's call and is not taken here.
+
+2. v1.1 keeps every existing section. Sections 02–08 still need screenshots; until then they follow the spec's unseen-section rules. Nothing is removed without Nihar's recorded decision.
 2. "Free to use" is not shown until pricing is decided.
 3. Every count and claim is read from the database at build; with today's ~175 companies the page shows the true count, never "10,000+".
 4. "Three valuation approaches" is shown only once build step 5 has shipped.

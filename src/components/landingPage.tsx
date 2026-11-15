@@ -39,6 +39,7 @@ import { MarginNotesSection } from './marginNotesSection';
 // request that can fail (2026-11-12).
 import INSTANT_LISTINGS, { INSTANT_LISTINGS_BUILT } from '../data/instantListings';
 import { coverageCount, coverageCountLabel } from '../data/coverageCount';
+import { useSectionGlide } from './useSectionGlide';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
 import { featureById, statusLabel, claimFor, isShipped, CLAIMS, companyCountLabel } from '../data/featureRegister';
@@ -133,8 +134,23 @@ const Block: React.FC<{
   return (
     <section
       id={id}
-      className={`relative flex items-center py-16 lg:py-24 ${
-        id === 'hero' ? 'min-h-[min(100svh,900px)] items-end pb-16' : ''
+      /* EACH SHAPE SECTION FILLS THE SCREEN ON ITS OWN (Nihar, 16 November
+         2026, item 5). The object and its words sit centred with clear space
+         around them, and the next section's heading is below the fold until
+         the reader moves to it.
+
+         THIS REVERSES PART OF THE 13 NOVEMBER DECISION, which sized every
+         section to its contents and took 26% off the page. That decision
+         stands for the sections BELOW the object -- coverage, the margin
+         table, the notes and the close are still content-height -- and is
+         reversed only here, where the whole point of a section is to hold
+         one shape still long enough to read it.
+
+         `100svh`, not `100vh`: the small-viewport unit is what stops a phone
+         jumping by the height of its own browser chrome. The hero's 900px cap
+         goes with it; LANDING_SPEC decision 1 records that. */
+      className={`relative flex min-h-[100svh] items-center py-16 lg:py-20 ${
+        id === 'hero' ? 'items-end pb-16' : ''
       }`}
     >
       {/* THE SEAM.
@@ -497,6 +513,13 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
     },
   ];
   /** Which stat has its list of names open, if any. */
+  /* THE SECTION-BY-SECTION GLIDE (Nihar, 16 Nov 2026, LANDING_SPEC decision 1).
+     Off under reduced motion -- where the reader gets a plain page and the
+     object arrives already formed -- and off on a narrow screen, where the
+     field does not run at all and there is nothing to form. */
+  const glideOn = !reducedMotion && constrained === null;
+  const glide = useSectionGlide(OBJECT_SECTIONS, glideOn);
+
   const [openNames, setOpenNames] = useState<string | null>(null);
   const [activeMargin, setActiveMargin] = useState(0);
   const marginRef = useRef<HTMLDivElement>(null);
@@ -604,6 +627,12 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             paused={paused}
             onFirstFrame={() => setFieldDrawn(true)}
             onFreeze={() => setFieldFrozen(true)}
+            /* ONE GESTURE, ONE SECTION. The glide owns which formation the
+               object is making; the object animates there on its own rather
+               than tracking the scroll. Under reduced motion the glide stands
+               aside and `still` makes the object arrive at once. */
+            section={glideOn ? glide.index : null}
+            still={reducedMotion}
           />
         </Suspense>
       )}
@@ -915,7 +944,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         {/* 190vh for one sentence and its attribution: about two and a half
             screens, most of it empty, to show a dispersal that does not read
             on either width. The sentence stays; the emptiness does not. */}
-        <section id="letgo" className="relative py-32 lg:py-40">
+        <section id="letgo" className="relative flex min-h-[100svh] items-center py-16 lg:py-20">
           {/* A scrim across the whole section would dim the dispersal, which
               is the one thing this section exists to show. The only shading
               is a soft pool behind the quote, and it travels with it. */}

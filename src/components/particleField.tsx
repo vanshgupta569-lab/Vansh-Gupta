@@ -46,8 +46,15 @@ export const PARTICLE_BUDGET = 12000;
    takes 10,500 and the sky 1,500; the total is unchanged at 12,000, which is
    what `VISUAL_SYSTEM` §6 budgets and what the check asserts. The sky is a
    backdrop and loses nothing a reader can name. */
-export const OBJECT_POINTS = { desktop: 10500, compact: 6000 } as const;
-export const SKY_POINTS = { desktop: 1500, compact: 500 } as const;
+/* DENSER SHAPES, INSIDE THE SAME BUDGET (Nihar, 16 November 2026, item 3).
+   The 12,000-point budget is unchanged -- it is published in VISUAL_SYSTEM 6
+   and it is what keeps this page inside its blocking-time budget -- so the
+   object is made denser by taking points from the ambient sky rather than by
+   spending more. The sky is also the thing VISUAL_SYSTEM 4 says should not be
+   there ("no ambient star field outside the wordmark box"), so the trade costs
+   nothing the design wanted. */
+export const OBJECT_POINTS = { desktop: 11200, compact: 7600 } as const;
+export const SKY_POINTS = { desktop: 800, compact: 400 } as const;
 export const MAX_PIXEL_RATIO = 1.5;
 export const SETTLE_MS = 5000;
 export const SLOW_FRAME_MS = 20;
@@ -66,14 +73,42 @@ interface ParticleFieldProps {
   onFirstFrame?: () => void;
   /** The first second's frames averaged over 24ms: show the poster instead. */
   onFreeze?: () => void;
+  /**
+   * THE SECTION THE PAGE HAS GLIDED TO (Nihar, 16 November 2026, item 4).
+   *
+   * When this is a number the object stops tracking the scroll position and
+   * animates to that formation ON ITS OWN -- the reader makes one gesture,
+   * the page glides, and the shape finishes forming without them having to
+   * keep scrolling. Null restores the old behaviour, where the formation is
+   * read from where the page happens to be.
+   */
+  section?: number | null;
+  /** Reduced motion: no glide and no morph, straight to the finished shape. */
+  still?: boolean;
 }
 
-export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launching, paused = false, onFirstFrame, onFreeze }) => {
+export const ParticleField: React.FC<ParticleFieldProps> = ({
+  sectionIds,
+  launching,
+  paused = false,
+  onFirstFrame,
+  onFreeze,
+  section = null,
+  still = false,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pausedRef = useRef(paused);
   const wakeRef = useRef<() => void>(() => {});
   const firstFrameRef = useRef(onFirstFrame);
   const freezeRef = useRef(onFreeze);
+  /* READ THROUGH REFS, so a new target does not tear down the scene. The
+     effect below builds 12,000 points, compiles two shaders and allocates a
+     WebGL context; re-running it on every section change would rebuild all of
+     that four times a page. */
+  const sectionRef = useRef<number | null>(section);
+  const stillRef = useRef(still);
+  sectionRef.current = section;
+  stillRef.current = still;
   firstFrameRef.current = onFirstFrame;
   freezeRef.current = onFreeze;
   useEffect(() => {
@@ -447,10 +482,12 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
       const g = seeded(i + 601);
       const isStar = g > 0.948;
       bright[i] = isStar ? 1 : 0;
-      /* A twelfth of the points the object had, so each grain of dust is
-         drawn larger (×2.6) for the body to keep its silhouette. */
+      /* A twelfth of the points the object had, so each grain is drawn
+         larger for the body to keep its silhouette -- raised from 2.6 to 3.3
+         on 16 November 2026, so a shape reads as a shape rather than as the
+         suggestion of one. Size and count together: the budget did not move. */
       sizes[i] =
-        (0.020 + Math.pow(seeded(i + 81), 1.6) * 0.026) * 2.6 +
+        (0.020 + Math.pow(seeded(i + 81), 1.6) * 0.026) * 3.3 +
         (isStar ? 0.055 + Math.pow((g - 0.948) / 0.052, 1.5) * 0.26 : 0);
       const u = seeded(i + 51) * Math.PI * 2, v = Math.acos(2 * seeded(i + 61) - 1);
       scatterDir[i * 3]     = Math.sin(v) * Math.cos(u);
@@ -678,6 +715,8 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
     };
 
     let entry = 0, clock = 0, launchT = 0, raf = 0, skyDrift = 0;
+    /** The formation index actually being drawn, eased towards its target. */
+    let glided = 0;
     let rotX = tiltX[0], rotY = spinY[0], posX = offX[0], posY = offY[0], zoom = zoomAt[0];
     let dragX = 0, dragY = 0, dragging = false, lastX = 0, lastY = 0;
 
@@ -820,14 +859,32 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
         }
       }
 
-      const sp = sectionPosition();
+      /* WHERE THE OBJECT IS, AND WHY THERE ARE TWO ANSWERS.
+         Without a target it reads the scroll, as it always did. With one it
+         eases towards that formation on its own clock -- 0.075 a frame, which
+         is about 950ms to settle at 60fps and sits inside the 800-1200ms the
+         decision sets. Under reduced motion it arrives at once. */
+      const want = sectionRef.current;
+      if (want === null) {
+        glided = sectionPosition();
+      } else if (stillRef.current) {
+        glided = want;
+      } else {
+        glided += (want - glided) * 0.075;
+        if (Math.abs(want - glided) < 0.001) glided = want;
+      }
+      const sp = glided;
       const s0 = Math.min(sectionIds.length - 2, Math.floor(sp));
       const t = sp - s0;
       const f0 = Math.min(s0, LAST);
       const f1 = Math.min(s0 + 1, LAST);
 
-      // each shape holds for most of its section, then comes apart
-      const HOLD = HOLDS[Math.min(s0, HOLDS.length - 1)];
+      /* THE HOLD IS A SCROLL DEVICE, so it only applies when the scroll is
+         driving. Holding at 0.78 while a glide eases the index from 2 to 3
+         would keep the old shape for three quarters of the move and then snap
+         -- the opposite of what a glide is for. Gliding, the morph simply
+         follows the eased index. */
+      const HOLD = want === null ? HOLDS[Math.min(s0, HOLDS.length - 1)] : 0;
       const m = f0 === f1 ? 0 : t < HOLD ? 0 : (t - HOLD) / (1 - HOLD);
       const smooth = m * m * (3 - 2 * m);
 
