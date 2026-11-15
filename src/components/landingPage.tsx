@@ -237,7 +237,13 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
         fired = true;
         io.disconnect();
         const t0 = performance.now();
-        const DURATION = 1900;
+        /* THE COUNT-UP'S OWN TOKEN, 600ms (`--m-dur-count`). It ran at
+           1,900ms -- three times the token, and past VISUAL_SYSTEM's limit
+           that no entrance sequence on a screen exceeds 600ms. Long enough
+           that a reader arriving at the coverage band watched the numbers
+           tick for two seconds before they could read one, and long enough
+           that `verify:coverage` photographed 25 on its way to 26. */
+        const DURATION = 600;
         const step = (now: number) => {
           /* clamp both ends: the timestamp rAF hands back is the frame's
              start time and can predate the performance.now() taken a moment
@@ -380,6 +386,12 @@ function useCoverage(): { count: number | null; exchanges: string[]; built: stri
         if (!alive || !Array.isArray(body?.rows)) return;
         // One listing per company, as the screener counts them.
         const home = body.rows.filter((row: any) => row?.homeListing !== false);
+        /* THE TABLE WINS ONLY WHEN IT ANSWERS WITH SOMETHING. A 200 with no
+           usable rows is a failed answer wearing a success code, and letting
+           it through replaced a true count with nought -- which reads as a
+           claim that this site covers no companies, and took the tile off
+           the page with it. The build's own figure stands instead. */
+        if (!home.length) return;
         const exchanges = [...new Set(home.map((row: any) => row?.exchange).filter(Boolean))].sort() as string[];
         setState({ count: home.length, exchanges, built: body.built ?? null, from: 'table' });
       })
@@ -444,7 +456,11 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
       ? [{
           key: 'companies', to: coverage.count as number, suffix: '', text: countLabel,
           label: 'Listed companies',
-          detail: coverage.exchanges.join(' · '),
+          /* THE EXCHANGE NAMES BELONG TO THE EXCHANGES TILE, which now
+             exists. Printed under both, the same 26 names filled two
+             thirds of the section twice over and said nothing the second
+             time. What belongs here is what the count is OF. */
+          detail: 'One listing a company, as the screener counts them',
           /* THE SOURCE LINE SAYS WHERE THE FIGURE ACTUALLY CAME FROM. With
              the live table unavailable the count is the build's own, and a
              line reading "counted from the screener table" would be a false
@@ -465,6 +481,32 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
       label: `Up to ${YEARS_IN_WORDS[CLAIMS.historyYears] ?? CLAIMS.historyYears} fiscal years of filed history`,
       detail: 'IS · BS · CF · WC · PP&E · Debt · Equity',
       source: 'Fiscal years read from each company\u2019s own filings',
+    },
+    /* THE EXCHANGES ARE COUNTED, NOT CLAIMED. The same listings the count
+       above comes from, reduced to their distinct exchanges -- so the two
+       figures can never disagree, and the names are under it. */
+    ...(coverage.exchanges.length
+      ? [{
+          key: 'exchanges',
+          to: coverage.exchanges.length,
+          suffix: '',
+          text: null,
+          label: 'Exchanges',
+          detail: coverage.exchanges.join(' · '),
+          source:
+            coverage.from === 'table'
+              ? 'Counted from the screener table'
+              : `Counted from the listings in this build${builtAt ? `, built ${builtAt}` : ''}`,
+        }]
+      : []),
+    /* THREE STATEMENTS IS A FACT ABOUT THE ENGINE, not a tally that could
+       drift: a model is not built unless all three are read, and a balance
+       sheet that does not balance is refused rather than shown. */
+    {
+      key: 'statements', to: 3, suffix: '', text: null,
+      label: 'Statements read for every company',
+      detail: 'Income statement · Balance sheet · Cash flow',
+      source: 'All three, or the company is refused rather than valued',
     },
     ...(isShipped('three-approaches')
       ? [{ key: 'approaches', to: 3, suffix: '', text: null, label: 'Valuation approaches', detail: 'Income · Market · Asset', source: 'Shown side by side, not averaged' }]
@@ -669,7 +711,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         <Block id="routes" side="right">
           <Eyebrow n="01">What you can do</Eyebrow>
           <h2 className="text-[28px] sm:text-[34px] lg:text-[42px] mb-8" style={{ ...DISPLAY, color: INK }}>
-            Four ways in
+            Ways in
             <Mark />
           </h2>
           <div className="grid gap-6">
@@ -914,9 +956,15 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               >
                 &ldquo;It is better to be vaguely right than exactly wrong.&rdquo;
               </p>
+              {/* "ATTRIBUTED TO", which is the honest form of this credit
+                  and Nihar's decision of 16 November 2026. The line is widely
+                  attributed to Keynes and the attribution cannot be sourced
+                  to him -- so the page says it is attributed rather than
+                  saying he wrote it. The earlier credit to Carveth Read and
+                  its book title are removed on the same decision; the note in
+                  LANDING_SPEC keeps the research that found him. */}
               <p className="font-figure text-[13px] mt-4" style={{ color: MUTED }}>
-                Carveth Read, <span className="italic">Logic: Deductive and Inductive</span> (1898),
-                chapter 22
+                Attributed to John Maynard Keynes
               </p>
             </div>
           </div>
@@ -940,12 +988,17 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           className="w-full"
           style={{
             background: PAPER.ground,
-            /* SQUARE, AND NO SHADOW. DESIGN.md Shapes: "Every panel,
-               tile, chip, pill and button has a 0px radius, and that right
-               angle is the form language: a ruled sheet, not a card deck."
-               The cream band used to slide up as a rounded card out of a dark
-               glow. The ground changing from page to paper is already the
-               strongest edge on this page and needs no card under it. */
+            /* THE ONE ROUNDED THING ON THE SITE (Nihar, 16 November 2026).
+               DESIGN.md's form language is square -- "a ruled sheet, not a
+               card deck" -- and this is a NAMED EXCEPTION to it, recorded in
+               DESIGN.md under "The one exception" and allowed by name in
+               verify:craft. The cream band is where the page changes
+               register from being shown to being read, and the owner wants
+               that edge to read as a sheet laid over the dark, not as a
+               butt join. No shadow comes back with it: the radius is the
+               whole exception. */
+            borderTopLeftRadius: 26,
+            borderTopRightRadius: 26,
             overflow: 'hidden',
           }}
         >

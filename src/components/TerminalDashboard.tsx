@@ -1427,9 +1427,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       : undefined
                 }
                 pill={
-                  <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
-                    {displayChangePct >= 0 ? '+' : ''}
-                    {displayChangePct}%
+                  /* NEUTRAL, SIGN ONLY (Nihar, 16 November 2026). The day's
+                     move was green when up and oxblood when down -- a traffic
+                     light, the same objection that took colour off the
+                     headline premium and discount pills on 13 November. The
+                     sign says which way it went; the colour said how to feel
+                     about it. */
+                  <Pill tone="neutral">
+                    {displayChangePct > 0 ? '+' : displayChangePct < 0 ? '−' : ''}
+                    {Math.abs(displayChangePct)}%
                   </Pill>
                 }
               />
@@ -1509,9 +1515,15 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                       : undefined
                 }
                 pill={
-                  <Pill tone={displayChangePct >= 0 ? 'positive' : 'negative'}>
-                    {displayChangePct >= 0 ? '+' : ''}
-                    {displayChangePct}%
+                  /* NEUTRAL, SIGN ONLY (Nihar, 16 November 2026). The day's
+                     move was green when up and oxblood when down -- a traffic
+                     light, the same objection that took colour off the
+                     headline premium and discount pills on 13 November. The
+                     sign says which way it went; the colour said how to feel
+                     about it. */
+                  <Pill tone="neutral">
+                    {displayChangePct > 0 ? '+' : displayChangePct < 0 ? '−' : ''}
+                    {Math.abs(displayChangePct)}%
                   </Pill>
                 }
               />

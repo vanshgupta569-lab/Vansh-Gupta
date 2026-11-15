@@ -139,7 +139,13 @@ for (const width of [1440, 390]) {
         const biggest = Math.max(...radii);
         // A circle is a circle (the round icon buttons); a CARD is the fault.
         const isPill = radii.every((v) => v >= Math.min(r.width, r.height) / 2 - 1);
-        if (biggest > 2 && !isPill) {
+        // THE ONE NAMED EXCEPTION (DESIGN.md, "The one exception"; Nihar,
+        // 16 November 2026): the landing page's coverage band carries a 26px
+        // radius on its top corners and nothing else on the site does. It is
+        // allowed BY NAME -- its own id -- rather than by its radius, so the
+        // exception cannot spread by being copied onto another element.
+        const named = el.id === 'numbers';
+        if (biggest > 2 && !isPill && !named) {
           rounded.push({ tag: el.tagName.toLowerCase(), cls: (el.className || '').toString().slice(0, 48), r: biggest });
         }
       }

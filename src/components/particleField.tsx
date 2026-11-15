@@ -233,7 +233,13 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
 
       const seenH = 2 * Math.tan((FOV * Math.PI) / 180 / 2) * DIST;
       const seenW = seenH * (vw() / vh());
-      const target = Math.min(11.4, seenW * 0.84);
+      /* SIZED TO THE GAP IT HAS, NOT TO THE WIDTH OF THE WINDOW.
+         At 0.84 of the visible width the word stood 277px tall between a
+         64px header and the first line of type, so it ran up behind the
+         header and the reader saw the bottom halves of the letters as a row
+         of disconnected arcs. It is the one thing on this page that must
+         read as a word. */
+      const target = Math.min(9.6, seenW * 0.74);
       const scale = target / inkW;
 
       const inkN = ink.length / 2, sqN = sqInk.length / 2;
@@ -411,7 +417,20 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({ sectionIds, launch
        fraction of the gap between the two sections. High means the reader
        sees a finished object for most of the section. The last one is low on
        purpose: the dispersal is the point, so it gets nearly all the scroll. */
-    const HOLDS  = [0.55, 0.58, 0.58,  0.58,  0.58, 0.58,  0.58, 0.58,  0.34, 0.50];
+    /* EACH SHAPE HOLDS FOR MOST OF ITS SECTION (raised 2026-11-16).
+       At 0.58 a shape held for 58% of its section and spent the other 42%
+       becoming the next one. While every section was a whole viewport tall
+       that was some 420px of scroll to morph in -- slow enough to read as a
+       transformation. The sections are sized by their contents now, so the
+       same fraction is barely 200px and a reader scrolling at any normal
+       speed only ever caught the blend: two point clouds mixed together,
+       which looks like formless dust rather than a shape.
+       THE FIX IS THE FRACTION, NOT THE HEIGHT. Holding longer gives each
+       shape most of its section to stand still in and makes the change
+       between them quick and deliberate, at whatever height the section is.
+       It is scroll-linked throughout, so no motion duration applies, and
+       the whole field is still off under reduced motion. */
+    const HOLDS  = [0.72, 0.78, 0.78,  0.78,  0.78, 0.78,  0.78, 0.78,  0.52, 0.68];
 
     /* WHY IT LOOKED LIKE PAPER AND NOT LIKE A SKY.
        Every point was the same size — between one and three pixels — so

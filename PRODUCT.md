@@ -39,8 +39,12 @@ either right about what the filing supports or explicit that it can't say.
 
 ## Operating Context
 
-- Company search and a coverage directory lead into a company; every route into
-  a company passes through the qualitative questions first.
+- Company search, the palette, the menu and a coverage directory all lead into
+  a company the same way: they open that company's page at its Overview tab
+  (`/company/<ticker>/overview`). The qualitative questions are part of
+  BUILDING a model, reached from the Model tab, not a toll gate on the way in.
+  (Until 12 November 2026 every route passed through the questions first, so a
+  reader who chose a company was asked ten judgements before seeing it.)
 - The company view pairs historical statements with the forecast, driver
   sliders, the DCF and bridge, market-approach comparables, residual income for
   banks, and "how it's calculated" views of the working.

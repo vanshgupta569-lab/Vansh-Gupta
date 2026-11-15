@@ -53,6 +53,10 @@ const { PARTICLE_BUDGET } = await import(`file:///${REPO}/src/components/particl
 const DENSITY_FLOOR = 0.017;
 /** The wordmark must stop this far above the first line of type. */
 const CLEAR_PX = 40;
+/** The fixed header, which the wordmark has to clear. */
+const HEADER_PX = 64;
+/** And by this much, so it reads as placed rather than as cropped. */
+const HEAD_CLEAR_PX = 16;
 
 let problems = 0;
 const say = (line: string) => console.log(`  ${line}`);
@@ -188,9 +192,23 @@ try {
       if (wait) await page.waitForTimeout(wait);
       const frame = (await page.screenshot()) as Buffer;
       const { width, height, rows } = brightness(frame);
-      const top = 70;
+      // FROM THE HEADER'S LOWER EDGE (2026-11-16).
+      //
+      // This used to start at row 70. The header is 64px, so the six rows
+      // where a wordmark drawn too high would collide with it were the only
+      // rows the check could not see -- and that collision is exactly the
+      // fault a reader reported. Starting at 0 instead is no good either:
+      // the header has its own lit type in it, and the check would measure
+      // the navigation.
+      //
+      // So it starts at the header's edge, and the rows just under that edge
+      // are the test: a wordmark whose topmost lit pixel sits against the
+      // header is a wordmark running behind it.
+      const top = HEADER_PX;
       const bottom = eyebrowTop > top ? eyebrowTop : Math.round(height * 0.45);
       const perRow: number[] = [];
+      // Kept for the record: the extremes of any lit pixel, which is the
+      // atmosphere rather than the object, and is not what is asserted.
       let lowest = 0;
       let first = height;
       for (let y = top; y < bottom; y++) {
@@ -205,22 +223,65 @@ try {
         perRow.push(n);
       }
       let best = 0;
+      let bestEnd = 0;
       let running = 0;
       for (let i = 0; i < perRow.length; i++) {
         running += perRow[i];
         if (i >= WINDOW) running -= perRow[i - WINDOW];
-        if (i >= WINDOW - 1 && running > best) best = running;
+        if (i >= WINDOW - 1 && running > best) {
+          best = running;
+          bestEnd = i;
+        }
       }
+      /* THE WORD'S OWN BAND, GROWN OUT FROM ITS DENSEST PART.
+         Two wrong measurements preceded this one, and both passed while the
+         word was visibly broken:
+           - The extremes of ANY lit pixel measured the 1,500 ambient sky
+             points, so "clear space" was the lowest speck of dust in the
+             frame and never moved when the word changed size.
+           - The densest 120 rows measured the MIDDLE of the word. A word
+             whose ascenders are cut off by the header still has a dense
+             middle sitting well below it, so the one fault a reader
+             reported could not fail the check.
+         So: start at the densest window and grow outwards while a row still
+         carries a reasonable share of the peak row's ink. Dust falls below
+         that share immediately; letters do not. What comes back is the band
+         a reader would point at and call "the word". */
+      const peak = Math.max(...perRow);
+      const EDGE = Math.max(2, peak * 0.12);
+      let lo = Math.max(0, bestEnd - (WINDOW - 1));
+      let hi = Math.min(perRow.length - 1, bestEnd);
+      while (lo > 0 && perRow[lo - 1] >= EDGE) lo--;
+      while (hi < perRow.length - 1 && perRow[hi + 1] >= EDGE) hi++;
+      const bandTop = top + lo;
+      const bandBottom = top + hi;
       const d = best / (WINDOW * width);
       if (d > density) {
         density = d;
-        lowestLit = lowest;
-        firstLit = first;
+        lowestLit = bandBottom;
+        firstLit = bandTop;
         shot = frame;
       }
     }
     if (shot) fs.writeFileSync(path.join(OUT, 'hero-wordmark.png'), shot);
     say(`the wordmark occupies rows ${firstLit}-${lowestLit}; its densest ${WINDOW} rows are ${(density * 100).toFixed(1)}% lit`);
+
+    // ---- THE WHOLE WORD IS ON THE PAGE -------------------------------
+    //
+    // Drawn too high, the word runs up behind the fixed header and a reader
+    // sees the bottom halves of the letters as a row of disconnected arcs.
+    // The topmost lit row is the measurement: hard against the header means
+    // there is more of the word above it.
+    // The scan begins at the header's lower edge, so a band that reaches
+    // that first row has more of itself above it, behind the header.
+    if (firstLit <= HEADER_PX + HEAD_CLEAR_PX) {
+      fail(
+        `the wordmark's topmost lit row is ${firstLit}, against a ${HEADER_PX}px header — ` +
+          `it needs ${HEAD_CLEAR_PX}px of clearance or it is running behind it and reading as cut off`
+      );
+    } else {
+      say(`the wordmark clears the header by ${firstLit - HEADER_PX}px`);
+    }
     if (density < DENSITY_FLOOR) {
       fail(
         `the wordmark is ${(density * 100).toFixed(1)}% lit, under the ${(DENSITY_FLOOR * 100).toFixed(

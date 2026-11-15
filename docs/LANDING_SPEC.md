@@ -36,6 +36,47 @@
      Set at 20px rather than 38px, because an unsourced aphorism was the
      loudest thing on a page about sourcing.
 
+0b. **(Nihar, 16 November 2026) Five landing-page corrections and three
+   decisions.**
+   - **The hero wordmark is sized to the gap it has**, not to the width of the
+     window. At 0.84 of the visible width it stood 277px tall between a 64px
+     header and the first line of type, so it ran up behind the header and a
+     reader saw the bottom halves of the letters as disconnected arcs. It is
+     `min(9.6, seenW * 0.74)` now, clearing the header by 54px. At 390 the hero
+     is `poster:narrow` -- no canvas runs -- so the poster's own arm covers
+     that width.
+   - **The formations hold again.** Each shape held for 58% of its section and
+     spent 42% becoming the next. While every section was a whole viewport that
+     was ~420px of scroll to morph in; with sections sized by their contents
+     (decision 0) it became ~200px, so a reader only ever caught the blend of
+     two point clouds, which reads as formless dust. **The fix is the fraction,
+     not the height**: HOLDS raised to ~0.78, which gives each shape most of
+     its section at any height. Scroll-linked throughout, so no duration
+     budget applies, and reduced motion still turns the field off entirely.
+   - **The quote is credited "Attributed to John Maynard Keynes."** The Carveth
+     Read credit and the book title are removed on Nihar's decision. The
+     research stands and is kept here rather than lost: the line traces to
+     Read's *Logic* (1898), ch. 22, and Oxford Reference records the Keynes
+     attribution as often wrong -- which is why the credit says ATTRIBUTED
+     rather than asserting he wrote it. The sentence on the page is Read's
+     wording.
+   - **The coverage section carries four figures, every one from the data**:
+     listed companies (counted from the listings this build ships), exchanges
+     (the distinct exchanges of those same listings, so the two can never
+     disagree), up to five fiscal years, and the three statements read for
+     every company. No count is written by hand. The 26 exchange names are
+     printed once, under Exchanges, rather than under two tiles. The count-up
+     runs at its own 600ms token instead of 1,900ms.
+   - **The coverage band has rounded corners again** -- 26px on its top two --
+     as a NAMED EXCEPTION recorded in `DESIGN.md` under "The one exception" and
+     allowed by id in `verify:craft`, so it cannot spread by being copied. No
+     shadow returns with it.
+   - **The day's price-change pill is neutral with a sign**, like the headline
+     pills (decision of 13 November).
+   - **"Four ways in" is "Ways in".** The Planned tags stay.
+   - **`PRODUCT.md` says what the routes now do**, and `DESIGN.md` no longer
+     claims that not one `box-shadow` exists in the build, which was untrue.
+
 1. v1.1 keeps every existing section. Sections 02–08 still need screenshots; until then they follow the spec's unseen-section rules. Nothing is removed without Nihar's recorded decision.
 2. "Free to use" is not shown until pricing is decided.
 3. Every count and claim is read from the database at build; with today's ~175 companies the page shows the true count, never "10,000+".

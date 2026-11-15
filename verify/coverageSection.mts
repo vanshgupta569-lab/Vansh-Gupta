@@ -62,10 +62,29 @@ console.log('\n=== the coverage section says how many companies ===');
 
 const browser = await chromium.launch({ headless: true });
 
+/**
+ * THE TWO WAYS THE TABLE LETS THIS SECTION DOWN.
+ *
+ * The first is the one this check was written for: the request fails.
+ * The second is worse and is what the live site was actually doing -- the
+ * request SUCCEEDS and answers with nothing. A 200 carrying no usable rows
+ * overwrote a true count of 178 with nought, `companyCountLabel(0)` returned
+ * null, and the whole tile came off the page. The section shipped showing one
+ * stat, "5Y", because a worse answer was allowed to replace a better one on
+ * the strength of its status code.
+ *
+ * A check that only ever tested the 500 could not see it.
+ */
+const BREAKAGES = [
+  { what: 'the request fails', status: 500, body: '{}' },
+  { what: 'the table answers with nothing', status: 200, body: JSON.stringify({ rows: [] }) },
+];
+
+for (const { what, status, body } of BREAKAGES)
 for (const width of [1440, 390]) {
   const ctx = await browser.newContext({ viewport: { width, height: width < 500 ? 844 : 900 } });
-  // THE FAILING REQUEST IS THE POINT. This is the live site's own state.
-  await ctx.route('**/api/screener*', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{}' }));
+  // THE BROKEN TABLE IS THE POINT. This is the live site's own state.
+  await ctx.route('**/api/screener*', (r) => r.fulfill({ status, contentType: 'application/json', body }));
   await ctx.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   const page = await ctx.newPage();
   try {
@@ -83,7 +102,7 @@ for (const width of [1440, 390]) {
     // ---- 1. THE COUNT --------------------------------------------------
     const companies = page.locator('[data-stat="companies"]').first();
     if (!(await companies.count())) {
-      fail(`${width}: no company count, with the screener request failing — the tile is dropped again`);
+      fail(`${width}, ${what}: no company count — the tile is dropped again`);
     } else {
       const text = ((await companies.textContent()) || '').replace(/\s+/g, ' ').trim();
       // The printed figure must be a floor of what the build ships, never more.
@@ -93,7 +112,7 @@ for (const width of [1440, 390]) {
       } else if (named > INSTANT.length) {
         fail(`${width}: the page claims ${named} companies and the build ships ${INSTANT.length}`);
       } else {
-        say(`${width}: the count is there with the request failing — "${text.slice(0, 44)}"`);
+        say(`${width}, ${what}: the count stands — "${text.slice(0, 44)}"`);
       }
     }
 
@@ -120,6 +139,26 @@ for (const width of [1440, 390]) {
       fail(`${width}: the count's source line does not say where it came from — "${source}"`);
     } else {
       say(`${width}: its source line reads "${source}"`);
+    }
+
+    // ---- 1c. EVERY STAT IS A REAL FIGURE, NOT A NOUGHT -----------------
+    //
+    // A stat printing 0 is a claim that this site covers nothing, and it is
+    // how the count vanished: nought is falsy twice over, once in the label
+    // and once in the tile's own condition.
+    const figures: any[] = await page.evaluate(
+      `Array.from(document.querySelectorAll('[data-stat]')).map((el) => ({
+        key: el.getAttribute('data-stat'),
+        shown: (el.children[0]?.textContent || '').trim(),
+      }))`
+    );
+    const nought = figures.filter((f: any) => /^0\b|^0$/.test(f.shown));
+    if (nought.length) {
+      fail(`${width}, ${what}: ${nought.map((f: any) => `${f.key} reads "${f.shown}"`).join(', ')}`);
+    } else if (figures.length < 2) {
+      fail(`${width}, ${what}: only ${figures.length} stat on the page — ${figures.map((f: any) => f.key).join(', ')}`);
+    } else {
+      say(`${width}, ${what}: ${figures.length} stats — ${figures.map((f: any) => `${f.key} ${f.shown}`).join(', ')}`);
     }
 
     // ---- 2. THE LABELS ARE SENTENCES -----------------------------------

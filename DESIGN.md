@@ -478,8 +478,18 @@ tables is what makes a page read as ragged columns floating in empty space.
 
 ## Elevation & Depth
 
-**There are no shadows in this system.** Not one `box-shadow` is declared anywhere
-in the build. Depth is entirely tonal plus hairline: the page is the ground, a
+**There are no shadows in this system.** Elevation is tonal, not cast: no panel,
+tile, chip or button is lifted off its ground by one, and the landing page carries
+none at all, which `verify:craft` keeps true at 1440 and 390. An `inset 0 0 0 1px`
+ring is not a shadow for this purpose -- it is a 1px border drawn where a real one
+would shift the layout, as the selected chart range and overlay buttons use it. The
+rule is about elevation, not about the property.
+
+*(Until 16 November 2026 this read "Not one `box-shadow` is declared anywhere in
+the build", which was not true: four were. The sentence was corrected rather than
+the count quietly fixed.)*
+
+Depth is entirely tonal plus hairline: the page is the ground, a
 panel is one step up, a metric tile sits back down on the page colour inside a
 hairline, and a 1px warm line does all the separating. The only atmospheric effect
 is the condensed header, which is the page colour at 95% with a small backdrop
@@ -497,6 +507,24 @@ exactly two guises — a full circle on a status dot and on the hero's concentri
 diagram rings, and one decorative corner wash. Borders are 1px hairlines, and a
 border is the default way an element is bounded; fills are the exception, reserved
 for accent states.
+
+### The one exception: the landing page's coverage band
+
+**Nihar's decision, 16 November 2026.** The off-white coverage band on the
+landing page — `<section id="numbers">`, the point where the page changes
+register from being shown to being read — carries a **26px radius on its two
+top corners**, and nothing else on the site does.
+
+It is written down here rather than left in the code because a rule with an
+unrecorded exception is a rule nobody can apply. The reasoning is the owner's:
+the cream band is a sheet laid over the dark, and a sheet has an edge; a butt
+join reads as two grounds meeting rather than as one laid on the other.
+
+**The exception is the radius and nothing else.** No shadow returns with it —
+the band used to arrive out of a 110px dark glow, and that stays gone. No other
+panel, tile or button gains a radius from this. `verify:craft` allows this one
+element by name and still fails on any other rounded corner, so the exception
+cannot spread by being copied.
 
 The signature silhouette is the **mark**: a 0.13em oxblood square that ends a
 heading in place of a full stop, with a 0.08em left margin and a **-0.21em right
