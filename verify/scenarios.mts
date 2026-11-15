@@ -2176,6 +2176,37 @@ for (const [key, what, sname] of [['da', 'D&A', 'K sweep: switch OFF, depreciati
     audit(file.replace(/\.json$/, ''), overviewStats(payload));
   }
 
+  // ---- A MOVE ON THE DAY CARRIES ITS DIRECTION (2026-11-15) -------------
+  //
+  // "Change on the day / 1.12%" said nothing about which way the price went.
+  // The plain percent format prints a minus for a fall and NOTHING for a
+  // rise -- right for ROE, ROCE and a dividend yield, none of which is a
+  // signed quantity, and wrong for the one figure on the overview that is.
+  // The sign is a character, not a colour: a green number would tell a
+  // reader which way to feel rather than which way the price moved.
+  {
+    let signed = 0;
+    let bare: string[] = [];
+    for (const n of [1.12, -1.12, 0.004, 12.5, -0.5]) {
+      const out = String(formatStat({ value: n, unit: 'signedPercent' } as any, '$'));
+      if (n > 0 && !out.startsWith('+')) bare.push(`${n} printed "${out}"`);
+      if (n < 0 && !out.startsWith('−')) bare.push(`${n} printed "${out}"`);
+      signed++;
+    }
+    // Nought is neither up nor down and takes no sign.
+    const zero = String(formatStat({ value: 0, unit: 'signedPercent' } as any, '$'));
+    if (/^[+−]/.test(zero)) bare.push(`0 printed "${zero}"`);
+    // And the unsigned kinds must NOT have gained a plus.
+    const roe = String(formatStat({ value: 26.6, unit: 'percent' } as any, '$'));
+    if (roe.startsWith('+')) bare.push(`an unsigned percentage printed "${roe}"`);
+    if (bare.length) {
+      totalProblems += bare.length;
+      console.log(`  PROBLEM: the move on the day does not read as a signed figure: ${bare.join('; ')}`);
+    } else {
+      console.log(`  ${signed} signed percentages, each carrying its direction; nought unsigned; ROE still bare`);
+    }
+  }
+
   console.log(`  ${read} payloads, ${statsSeen} figures, ${dashes} of them a dash with a reason`);
   if (faults.length) {
     totalProblems += faults.length;

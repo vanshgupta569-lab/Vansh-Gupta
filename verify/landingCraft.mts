@@ -124,7 +124,14 @@ for (const width of [1440, 390]) {
         const s = getComputedStyle(el);
         const r = el.getBoundingClientRect();
         if (r.width < 24 || r.height < 12) continue;
-        if (s.boxShadow && s.boxShadow !== 'none') {
+        // AN INSET HAIRLINE RING IS A BORDER, NOT ELEVATION. The selected
+        // chart range and overlay buttons carry an inset 0 0 0 1px oxblood
+        // to thicken their ring without shifting the layout a real border
+        // would. DESIGN.md's "no shadows" rule is about elevation -- a card
+        // lifted off the ground -- and reading every box-shadow as elevation
+        // would make this check noise on every screen that uses the trick.
+        const ring = /inset/.test(s.boxShadow || '') && !/\d+px\s+\d*[1-9]\d*px/.test((s.boxShadow || '').replace(/inset/g, ''));
+        if (s.boxShadow && s.boxShadow !== 'none' && !ring) {
           shadows.push({ tag: el.tagName.toLowerCase(), cls: (el.className || '').toString().slice(0, 48), v: s.boxShadow.slice(0, 44) });
         }
         const radii = [s.borderTopLeftRadius, s.borderTopRightRadius, s.borderBottomLeftRadius, s.borderBottomRightRadius]

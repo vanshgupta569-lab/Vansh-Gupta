@@ -31,7 +31,7 @@ import { reportedRatios } from './ratios.js';
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && isFinite(v);
 
-export type StatUnit = 'currency' | 'percent' | 'multiple' | 'count';
+export type StatUnit = 'currency' | 'percent' | 'signedPercent' | 'multiple' | 'count';
 
 export interface OverviewStat {
   key: string;
@@ -171,7 +171,7 @@ export function overviewStats(payload: any): OverviewResult {
 
   stats.push(
     isNum(quote?.changePct)
-      ? got('change', 'Change on the day', 'percent', quote.changePct, priceSource, quoteAsOf, {
+      ? got('change', 'Change on the day', 'signedPercent', quote.changePct, priceSource, quoteAsOf, {
           formula: 'price / previous close - 1',
         })
       : dash(
@@ -461,6 +461,14 @@ export function formatStat(stat: OverviewStat, currencySymbol: string): string {
   switch (stat.unit) {
     case 'percent':
       return `${n >= 0 ? '' : '−'}${Math.abs(n).toFixed(n === 0 || Math.abs(n) >= 10 ? 1 : 2)}%`;
+    // A SIGNED PERCENTAGE ALWAYS CARRIES ITS SIGN, including the plus. Used
+    // for the move on the day, which is the one figure on the overview whose
+    // direction is part of the fact. Nought is neither up nor down, so it
+    // takes no sign.
+    case 'signedPercent': {
+      const mark = n > 0 ? '+' : n < 0 ? '−' : '';
+      return `${mark}${Math.abs(n).toFixed(Math.abs(n) >= 10 ? 1 : 2)}%`;
+    }
     case 'multiple':
       return `${n.toFixed(n >= 100 ? 0 : 1)}×`;
     case 'count':
