@@ -382,7 +382,7 @@ export const Header: React.FC<HeaderProps> = ({
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           aria-label="Marginalia home"
-          className="text-[20px] sm:text-[26px] lg:text-[28px] leading-none text-ink hover:text-accent-text transition-colors flex items-baseline group cursor-pointer shrink-0 whitespace-nowrap"
+          className="text-[20px] sm:text-[26px] lg:text-[28px] text-ink hover:text-accent-text transition-colors inline-flex items-center group cursor-pointer shrink-0 whitespace-nowrap"
         >
           {/* The mark, not a label: lowercase Newsreader with the red square
               standing in for the full stop, as the hero draws it. */}
@@ -526,7 +526,7 @@ export const Header: React.FC<HeaderProps> = ({
               onNavigateToScreen('HOME');
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
-            className="h-9 pointer-coarse:h-11 px-1 text-[17px] leading-none text-ink hover:text-accent-text transition-colors flex items-baseline cursor-pointer shrink-0 whitespace-nowrap"
+            className="h-9 pointer-coarse:h-11 px-1 text-[17px] text-ink hover:text-accent-text transition-colors inline-flex items-center cursor-pointer shrink-0 whitespace-nowrap"
           >
             <span className="font-serif" style={{ fontWeight: 500, letterSpacing: '-0.005em' }}>
               marginalia

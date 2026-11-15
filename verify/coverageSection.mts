@@ -32,6 +32,15 @@ const PORT = 6900 + Math.floor(Math.random() * 200);
 const SHOTS = process.argv.includes('--shots');
 
 const INSTANT = (await import(`file:///${REPO}/src/data/instantListings.ts`)).default as any[];
+/* THE FIGURE IS NO LONGER "WHAT THIS BUILD SHIPS" (Nihar, 16 November 2026).
+   It is what the site can VALUE: the SEC filers whose filings carry the line
+   the engine needs, plus the listings held here that no SEC archive contains.
+   This check used to assert the printed count was at most `INSTANT.length`,
+   which was right while the count WAS the search index and became a ceiling
+   180 times too low the moment it stopped being. It is measured against the
+   same function the page calls now, so a hand-written number fails. */
+const { coverageCount, coverageCountLabel } = await import(`file:///${REPO}/src/data/coverageCount.ts`);
+const COVERED = coverageCount();
 
 let problems = 0;
 const say = (line: string) => console.log(`  ${line}`);
@@ -107,10 +116,16 @@ for (const width of [1440, 390]) {
       const text = ((await companies.textContent()) || '').replace(/\s+/g, ' ').trim();
       // The printed figure must be a floor of what the build ships, never more.
       const named = Number((text.match(/([\d,]+)\s*\+/) || [])[1]?.replace(/,/g, '') || 0);
+      const expected = coverageCountLabel(COVERED.total);
       if (!named) {
         fail(`${width}: the count tile reads "${text.slice(0, 50)}" with no figure in it`);
-      } else if (named > INSTANT.length) {
-        fail(`${width}: the page claims ${named} companies and the build ships ${INSTANT.length}`);
+      } else if (named > COVERED.total) {
+        fail(
+          `${width}: the page claims ${named} companies and the measured universe is ${COVERED.total} ` +
+            `(${COVERED.secFilers} SEC filers + ${COVERED.nonUsListings} listed elsewhere)`
+        );
+      } else if (expected && !text.includes(expected)) {
+        fail(`${width}: the count reads "${text.slice(0, 24)}" where the data gives "${expected}"`);
       } else {
         say(`${width}, ${what}: the count stands — "${text.slice(0, 44)}"`);
       }
@@ -133,10 +148,16 @@ for (const width of [1440, 390]) {
     ).trim();
     if (!source) {
       fail(`${width}: the count has no source line`);
-    } else if (/screener table/i.test(source)) {
-      fail(`${width}: the count came from the build and its source line says "${source}"`);
-    } else if (!/build/i.test(source)) {
-      fail(`${width}: the count's source line does not say where it came from — "${source}"`);
+    } else if (!/\d/.test(source)) {
+      // IT HAS TO SAY WHAT WAS COUNTED, with the figures in it. "Counted from
+      // our data" is not a provenance on a page whose whole claim is that
+      // every figure has one.
+      fail(`${width}: the count's source line carries no figures — "${source}"`);
+    } else if (!source.includes(COVERED.secFilers.toLocaleString('en-GB'))) {
+      fail(
+        `${width}: the count's source line does not name the ${COVERED.secFilers.toLocaleString('en-GB')} ` +
+          `SEC filers it is mostly made of — "${source}"`
+      );
     } else {
       say(`${width}: its source line reads "${source}"`);
     }
@@ -208,6 +229,47 @@ for (const width of [1440, 390]) {
       } else {
         say(`${width}: ${fill.stats} stats fill ${(share * 100).toFixed(0)}% of the row`);
       }
+    }
+
+    // ---- 5. ONE ROW AT 1440, TWO BY TWO ON A PHONE -------------------
+    const rows: any = await page.evaluate(`(() => {
+      const grid = document.querySelector('[data-coverage-stats]');
+      if (!grid) return null;
+      const tops = new Set();
+      for (const kid of grid.children) tops.add(Math.round(kid.getBoundingClientRect().top));
+      return { rows: tops.size, tiles: grid.children.length };
+    })()`);
+    if (!rows) {
+      fail(`${width}: the stats grid could not be measured for its rows`);
+    } else {
+      const want = width >= 1024 ? 1 : 2;
+      if (rows.rows !== want) {
+        fail(`${width}: ${rows.tiles} tiles sit on ${rows.rows} rows, and should sit on ${want}`);
+      } else {
+        say(`${width}: ${rows.tiles} tiles on ${rows.rows} row${rows.rows === 1 ? '' : 's'}`);
+      }
+    }
+
+    // ---- 6. NO WALL OF NAMES IN THE BAND ------------------------------
+    //
+    // Twenty-six exchange names as a comma run were three lines of the
+    // busiest text on an otherwise disciplined page. They belong behind a
+    // control, so the tile stays a number, a label and one line.
+    const wall: any = await page.evaluate(`(() => {
+      const grid = document.querySelector('[data-coverage-stats]');
+      if (!grid) return null;
+      let worst = 0;
+      let who = '';
+      for (const tile of grid.children) {
+        const text = (tile.textContent || '').trim();
+        if (text.length > worst) { worst = text.length; who = (tile.getAttribute('data-stat') || '') + ': ' + text.slice(0, 40); }
+      }
+      return { worst, who };
+    })()`);
+    if (wall && wall.worst > 190) {
+      fail(`${width}: a tile carries ${wall.worst} characters — "${wall.who}…"`);
+    } else if (wall) {
+      say(`${width}: the longest tile is ${wall.worst} characters`);
     }
 
     if (SHOTS) {

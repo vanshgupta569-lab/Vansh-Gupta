@@ -18,6 +18,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { inkBand } from './fixtures/pngRows.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
@@ -100,6 +101,49 @@ for (const width of [1440, 390]) {
       }
       if (mark.top < 0 || mark.bottom > BAR_HEIGHT + 2) {
         fail(`${width}: the wordmark sits ${mark.top}–${mark.bottom}px against a bar of ${BAR_HEIGHT}px`);
+      }
+    }
+
+    // ---- THE MARK SITS IN THE MIDDLE OF THE BAR -----------------------
+    //
+    // MEASURED ON THE INK, NOT ON THE BOX. The button's box was centred in
+    // the bar to the pixel while the word inside it sat 9px high -- 12px of
+    // bar above the ink and 21px below -- because `leading-none` on a
+    // baseline-aligned box puts the glyphs where the box is not. Every DOM
+    // assertion passed throughout; only the picture shows it.
+    {
+      const mark = await page.evaluate(`(() => {
+        const el = document.querySelector('[data-condensed-wordmark]');
+        if (!el) return null;
+        const bar = el.closest('[data-header-condensed]') || el.closest('header');
+        const r = el.getBoundingClientRect();
+        const br = bar.getBoundingClientRect();
+        return { left: Math.round(r.left), right: Math.round(r.right), barTop: Math.round(br.top), barH: Math.round(br.height) };
+      })()`);
+      const m = mark as any;
+      if (!m) {
+        fail(`${width}: the slim bar has no wordmark to measure`);
+      } else {
+        const crop = (await page.screenshot({
+          clip: { x: m.left, y: m.barTop, width: Math.max(8, m.right - m.left), height: m.barH },
+        })) as Buffer;
+        const band = inkBand(crop);
+        if (!band) {
+          fail(`${width}: the slim bar's wordmark has no ink in it`);
+        } else {
+          const above = band.first;
+          const below = band.height - 1 - band.last;
+          // Two pixels of slack: a descender makes perfect symmetry a
+          // nonsense, and sub-pixel rendering moves the edge row anyway.
+          if (Math.abs(above - below) > 3) {
+            fail(
+              `${width}: the slim bar's mark is ${above}px from the top and ${below}px from the foot ` +
+                `of a ${m.barH}px bar — it is pressed against the ${above < below ? 'top' : 'bottom'} edge`
+            );
+          } else {
+            say(`${width}: the mark sits ${above}px / ${below}px in the ${m.barH}px bar`);
+          }
+        }
       }
     }
 

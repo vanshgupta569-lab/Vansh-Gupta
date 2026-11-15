@@ -38,6 +38,7 @@ import { MarginNotesSection } from './marginNotesSection';
 // The listings this build ships, so the coverage count never depends on a
 // request that can fail (2026-11-12).
 import INSTANT_LISTINGS, { INSTANT_LISTINGS_BUILT } from '../data/instantListings';
+import { coverageCount, coverageCountLabel } from '../data/coverageCount';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
 import { featureById, statusLabel, claimFor, isShipped, CLAIMS, companyCountLabel } from '../data/featureRegister';
@@ -451,40 +452,31 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
   const coverage = useCoverage();
   const countLabel = companyCountLabel(coverage.count);
   const builtAt = asAt(coverage.built);
-  const STATS: (Stat & { label: string; text: string | null })[] = [
-    ...(countLabel
+  /* FOUR FIGURES, ONE ROW, EACH CUT TO WHAT IT IS (Nihar, 16 Nov 2026).
+     Every tile is a number, a short label and at most one short line. The 26
+     exchange names used to run to three lines under a tile and were the
+     busiest text on an otherwise disciplined page; they sit behind a control
+     now, for the reader who actually wants to scan for their own. */
+  const covered = coverageCount();
+  const coveredLabel = coverageCountLabel(covered.total);
+  const STATS: (Stat & { label: string; text: string | null; names?: string[] })[] = [
+    ...(coveredLabel
       ? [{
-          key: 'companies', to: coverage.count as number, suffix: '', text: countLabel,
-          label: 'Listed companies',
-          /* THE EXCHANGE NAMES BELONG TO THE EXCHANGES TILE, which now
-             exists. Printed under both, the same 26 names filled two
-             thirds of the section twice over and said nothing the second
-             time. What belongs here is what the count is OF. */
-          detail: 'One listing a company, as the screener counts them',
-          /* THE SOURCE LINE SAYS WHERE THE FIGURE ACTUALLY CAME FROM. With
-             the live table unavailable the count is the build's own, and a
-             line reading "counted from the screener table" would be a false
-             provenance on a page whose whole claim is that every figure has
-             one. */
-          source:
-            coverage.from === 'table'
-              ? `Counted from the screener table${builtAt ? `, as at ${builtAt}` : ''}`
-              : `Counted from the listings in this build${builtAt ? `, built ${builtAt}` : ''}`,
+          key: 'companies', to: covered.total, suffix: '', text: coveredLabel,
+          label: 'Companies we can value',
+          detail: null,
+          /* WHAT WAS COUNTED, IN ONE LINE. Not "listings in this build",
+             which was the size of the search index rather than the size of
+             the universe. */
+          source: `${covered.secFilers.toLocaleString('en-GB')} SEC filers reporting annual revenue, plus ${covered.nonUsListings} listed elsewhere`,
         }]
       : []),
     {
-      /* THE LABEL READ "Up to, of filed history" (2026-11-12) — a sentence
-         with its middle missing, because the number it refers to is printed
-         above it and the words were written as though it were inline. The
-         label now says what it means on its own. */
       key: 'years', to: CLAIMS.historyYears, suffix: 'Y', text: null,
-      label: `Up to ${YEARS_IN_WORDS[CLAIMS.historyYears] ?? CLAIMS.historyYears} fiscal years of filed history`,
-      detail: 'IS · BS · CF · WC · PP&E · Debt · Equity',
-      source: 'Fiscal years read from each company\u2019s own filings',
+      label: 'Years of filed history',
+      detail: null,
+      source: 'Read from each company\u2019s own filings',
     },
-    /* THE EXCHANGES ARE COUNTED, NOT CLAIMED. The same listings the count
-       above comes from, reduced to their distinct exchanges -- so the two
-       figures can never disagree, and the names are under it. */
     ...(coverage.exchanges.length
       ? [{
           key: 'exchanges',
@@ -492,26 +484,20 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
           suffix: '',
           text: null,
           label: 'Exchanges',
-          detail: coverage.exchanges.join(' · '),
-          source:
-            coverage.from === 'table'
-              ? 'Counted from the screener table'
-              : `Counted from the listings in this build${builtAt ? `, built ${builtAt}` : ''}`,
+          detail: null,
+          source: 'Counted from the listings this build ships',
+          names: coverage.exchanges,
         }]
       : []),
-    /* THREE STATEMENTS IS A FACT ABOUT THE ENGINE, not a tally that could
-       drift: a model is not built unless all three are read, and a balance
-       sheet that does not balance is refused rather than shown. */
     {
       key: 'statements', to: 3, suffix: '', text: null,
-      label: 'Statements read for every company',
-      detail: 'Income statement · Balance sheet · Cash flow',
-      source: 'All three, or the company is refused rather than valued',
+      label: 'Statements read',
+      detail: null,
+      source: 'All three, or the company is refused',
     },
-    ...(isShipped('three-approaches')
-      ? [{ key: 'approaches', to: 3, suffix: '', text: null, label: 'Valuation approaches', detail: 'Income · Market · Asset', source: 'Shown side by side, not averaged' }]
-      : []),
   ];
+  /** Which stat has its list of names open, if any. */
+  const [openNames, setOpenNames] = useState<string | null>(null);
   const [activeMargin, setActiveMargin] = useState(0);
   const marginRef = useRef<HTMLDivElement>(null);
 
@@ -956,15 +942,15 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               >
                 &ldquo;It is better to be vaguely right than exactly wrong.&rdquo;
               </p>
-              {/* "ATTRIBUTED TO", which is the honest form of this credit
-                  and Nihar's decision of 16 November 2026. The line is widely
-                  attributed to Keynes and the attribution cannot be sourced
-                  to him -- so the page says it is attributed rather than
-                  saying he wrote it. The earlier credit to Carveth Read and
-                  its book title are removed on the same decision; the note in
-                  LANDING_SPEC keeps the research that found him. */}
+              {/* THE CREDIT READS AS THE OWNER SET IT (Nihar, 16 November
+                  2026, second decision): the name alone, with "Attributed to"
+                  removed. The evidence is not lost -- LANDING_SPEC decision 1
+                  records that the line traces to Carveth Read's `Logic`
+                  (1898) ch. 22 and that Oxford Reference calls the Keynes
+                  attribution often wrong -- so anyone who revisits this can
+                  see what was known when the decision was taken. */}
               <p className="font-figure text-[13px] mt-4" style={{ color: MUTED }}>
-                Attributed to John Maynard Keynes
+                John Maynard Keynes
               </p>
             </div>
           </div>
@@ -1015,13 +1001,19 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 the count was withheld on the live site — so the page showed a
                 wide blank where its headline figure belongs. The columns are
                 the number of stats, capped at three. */}
+            {/* ONE ROW AT 1440, TWO BY TWO ON A PHONE (Nihar, 16 Nov 2026).
+                The columns are the number of stats, so a withheld figure
+                closes the row up rather than leaving the wide blank that
+                shipped in November. */}
             <div
-              className={`grid gap-y-14 gap-x-8 ${
-                STATS.length >= 3
-                  ? 'grid-cols-2 lg:grid-cols-3'
-                  : STATS.length === 2
-                    ? 'grid-cols-1 sm:grid-cols-2'
-                    : 'grid-cols-1 max-w-[42rem]'
+              className={`grid gap-y-12 gap-x-8 ${
+                STATS.length >= 4
+                  ? 'grid-cols-2 lg:grid-cols-4'
+                  : STATS.length === 3
+                    ? 'grid-cols-2 lg:grid-cols-3'
+                    : STATS.length === 2
+                      ? 'grid-cols-1 sm:grid-cols-2'
+                      : 'grid-cols-1 max-w-[42rem]'
               }`}
               data-coverage-stats={STATS.length}
             >
@@ -1031,18 +1023,45 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                     {/* A count that is a label ("200+") is printed, not counted up. */}
                     {s.text ? <span className="font-figure tabular-nums">{s.text}</span> : <CountUp to={s.to} suffix={s.suffix} />}
                   </div>
-                  <div
-                    className="font-figure text-[12px] tracking-[0.2em] uppercase mt-4"
-                    style={{ color: PAPER.ink }}
-                  >
+                  {/* SENTENCE CASE, NOT TRACKED CAPITALS. Uppercase tracked
+                      labels are on the VISUAL_SYSTEM Avoid list by name. */}
+                  <div className="font-figure text-[13px] mt-4" style={{ color: PAPER.ink }}>
                     {s.label}
                   </div>
-                  <div className="font-figure text-[12px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
-                    {s.detail}
-                  </div>
-                  <div className="font-figure text-[12px] mt-1 leading-[1.5]" data-stat-source style={{ color: PAPER.quiet }}>
+                  {s.detail ? (
+                    <div className="font-figure text-[13px] mt-2 leading-[1.5]" style={{ color: PAPER.quiet }}>
+                      {s.detail}
+                    </div>
+                  ) : null}
+                  <div className="font-figure text-[13px] mt-1 leading-[1.5]" data-stat-source style={{ color: PAPER.quiet }}>
                     {s.source}
                   </div>
+                  {/* THE NAMES, FOR THE READER WHO WANTS THEM. Twenty-six
+                      exchange names set as a comma run were three lines of
+                      the busiest text on the page, answering a question
+                      ("is mine here?") in the hardest possible form. They
+                      open on demand. The control carries the 24x24 hit area
+                      the landing spec's decision line sets, and 44x44 on a
+                      coarse pointer. */}
+                  {s.names?.length ? (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        data-stat-names={s.key}
+                        aria-expanded={openNames === s.key}
+                        onClick={() => setOpenNames(openNames === s.key ? null : s.key)}
+                        className="font-figure text-[13px] underline underline-offset-2 h-6 min-w-6 pointer-coarse:h-11 px-1 -mx-1 cursor-pointer"
+                        style={{ color: PAPER.quiet }}
+                      >
+                        {openNames === s.key ? 'Hide the names' : 'Which ones?'}
+                      </button>
+                      {openNames === s.key ? (
+                        <p className="font-figure text-[13px] mt-2 leading-[1.6]" style={{ color: PAPER.quiet }}>
+                          {s.names.join(' · ')}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
