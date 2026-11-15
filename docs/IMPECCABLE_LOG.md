@@ -126,4 +126,8 @@ Carried forward rather than dropped. None is a conflict; each is work.
 The landing page lost an unverifiable "VERIFIED LEAD" badge, four box-shadows and three rounded corners it had while DESIGN.md claimed none existed, and **26% of its height** (15,969 → 11,756px at 1440; 16,053 → 12,174px at 390) with every section kept; its sample figures became NVIDIA's filed lines and its quote found its real author. The header's two phone squares matched at 44px and its menu sheet went from 780px around 227px of content to 229px. The search field got a name a screen reader can read; **the palette needed nothing at all** and that is recorded as carefully as the changes.
 Three checks now run at 1440 and 390 — `verify:craft`, the extended `verify:condensed`, and `verify:open`'s field arm — and each was proved by breaking it.
 
+**Batch 1 complete — 15 November 2026** (landing page; header and menus; search palette and screen; company Overview).
+Five screens reviewed, four changed, one found correct and recorded as such. The landing page lost an unverifiable credibility badge, four shadows, three rounded corners and **26% of its height** with every section kept; the header's phone squares matched and its sheet went from 780px to 229px; the search field gained a name a screen reader can read; the Overview's move on the day gained its sign.
+**Three suspected faults turned out to be the code being right** — the palette's blur, the ⓘ hit areas and the inset ring "shadows" — and two of my own checks were wrong before the app was. Carried forward: 8 open findings and 3 conflicts for Nihar.
+
 *(Three lines per batch, written after the push.)*
