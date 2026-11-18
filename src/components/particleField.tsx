@@ -542,9 +542,15 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
         float sy = exp(-abs(q.y) * 30.0) * exp(-abs(q.x) * 1.5);
         float spikes = (sx + sy) * vBright * f;
 
-        float a = (halo * 0.36 + core * 1.00 + spikes * 0.72)
+        /* EACH POINT CARRIES MORE BODY (Nihar, 16 November 2026, item 4).
+           A grain was a 0.36 halo around a pinpoint core, which at arm's
+           length on a normal-brightness laptop reads as dust rather than as
+           a shape. The halo is the part the eye actually sees at a glance,
+           so it carries nearly twice as much, and the colour starts brighter.
+           No points were added and the budget did not move. */
+        float a = (halo * 0.70 + core * 1.00 + spikes * 0.72)
                 * vFade * uOpacity * mix(0.94, 1.0, vBright);
-        vec3 c = vColor * (0.76 + core * 1.70 + spikes * 1.25);
+        vec3 c = vColor * (0.95 + core * 1.70 + spikes * 1.25);
         gl_FragColor = vec4(c, clamp(a, 0.0, 1.0));
       }
     `;
@@ -600,7 +606,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           /* Dust is lifted by half again: at a twelfth of the points it
              used to have, the additive light it built up was faint. */
-          vFade = clamp((mv.z + 21.0) / 16.0, 0.64, 1.0)
+          vFade = clamp((mv.z + 21.0) / 16.0, 0.80, 1.0)
                 * mix(0.96, tw, 0.18 + bright * 0.62)
                 * mix(1.5, 1.0, bright);
           gl_PointSize = psize * uScale / max(-mv.z, 0.1);

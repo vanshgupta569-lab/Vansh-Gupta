@@ -170,7 +170,11 @@ for (const width of [1440, 390]) {
     const figures: any[] = await page.evaluate(
       `Array.from(document.querySelectorAll('[data-stat]')).map((el) => ({
         key: el.getAttribute('data-stat'),
-        shown: (el.children[0]?.textContent || '').trim(),
+        // The VISIBLE figure. The settled value also sits in an sr-only span
+        // so a screen reader is given the number rather than forty of them,
+        // and reading the tile's whole text returned both.
+        shown: (el.querySelector('[data-stat-shown]')?.textContent || '').trim(),
+        read: (el.querySelector('[data-stat-final]')?.textContent || '').trim(),
       }))`
     );
     const nought = figures.filter((f: any) => /^0\b|^0$/.test(f.shown));

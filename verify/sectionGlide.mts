@@ -138,6 +138,47 @@ for (const [width, height] of SIZES) {
       say(`${width}x${height}: no following heading shows before the reader moves`);
     }
 
+    // ---- 1b. THE QUOTE IS CENTRED IN THE SCREEN ----------------------
+    //
+    // Giving the quote's section `flex items-center` on 16 November made its
+    // pinned child a FLEX ITEM, and a flex item with no width sizes to its
+    // contents -- so the pane stopped spanning the section and the quote,
+    // centred inside that shrunken pane, sat in the left third of the screen
+    // with the right side empty. Measured against the VIEWPORT, which is what
+    // a reader sees, rather than against the pane, which was the thing that
+    // was wrong.
+    {
+      const letgoTop = geo.find((g: any) => g.id === 'letgo')?.top ?? 0;
+      await page.evaluate(`window.scrollTo(0, ${letgoTop})`);
+      await page.waitForTimeout(450);
+      const q: any = await page.evaluate(`(() => {
+        const sec = document.getElementById('letgo');
+        if (!sec) return null;
+        const p = sec.querySelector('p');
+        if (!p) return null;
+        const r = p.getBoundingClientRect();
+        return {
+          mid: Math.round(r.left + r.width / 2),
+          midY: Math.round(r.top + r.height / 2),
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+        };
+      })()`);
+      if (!q) {
+        fail(`${width}x${height}: the quote could not be found`);
+      } else {
+        const offX = Math.abs(q.mid - q.vw / 2);
+        const offY = Math.abs(q.midY - q.vh / 2);
+        if (offX > 24) {
+          fail(`${width}x${height}: the quote's centre is ${q.mid}px across a ${q.vw}px screen — ${offX}px off centre`);
+        } else if (offY > Math.max(60, height * 0.12)) {
+          fail(`${width}x${height}: the quote sits ${offY}px off the vertical centre of a ${q.vh}px screen`);
+        } else {
+          say(`${width}x${height}: the quote is centred (${offX}px across, ${offY}px down)`);
+        }
+      }
+    }
+
     // ---- 6. REDUCED MOTION GETS NO GLIDE -----------------------------
     //
     // Done on its own context further down; here the ordinary path.

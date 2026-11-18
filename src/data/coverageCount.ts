@@ -76,4 +76,20 @@ export function coverageCountLabel(total: number): string | null {
   return `${(Math.floor(total / 100) * 100).toLocaleString('en-GB')}+`;
 }
 
-export default { coverageCount, coverageCountLabel, US_EXCHANGES };
+/**
+ * THE SAME FIGURE, IN PARTS, so it can be counted up to.
+ *
+ * `coverageCountLabel` is the one place the rounding lives; this returns what
+ * that label is MADE OF -- the number to count to and the mark after it -- so
+ * the band can animate to the figure it prints without a second rounding rule
+ * drifting away from the first.
+ */
+export function coverageCountParts(total: number): { value: number; suffix: string } | null {
+  const label = coverageCountLabel(total);
+  if (!label) return null;
+  const plus = label.endsWith('+');
+  const value = Number(label.replace(/[^0-9]/g, ''));
+  return { value, suffix: plus ? '+' : '' };
+}
+
+export default { coverageCount, coverageCountLabel, coverageCountParts, US_EXCHANGES };

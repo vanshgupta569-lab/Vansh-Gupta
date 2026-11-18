@@ -50,7 +50,14 @@ const { PARTICLE_BUDGET } = await import(`file:///${REPO}/src/components/particl
  * object points being spent elsewhere or the scatter being widened again, and
  * it does not pin the hero to one exact look.
  */
-const DENSITY_FLOOR = 0.017;
+/* RAISED TO 4.0% ON 16 NOVEMBER 2026, after the points were given more body
+   for item 4. Measured across the Windows matrix immediately after that
+   change: 8.8% and 6.6% at 1366x768 (scaling 1 and 1.25), 5.8% at 1440x900
+   and 5.0% at 1536x864 -- against 1.8%, 1.0%, 2.3% and 2.0% before it. The
+   floor sits under the worst of those and far above anything the old wordmark
+   managed, so it catches the brightness being taken back out without pinning
+   the hero to one exact look. */
+const DENSITY_FLOOR = 0.040;
 /** The wordmark must stop this far above the first line of type. */
 const CLEAR_PX = 40;
 /** The fixed header, which the wordmark has to clear. */
@@ -59,6 +66,8 @@ const HEADER_PX = 64;
 const HEAD_CLEAR_PX = 16;
 
 let problems = 0;
+let measured = 0;
+let posterOnly = 0;
 const say = (line: string) => console.log(`  ${line}`);
 const fail = (line: string) => {
   problems++;
@@ -143,7 +152,33 @@ function brightness(png: Buffer): { width: number; height: number; rows: Uint8Ar
   return { width, height, rows };
 }
 
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+/**
+ * THE SIZES AND SCALINGS A WINDOWS LAPTOP ACTUALLY USES (Nihar, 16 November
+ * 2026, item 5).
+ *
+ * The wordmark was reported broken on a Dell laptop while every check here
+ * passed, and the reason is that this file only ever opened ONE window:
+ * 1440x900 at a device pixel ratio of 1. Windows ships 125% and 150% display
+ * scaling as defaults on exactly the panels that are 1366x768, 1536x864 and
+ * 1920x1080 -- so the common case was the untested case.
+ *
+ * A scaled display changes the CSS viewport the page sees AND the number of
+ * device pixels each CSS pixel is drawn with, and the wordmark is fitted to
+ * the first and drawn into the second. Both have to be varied, which is why
+ * this is a matrix and not a list.
+ */
+const WINDOWS_SIZES: [number, number][] = [
+  [1366, 768],
+  [1440, 900],
+  [1536, 864],
+  [1920, 1080],
+];
+const SCALINGS = [1, 1.25, 1.5];
+
+for (const [vw, vh_] of WINDOWS_SIZES)
+for (const dpr of SCALINGS) {
+const WHERE = `${vw}x${vh_} at ${dpr}x`;
+const ctx = await browser.newContext({ viewport: { width: vw, height: vh_ }, deviceScaleFactor: dpr });
 await ctx.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
 const page = await ctx.newPage();
 try {
@@ -154,7 +189,8 @@ try {
 
   const mode = await page.evaluate(`document.querySelector('[data-hero-mode]')?.getAttribute('data-hero-mode') || ''`);
   if (!/field/.test(String(mode))) {
-    say(`the hero is showing ${mode}, not the field, so the wordmark is not drawn here`);
+    posterOnly++;
+    say(`${WHERE}: showing ${mode}, not the field, so the wordmark is not drawn here`);
   } else {
     const points = Number(await page.evaluate(`document.querySelector('canvas')?.dataset.particles || 0`));
     if (!(points > 0 && points <= PARTICLE_BUDGET)) {
@@ -191,7 +227,15 @@ try {
     for (const wait of [0, 1200, 1200, 1200, 1200, 1200]) {
       if (wait) await page.waitForTimeout(wait);
       const frame = (await page.screenshot()) as Buffer;
-      const { width, height, rows } = brightness(frame);
+      const shotPx = brightness(frame);
+      /* THE SCREENSHOT IS IN DEVICE PIXELS. At 150% scaling a 768px window is
+         photographed 1152 rows tall, so a clearance measured in those rows is
+         half as big as it looks and the header's 64px edge sits at row 96.
+         Everything below is in CSS pixels, so the rows are converted once,
+         here, rather than at each comparison. */
+      const width = shotPx.width;
+      const height = Math.round(shotPx.height / dpr);
+      const rows = shotPx.rows;
       // FROM THE HEADER'S LOWER EDGE (2026-11-16).
       //
       // This used to start at row 70. The header is 64px, so the six rows
@@ -211,10 +255,17 @@ try {
       // atmosphere rather than the object, and is not what is asserted.
       let lowest = 0;
       let first = height;
+      /* `y` IS A CSS ROW AND `rows` IS INDEXED IN DEVICE ROWS. At 150%
+         scaling a 768px window is photographed 1152 rows tall, so reading
+         `rows[64]` for the header's edge would read CSS row 42 -- inside the
+         header, where the navigation's own type is. Converted once, here. */
       for (let y = top; y < bottom; y++) {
+        const dy = Math.min(shotPx.height - 1, Math.round(y * dpr));
+        const row = rows[dy];
+        if (!row) continue;
         let n = 0;
         for (let x = 0; x < width; x++) {
-          if (rows[y][x] >= LIT) {
+          if (row[x] >= LIT) {
             n++;
             if (y > lowest) lowest = y;
             if (y < first) first = y;
@@ -263,8 +314,9 @@ try {
         shot = frame;
       }
     }
-    if (shot) fs.writeFileSync(path.join(OUT, 'hero-wordmark.png'), shot);
-    say(`the wordmark occupies rows ${firstLit}-${lowestLit}; its densest ${WINDOW} rows are ${(density * 100).toFixed(1)}% lit`);
+    if (shot) fs.writeFileSync(path.join(OUT, `hero-${vw}x${vh_}@${dpr}.png`), shot);
+    measured++;
+    say(`${WHERE}: rows ${firstLit}-${lowestLit}; its densest ${WINDOW} rows are ${(density * 100).toFixed(1)}% lit`);
 
     // ---- THE WHOLE WORD IS ON THE PAGE -------------------------------
     //
@@ -306,12 +358,19 @@ try {
   if (scroll) fail('"Scroll to see how it works" is still on the page (LANDING_SPEC finding 4)');
   else say('the "Scroll to see how it works" line is gone');
 } catch (err) {
-  fail(String(err).slice(0, 140));
+  fail(`${WHERE}: ${String(err).slice(0, 130)}`);
 } finally {
   await ctx.close();
-  await browser.close();
-  child.kill();
+}
 }
 
+await browser.close();
+child.kill();
+
+console.log(
+  `
+  measured ${measured} of ${WINDOWS_SIZES.length * SCALINGS.length} windows; ` +
+    `${posterOnly} fell back to the poster because the software renderer could not hold the frame rate`
+);
 console.log(`\nTOTAL PROBLEMS IN THE HERO WORDMARK: ${problems}`);
 process.exit(0);

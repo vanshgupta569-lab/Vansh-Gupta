@@ -38,7 +38,7 @@ import { MarginNotesSection } from './marginNotesSection';
 // The listings this build ships, so the coverage count never depends on a
 // request that can fail (2026-11-12).
 import INSTANT_LISTINGS, { INSTANT_LISTINGS_BUILT } from '../data/instantListings';
-import { coverageCount, coverageCountLabel } from '../data/coverageCount';
+import { coverageCount, coverageCountParts } from '../data/coverageCount';
 import { useSectionGlide } from './useSectionGlide';
 import { DARK, PAPER, TYPE } from '../design/tokens';
 import { Mark } from '../design/Mark';
@@ -277,11 +277,22 @@ const CountUp: React.FC<{ to: number; suffix?: string }> = ({ to, suffix = '' })
     return () => { io.disconnect(); if (raf) cancelAnimationFrame(raf); };
   }, [to, still]);
 
+  const finished = `${to.toLocaleString('en-GB')}${suffix}`;
   return (
-    <span ref={ref} className="tabular-nums">
-      {n.toLocaleString('en-IN')}
-      {suffix}
-    </span>
+    <>
+      {/* THE FINAL FIGURE IS IN THE PAGE FROM THE FIRST RENDER. A count-up
+          read aloud is a screen reader announcing a number forty times on
+          its way somewhere, so the animated digits are hidden from the
+          accessibility tree and the figure itself is there, settled, from
+          the start. */}
+      <span ref={ref} aria-hidden="true" data-stat-shown className="tabular-nums">
+        {n.toLocaleString('en-GB')}
+        {suffix}
+      </span>
+      <span className="sr-only" data-stat-final>
+        {finished}
+      </span>
+    </>
   );
 };
 
@@ -474,11 +485,11 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
      busiest text on an otherwise disciplined page; they sit behind a control
      now, for the reader who actually wants to scan for their own. */
   const covered = coverageCount();
-  const coveredLabel = coverageCountLabel(covered.total);
+  const coveredParts = coverageCountParts(covered.total);
   const STATS: (Stat & { label: string; text: string | null; names?: string[] })[] = [
-    ...(coveredLabel
+    ...(coveredParts
       ? [{
-          key: 'companies', to: covered.total, suffix: '', text: coveredLabel,
+          key: 'companies', to: coveredParts.value, suffix: coveredParts.suffix, text: null,
           label: 'Companies we can value',
           detail: null,
           /* WHAT WAS COUNTED, IN ONE LINE. Not "listings in this build",
@@ -944,7 +955,14 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
         {/* 190vh for one sentence and its attribution: about two and a half
             screens, most of it empty, to show a dispersal that does not read
             on either width. The sentence stays; the emptiness does not. */}
-        <section id="letgo" className="relative flex min-h-[100svh] items-center py-16 lg:py-20">
+        {/* NOT A FLEX CONTAINER. Giving this section `flex items-center` on
+            16 November made its sticky child a FLEX ITEM, and a flex item
+            with no width sizes to its contents -- so the pinned pane stopped
+            spanning the section and the quote, centred inside that shrunken
+            pane, sat in the left third of the screen with the right side
+            empty. The child pins and centres itself; the section only has to
+            be tall enough to pin within. */}
+        <section id="letgo" className="relative min-h-[100svh]">
           {/* A scrim across the whole section would dim the dispersal, which
               is the one thing this section exists to show. The only shading
               is a soft pool behind the quote, and it travels with it. */}
@@ -955,7 +973,7 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
                 'linear-gradient(to top, rgba(9,9,11,.96) 0%, rgba(9,9,11,.52) 42%, rgba(9,9,11,0) 100%)',
             }}
           />
-          <div className="sticky top-0 h-screen flex items-center justify-center">
+          <div className="sticky top-0 w-full h-[100svh] flex items-center justify-center">
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
@@ -1048,9 +1066,23 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
             >
               {STATS.map((s) => (
                 <div key={s.key} data-stat={s.key}>
-                  <div className="text-[44px] lg:text-[62px]" style={{ ...DISPLAY, color: PAPER.ink }}>
-                    {/* A count that is a label ("200+") is printed, not counted up. */}
-                    {s.text ? <span className="font-figure tabular-nums">{s.text}</span> : <CountUp to={s.to} suffix={s.suffix} />}
+                  {/* ONE TYPE STYLE FOR ALL FOUR FIGURES, and it is the
+                      FIGURE face, not Newsreader. The container used to set
+                      `DISPLAY` -- Newsreader at weight 800 -- which every
+                      numeral inherited except "6,900+", whose own span set
+                      the figure face and so stood out as a different, lighter
+                      letterform beside three heavy ones. Setting the figure
+                      face here settles that AND keeps LANDING_SPEC checklist
+                      13, "no Newsreader on a number", which the band had been
+                      breaking since it was written.
+
+                      AND ALL FOUR COUNT UP. The companies tile printed a
+                      finished label while its three neighbours animated, so
+                      one number in four sat still. It counts to the rounded
+                      figure it prints, from `coverageCountParts`, so there is
+                      no second rounding rule to drift. */}
+                  <div className="font-figure text-[44px] lg:text-[62px] leading-none" style={{ color: PAPER.ink }}>
+                    <CountUp to={s.to} suffix={s.suffix} />
                   </div>
                   {/* SENTENCE CASE, NOT TRACKED CAPITALS. Uppercase tracked
                       labels are on the VISUAL_SYSTEM Avoid list by name. */}
