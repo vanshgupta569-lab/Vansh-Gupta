@@ -28,6 +28,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright';
+import { litRows } from './fixtures/pngRows.mts';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..').split(path.sep).join('/');
@@ -67,6 +68,45 @@ await new Promise<void>((resolve, reject) => {
   child.on('error', reject);
 });
 const BASE = `http://127.0.0.1:${PORT}`;
+
+// ---- THE LETTING-GO STAYS INSIDE THE FRAME ----------------------------
+//
+// "And then it lets go" is the one section whose whole subject is the object
+// coming apart. It used to open to a radius of 7.5-15 while the camera sees
+// about 8.6 units of height, so most of the cloud was past the edge within a
+// few hundred milliseconds and a reader arriving found an empty screen with a
+// quote on it -- which is exactly what was reported.
+//
+// CHECKED AS GEOMETRY, NOT AS A PICTURE, and that choice is the point. Three
+// picture-based versions of this were tried: the total light on the screen,
+// the same compared against the settled state, and the share of screen rows
+// carrying ink. None could tell the fixed version from the broken one,
+// because a cloud letting go does not get BRIGHTER, it gets WIDER -- the same
+// light spread further -- and because headless Chrome freezes this field to
+// its poster about half the time, which makes any photograph a coin toss.
+// The geometry is unambiguous and does not flake.
+{
+  const { CAMERA, DISPERSAL_RADIUS } = await import(`file:///${REPO}/src/components/particleField.tsx`);
+  const half = (2 * Math.tan((CAMERA.fov * Math.PI) / 180 / 2) * CAMERA.dist) / 2;
+  if (DISPERSAL_RADIUS.from >= half) {
+    problems++;
+    console.log(
+      `  PROBLEM: the letting-go starts at a radius of ${DISPERSAL_RADIUS.from} and the camera sees ` +
+        `${half.toFixed(1)} units from the centre — the cloud is off the edge before it begins`
+    );
+  } else if (DISPERSAL_RADIUS.to > half * 2.6) {
+    problems++;
+    console.log(
+      `  PROBLEM: the letting-go opens to a radius of ${DISPERSAL_RADIUS.to} against ${half.toFixed(1)} ` +
+        `visible — the points leave the frame before a reader can watch them go`
+    );
+  } else {
+    console.log(
+      `  the letting-go opens from ${DISPERSAL_RADIUS.from} to ${DISPERSAL_RADIUS.to} against ` +
+        `${half.toFixed(1)} units the camera sees from centre — it happens in shot`
+    );
+  }
+}
 
 console.log('\n=== one gesture, one section ===');
 const browser = await chromium.launch({

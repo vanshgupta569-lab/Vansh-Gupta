@@ -53,8 +53,43 @@ export const PARTICLE_BUDGET = 12000;
    spending more. The sky is also the thing VISUAL_SYSTEM 4 says should not be
    there ("no ambient star field outside the wordmark box"), so the trade costs
    nothing the design wanted. */
-export const OBJECT_POINTS = { desktop: 11200, compact: 7600 } as const;
-export const SKY_POINTS = { desktop: 800, compact: 400 } as const;
+export const OBJECT_POINTS = { desktop: 11700, compact: 7800 } as const;
+/* THE AMBIENT SKY IS NEARLY GONE (18 November 2026). VISUAL_SYSTEM 4 says
+   there should be "no ambient star field outside the wordmark box" at all, and
+   measuring the letting-go showed what it was costing: the settled brightness
+   of the quote section was the SAME at 1366x768 as at 1440x900 even though the
+   smaller screen has 30% fewer pixels, because the sky -- not the object --
+   was most of what was lit. It was drowning the one effect that section
+   exists for. What is left is a thin haze; the points go to the object. */
+export const SKY_POINTS = { desktop: 300, compact: 200 } as const;
+
+/**
+ * THE CAMERA, AND HOW FAR THE LETTING-GO THROWS THE POINTS.
+ *
+ * Exported so a check can hold the one against the other WITHOUT a browser.
+ * The fault this guards is exact and was reported from a real screen: the
+ * dispersal used to open to a radius of 7.5-15 while the camera sees about
+ * 8.6 units of height, so most of the cloud was past the edge of the frame
+ * within the first few hundred milliseconds and a reader arriving at the
+ * quote found an empty screen. Measuring the PICTURE could not tell the two
+ * apart reliably -- the software renderer freezes, and the light does not
+ * change much when a cloud spreads, only its distribution does. The geometry
+ * is not ambiguous and does not flake.
+ */
+export const CAMERA = { fov: 46, dist: 10.2 } as const;
+/** The letting-go opens to between these, in world units. */
+/** The letting-go opens to between these, in world units.
+ *
+ *  MEASURED AGAINST THE CAMERA, which sees 4.3 units from the centre of the
+ *  frame vertically and about 6.9 across at 1440x900. The original 7.5-15 put
+ *  the ENTIRE cloud outside that before it began. 4.6 was no better: it only
+ *  looked better because the points pass through the frame on their way out,
+ *  so the flight read richly and the state it settled into was empty -- which
+ *  is arriving after the event, the thing that was reported.
+ *  Opening from 2.6 means the near half of the cloud starts inside the frame
+ *  and stays there; 7.0 is past the vertical edge but inside the horizontal,
+ *  so the cloud spreads across the screen rather than off it. */
+export const DISPERSAL_RADIUS = { from: 2.6, to: 7.0 } as const;
 export const MAX_PIXEL_RATIO = 1.5;
 export const SETTLE_MS = 5000;
 export const SLOW_FRAME_MS = 20;
@@ -144,8 +179,8 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     renderer.setSize(vw(), vh(), false);
 
-    const FOV = 46;
-    const DIST = 10.2;
+    const FOV = CAMERA.fov;
+    const DIST = CAMERA.dist;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(FOV, vw() / vh(), 0.1, 120);
     camera.position.set(0, 0, DIST);
@@ -424,14 +459,20 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
       forms.push(a);
     }
 
-    /* 9. AND THEN IT LETS GO. Held closer in than it used to be, so the
-          coming-apart happens where the reader can still see it rather than
-          off the edges of the screen in the first half second. */
+    /* 9. AND THEN IT LETS GO -- and it has to be WATCHABLE (18 Nov 2026).
+          At a radius of 7.5 to 15 the points left the frame almost at once:
+          the camera sees about 11 units, so by the time a reader arrived the
+          burst had already happened somewhere off the edges and the section
+          read as an empty screen with a quote on it. Held between 4.6 and
+          10.2, most of the cloud is still in shot as it opens out, so the
+          coming-apart is something you watch rather than something you
+          arrive after. The spread is still wide enough that nothing reads as
+          a shape any more, which is the point of the section. */
     {
       const a = new Float32Array(COUNT * 3);
       for (let i = 0; i < COUNT; i++) {
         const u = seeded(i + 21) * Math.PI * 2, v = Math.acos(2 * seeded(i + 31) - 1);
-        const rad = 7.5 + seeded(i + 41) * 7.5;
+        const rad = DISPERSAL_RADIUS.from + seeded(i + 41) * (DISPERSAL_RADIUS.to - DISPERSAL_RADIUS.from);
         a[i * 3]     = rad * Math.sin(v) * Math.cos(u);
         a[i * 3 + 1] = rad * Math.sin(v) * Math.sin(u);
         a[i * 3 + 2] = rad * Math.cos(v);
@@ -876,7 +917,19 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
       } else if (stillRef.current) {
         glided = want;
       } else {
-        glided += (want - glided) * 0.075;
+        /* THE LETTING-GO IS MUCH SLOWER THAN THE OTHER MOVES.
+           Every other change is one shape becoming another and wants to be
+           brisk. This one is the object coming apart, and it is the whole
+           subject of its section -- so it is the one piece of motion on this
+           page a reader is meant to watch rather than notice. At the ordinary
+           rate 85% of it was over within 900ms, which is why arriving at the
+           quote felt like arriving after the event. At 0.016 a frame the
+           cloud is still opening out three seconds later.
+           It is ambient, not a response to an action, so the 280ms
+           interaction budget does not apply to it; reduced motion skips it
+           entirely and arrives at the finished state. */
+        const toLast = want >= LAST - 0.001;
+        glided += (want - glided) * (toLast ? 0.016 : 0.075);
         if (Math.abs(want - glided) < 0.001) glided = want;
       }
       const sp = glided;

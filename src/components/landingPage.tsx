@@ -978,7 +978,13 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
               className="absolute inset-0 pointer-events-none"
               style={{
                 background:
-                  'radial-gradient(ellipse 46rem 17rem at 50% 50%, rgba(9,9,11,.95) 0%, rgba(9,9,11,.86) 34%, rgba(9,9,11,.48) 60%, rgba(9,9,11,0) 82%)',
+                  /* A POOL, NOT A LID (18 Nov 2026). At .95 in the middle this
+                     blotted out the very thing the section exists to show: the
+                     burst passes straight through the centre of the screen, and
+                     an almost opaque ellipse sat over it. Lightened until the
+                     quote still reads against moving points but the flight is
+                     visible through it. */
+                  'radial-gradient(ellipse 40rem 13rem at 50% 50%, rgba(9,9,11,.72) 0%, rgba(9,9,11,.54) 38%, rgba(9,9,11,.24) 64%, rgba(9,9,11,0) 84%)',
               }}
             />
             <div className="relative w-full max-w-[42rem] mx-auto px-6 sm:px-10 lg:px-16 text-center pointer-events-auto">
@@ -1013,7 +1019,13 @@ export const LandingPage: React.FC<LandingProps> = ({ onOpenCompany, onScrollTo,
       {/* scroll container for everything inside and break the pinned    */}
       {/* section further down.                                          */}
       {/* ============================================================ */}
-      <div className="relative z-10" style={{ background: '#0B0B0D', marginTop: '-16vh' }}>
+      {/* THE CREAM BAND NO LONGER CLIMBS OVER THE QUOTE. Pulling it up 16vh
+          was a device from when the sections were one long scroll: the panel
+          rose across the object as you went. With each shape section holding
+          a whole screen it simply ate the bottom sixth of the one screen the
+          dispersal has to happen on, so the burst flew out behind a sheet of
+          paper. */}
+      <div className="relative z-10" style={{ background: '#0B0B0D' }}>
         {/* 09 — coverage, counted up on arrival */}
         <section
           id="numbers"
