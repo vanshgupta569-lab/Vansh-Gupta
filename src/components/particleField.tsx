@@ -176,7 +176,20 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
     }
     if (!renderer.getContext()) { canvas.style.display = 'none'; return; }
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+
+    /* POINTS ARE SIZED IN DEVICE PIXELS, AND THE SCALE WAS IN CSS PIXELS.
+       `gl_PointSize` is a count of DEVICE pixels, and `setPixelRatio` above
+       makes the drawing buffer that many times larger -- so a point drawn at
+       N device pixels covers N/ratio of the CSS pixels a reader sees. At
+       Windows' default 125% display scaling every grain came out a fifth
+       smaller than intended and the wordmark's strokes thinned accordingly,
+       which is why it was reported as badly formed on a Dell laptop while it
+       looked right at 100%. Measured across the matrix before this: 11.6% lit
+       at 1440x900 and 1x against 4.3% at the same size and 1.25x; 10.1%
+       against 3.7% at 1536x864.
+       The apparent size is what matters, so the scale carries the ratio. */
+    const pointScale = () => vh() * 0.5 * renderer.getPixelRatio();
     renderer.setSize(vw(), vh(), false);
 
     const FOV = CAMERA.fov;
@@ -606,7 +619,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
       blending: THREE.AdditiveBlending,
       uniforms: {
         uOpacity: { value: 1.0 },
-        uScale: { value: vh() * 0.5 },
+        uScale: { value: pointScale() },
         uTime: { value: 0 },
         uAccent: { value: 1.0 },
       },
@@ -703,7 +716,7 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
       blending: THREE.AdditiveBlending,
       uniforms: {
         uOpacity: { value: 1.0 },
-        uScale: { value: vh() * 0.5 },
+        uScale: { value: pointScale() },
         uTime: { value: 0 },
       },
       vertexShader: `
@@ -1023,8 +1036,8 @@ export const ParticleField: React.FC<ParticleFieldProps> = ({
       camera.aspect = vw() / vh();
       camera.updateProjectionMatrix();
       renderer.setSize(vw(), vh(), false);
-      material.uniforms.uScale.value = vh() * 0.5;
-      skyMaterial.uniforms.uScale.value = vh() * 0.5;
+      material.uniforms.uScale.value = pointScale();
+      skyMaterial.uniforms.uScale.value = pointScale();
       forms[0] = buildWordmark();
       geom.attributes.accent.needsUpdate = true;
       wake();

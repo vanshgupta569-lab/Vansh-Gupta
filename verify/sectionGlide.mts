@@ -278,22 +278,95 @@ for (const [width, height] of SIZES) {
       say(`${width}x${height}: a 20-event flick moved ${moved} section`);
     }
 
-    // ---- 4. THE KEYBOARD ---------------------------------------------
-    await page.keyboard.press('PageDown');
-    await page.waitForTimeout(1500);
-    const afterKey = Number(await page.evaluate('window.scrollY'));
-    const keyIdx = geo.findIndex((g) => Math.abs(g.top - afterKey) < 6);
-    if (keyIdx !== landed + 1) {
-      fail(`${width}x${height}: Page Down went from section ${landed} to ${keyIdx}`);
-    } else {
-      say(`${width}x${height}: Page Down moves one section`);
+    // ---- 4. EVERY WAY OF SAYING "NEXT", ONE PRESS AT A TIME ----------
+    //
+    // Reported from a real screen on 22 November: one press of the Down arrow
+    // did not move, and it took two. LANDING_SPEC decision 1 says one press
+    // moves exactly one section, so every key that means "next" or "back" is
+    // driven here, ONE PRESS AT A TIME, from a known section.
+    //
+    // The press is made from a settled position and the result read after the
+    // glide has finished, so a press that does nothing is a failure rather
+    // than something the next press covers up.
+    {
+      const keys: [string, 1 | -1][] = [
+        ['ArrowDown', 1],
+        ['ArrowUp', -1],
+        ['PageDown', 1],
+        ['PageUp', -1],
+        [' ', 1],
+        ['Shift+ ', -1],
+      ];
+      // Start one section in, so an "up" press has somewhere to go.
+      await page.evaluate(`window.scrollTo(0, ${geo[1].top})`);
+      await page.waitForTimeout(900);
+      for (const [key, dir] of keys) {
+        const beforeY = Number(await page.evaluate('window.scrollY'));
+        const beforeIdx = geo.findIndex((g: any) => Math.abs(g.top - beforeY) < 6);
+        if (beforeIdx < 0) {
+          fail(`${width}x${height}: before "${key}" the page sat at ${beforeY}px, between sections`);
+          break;
+        }
+        await page.keyboard.press(key);
+        await page.waitForTimeout(1500);
+        const afterY = Number(await page.evaluate('window.scrollY'));
+        const afterIdx = geo.findIndex((g: any) => Math.abs(g.top - afterY) < 6);
+        const moved = afterIdx - beforeIdx;
+        if (afterIdx < 0) {
+          fail(`${width}x${height}: one "${key}" left the page at ${afterY}px, between sections`);
+        } else if (moved === 0) {
+          fail(
+            `${width}x${height}: one press of "${key}" moved nothing (still section ${beforeIdx}) — ` +
+              `it takes a second press, and the decision says one`
+          );
+        } else if (moved !== dir) {
+          fail(`${width}x${height}: one press of "${key}" moved ${moved} sections, not ${dir}`);
+        } else {
+          say(`${width}x${height}: one "${key}" moves one section`);
+        }
+        // Back to a known place for the next key.
+        await page.evaluate(`window.scrollTo(0, ${geo[1].top})`);
+        await page.waitForTimeout(900);
+      }
     }
-    await page.keyboard.press('PageUp');
-    await page.waitForTimeout(1500);
-    const backY = Number(await page.evaluate('window.scrollY'));
-    const backIdx = geo.findIndex((g) => Math.abs(g.top - backY) < 6);
-    if (backIdx !== keyIdx - 1) fail(`${width}x${height}: Page Up went from section ${keyIdx} to ${backIdx}`);
-    else say(`${width}x${height}: Page Up comes back`);
+
+    // ---- 4b. ONE WHEEL NOTCH IS ONE SECTION --------------------------
+    {
+      await page.evaluate(`window.scrollTo(0, ${geo[1].top})`);
+      await page.waitForTimeout(900);
+      await page.mouse.move(width / 2, height / 2);
+      await page.mouse.wheel(0, 100);
+      await page.waitForTimeout(1500);
+      const y = Number(await page.evaluate('window.scrollY'));
+      const idx = geo.findIndex((g: any) => Math.abs(g.top - y) < 6);
+      if (idx !== 2) fail(`${width}x${height}: one wheel notch from section 1 landed at ${idx < 0 ? `${y}px, between sections` : `section ${idx}`}`);
+      else say(`${width}x${height}: one wheel notch moves one section`);
+    }
+
+    // ---- 4c. HOLDING A KEY DOWN DOES NOT WALK THE PAGE ---------------
+    //
+    // A held key sends a stream of `keydown`s with `repeat` set. Once the
+    // door opened mid-hold the next repeat moved again, so holding walked
+    // the reader through the page several sections at a time.
+    {
+      await page.evaluate(`window.scrollTo(0, ${geo[0].top})`);
+      await page.waitForTimeout(900);
+      await page.keyboard.down('ArrowDown');
+      await page.waitForTimeout(3000);
+      await page.keyboard.up('ArrowDown');
+      await page.waitForTimeout(1600);
+      const y = Number(await page.evaluate('window.scrollY'));
+      const idx = geo.findIndex((g: any) => Math.abs(g.top - y) < 6);
+      if (idx < 0) {
+        fail(`${width}x${height}: holding Down left the page at ${y}px, between sections`);
+      } else if (idx > 1) {
+        fail(`${width}x${height}: holding Down for three seconds moved ${idx} sections — a held key walks the page`);
+      } else {
+        say(`${width}x${height}: holding Down for three seconds moves ${idx} section`);
+      }
+      await page.evaluate(`window.scrollTo(0, ${geo[1].top})`);
+      await page.waitForTimeout(700);
+    }
 
     // ---- 5. NEVER TRAPPED --------------------------------------------
     //

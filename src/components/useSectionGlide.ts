@@ -50,7 +50,23 @@ export interface SectionGlide {
 export function useSectionGlide(sectionIds: string[], enabled: boolean): SectionGlide {
   const [index, setIndex] = useState(0);
   const [moving, setMoving] = useState(false);
-  const lock = useRef(false);
+  /**
+   * THE DOOR, AS A TIME RATHER THAN A FLAG.
+   *
+   * It used to be a boolean cleared by a `setTimeout` at the end of the
+   * glide's animation frame loop. That loop is cancelled by the effect's own
+   * cleanup -- `cancelAnimationFrame` -- and the cleanup did NOT clear the
+   * flag, so an effect that re-ran or unmounted DURING a glide left the door
+   * shut for good. From then on every arrow key and every wheel notch was
+   * swallowed: `preventDefault` ran, nothing moved, and the browser's own
+   * scroll was suppressed too, so the press did nothing at all.
+   *
+   * A timestamp cannot strand. It expires by itself whether or not any
+   * clean-up runs, whether or not a frame is ever delivered, and whether or
+   * not the tab was hidden for the duration.
+   */
+  const shutUntil = useRef(0);
+  const shut = () => performance.now() < shutUntil.current;
   const indexRef = useRef(0);
   const frame = useRef(0);
 
@@ -108,7 +124,10 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
         setIndex(next);
         return false;
       }
-      lock.current = true;
+      // SHUT FOR THE WHOLE MOVE AND A MOMENT AFTER, so the tail of a trackpad
+      // flick is spent against a closed door rather than queued into another
+      // move. Set once, in one place, and it expires on its own.
+      shutUntil.current = performance.now() + GLIDE_MS + SETTLE_MS;
       setMoving(true);
       setIndex(next);
       const started = performance.now();
@@ -121,11 +140,6 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
           return;
         }
         setMoving(false);
-        // THE DOOR STAYS SHUT a moment longer, so the tail of a trackpad
-        // flick is spent against it rather than queued into another move.
-        window.setTimeout(() => {
-          lock.current = false;
-        }, SETTLE_MS);
       };
       frame.current = requestAnimationFrame(step);
       return true;
@@ -135,7 +149,7 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
 
     const onWheel = (e: WheelEvent) => {
       if (busy() || !inRun()) return;
-      if (lock.current) {
+      if (shut()) {
         e.preventDefault();
         return;
       }
@@ -152,7 +166,16 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
       const down = e.key === 'ArrowDown' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey);
       const up = e.key === 'ArrowUp' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey);
       if (!down && !up) return;
-      if (lock.current) {
+      /* AUTO-REPEAT IS NOT A SECOND PRESS. Holding the key down sends a
+         stream of `keydown`s, and once the door opened mid-hold the next
+         repeat moved another section -- so holding walked the reader through
+         the page. One press, one section: a repeat is swallowed, and the
+         default scroll with it. */
+      if (e.repeat) {
+        e.preventDefault();
+        return;
+      }
+      if (shut()) {
         e.preventDefault();
         return;
       }
@@ -165,7 +188,7 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
       startY = e.touches[0]?.clientY ?? 0;
     };
     const onTouchEnd = (e: TouchEvent) => {
-      if (busy() || !inRun() || lock.current) return;
+      if (busy() || !inRun() || shut()) return;
       const endY = e.changedTouches[0]?.clientY ?? startY;
       const travelled = startY - endY;
       if (Math.abs(travelled) < SWIPE_PX) return;
@@ -177,7 +200,7 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
        Find in page, a scrollbar drag -- the index is read back rather than
        asserted, so the object follows the reader instead of fighting them. */
     const onScroll = () => {
-      if (lock.current) return;
+      if (shut()) return;
       const n = nearest();
       if (n !== indexRef.current) {
         indexRef.current = n;
@@ -192,6 +215,9 @@ export function useSectionGlide(sectionIds: string[], enabled: boolean): Section
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(frame.current);
+      // AND THE DOOR IS LEFT OPEN. Cancelling the frame loop without this is
+      // what used to strand the lock and swallow every press afterwards.
+      shutUntil.current = 0;
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('touchstart', onTouchStart);
