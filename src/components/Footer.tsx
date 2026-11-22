@@ -8,11 +8,15 @@ export const Footer: React.FC = () => {
     <>
       <footer className="relative z-10 w-full bg-[#111114] border-t hairline-border-t py-8 px-6 lg:px-12 max-w-[1440px] mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="font-figure text-xs text-[#8A8A8F] uppercase tracking-widest">
-            © 2026 MARGINALIA RESEARCH. ALL RIGHTS RESERVED.
+          {/* SENTENCE CASE, AND THE TRACKING GOES WITH IT. Written in
+              capitals in the SOURCE, so the rule in index.css that
+              neutralises the `.uppercase` class never saw it and it
+              shouted from the foot of every screen on the site. */}
+          <div className="font-figure text-[13px] text-quiet">
+            © 2026 Marginalia Research. All rights reserved.
           </div>
 
-          <div className="flex gap-6 flex-wrap font-figure text-xs text-[#8A8A8F] uppercase tracking-widest">
+          <div className="flex gap-6 flex-wrap font-figure text-[13px] text-quiet">
             <button 
               onClick={() => setActiveModal('LEGAL')}
               className="hover:text-[#F2F0EA] transition-colors cursor-pointer bg-transparent border-none p-0"

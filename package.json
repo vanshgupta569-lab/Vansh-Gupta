@@ -32,6 +32,7 @@
     "verify:glide": "tsx verify/sectionGlide.mts",
     "verify:countup": "tsx verify/countUp.mts",
     "verify:evidence": "tsx verify/evidenceSheet.mts",
+    "verify:case": "tsx verify/sentenceCase.mts",
     "verify:bridge": "tsx verify/bridgeVersions.mts",
     "verify:baserates": "tsx verify/baseRates.mts",
     "screener:table": "tsx scripts/buildScreenerTable.mts",

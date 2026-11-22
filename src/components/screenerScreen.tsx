@@ -223,7 +223,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
     return (
       <Shell onBack={onBack}>
         <div className="border border-line bg-panel px-5 py-8">
-          <div className={`${EYEBROW} text-accent-text mb-2`}>NOTHING TO SCREEN</div>
+          <div className={`${EYEBROW} text-accent-text mb-2`}>Nothing to screen</div>
           <p className={`${BODY} text-read max-w-prose`}>{failed}</p>
         </div>
       </Shell>
@@ -233,7 +233,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
     return (
       <Shell onBack={onBack}>
         <div className="border border-line bg-panel px-5 py-10 text-center">
-          <div className={`${EYEBROW} text-quiet mb-2`}>READING THE TABLE</div>
+          <div className={`${EYEBROW} text-quiet mb-2`}>Reading the table</div>
           <p className={`${UI} text-read`}>Every company's figures, precomputed.</p>
         </div>
       </Shell>
@@ -243,7 +243,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
     return (
       <Shell onBack={onBack}>
         <div className="border border-line bg-panel px-5 py-8">
-          <div className={`${EYEBROW} text-amber mb-2`}>NO TABLE ON THIS DEPLOYMENT</div>
+          <div className={`${EYEBROW} text-amber mb-2`}>No table on this deployment</div>
           <p className={`${BODY} text-read max-w-prose`}>{table.unavailable}</p>
         </div>
       </Shell>
@@ -263,7 +263,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
           data-screener-universe-toggle
           className="flex w-full items-baseline justify-between gap-4 px-5 py-4 text-left cursor-pointer hover:bg-page/40 transition-colors"
         >
-          <span className={`${EYEBROW} text-ink`}>THE UNIVERSE</span>
+          <span className={`${EYEBROW} text-ink`}>The universe</span>
           <span className={`${UI} text-quiet`} data-screener-universe>
             {result.universe} of {rows.length} companies
             {screen.oneListingPerCompany ? ', one listing each' : ', every listing'}
@@ -302,7 +302,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
               </span>
             </label>
             <div>
-              <div className={`${EYEBROW} text-quiet mb-2`}>BANKS AND INSURERS</div>
+              <div className={`${EYEBROW} text-quiet mb-2`}>Banks and insurers</div>
               <div className="flex flex-wrap gap-2">
                 {(
                   [
@@ -361,7 +361,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
             aria-expanded={filtersOpen}
             className={`${EYEBROW} text-ink cursor-pointer`}
           >
-            FILTERS
+            Filters
           </button>
           <button
             type="button"
@@ -527,7 +527,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
 
             {/* presets, named by their rules (rule 14) */}
             <div className="mt-4">
-              <div className={`${EYEBROW} text-quiet mb-2`}>WRITTEN AS THEIR RULES, NOT THEIR OUTCOME</div>
+              <div className={`${EYEBROW} text-quiet mb-2`}>Written as their rules, not their outcome</div>
               <div className="flex flex-wrap gap-2">
                 {PRESETS.map((preset) => (
                   <button
@@ -545,7 +545,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
 
             {/* user-defined ratios (rule 8) */}
             <div className="mt-5 border-t border-line pt-4">
-              <div className={`${EYEBROW} text-quiet mb-2`}>A RATIO OF YOUR OWN</div>
+              <div className={`${EYEBROW} text-quiet mb-2`}>A ratio of your own</div>
               <div className="flex flex-wrap items-end gap-2">
                 <input
                   data-screener-ratio-label
@@ -663,7 +663,7 @@ export const ScreenerScreen: React.FC<Props> = ({ onOpenCompany, onBack, search,
                     onClick={() => set({ sort: 'name', descending: screen.sort === 'name' ? !screen.descending : false })}
                     className={`${EYEBROW} cursor-pointer hover:text-ink`}
                   >
-                    COMPANY {screen.sort === 'name' ? (screen.descending ? '↓' : '↑') : ''}
+                    Company {screen.sort === 'name' ? (screen.descending ? '↓' : '↑') : ''}
                   </button>
                 </th>
                 {columns.map((key) => {
