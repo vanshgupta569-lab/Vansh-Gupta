@@ -376,7 +376,14 @@ const EvidenceSheet: React.FC<{ evidence: Evidence; onClose: () => void }> = ({ 
         {evidence.lines.map((line) => (
           <div key={line.label} className="flex items-baseline justify-between gap-4 py-1">
             <dt className={`${EYEBROW} text-quiet shrink-0`}>{line.label}</dt>
-            <dd className={`${UI} text-read text-right`}>{line.value}</dd>
+            {/* A LONG XBRL CONCEPT IS ONE UNBREAKABLE WORD.
+                `RevenueFromContractWithCustomerExcludingAssessedTax` has no
+                space in it, so on a phone it ran 15px PAST the right edge of
+                the sheet -- the one line in the panel that proves where a
+                figure came from, printed off the side of it. `break-words`
+                lets it wrap inside the panel; `min-w-0` is what allows the
+                value to shrink at all beside a `shrink-0` label. */}
+            <dd className={`${UI} text-read text-right min-w-0 break-words`}>{line.value}</dd>
           </div>
         ))}
       </dl>
