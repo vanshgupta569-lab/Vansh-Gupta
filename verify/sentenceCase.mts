@@ -38,6 +38,9 @@ const PORT = 8800 + Math.floor(Math.random() * 90);
 const ALLOWED = [
   'EBITDA', 'EBIT', 'WACC', 'EDGAR', 'XBRL', 'LBO', 'SEBI', 'IFRS', 'GAAP',
   'ROCE', 'ROIC', 'NOPAT', 'CAGR', 'ESOP', 'ADR', 'GDR', 'ISIN', 'TTM',
+  // Names of things, which are capitals because that is their name.
+  'SEC', 'NASDAQ', 'NYSE', 'LSE', 'NSE', 'BSE', 'XETRA', 'OTC', 'IOB', 'ASX',
+  'KSE', 'MCE', 'SES', 'DCF', 'FCF', 'PP', 'USD', 'GBP', 'EUR', 'INR', 'JPY',
 ];
 
 let problems = 0;
@@ -96,10 +99,15 @@ async function shouted(page: Page, allowed: string[]) {
           const letters = w.replace(/[^A-Za-z]/g, '');
           return letters.length >= 3 && letters === letters.toUpperCase();
         };
+        /* AN ALLOWED WORD DOES NOT BUILD A RUN. "SEC EDGAR" is two
+           capitalised words in a row and is simply the name of the archive;
+           counting it as a shouted label would make this check noise on the
+           one sentence that states a figure's provenance. */
+        const bare = (w) => w.replace(/[^A-Za-z]/g, '');
         let run = 0;
         let best = 0;
         for (const w of words) {
-          run = caps(w) ? run + 1 : 0;
+          run = caps(w) && !ALLOWED.includes(bare(w)) ? run + 1 : 0;
           if (run > best) best = run;
         }
         const single =
@@ -125,10 +133,42 @@ const SCREENS: [string, string, (p: Page) => Promise<void>][] = [
     await p.locator('[data-financials]').first().waitFor({ timeout: 30_000 }).catch(() => {});
     await p.waitForTimeout(1200);
   }],
+  // THE VALUATION SCREEN, reached the way a reader reaches it. It is the
+  // densest screen on the site and the one with the most labels on it.
+  ['the valuation screen', '/', async (p) => {
+    await p.waitForTimeout(1400);
+    for (let i = 0; i < 4; i++) {
+      if (await p.getByPlaceholder(/Apple, Reliance/i).isVisible().catch(() => false)) break;
+      await p.getByRole('button', { name: /value a listed company/i }).first().click({ timeout: 3_000 }).catch(() => {});
+      await p.waitForTimeout(600);
+    }
+    await p.getByPlaceholder(/Apple, Reliance/i).fill(PAPER_TICKER).catch(() => {});
+    await p.waitForTimeout(700);
+    await p.getByRole('button', { name: /^build model$/i }).locator('visible=true').first().click({ timeout: 10_000 }).catch(() => {});
+    await p.waitForTimeout(1500);
+    await p.getByRole('tab', { name: /^model$/i }).first().click({ timeout: 10_000 }).catch(() => {});
+    await p.waitForTimeout(1200);
+    await p.getByRole('button', { name: /^open the figures for/i }).first().click({ timeout: 10_000 }).catch(() => {});
+    await p.waitForTimeout(2500);
+    await p.getByRole('button', { name: /build the model/i }).locator('visible=true').first().click({ timeout: 20_000 }).catch(() => {});
+    await p.waitForTimeout(2500);
+    await p.getByRole('button', { name: /skip and build the model/i }).click({ timeout: 20_000 }).catch(() => {});
+    await p.waitForTimeout(3000);
+  }],
 ];
 
 for (const width of [1440, 390]) {
   const ctx = await browser.newContext({ viewport: { width, height: width < 500 ? 844 : 900 } });
+  // THE CATCH-ALL IS REGISTERED FIRST, AND THAT ORDER IS THE WHOLE POINT.
+  // Playwright matches the LAST route registered, so a catch-all added after
+  // the specific ones silently answers an empty object to every company
+  // request -- and three of these four screens then render their error state
+  // while the check happily reports "nothing set in capitals" about it. That
+  // is this repository's own recorded trap, and it caught me with it.
+  //
+  // (Written as line comments on purpose: a glob with a star-slash in it ends
+  // a block comment early, which is how this file last failed to parse.)
+  await ctx.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await ctx.route('**/api/screener*', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows: [], built: '2026-11-10' }) })
   );
@@ -138,13 +178,28 @@ for (const width of [1440, 390]) {
   await ctx.route('**/api/marketIndex*', (r) =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(paperIndexSeries()) })
   );
-  await ctx.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   const page = await ctx.newPage();
   try {
     for (const [name, route, settle] of SCREENS) {
       await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' });
       await settle(page);
       // A ticker is capitals by nature, and this fixture's is a real word.
+      /* THE SCREEN HAS TO BE THE SCREEN. The valuation journey is six clicks
+         long and every one of them can miss; a check that then reads whatever
+         page it happens to be on and reports "nothing set in capitals" is
+         reporting on the search screen. Each screen names something only it
+         carries. */
+      const SIGN: Record<string, RegExp> = {
+        'the screener': /the universe/i,
+        'the company overview': /change on the day/i,
+        'the financials tab': /income statement/i,
+        'the valuation screen': /sensitivity/i,
+      };
+      const here = String(await page.evaluate('document.body.innerText'));
+      if (!SIGN[name].test(here)) {
+        fail(`${width}, ${name}: the journey did not arrive -- nothing on the page matches ${SIGN[name]}`);
+        continue;
+      }
       const loud = (await shouted(page, [...ALLOWED, PAPER_TICKER])).filter((t) => t !== PAPER_TICKER);
       if (loud.length) {
         fail(`${width}, ${name}: ${loud.length} label(s) set in capitals — ${loud.slice(0, 4).map((t) => `"${t}"`).join(', ')}`);

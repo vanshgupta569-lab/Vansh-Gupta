@@ -1780,10 +1780,19 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
       </div>
 
       {/* Live News Ticker Marquee */}
-      <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 overflow-hidden mb-8 relative flex items-center shadow-inner">
-      <div className="font-figure text-[11px] text-[#8B1E1E] uppercase tracking-widest font-bold shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 animate-pulse" />
-          <span>NEWS DISPATCH:</span>
+      {/* THE HEADLINES STOPPED BEING A TICKER (2026-11-22).
+          VISUAL_SYSTEM 1 puts "live tickers" on its Avoid list by name, next
+          to red/green flashing prices and a clock: they are the furniture of a
+          trading app, and this is meant to read as a private bank's annual
+          report. The NEWS they carry is worth keeping and nothing about it
+          changes -- the same headlines, the same sources, the same links. What
+          goes is the behaviour: no crawl, no pulsing dot, no shouted label.
+          A reader who wants a headline can now read it standing still, and
+          scroll the row by hand if there are more than fit. */}
+      <div className="hairline-border border bg-[#0B0B0D] py-3 px-4 mb-8 relative flex items-center">
+      <div className="font-figure text-[13px] text-quiet shrink-0 border-r hairline-border-r pr-4 mr-4 flex items-center gap-2">
+          <Activity className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>Recent headlines</span>
         </div>
         {/* THE TICKER ONLY TICKS WHEN IT HAS SOMEWHERE TO GO (`KI-25`).
 
@@ -1801,7 +1810,7 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
             also removes the blank gap the -100% version left before restarting.
             The duplicate is aria-hidden, so a screen reader hears the
             headlines once. */}
-        <div ref={marquee.window} className="overflow-hidden relative w-full">
+        <div ref={marquee.window} className="relative w-full min-w-0 overflow-x-auto [scrollbar-width:none]">
           {newsToShow.length === 0 ? (
             <span className="font-sans text-[13px] leading-snug text-[#8A8A8F]">
               {newsLoading ? 'Loading the news…' : 'No recent headlines found for this company.'}
@@ -1809,8 +1818,8 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
           ) : (
           <div
             data-ticker-strip
-            data-scrolling={marquee.scrolling ? 'true' : 'false'}
-            className={marquee.scrolling ? 'mg-marquee' : 'inline-flex'}
+            data-scrolling="false"
+            className="inline-flex"
           >
           <div ref={marquee.content} className="mg-marquee-copy flex gap-12 font-figure text-xs text-[#A1A1AA]">
             {newsToShow.map((news) =>
@@ -1824,28 +1833,21 @@ export const TerminalDashboard: React.FC<TerminalDashboardProps> = ({
                 >
                   <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
                   <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
-                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                  <span className="text-quiet text-[13px]">({news.source})</span>
                 </a>
               ) : (
                 <span key={news.id} className="inline-flex items-center gap-2">
                   <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
                   <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
-                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
+                  <span className="text-quiet text-[13px]">({news.source})</span>
                 </span>
               )
             )}
           </div>
-          {marquee.scrolling && (
-            <div aria-hidden="true" className="mg-marquee-copy flex gap-12 font-figure text-xs text-[#A1A1AA]">
-              {newsToShow.map((news) => (
-                <span key={`echo-${news.id}`} className="inline-flex items-center gap-2">
-                  <span className="text-[#8B1E1E] font-semibold tracking-wider">[{news.time}]</span>
-                  <span className="text-[#F2F0EA] font-medium tracking-wide">{news.headline}</span>
-                  <span className="text-[#8A8A8F] text-[10px] tracking-widest uppercase">({news.source})</span>
-                </span>
-              ))}
-            </div>
-          )}
+          {/* THE SECOND COPY IS GONE WITH THE CRAWL. It existed only so a
+              looping marquee had no blank gap before restarting; with nothing
+              moving there is nothing to loop, and a screen reader is no longer
+              offered a duplicate it has to be told to ignore. */}
           </div>
           )}
         </div>
