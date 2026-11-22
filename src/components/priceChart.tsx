@@ -61,8 +61,14 @@ const Segmented: React.FC<{
   phone: boolean;
 }> = ({ label, items, value, onChange, phone }) => {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  /* `min-w-0` IS WHAT LETS THIS SHRINK. A flex item defaults to
+     `min-width: auto`, which is its CONTENT width -- so a row of chips wider
+     than the screen refuses to shrink, its own `overflow-x-auto` never gets
+     the chance to scroll, and the parent overflows instead. Measured at 390
+     before this: the chart's control row wanted 315px in a 300px box and
+     spilled 15px outside it. */
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex border border-line-control max-w-full overflow-x-auto [scrollbar-width:none]">
+    <div role="radiogroup" aria-label={label} className="inline-flex min-w-0 border border-line-control max-w-full overflow-x-auto [scrollbar-width:none]">
       {items.map((it, i) => {
         const on = it.key === value;
         return (
@@ -310,7 +316,7 @@ export const PriceChart: React.FC<Props> = ({ payload, currencySymbol }) => {
       {/* CONTROLS (§3.1, §3.4–3.5): the range on the left; the overlay, its
           label and ⓘ on the right; wrapping to two rows on a narrow panel. */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex min-w-0 items-center gap-3 flex-wrap">
           <Segmented label="Range" phone={phone} items={RANGES.map((r) => ({ key: r.key, label: r.label }))} value={range} onChange={(k) => { setRange(k as RangeKey); setSwitched(true); }} />
           {canLog && (
             /* D9: offered only on 10Y and Max when the price moved more than

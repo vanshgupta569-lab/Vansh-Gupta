@@ -65,7 +65,7 @@ await new Promise<void>((resolve, reject) => {
   child.on('error', reject);
 });
 
-console.log('\n=== the evidence sheet fits inside itself ===');
+console.log('\n=== the company page fits inside itself ===');
 const browser = await chromium.launch({ headless: true });
 
 for (const [width, height] of [[1440, 900], [390, 844]] as [number, number][]) {
@@ -154,7 +154,59 @@ for (const [width, height] of [[1440, 900], [390, 844]] as [number, number][]) {
   }
 }
 
+// ---- AND NOTHING ON THE OVERVIEW SPILLS OUT OF ITS BOX ----------------
+//
+// THE SAME FAULT AS THE CONCEPT STRING, one level up. A flex item defaults to
+// `min-width: auto` -- its CONTENT width -- so a row wider than the screen
+// refuses to shrink, its own `overflow-x-auto` never gets the chance to
+// scroll, and the PARENT overflows instead. The price chart's control row
+// wanted 315px in a 300px box at 390 and spilled 15px outside it.
+//
+// A box that scrolls ON PURPOSE is not a fault: `overflow-x: auto` with snap
+// points is how the range chips are meant to behave on a phone. What is
+// checked is content escaping a box that cannot scroll at all.
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx.route('**/api/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await ctx.route('**/api/company*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(paperPayload()) })
+  );
+  await ctx.route('**/api/marketIndex*', (r) =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(paperIndexSeries()) })
+  );
+  const page = await ctx.newPage();
+  try {
+    await page.goto(`http://127.0.0.1:${PORT}/company/${PAPER_TICKER}/overview`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3200);
+    const spills: any[] = await page.evaluate(`(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('div, ul, nav, section')) {
+        if (el.scrollWidth <= el.clientWidth + 2) continue;
+        if (el.clientWidth < 80) continue;
+        const s = getComputedStyle(el);
+        if (s.overflowX === 'auto' || s.overflowX === 'scroll' || s.overflowX === 'hidden') continue;
+        out.push({ cls: (el.className || '').toString().slice(0, 46), wants: el.scrollWidth, has: el.clientWidth });
+      }
+      return out.slice(0, 5);
+    })()`);
+    if (spills.length) {
+      for (const sp of spills) {
+        fail(`390: a row wants ${sp.wants}px in a ${sp.has}px box and spills ${sp.wants - sp.has}px outside it — class "${sp.cls}"`);
+      }
+    } else {
+      say('390: nothing on the overview spills out of a box that cannot scroll');
+    }
+    const sideways = await page.evaluate(`document.documentElement.scrollWidth > window.innerWidth + 1`);
+    if (sideways) fail('390: the overview scrolls sideways');
+    else say('390: the overview does not scroll sideways');
+  } catch (err) {
+    fail(`390 overview: ${String(err).slice(0, 110)}`);
+  } finally {
+    await ctx.close();
+  }
+}
+
 await browser.close();
 child.kill();
-console.log(`\nTOTAL PROBLEMS IN THE EVIDENCE SHEET: ${problems}`);
+console.log(`\nTOTAL PROBLEMS ON THE COMPANY PAGE: ${problems}`);
 process.exit(0);
