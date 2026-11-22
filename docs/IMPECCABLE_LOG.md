@@ -138,4 +138,8 @@ Three checks now run at 1440 and 390 — `verify:craft`, the extended `verify:co
 Five screens reviewed, four changed, one found correct and recorded as such. The landing page lost an unverifiable credibility badge, four shadows, three rounded corners and **26% of its height** with every section kept; the header's phone squares matched and its sheet went from 780px to 229px; the search field gained a name a screen reader can read; the Overview's move on the day gained its sign.
 **Three suspected faults turned out to be the code being right** — the palette's blur, the ⓘ hit areas and the inset ring "shadows" — and two of my own checks were wrong before the app was. Carried forward: 8 open findings and 3 conflicts for Nihar.
 
+**Batch 2 complete — 22 November 2026** (Financials tab and evidence sheet; cost-of-capital card and price chart; screener; valuation screen).
+Four screens, four faults, and three of them were the same bug wearing different clothes: content escaping a box because a flex item defaults to `min-width: auto` (the XBRL concept **15px off the side of a 390px sheet**, the chart's controls **spilling 15px**), and labels written in literal capitals that no `textTransform` check could see (**nine on the screener**, one in the footer of every screen, and the valuation screen's news ticker). The ticker stopped crawling: `VISUAL_SYSTEM` names live tickers on its Avoid list, and the headlines themselves are untouched.
+Three checks added — `verify:evidence`, `verify:case`, and a signature guard that each screen proves it is itself, which immediately caught me registering a Playwright catch-all last and measuring three error screens.
+
 *(Three lines per batch, written after the push.)*
